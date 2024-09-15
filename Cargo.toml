@@ -1,0 +1,9 @@
+[package]
+name = "granite"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
+clap = { version = "4.5.17", default-features = false, features = ["derive", "std"] }
+thiserror = { version = "1.0.63", default-features = false }
