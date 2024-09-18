@@ -21,12 +21,15 @@ fn main() {
     let _campaigns =
         game::campaigns::read_compaign_defs(&String::from_utf8_lossy(config_file.as_ref()));
 
-    // for c in campaigns {
-    //     println!("campaign: {:#?}", c);
-    // }
+    for c in _campaigns
+        .iter()
+        .map(|c| format!("{} ({})", c.title, c.base_name))
+    {
+        println!("campaign: {}", c);
+    }
 
     let image_defs_file = vfs.open("config/image_defs.txt").unwrap();
     let images = game::images::read_image_defs(&String::from_utf8_lossy(image_defs_file.as_ref()));
 
-    println!("images: {:#?}", images);
+    // println!("images: {:#?}", images);
 }
