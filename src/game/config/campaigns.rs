@@ -1,6 +1,4 @@
-#![allow(dead_code)]
-
-use super::config::ConfigFile;
+use crate::game::config::ConfigFile;
 
 #[derive(Debug, Default)]
 pub struct EmitterConfig {
@@ -207,26 +205,24 @@ pub fn read_compaign_defs(data: &str) -> Vec<CampaignDef> {
 
     let mut config = ConfigFile::new(data);
 
-    enum State {
-        None,
-        CampaignDef(CampaignDef),
-    }
+    struct State(Option<CampaignDef>);
     impl State {
         fn with_campaign(&mut self) -> &mut CampaignDef {
-            match self {
-                State::None => panic!("No current campaign!"),
-                State::CampaignDef(campaign_def) => campaign_def,
-            }
+            let Some(campaign_def) = &mut self.0 else {
+                panic!("No current campaign!");
+            };
+
+            campaign_def
         }
     }
 
-    let mut state = State::None;
+    let mut state = State(None);
 
     while let Some(current) = config.current() {
         match current[0] {
-            "CAMPAIGN_DEF" => match state {
-                State::None => state = State::CampaignDef(CampaignDef::default()),
-                State::CampaignDef(ref mut campaign_def) => {
+            "CAMPAIGN_DEF" => match state.0 {
+                None => state = State(Some(CampaignDef::default())),
+                Some(ref mut campaign_def) => {
                     campaigns.push(std::mem::take(campaign_def));
                 }
             },
@@ -286,7 +282,7 @@ pub fn read_compaign_defs(data: &str) -> Vec<CampaignDef> {
         config.next();
     }
 
-    if let State::CampaignDef(campaign_def) = state {
+    if let Some(campaign_def) = state.0 {
         campaigns.push(campaign_def);
     }
 

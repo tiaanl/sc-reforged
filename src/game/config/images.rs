@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::config::ConfigFile;
+use crate::game::config::ConfigFile;
 
 #[derive(Debug, Default)]
 pub struct Image {
