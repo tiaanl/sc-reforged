@@ -1,6 +1,6 @@
 use crate::game::config::ConfigFile;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct EmitterConfig {
     mi_subset: String,
     emitter_type_desired: String,
@@ -18,7 +18,7 @@ impl EmitterConfig {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ClothingInfiltrationMod {
     clothing_type: String,
     day_infiltration_modifier: i32,
@@ -40,7 +40,7 @@ impl ClothingInfiltrationMod {
 }
 
 /// Actions to be performed before (pre) or after (post) a campaign.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Action {
     /// This is the amount of money given to the player.
     Reward {
@@ -140,7 +140,7 @@ impl Action {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum PreconditionType {
     MustTake {
         param_id: String,
@@ -162,7 +162,7 @@ impl PreconditionType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Precondition {
     name: String,
     typ: PreconditionType,
@@ -177,7 +177,7 @@ impl Precondition {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct CampaignDef {
     pub base_name: String,
     pub title: String,
