@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bytemuck = { version = "1.18.0", default-features = false, features = ["derive"] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
+cgmath = { version = "0.18.0", default-features = false }
 clap = { version = "4.5.17", default-features = false, features = [
     "derive",
     "std",

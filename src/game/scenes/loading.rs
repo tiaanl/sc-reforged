@@ -159,6 +159,8 @@ impl LoadingScene {
 }
 
 impl Scene for LoadingScene {
+    fn resize(&mut self, _width: u32, _height: u32) {}
+
     fn update(&mut self, _delta_time: f32) {}
 
     fn render(

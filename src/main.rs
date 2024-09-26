@@ -134,6 +134,9 @@ impl winit::application::ApplicationHandler for App {
 
                     WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
                         renderer.resize(width, height);
+                        if let Some(scene) = scene {
+                            scene.resize(width, height);
+                        }
                         window.request_redraw();
                     }
 
