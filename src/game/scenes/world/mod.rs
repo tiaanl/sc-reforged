@@ -3,7 +3,7 @@ use crate::{
     game::config::CampaignDef,
 };
 use camera::*;
-use cgmath::{prelude::*, vec3, Deg, Quaternion, Vector3};
+use cgmath::{prelude::*, Deg, Quaternion, Vector3};
 use terrain::*;
 use wgpu::util::DeviceExt;
 
@@ -17,6 +17,9 @@ pub struct WorldScene {
 
     camera: Camera,
     camera_bind_group_layout: wgpu::BindGroupLayout,
+
+    model: [[f32; 4]; 4],
+    model_bind_group_layout: wgpu::BindGroupLayout,
 
     terrain: Terrain,
 
@@ -44,21 +47,47 @@ impl WorldScene {
                     }],
                 });
 
+        let model = cgmath::Matrix4::identity().into();
+        let model_bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("model_bind_group_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
         let camera = Camera::from_position_rotation(
             Vector3::new(0.0, 0.0, 5.0),
             Quaternion::from_angle_y(Deg(0.0)),
         );
 
-        let terrain = Terrain::new(renderer, &camera_bind_group_layout);
+        let terrain = Terrain::new(
+            renderer,
+            &camera_bind_group_layout,
+            &model_bind_group_layout,
+        );
 
         Self {
             campaign_def,
-            camera,
-            terrain,
 
+            camera,
             camera_bind_group_layout,
 
-            camera_diff: Vector3::new(0.0, 0.001, 0.0),
+            model,
+            model_bind_group_layout,
+
+            terrain,
+
+            camera_diff: Vector3::zero(),
         }
     }
 
@@ -93,8 +122,9 @@ impl Scene for WorldScene {
         self.camera.resize(width, height);
     }
 
-    fn update(&mut self, _delta_time: f32) {
+    fn update(&mut self, delta_time: f32) {
         self.camera.position += self.camera_diff;
+        self.terrain.update(delta_time);
 
         // self.camera.position = vec3(0.0, 1.0, -5.0);
         // self.camera.look_at(vec3(0.0, 0.0, 0.0));

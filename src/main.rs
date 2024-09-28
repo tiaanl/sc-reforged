@@ -1,10 +1,12 @@
+use bevy_ecs::prelude::*;
+
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
-use engine::{assets::Assets, renderer::Renderer, scene::Scene, vfs::VirtualFileSystem};
+use engine::{assets::Assets, renderer::Renderer, scene::SceneResource, vfs::VirtualFileSystem};
 use game::{
     config::{read_compaign_defs, CampaignDef},
-    scenes::{loading::LoadingScene, world::WorldScene},
+    scenes::world::WorldScene,
 };
 use winit::platform::windows::WindowAttributesExtWindows;
 
@@ -22,15 +24,16 @@ enum App {
     Uninitialzed(Opts),
     Initialized {
         window: Arc<winit::window::Window>,
-        renderer: Arc<Renderer>,
+        // renderer: Renderer,
         assets: Assets,
-        scene: Option<Box<dyn Scene>>,
 
         // The instant that the last frame started to render.
         last_frame_time: Instant,
 
         // All the available campaign definitions.
         campaign_defs: Vec<CampaignDef>,
+
+        world: bevy_ecs::world::World,
     },
 }
 
@@ -54,7 +57,7 @@ impl winit::application::ApplicationHandler for App {
                     .with_title("Shadow Company - Left for Dead (granite)")
                     .with_inner_size(winit::dpi::LogicalSize::new(640, 480))
                     .with_position(position)
-                    .with_resizable(false)
+                    // .with_resizable(false)
                     .with_system_backdrop(winit::platform::windows::BackdropType::None)
                     .with_enabled_buttons(
                         winit::window::WindowButtons::MINIMIZE
@@ -66,7 +69,7 @@ impl winit::application::ApplicationHandler for App {
                         .expect("create main window"),
                 );
 
-                let renderer = Arc::new(Renderer::new(Arc::clone(&window)));
+                let renderer = Renderer::new(Arc::clone(&window));
 
                 let path = opts
                     .path
@@ -74,7 +77,7 @@ impl winit::application::ApplicationHandler for App {
                     .unwrap_or(PathBuf::from("C:\\Games\\shadow_company\\data"));
                 let vfs = VirtualFileSystem::new(path);
 
-                let assets = Assets::new(vfs, Arc::clone(&renderer));
+                let assets = Assets::new(vfs);
 
                 let s = assets.load_config_file("config/campaign_defs.txt").unwrap();
                 let campaign_defs = read_compaign_defs(&s);
@@ -85,16 +88,21 @@ impl winit::application::ApplicationHandler for App {
                     .unwrap();
 
                 // let scene = Box::new(LoadingScene::new(vfs.as_ref(), &renderer));
-                let scene = Box::new(WorldScene::new(&assets, renderer.as_ref(), campaign_def));
+                // let scene = Box::new(WorldScene::new(&assets, &renderer, campaign_def));
+
+                let scene = Box::new(WorldScene::new(&assets, &renderer, campaign_def));
+
+                let mut world = bevy_ecs::world::World::default();
+                world.insert_resource(renderer);
+                world.insert_resource(SceneResource(scene));
 
                 tracing::info!("Application initialized!");
                 *self = App::Initialized {
                     window,
-                    renderer,
                     assets,
-                    scene: Some(scene),
                     last_frame_time: Instant::now(),
                     campaign_defs,
+                    world,
                 };
             }
 
@@ -118,9 +126,9 @@ impl winit::application::ApplicationHandler for App {
             }
             App::Initialized {
                 window,
-                renderer,
-                scene,
+                // renderer,
                 last_frame_time,
+                world,
                 ..
             } => {
                 if window_id != window.id() {
@@ -133,40 +141,49 @@ impl winit::application::ApplicationHandler for App {
                     }
 
                     WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
-                        renderer.resize(width, height);
-                        if let Some(scene) = scene {
-                            scene.resize(width, height);
-                        }
+                        use bevy_ecs::system::RunSystemOnce;
+
+                        world.run_system_once(
+                            move |mut renderer: ResMut<Renderer>,
+                                  mut scene: ResMut<SceneResource>| {
+                                renderer.resize(width, height);
+                                scene.resize(width, height);
+                            },
+                        );
                         window.request_redraw();
                     }
 
                     WindowEvent::RedrawRequested => {
+                        use bevy_ecs::system::RunSystemOnce;
+
                         let now = Instant::now();
                         let last_frame_duration = now - *last_frame_time;
                         *last_frame_time = now;
 
-                        let output = renderer.surface.get_current_texture().unwrap();
-                        let view = output
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
+                        world.run_system_once(
+                            move |renderer: Res<Renderer>, mut scene: ResMut<SceneResource>| {
+                                let output = renderer.surface.get_current_texture().unwrap();
+                                let view = output
+                                    .texture
+                                    .create_view(&wgpu::TextureViewDescriptor::default());
 
-                        let mut encoder = renderer.device.create_command_encoder(
-                            &wgpu::CommandEncoderDescriptor {
-                                label: Some("main command encoder"),
+                                let mut encoder = renderer.device.create_command_encoder(
+                                    &wgpu::CommandEncoderDescriptor {
+                                        label: Some("main command encoder"),
+                                    },
+                                );
+
+                                scene.update(1.0 / last_frame_duration.as_secs_f32() / 60.0);
+
+                                scene.begin_frame();
+                                scene.render(&renderer, &mut encoder, &view);
+                                scene.end_frame();
+
+                                renderer.queue.submit(std::iter::once(encoder.finish()));
+
+                                output.present();
                             },
                         );
-
-                        if let Some(scene) = scene {
-                            scene.update(60.0 / last_frame_duration.as_secs_f32());
-
-                            scene.begin_frame();
-                            scene.render(&renderer, &mut encoder, &view);
-                            scene.end_frame();
-                        }
-
-                        renderer.queue.submit(std::iter::once(encoder.finish()));
-
-                        output.present();
 
                         window.request_redraw();
                     }

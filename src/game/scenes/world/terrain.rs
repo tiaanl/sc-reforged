@@ -1,4 +1,4 @@
-use cgmath::{Vector2, Vector3};
+use cgmath::{Deg, SquareMatrix};
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
 use crate::engine::renderer::Renderer;
@@ -17,10 +17,19 @@ pub struct Terrain {
     index_count: u32,
 
     pipeline: wgpu::RenderPipeline,
+
+    model_buffer: wgpu::Buffer,
+    model_bind_group: wgpu::BindGroup,
+
+    rotation: Deg<f32>,
 }
 
 impl Terrain {
-    pub fn new(renderer: &Renderer, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(
+        renderer: &Renderer,
+        camera_bind_group_layout: &wgpu::BindGroupLayout,
+        model_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
         // vx, vy, vz, nx, ny, nz, u, v
         let vertices: &[[f32; 8]] = &[
             // Back face
@@ -94,7 +103,7 @@ impl Terrain {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("terrain_pipeline_layout"),
-                    bind_group_layouts: &[camera_bind_group_layout],
+                    bind_group_layouts: &[camera_bind_group_layout, model_bind_group_layout],
                     push_constant_ranges: &[],
                 });
 
@@ -121,14 +130,14 @@ impl Terrain {
                     topology: wgpu::PrimitiveTopology::TriangleList,
                     ..Default::default()
                 },
-                depth_stencil: None,
+                depth_stencil: renderer.depth_stencil_state(),
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_module,
                     entry_point: "fragment_main",
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: renderer.surface_config.borrow().format,
+                        format: renderer.surface_config.format,
                         blend: Some(wgpu::BlendState::REPLACE),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -137,22 +146,56 @@ impl Terrain {
                 cache: None,
             });
 
+        let model: [[f32; 4]; 4] = cgmath::Matrix4::identity().into();
+        let model_buffer = renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("model_buffer"),
+                contents: bytemuck::cast_slice(&model),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+        let model_bind_group = renderer
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("model_bind_group"),
+                layout: &model_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: model_buffer.as_entire_binding(),
+                }],
+            });
+
         Self {
             vertex_buffer,
             index_buffer,
             index_count: indices.len() as u32,
 
             pipeline,
+
+            model_buffer,
+            model_bind_group,
+
+            rotation: Deg(0.0),
         }
+    }
+
+    pub fn update(&mut self, delta_time: f32) {
+        self.rotation += Deg(0.1 * delta_time);
     }
 
     pub fn render(
         &self,
-        _renderer: &crate::engine::renderer::Renderer,
+        renderer: &crate::engine::renderer::Renderer,
         encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
     ) {
+        // Update the model details.
+        let model: [[f32; 4]; 4] = cgmath::Matrix4::from_angle_y(self.rotation).into();
+        renderer
+            .queue
+            .write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&model));
+
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("terrain_render_pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -168,6 +211,7 @@ impl Terrain {
                     store: wgpu::StoreOp::Store,
                 },
             })],
+            depth_stencil_attachment: renderer.render_pass_depth_stencil_attachment(),
             ..Default::default()
         });
 
@@ -175,6 +219,7 @@ impl Terrain {
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.set_bind_group(0, camera_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.model_bind_group, &[]);
         render_pass.draw_indexed(0..self.index_count, 0, 0..1);
     }
 }

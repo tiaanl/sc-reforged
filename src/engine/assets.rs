@@ -1,20 +1,15 @@
-use super::{
-    renderer::Renderer,
-    vfs::{VirtualFileSystem, VirtualFileSystemError},
-};
-use crate::game::config::ConfigFile;
-use std::{path::Path, sync::Arc};
+use super::vfs::VirtualFileSystem;
+use std::path::Path;
 
 pub struct Handle(usize);
 
 pub struct Assets {
     vfs: VirtualFileSystem,
-    renderer: Arc<Renderer>,
 }
 
 impl Assets {
-    pub fn new(vfs: VirtualFileSystem, renderer: Arc<Renderer>) -> Self {
-        Self { vfs, renderer }
+    pub fn new(vfs: VirtualFileSystem) -> Self {
+        Self { vfs }
     }
 
     pub fn load_config_file(&self, path: impl AsRef<Path>) -> Result<String, ()> {

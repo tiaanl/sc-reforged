@@ -132,14 +132,14 @@ impl LoadingScene {
                     buffers: &[],
                 },
                 primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
+                depth_stencil: renderer.depth_stencil_state(),
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: &module,
                     entry_point: "fragment_main",
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: renderer.surface_config.borrow().format,
+                        format: renderer.surface_config.format,
                         blend: Some(wgpu::BlendState::REPLACE),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -165,7 +165,7 @@ impl Scene for LoadingScene {
 
     fn render(
         &self,
-        _renderer: &crate::engine::renderer::Renderer,
+        renderer: &crate::engine::renderer::Renderer,
         _encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,
     ) {
@@ -184,7 +184,7 @@ impl Scene for LoadingScene {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: renderer.render_pass_depth_stencil_attachment(),
             timestamp_writes: None,
             occlusion_query_set: None,
         });
