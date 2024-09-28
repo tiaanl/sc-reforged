@@ -1,4 +1,4 @@
-use cgmath::{Deg, SquareMatrix};
+use glam::Mat4;
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
 use crate::engine::renderer::Renderer;
@@ -21,7 +21,7 @@ pub struct Terrain {
     model_buffer: wgpu::Buffer,
     model_bind_group: wgpu::BindGroup,
 
-    rotation: Deg<f32>,
+    rotation: f32,
 }
 
 impl Terrain {
@@ -146,7 +146,7 @@ impl Terrain {
                 cache: None,
             });
 
-        let model: [[f32; 4]; 4] = cgmath::Matrix4::identity().into();
+        let model = Mat4::IDENTITY.to_cols_array_2d();
         let model_buffer = renderer
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -175,12 +175,12 @@ impl Terrain {
             model_buffer,
             model_bind_group,
 
-            rotation: Deg(0.0),
+            rotation: 0.0,
         }
     }
 
     pub fn update(&mut self, delta_time: f32) {
-        self.rotation += Deg(0.1 * delta_time);
+        self.rotation += 0.01 * delta_time;
     }
 
     pub fn render(
@@ -191,7 +191,7 @@ impl Terrain {
         camera_bind_group: &wgpu::BindGroup,
     ) {
         // Update the model details.
-        let model: [[f32; 4]; 4] = cgmath::Matrix4::from_angle_y(self.rotation).into();
+        let model = Mat4::from_rotation_y(self.rotation).to_cols_array_2d();
         renderer
             .queue
             .write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&model));

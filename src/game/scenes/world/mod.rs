@@ -3,7 +3,7 @@ use crate::{
     game::config::CampaignDef,
 };
 use camera::*;
-use cgmath::{prelude::*, Deg, Quaternion, Vector3};
+use glam::{Mat4, Quat, Vec3};
 use terrain::*;
 use wgpu::util::DeviceExt;
 
@@ -23,7 +23,7 @@ pub struct WorldScene {
 
     terrain: Terrain,
 
-    camera_diff: Vector3<f32>,
+    camera_diff: Vec3,
 }
 
 impl WorldScene {
@@ -47,7 +47,7 @@ impl WorldScene {
                     }],
                 });
 
-        let model = cgmath::Matrix4::identity().into();
+        let model = Mat4::IDENTITY.to_cols_array_2d();
         let model_bind_group_layout =
             renderer
                 .device
@@ -65,10 +65,8 @@ impl WorldScene {
                     }],
                 });
 
-        let camera = Camera::from_position_rotation(
-            Vector3::new(0.0, 0.0, 5.0),
-            Quaternion::from_angle_y(Deg(0.0)),
-        );
+        let camera =
+            Camera::from_position_rotation(Vec3::new(0.0, 0.0, -5.0), Quat::from_rotation_y(0.0));
 
         let terrain = Terrain::new(
             renderer,
@@ -87,7 +85,7 @@ impl WorldScene {
 
             terrain,
 
-            camera_diff: Vector3::zero(),
+            camera_diff: Vec3::ZERO,
         }
     }
 

@@ -7,11 +7,11 @@ edition = "2021"
 bevy_ecs = { version = "0.14.2", default-features = false, features = ["trace"] }
 bytemuck = { version = "1.18.0", default-features = false, features = ["derive"] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
-cgmath = { version = "0.18.0", default-features = false }
 clap = { version = "4.5.17", default-features = false, features = [
     "derive",
     "std",
 ] }
+glam = { version = "0.29.0", default-features = false, features = ["bytemuck", "std"] }
 image = { version = "0.25.2", default-features = false, features = ["jpeg"] }
 pollster = { version = "0.3.0", default-features = false }
 thiserror = { version = "1.0.63", default-features = false }
