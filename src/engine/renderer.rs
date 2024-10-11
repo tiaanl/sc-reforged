@@ -1,14 +1,11 @@
 use std::sync::Arc;
 
-use bevy_ecs::system::Resource;
-
 struct DepthTexture {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
 }
 
-#[derive(Resource)]
 pub struct Renderer {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,

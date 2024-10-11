@@ -11,7 +11,6 @@ mod camera;
 mod terrain;
 
 /// The [Scene] that renders the ingame world view.
-
 pub struct WorldScene {
     campaign_def: CampaignDef,
 
@@ -66,7 +65,7 @@ impl WorldScene {
                 });
 
         let camera =
-            Camera::from_position_rotation(Vec3::new(0.0, 0.0, -5.0), Quat::from_rotation_y(0.0));
+            Camera::from_position_rotation(Vec3::new(0.0, 2.0, -5.0), Quat::from_rotation_y(0.0));
 
         let terrain = Terrain::new(
             renderer,
@@ -121,7 +120,7 @@ impl Scene for WorldScene {
     }
 
     fn update(&mut self, delta_time: f32) {
-        self.camera.position += self.camera_diff;
+        // self.camera.position += self.camera_diff;
         self.terrain.update(delta_time);
 
         // self.camera.position = vec3(0.0, 1.0, -5.0);

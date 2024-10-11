@@ -1,9 +1,9 @@
-use bevy_ecs::prelude::*;
+use tracing::{info, warn};
 
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
-use engine::{assets::Assets, renderer::Renderer, scene::SceneResource, vfs::VirtualFileSystem};
+use engine::{assets::Assets, renderer::Renderer, scene::Scene, vfs::FileSystem};
 use game::{
     config::{read_compaign_defs, CampaignDef},
     scenes::world::WorldScene,
@@ -24,7 +24,10 @@ enum App {
     Uninitialzed(Opts),
     Initialized {
         window: Arc<winit::window::Window>,
-        // renderer: Renderer,
+
+        /// The renderer.
+        renderer: Renderer,
+
         assets: Assets,
 
         // The instant that the last frame started to render.
@@ -33,7 +36,8 @@ enum App {
         // All the available campaign definitions.
         campaign_defs: Vec<CampaignDef>,
 
-        world: bevy_ecs::world::World,
+        /// The scene we are currently rendering to the screen.
+        scene: Box<dyn Scene>,
     },
 }
 
@@ -75,7 +79,7 @@ impl winit::application::ApplicationHandler for App {
                     .path
                     .clone()
                     .unwrap_or(PathBuf::from("C:\\Games\\shadow_company\\data"));
-                let vfs = VirtualFileSystem::new(path);
+                let vfs = FileSystem::new(path);
 
                 let assets = Assets::new(vfs);
 
@@ -92,22 +96,20 @@ impl winit::application::ApplicationHandler for App {
 
                 let scene = Box::new(WorldScene::new(&assets, &renderer, campaign_def));
 
-                let mut world = bevy_ecs::world::World::default();
-                world.insert_resource(renderer);
-                world.insert_resource(SceneResource(scene));
+                info!("Application initialized!");
 
-                tracing::info!("Application initialized!");
                 *self = App::Initialized {
                     window,
+                    renderer,
                     assets,
                     last_frame_time: Instant::now(),
                     campaign_defs,
-                    world,
+                    scene,
                 };
             }
 
             App::Initialized { .. } => {
-                tracing::warn!("Application already initialized!");
+                warn!("Application already initialized!");
             }
         }
     }
@@ -122,13 +124,13 @@ impl winit::application::ApplicationHandler for App {
 
         match self {
             App::Uninitialzed(_) => {
-                tracing::warn!("Can't process events for uninitialized application.");
+                warn!("Can't process events for uninitialized application.");
             }
             App::Initialized {
                 window,
-                // renderer,
+                renderer,
                 last_frame_time,
-                world,
+                scene,
                 ..
             } => {
                 if window_id != window.id() {
@@ -141,49 +143,37 @@ impl winit::application::ApplicationHandler for App {
                     }
 
                     WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
-                        use bevy_ecs::system::RunSystemOnce;
+                        renderer.resize(width, height);
+                        scene.resize(width, height);
 
-                        world.run_system_once(
-                            move |mut renderer: ResMut<Renderer>,
-                                  mut scene: ResMut<SceneResource>| {
-                                renderer.resize(width, height);
-                                scene.resize(width, height);
-                            },
-                        );
                         window.request_redraw();
                     }
 
                     WindowEvent::RedrawRequested => {
-                        use bevy_ecs::system::RunSystemOnce;
-
                         let now = Instant::now();
                         let last_frame_duration = now - *last_frame_time;
                         *last_frame_time = now;
 
-                        world.run_system_once(
-                            move |renderer: Res<Renderer>, mut scene: ResMut<SceneResource>| {
-                                let output = renderer.surface.get_current_texture().unwrap();
-                                let view = output
-                                    .texture
-                                    .create_view(&wgpu::TextureViewDescriptor::default());
+                        let output = renderer.surface.get_current_texture().unwrap();
+                        let view = output
+                            .texture
+                            .create_view(&wgpu::TextureViewDescriptor::default());
 
-                                let mut encoder = renderer.device.create_command_encoder(
-                                    &wgpu::CommandEncoderDescriptor {
-                                        label: Some("main command encoder"),
-                                    },
-                                );
-
-                                scene.update(1.0 / last_frame_duration.as_secs_f32() / 60.0);
-
-                                scene.begin_frame();
-                                scene.render(&renderer, &mut encoder, &view);
-                                scene.end_frame();
-
-                                renderer.queue.submit(std::iter::once(encoder.finish()));
-
-                                output.present();
+                        let mut encoder = renderer.device.create_command_encoder(
+                            &wgpu::CommandEncoderDescriptor {
+                                label: Some("main command encoder"),
                             },
                         );
+
+                        scene.update(1.0 / last_frame_duration.as_secs_f32() / 60.0);
+
+                        scene.begin_frame();
+                        scene.render(&renderer, &mut encoder, &view);
+                        scene.end_frame();
+
+                        renderer.queue.submit(std::iter::once(encoder.finish()));
+
+                        output.present();
 
                         window.request_redraw();
                     }

@@ -1,6 +1,8 @@
 use std::{
+    cell::RefCell,
     io::{Read, SeekFrom},
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -8,23 +10,38 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use crate::engine::utils;
 
 #[derive(Debug, thiserror::Error)]
-pub enum VirtualFileSystemError {
+pub enum FileSystemError {
     #[error("IO Error: {0}")]
     Io(#[from] std::io::Error),
 }
 
-pub struct VirtualFileSystem {
+#[derive(Clone)]
+pub struct FileSystem(Rc<RefCell<VirtualFileSystem>>);
+
+impl FileSystem {
+    pub fn new(root_path: impl AsRef<Path>) -> Self {
+        Self(Rc::new(RefCell::new(VirtualFileSystem::new(root_path))))
+    }
+}
+
+impl FileSystem {
+    pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
+        self.0.borrow_mut().load(path)
+    }
+}
+
+struct VirtualFileSystem {
     root_path: PathBuf,
 }
 
 impl VirtualFileSystem {
-    pub fn new(root_path: impl AsRef<Path>) -> Self {
+    fn new(root_path: impl AsRef<Path>) -> Self {
         Self {
             root_path: root_path.as_ref().to_owned(),
         }
     }
 
-    pub fn open(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, VirtualFileSystemError> {
+    fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         let external_path = self.root_path.join(path.as_ref());
         if external_path.exists() {
             let mut file = std::fs::File::open(external_path)?;

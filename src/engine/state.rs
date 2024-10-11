@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
-use super::{renderer::Renderer, scene::Scene, vfs::VirtualFileSystem};
+use super::{renderer::Renderer, scene::Scene, vfs::FileSystem};
 
 pub struct State {
-    pub vfs: Arc<VirtualFileSystem>,
+    pub fs: FileSystem,
     pub renderer: Renderer,
     pub scene: Option<Box<dyn Scene>>,
 
@@ -12,13 +10,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(
-        vfs: Arc<VirtualFileSystem>,
-        renderer: Renderer,
-        scene: Option<Box<dyn Scene>>,
-    ) -> Self {
+    pub fn new(fs: FileSystem, renderer: Renderer, scene: Option<Box<dyn Scene>>) -> Self {
         Self {
-            vfs,
+            fs,
             renderer,
             scene,
 
