@@ -1,5 +1,9 @@
 use crate::{
-    engine::{assets::Assets, renderer::Renderer, scene::Scene},
+    engine::{
+        assets::{AssetError, Assets},
+        renderer::Renderer,
+        scene::Scene,
+    },
     game::config::CampaignDef,
 };
 use camera::*;
@@ -26,7 +30,11 @@ pub struct WorldScene {
 }
 
 impl WorldScene {
-    pub fn new(_assets: &Assets, renderer: &Renderer, campaign_def: CampaignDef) -> Self {
+    pub fn new(
+        assets: &Assets,
+        renderer: &Renderer,
+        campaign_def: CampaignDef,
+    ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let camera_bind_group_layout =
@@ -64,16 +72,20 @@ impl WorldScene {
                     }],
                 });
 
-        let camera =
-            Camera::from_position_rotation(Vec3::new(0.0, 2.0, -5.0), Quat::from_rotation_y(0.0));
+        let camera = Camera::from_position_rotation(
+            Vec3::new(1000.0, 2000.0, -3000.0),
+            Quat::from_rotation_x(-15.0_f32.to_radians())
+                * Quat::from_rotation_y(-30.0_f32.to_radians()),
+        );
 
         let terrain = Terrain::new(
+            assets,
             renderer,
             &camera_bind_group_layout,
             &model_bind_group_layout,
-        );
+        )?;
 
-        Self {
+        Ok(Self {
             campaign_def,
 
             camera,
@@ -85,7 +97,7 @@ impl WorldScene {
             terrain,
 
             camera_diff: Vec3::ZERO,
-        }
+        })
     }
 
     fn create_camera_bind_group(&self, renderer: &Renderer) -> (wgpu::Buffer, wgpu::BindGroup) {

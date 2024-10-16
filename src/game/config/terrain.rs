@@ -6,23 +6,23 @@ use super::ConfigFile;
 /// `previous + (rand() % (max_alt_grad - min_alt_grad) + min_alt_grad) * altitude_map_height_base`.
 #[derive(Debug)]
 pub struct TerrainMapping {
-    fully_textured_map: bool,
-    texture_map_base_name: String,
-    terrain_textures_dx: i32,
-    terrain_textures_dy: i32,
-    map_dx: f32,
-    map_dy: f32,
-    water_level: f32,
-    nominal_edge_size: f32,
+    pub fully_textured_map: bool,
+    pub texture_map_base_name: String,
+    pub terrain_textures_dx: i32,
+    pub terrain_textures_dy: i32,
+    pub map_dx: f32,
+    pub map_dy: f32,
+    pub water_level: f32,
+    pub nominal_edge_size: f32,
     /// Indicates the number of averaging smooth passes to be performed on the map after it is
     /// generated.
-    map_smooth_passes: i32,
+    pub map_smooth_passes: i32,
     /// indicates the number of texture constraint passes to be performed.  Additional constraint
     /// passes can be executed from the Terrain Editor window.
-    constraint_passes: i32,
-    altitude_map_height_base: f32,
-    min_alt_grad: i32,
-    max_alt_grad: i32,
+    pub constraint_passes: i32,
+    pub altitude_map_height_base: f32,
+    pub min_alt_grad: i32,
+    pub max_alt_grad: i32,
 }
 
 impl Default for TerrainMapping {

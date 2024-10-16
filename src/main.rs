@@ -1,4 +1,4 @@
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
@@ -8,7 +8,6 @@ use game::{
     config::{read_compaign_defs, CampaignDef},
     scenes::world::WorldScene,
 };
-use winit::platform::windows::WindowAttributesExtWindows;
 
 mod engine;
 mod game;
@@ -28,13 +27,13 @@ enum App {
         /// The renderer.
         renderer: Renderer,
 
-        assets: Assets,
+        _assets: Assets,
 
         // The instant that the last frame started to render.
         last_frame_time: Instant,
 
         // All the available campaign definitions.
-        campaign_defs: Vec<CampaignDef>,
+        _campaign_defs: Vec<CampaignDef>,
 
         /// The scene we are currently rendering to the screen.
         scene: Box<dyn Scene>,
@@ -59,14 +58,16 @@ impl winit::application::ApplicationHandler for App {
 
                 let attributes = winit::window::WindowAttributes::default()
                     .with_title("Shadow Company - Left for Dead (granite)")
-                    .with_inner_size(winit::dpi::LogicalSize::new(640, 480))
+                    // .with_inner_size(winit::dpi::LogicalSize::new(640, 480))
+                    .with_inner_size(winit::dpi::LogicalSize::new(1280, 800))
                     .with_position(position)
                     // .with_resizable(false)
-                    .with_system_backdrop(winit::platform::windows::BackdropType::None)
-                    .with_enabled_buttons(
-                        winit::window::WindowButtons::MINIMIZE
-                            | winit::window::WindowButtons::CLOSE,
-                    );
+                    // .with_enabled_buttons(
+                    //     winit::window::WindowButtons::MINIMIZE
+                    //         | winit::window::WindowButtons::CLOSE,
+                    // )
+                    //.with_system_backdrop(winit::platform::windows::BackdropType::None)
+                    ;
                 let window = Arc::new(
                     event_loop
                         .create_window(attributes)
@@ -91,19 +92,27 @@ impl winit::application::ApplicationHandler for App {
                     .cloned()
                     .unwrap();
 
-                // let scene = Box::new(LoadingScene::new(vfs.as_ref(), &renderer));
-                // let scene = Box::new(WorldScene::new(&assets, &renderer, campaign_def));
-
-                let scene = Box::new(WorldScene::new(&assets, &renderer, campaign_def));
+                let scene: Box<dyn Scene> = if false {
+                    use game::scenes::loading::LoadingScene;
+                    Box::new(LoadingScene::new(&assets, &renderer))
+                } else {
+                    Box::new(match WorldScene::new(&assets, &renderer, campaign_def) {
+                        Ok(scene) => scene,
+                        Err(err) => {
+                            error!("Could not create world scene! - {}", err);
+                            panic!();
+                        }
+                    })
+                };
 
                 info!("Application initialized!");
 
                 *self = App::Initialized {
                     window,
                     renderer,
-                    assets,
+                    _assets: assets,
                     last_frame_time: Instant::now(),
-                    campaign_defs,
+                    _campaign_defs: campaign_defs,
                     scene,
                 };
             }
@@ -189,29 +198,6 @@ fn main() {
     tracing_subscriber::fmt().init();
 
     let opts = Opts::parse();
-
-    // let vfs = engine::vfs::VirtualFileSystem::new(opts.path);
-
-    // let config_file = vfs.open("config/campaign_defs.txt").unwrap();
-
-    // let _campaigns =
-    //     game::config::read_compaign_defs(&String::from_utf8_lossy(config_file.as_ref()));
-
-    // for c in _campaigns
-    //     .iter()
-    //     .map(|c| format!("{} ({})", c.title, c.base_name))
-    // {
-    //     println!("campaign: {}", c);
-    // }
-
-    // let image_defs_file = vfs.open("config/image_defs.txt").unwrap();
-    // let images = game::config::read_image_defs(&String::from_utf8_lossy(image_defs_file.as_ref()));
-
-    // println!("images: {:#?}", images);
-
-    // let window_base_file = vfs.open("config/window_bases/main_menu.txt").unwrap();
-    // let data = String::from_utf8_lossy(window_base_file.as_ref());
-    // config::read_window_base_file(data.as_ref());
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
 

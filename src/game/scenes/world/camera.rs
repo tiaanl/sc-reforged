@@ -22,7 +22,7 @@ impl Camera {
             rotation,
             aspect: 1.0,
             near: 0.1,
-            far: 1000.0,
+            far: 100000.0,
         }
     }
 

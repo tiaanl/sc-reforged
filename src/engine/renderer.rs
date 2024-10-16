@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 struct DepthTexture {
-    texture: wgpu::Texture,
+    _texture: wgpu::Texture,
     view: wgpu::TextureView,
-    sampler: wgpu::Sampler,
+    _sampler: wgpu::Sampler,
 }
 
 pub struct Renderer {
@@ -110,9 +110,9 @@ impl Renderer {
         });
 
         DepthTexture {
-            texture,
+            _texture: texture,
             view,
-            sampler,
+            _sampler: sampler,
         }
     }
 

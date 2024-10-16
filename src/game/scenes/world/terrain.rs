@@ -1,14 +1,15 @@
-use std::{
-    io::{Read, Seek, SeekFrom},
-    path::{Path, PathBuf},
-};
+use std::io::{Read, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use glam::Mat4;
+use tracing::info;
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
 use crate::{
-    engine::renderer::Renderer,
+    engine::{
+        assets::{AssetError, Assets},
+        renderer::Renderer,
+    },
     game::config::{ConfigFile, TerrainMapping},
 };
 
@@ -22,10 +23,15 @@ struct Vertex {
 
 pub struct Terrain {
     vertex_buffer: wgpu::Buffer,
+
     index_buffer: wgpu::Buffer,
     index_count: u32,
 
+    wireframe_index_buffer: wgpu::Buffer,
+    wireframe_index_count: u32,
+
     pipeline: wgpu::RenderPipeline,
+    wireframe_pipeline: wgpu::RenderPipeline,
 
     model_buffer: wgpu::Buffer,
     model_bind_group: wgpu::BindGroup,
@@ -33,9 +39,7 @@ pub struct Terrain {
     rotation: f32,
 }
 
-fn load_texture_map(path: impl AsRef<Path>) -> (u32, u32, Vec<u8>) {
-    let mut file = std::fs::File::open(path.as_ref()).unwrap();
-
+fn load_texture_map(data: &[u8]) -> (u32, u32, Vec<u8>) {
     /*
     typedef struct _PcxHeader
     {
@@ -60,40 +64,44 @@ fn load_texture_map(path: impl AsRef<Path>) -> (u32, u32, Vec<u8>) {
     } PCXHEAD;
     */
 
-    let header = file.read_u8().unwrap();
-    let version = file.read_u8().unwrap();
-    let encoding_method = file.read_u8().unwrap();
-    let bits = file.read_u8().unwrap();
-    let min_x = file.read_u16::<LittleEndian>().unwrap();
-    let min_y = file.read_u16::<LittleEndian>().unwrap();
-    let max_x = file.read_u16::<LittleEndian>().unwrap();
-    let max_y = file.read_u16::<LittleEndian>().unwrap();
-    let dpi_x = file.read_u16::<LittleEndian>().unwrap();
-    let dpi_y = file.read_u16::<LittleEndian>().unwrap();
-    file.seek(SeekFrom::Current(48)).unwrap(); // Skip the EGA palette.
-    let _ = file.read_u8().unwrap(); // Reserved.
-    let color_planes = file.read_u8().unwrap();
-    let color_plane_bytes = file.read_u16::<LittleEndian>().unwrap();
-    let palette_mode = file.read_u16::<LittleEndian>().unwrap();
-    let source_width = file.read_u16::<LittleEndian>().unwrap();
-    let source_height = file.read_u16::<LittleEndian>().unwrap();
-    file.seek(SeekFrom::Current(54)).unwrap();
+    let mut data = std::io::Cursor::new(data);
+
+    let _header = data.read_u8().unwrap();
+    let _version = data.read_u8().unwrap();
+    let encoding_method = data.read_u8().unwrap();
+    let _bits = data.read_u8().unwrap();
+    let min_x = data.read_u16::<LittleEndian>().unwrap();
+    let min_y = data.read_u16::<LittleEndian>().unwrap();
+    let max_x = data.read_u16::<LittleEndian>().unwrap();
+    let max_y = data.read_u16::<LittleEndian>().unwrap();
+    let _dpi_x = data.read_u16::<LittleEndian>().unwrap();
+    let _dpi_y = data.read_u16::<LittleEndian>().unwrap();
+    data.seek(SeekFrom::Current(48)).unwrap(); // Skip the EGA palette.
+    let _ = data.read_u8().unwrap(); // Reserved.
+    let _color_planes = data.read_u8().unwrap();
+    let _color_plane_bytes = data.read_u16::<LittleEndian>().unwrap();
+    let _palette_mode = data.read_u16::<LittleEndian>().unwrap();
+    let _source_width = data.read_u16::<LittleEndian>().unwrap();
+    let _source_height = data.read_u16::<LittleEndian>().unwrap();
+    data.seek(SeekFrom::Current(54)).unwrap();
 
     let width = max_x - min_x + 1;
     let height = max_y - min_y + 1;
 
+    println!("width: {width}, height: {height}");
+
     let decoded = if encoding_method == 0 {
-        let mut decoded = vec![0_u8; (width * height) as usize];
-        file.read_exact(decoded.as_mut()).unwrap();
+        let mut decoded = vec![0_u8; width as usize * height as usize];
+        data.read_exact(decoded.as_mut()).unwrap();
         decoded
     } else if encoding_method == 1 {
-        let mut decoded = Vec::with_capacity((width * height) as usize);
-        while let Ok(byte) = file.read_u8() {
+        let mut decoded = Vec::with_capacity(width as usize * height as usize);
+        while let Ok(byte) = data.read_u8() {
             if (byte & 0xC0) != 0xC0 {
                 decoded.push(byte);
             } else {
                 let count = (byte & 0x3F) as usize;
-                let data_byte = file.read_u8().unwrap();
+                let data_byte = data.read_u8().unwrap();
                 decoded.extend(std::iter::repeat(data_byte).take(count));
             }
         }
@@ -107,89 +115,164 @@ fn load_texture_map(path: impl AsRef<Path>) -> (u32, u32, Vec<u8>) {
 
 impl Terrain {
     pub fn new(
+        assets: &Assets,
         renderer: &Renderer,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         model_bind_group_layout: &wgpu::BindGroupLayout,
-    ) -> Self {
-        let root = PathBuf::from(r"C:\Games\shadow_company\Data\");
-        let data = std::fs::read_to_string(
-            root.join("textures")
-                .join("terrain")
-                .join("training")
-                .join("terrain_mapping.txt"),
-        )
-        .unwrap();
-        let f = ConfigFile::new(data.as_str());
-        let tm = TerrainMapping::from(f);
+    ) -> Result<Self, AssetError> {
+        let terrain_name = "angola"; // TODO: Replace with campaign name.
 
-        // let height_map = load_texture_map(root.join("maps").join("training.pcx"));
-        let (width, height, height_map) = load_texture_map(r"C:\Code\granite\test.pcx");
+        let TerrainMapping {
+            altitude_map_height_base,
+            map_dx,
+            map_dy,
+            nominal_edge_size,
+            ..
+        } = {
+            let terrain_mapping_path =
+                format!("textures/terrain/{}/terrain_mapping.txt", terrain_name);
 
-        println!("width: {}, height: {}", width, height);
+            info!("Loading terrain mapping: {}", terrain_mapping_path);
 
-        let height_map = height_map.into_iter().map(|v| v as f32).collect::<Vec<_>>();
+            let data = assets.load_config_file(terrain_mapping_path)?;
 
-        let mut vertices = Vec::with_capacity(width as usize * height as usize);
-        for y in 0..width {
-            for x in 0..height {
-                // let index = y as usize * width as usize + x as usize;
-                // let height = height_map[index];
+            TerrainMapping::from(ConfigFile::new(&data))
+        };
 
-                vertices.push([
-                    (x as f32) * 2.0,
-                    (y as f32) * 2.0,
-                    0.0, // height
-                    0.0,
-                    0.0,
-                    0.0,
-                    1.0,
-                    0.0,
-                ]);
+        let (width, height, _height_map) = {
+            let path = format!("maps/{}.pcx", terrain_name); // TODO: Get the name of the map from the [CampaignDef].
+            let data = assets.load_raw(path)?;
+            load_texture_map(&data)
+        };
+
+        info!(
+            "terrain size: {} x {}, terrain heightmap size: {} x {}",
+            map_dx, map_dy, width, height,
+        );
+
+        let heights = (0..=255)
+            .map(|h| (h as f32) * altitude_map_height_base)
+            .collect::<Vec<_>>();
+
+        let (vertices, indices, wireframe_indices) = if true {
+            let mut vertices = Vec::with_capacity(width as usize * height as usize);
+            let mut indices: Vec<u16> =
+                Vec::with_capacity((width as usize - 1) * (height as usize - 1) * 6);
+            let mut wireframe_indices: Vec<u16> =
+                Vec::with_capacity((width as usize - 1) * (height as usize - 1) * 8);
+
+            for y in 0..width {
+                for x in 0..height {
+                    let height = _height_map[(y * width + x) as usize] as usize;
+                    vertices.push([
+                        (x as f32) * nominal_edge_size,
+                        heights[height],
+                        (y as f32) * nominal_edge_size,
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0,
+                    ]);
+                }
             }
-        }
 
-        // vx, vy, vz, nx, ny, nz, u, v
-        // let vertices: &[[f32; 8]] = &[
-        //     // Back face
-        //     [-0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.0, 0.0], // 0
-        //     [0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 0.0],  // 1
-        //     [0.5, 0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 1.0],   // 2
-        //     [-0.5, 0.5, -0.5, 0.0, 0.0, -1.0, 0.0, 1.0],  // 3
-        //     // Front face
-        //     [-0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 0.0], // 4
-        //     [0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 0.0],  // 5
-        //     [0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0],   // 6
-        //     [-0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 1.0],  // 7
-        //     // Left face
-        //     [-0.5, -0.5, -0.5, -1.0, 0.0, 0.0, 0.0, 0.0], // 8
-        //     [-0.5, 0.5, -0.5, -1.0, 0.0, 0.0, 1.0, 0.0],  // 9
-        //     [-0.5, 0.5, 0.5, -1.0, 0.0, 0.0, 1.0, 1.0],   // 10
-        //     [-0.5, -0.5, 0.5, -1.0, 0.0, 0.0, 0.0, 1.0],  // 11
-        //     // Right face
-        //     [0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.0, 0.0], // 12
-        //     [0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 1.0, 0.0],  // 13
-        //     [0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 1.0, 1.0],   // 14
-        //     [0.5, -0.5, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0],  // 15
-        //     // Top face
-        //     [-0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.0, 0.0], // 16
-        //     [0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0],  // 17
-        //     [0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 1.0, 1.0],   // 18
-        //     [-0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.0, 1.0],  // 19
-        //     // Bottom face
-        //     [-0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.0, 0.0], // 20
-        //     [0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 1.0, 0.0],  // 21
-        //     [0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 1.0, 1.0],   // 22
-        //     [-0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 0.0, 1.0],  // 23
-        // ];
+            for y in 0..width - 1 {
+                for x in 0..height - 1 {
+                    // Top-left, bottom-left, bottom-right, top-right vertices of the quad
+                    let bottom_left = (y * width + x) as u16;
+                    let top_left = ((y + 1) * width + x) as u16;
+                    let top_right = ((y + 1) * width + (x + 1)) as u16;
+                    let bottom_right = (y * width + (x + 1)) as u16;
 
-        let indices: &[u16] = &[
-            0, 1, 2, 2, 3, 0, // Back face
-            4, 5, 6, 6, 7, 4, // Front face
-            8, 9, 10, 10, 11, 8, // Left face
-            12, 13, 14, 14, 15, 12, // Right face
-            16, 17, 18, 18, 19, 16, // Top face
-            20, 21, 22, 22, 23, 20, // Bottom face
-        ];
+                    // First triangle (top-left, bottom-left, bottom-right)
+                    indices.push(top_left);
+                    indices.push(bottom_left);
+                    indices.push(bottom_right);
+
+                    // Second triangle (top-left, bottom-right, top-right)
+                    indices.push(top_left);
+                    indices.push(bottom_right);
+                    indices.push(top_right);
+
+                    // Horizontal edges
+                    wireframe_indices.push(top_left);
+                    wireframe_indices.push(top_right);
+
+                    // Vertical edge (right of the quad)
+                    wireframe_indices.push(top_right);
+                    wireframe_indices.push(bottom_right);
+                }
+            }
+
+            for x in 0..width - 1 {
+                let bottom_left = x as u16;
+                let bottom_right = (x + 1) as u16;
+                wireframe_indices.push(bottom_left);
+                wireframe_indices.push(bottom_right);
+            }
+
+            // Add the last column's vertical edges
+            for y in 0..height - 1 {
+                let bottom_left = (y * width) as u16;
+                let top_left = ((y + 1) * width) as u16;
+                wireframe_indices.push(bottom_left);
+                wireframe_indices.push(top_left);
+            }
+
+            (
+                vertices,
+                indices.iter().map(|i| *i as u16).collect(),
+                wireframe_indices,
+            )
+        } else {
+            // vx, vy, vz, nx, ny, nz, u, v
+            let vertices = vec![
+                // Back face
+                [-0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.0, 0.0], // 0
+                [0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 0.0],  // 1
+                [0.5, 0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 1.0],   // 2
+                [-0.5, 0.5, -0.5, 0.0, 0.0, -1.0, 0.0, 1.0],  // 3
+                // Front face
+                [-0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 0.0], // 4
+                [0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 0.0],  // 5
+                [0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0],   // 6
+                [-0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 1.0],  // 7
+                // Left face
+                [-0.5, -0.5, -0.5, -1.0, 0.0, 0.0, 0.0, 0.0], // 8
+                [-0.5, 0.5, -0.5, -1.0, 0.0, 0.0, 1.0, 0.0],  // 9
+                [-0.5, 0.5, 0.5, -1.0, 0.0, 0.0, 1.0, 1.0],   // 10
+                [-0.5, -0.5, 0.5, -1.0, 0.0, 0.0, 0.0, 1.0],  // 11
+                // Right face
+                [0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.0, 0.0], // 12
+                [0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 1.0, 0.0],  // 13
+                [0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 1.0, 1.0],   // 14
+                [0.5, -0.5, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0],  // 15
+                // Top face
+                [-0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.0, 0.0], // 16
+                [0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0],  // 17
+                [0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 1.0, 1.0],   // 18
+                [-0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.0, 1.0],  // 19
+                // Bottom face
+                [-0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.0, 0.0], // 20
+                [0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 1.0, 0.0],  // 21
+                [0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 1.0, 1.0],   // 22
+                [-0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 0.0, 1.0],  // 23
+            ];
+
+            let indices: &[u16] = &[
+                0, 1, 2, 2, 3, 0, // Back face
+                4, 5, 6, 6, 7, 4, // Front face
+                8, 9, 10, 10, 11, 8, // Left face
+                12, 13, 14, 14, 15, 12, // Right face
+                16, 17, 18, 18, 19, 16, // Top face
+                20, 21, 22, 22, 23, 20, // Bottom face
+            ];
+
+            let wireframe_indices = &[0, 1, 1, 2];
+
+            (vertices, indices.to_vec(), wireframe_indices.to_vec())
+        };
 
         let vertex_buffer = renderer
             .device
@@ -203,9 +286,18 @@ impl Terrain {
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("terrain_index_buffer"),
-                contents: bytemuck::cast_slice(indices),
+                contents: bytemuck::cast_slice(&indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
+
+        let wireframe_index_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("terrain_wireframe_index_buffer"),
+                    contents: bytemuck::cast_slice(&wireframe_indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
 
         let shader_module = renderer
             .device
@@ -216,53 +308,105 @@ impl Terrain {
                 ))),
             });
 
-        let pipeline_layout =
+        let pipeline = {
+            let pipeline_layout =
+                renderer
+                    .device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("terrain_pipeline_layout"),
+                        bind_group_layouts: &[camera_bind_group_layout, model_bind_group_layout],
+                        push_constant_ranges: &[],
+                    });
+
             renderer
                 .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("terrain_pipeline_layout"),
-                    bind_group_layouts: &[camera_bind_group_layout, model_bind_group_layout],
-                    push_constant_ranges: &[],
-                });
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("terrain_render_pipeline"),
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader_module,
+                        entry_point: "vertex_main",
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers: &[wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &vertex_attr_array![
+                                0 => Float32x3,
+                                1 => Float32x3,
+                                2 => Float32x2,
+                            ],
+                        }],
+                    },
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        ..Default::default()
+                    },
+                    depth_stencil: renderer.depth_stencil_state(),
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader_module,
+                        entry_point: "fragment_main",
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: renderer.surface_config.format,
+                            blend: Some(wgpu::BlendState::REPLACE),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    multiview: None,
+                    cache: None,
+                })
+        };
 
-        let pipeline = renderer
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("world_render_pipeline"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader_module,
-                    entry_point: "vertex_main",
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[wgpu::VertexBufferLayout {
-                        array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &vertex_attr_array![
-                            0 => Float32x3,
-                            1 => Float32x3,
-                            2 => Float32x2,
-                        ],
-                    }],
-                },
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    ..Default::default()
-                },
-                depth_stencil: renderer.depth_stencil_state(),
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader_module,
-                    entry_point: "fragment_main",
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: renderer.surface_config.format,
-                        blend: Some(wgpu::BlendState::REPLACE),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                multiview: None,
-                cache: None,
-            });
+        let wireframe_pipeline = {
+            let writeframe_pipeline_layout =
+                renderer
+                    .device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("terrain_writeframe_pipeline_layout"),
+                        bind_group_layouts: &[camera_bind_group_layout, model_bind_group_layout],
+                        push_constant_ranges: &[],
+                    });
+
+            renderer
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("terrain_wireframe_render_pipeline"),
+                    layout: Some(&writeframe_pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader_module,
+                        entry_point: "vertex_main",
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers: &[wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &vertex_attr_array![
+                                0 => Float32x3,
+                                1 => Float32x3,
+                                2 => Float32x2,
+                            ],
+                        }],
+                    },
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::LineList,
+                        ..Default::default()
+                    },
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader_module,
+                        entry_point: "fragment_main_wireframe",
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: renderer.surface_config.format,
+                            blend: Some(wgpu::BlendState::REPLACE),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    multiview: None,
+                    cache: None,
+                })
+        };
 
         let model = Mat4::IDENTITY.to_cols_array_2d();
         let model_buffer = renderer
@@ -283,23 +427,26 @@ impl Terrain {
                 }],
             });
 
-        Self {
+        Ok(Self {
             vertex_buffer,
+
             index_buffer,
             index_count: indices.len() as u32,
 
+            wireframe_index_buffer,
+            wireframe_index_count: wireframe_indices.len() as u32,
+
             pipeline,
+            wireframe_pipeline,
 
             model_buffer,
             model_bind_group,
 
             rotation: 0.0,
-        }
+        })
     }
 
-    pub fn update(&mut self, delta_time: f32) {
-        // self.rotation += 0.01 * delta_time;
-    }
+    pub fn update(&mut self, _delta_time: f32) {}
 
     pub fn render(
         &self,
@@ -314,30 +461,58 @@ impl Terrain {
             .queue
             .write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&model));
 
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("terrain_render_pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: output,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 0.4,
-                    }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: renderer.render_pass_depth_stencil_attachment(),
-            ..Default::default()
-        });
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("terrain_render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: output,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 0.4,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: renderer.render_pass_depth_stencil_attachment(),
+                ..Default::default()
+            });
 
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.model_bind_group, &[]);
-        render_pass.draw_indexed(0..self.index_count, 0, 0..1);
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.model_bind_group, &[]);
+            render_pass.draw_indexed(0..self.index_count, 0, 0..1);
+        }
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("terrain_render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: output,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                ..Default::default()
+            });
+
+            render_pass.set_pipeline(&self.wireframe_pipeline);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(
+                self.wireframe_index_buffer.slice(..),
+                wgpu::IndexFormat::Uint16,
+            );
+            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.model_bind_group, &[]);
+            render_pass.draw_indexed(0..self.wireframe_index_count, 0, 0..1);
+        }
     }
 }

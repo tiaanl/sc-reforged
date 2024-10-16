@@ -1,4 +1,4 @@
-use crate::engine::{renderer::Renderer, scene::Scene, vfs::FileSystem};
+use crate::engine::{assets::Assets, renderer::Renderer, scene::Scene};
 
 pub struct LoadingScene {
     pipeline: wgpu::RenderPipeline,
@@ -9,8 +9,8 @@ pub struct LoadingScene {
 }
 
 impl LoadingScene {
-    pub fn new(fs: FileSystem, renderer: &Renderer) -> Self {
-        let data = fs.load(r"textures/interface/loadscr2.jpg").unwrap();
+    pub fn new(assets: &Assets, renderer: &Renderer) -> Self {
+        let data = assets.load_raw(r"textures/interface/loadscr2.jpg").unwrap();
         let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg).unwrap();
         let image = image.into_rgba8();
 
