@@ -1,3 +1,5 @@
+use tracing::info;
+
 use crate::engine::{assets::Assets, renderer::Renderer, scene::Scene};
 
 pub struct LoadingScene {

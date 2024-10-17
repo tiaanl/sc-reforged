@@ -158,6 +158,30 @@ impl winit::application::ApplicationHandler for App {
                         window.request_redraw();
                     }
 
+                    WindowEvent::KeyboardInput { event, .. } => {
+                        if let winit::keyboard::PhysicalKey::Code(key) = event.physical_key {
+                            if !event.repeat {
+                                if event.state == winit::event::ElementState::Pressed {
+                                    scene.on_key_pressed(key);
+                                } else {
+                                    scene.on_key_released(key);
+                                }
+                            }
+                        }
+                    }
+
+                    WindowEvent::MouseInput { state, button, .. } => {
+                        if state == winit::event::ElementState::Pressed {
+                            scene.on_mouse_pressed(button);
+                        } else {
+                            scene.on_mouse_released(button);
+                        }
+                    }
+
+                    WindowEvent::CursorMoved { position, .. } => {
+                        scene.on_mouse_moved(glam::vec2(position.x as f32, position.y as f32));
+                    }
+
                     WindowEvent::RedrawRequested => {
                         let now = Instant::now();
                         let last_frame_duration = now - *last_frame_time;

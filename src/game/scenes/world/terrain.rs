@@ -35,8 +35,6 @@ pub struct Terrain {
 
     model_buffer: wgpu::Buffer,
     model_bind_group: wgpu::BindGroup,
-
-    rotation: f32,
 }
 
 fn load_texture_map(data: &[u8]) -> (u32, u32, Vec<u8>) {
@@ -441,8 +439,6 @@ impl Terrain {
 
             model_buffer,
             model_bind_group,
-
-            rotation: 0.0,
         })
     }
 
@@ -456,7 +452,7 @@ impl Terrain {
         camera_bind_group: &wgpu::BindGroup,
     ) {
         // Update the model details.
-        let model = Mat4::from_rotation_y(self.rotation).to_cols_array_2d();
+        let model = Mat4::IDENTITY.to_cols_array_2d();
         renderer
             .queue
             .write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&model));

@@ -1,4 +1,5 @@
 use glam::{Mat4, Quat, Vec3};
+use tracing::info;
 
 pub struct Camera {
     pub position: glam::Vec3,
@@ -39,7 +40,7 @@ impl Camera {
         let rotation = Mat4::from_quat(self.rotation);
         // Translation is inverted, because we're moving the world, not the camera.
         let translation = Mat4::from_translation(-self.position);
-        let view = translation * rotation;
+        let view = rotation * translation;
 
         Matrices {
             projection: projection.to_cols_array_2d(),
@@ -47,26 +48,34 @@ impl Camera {
         }
     }
 
-    pub fn look_at(&mut self, target: Vec3) {
-        let world_up = Vec3::Y;
-        let world_forward = Vec3::Z; // +Z goes into the screen.
+    /// Calculate and return the camera's forward vector.
+    pub fn forward(&self) -> Vec3 {
+        self.rotation * Vec3::NEG_Z
+    }
 
-        let forward = (target - self.position).normalize();
+    pub fn right(&self) -> Vec3 {
+        self.rotation * Vec3::X
+    }
 
-        let rotation_axis = world_forward.cross(forward).normalize();
-        let dot_product = world_forward.dot(forward).clamp(-1.0, 1.0);
+    pub fn up(&self) -> Vec3 {
+        self.rotation * Vec3::Y
+    }
 
-        let rotation_angle = dot_product.acos().to_radians();
+    pub fn _look_at(&mut self, target: Vec3) {
+        let direction = (target - self.position).normalize();
+        let forward = Vec3::new(0.0, 0.0, -1.0);
+        let dot = forward.dot(direction);
 
-        self.rotation = if dot_product < -0.9999 {
-            // If looking in exactly the opposite direction, rotate 180 degrees around the "up" vector
-            Quat::from_axis_angle(world_up, std::f32::consts::PI)
-        } else if dot_product > 0.9999 {
-            // No rotation needed if eye is already facing target
-            Quat::IDENTITY
+        // If looking directly opposite, rotate by PI around the Y axis
+        if dot < -0.9999 {
+            self.rotation = Quat::from_axis_angle(Vec3::Y, std::f32::consts::PI);
+        } else if dot > 0.9999 {
+            // If already looking at the target, keep the current rotation
+            self.rotation = Quat::IDENTITY;
         } else {
-            // Regular rotation quaternion.
-            Quat::from_axis_angle(rotation_axis, rotation_angle)
-        };
+            let axis = forward.cross(direction).normalize();
+            let angle = dot.acos();
+            self.rotation = Quat::from_axis_angle(axis, angle);
+        }
     }
 }
