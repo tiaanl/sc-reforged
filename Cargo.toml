@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ahash = { version = "0.8.11", default-features = false }
 bytemuck = { version = "1.18.0", default-features = false, features = [
     "derive",
 ] }
@@ -12,6 +13,9 @@ clap = { version = "4.5.17", default-features = false, features = [
     "derive",
     "std",
 ] }
+egui = { version = "0.29.1", default-features = false }
+egui-winit = { version = "0.29.1", default-features = false }
+egui-wgpu = { version = "0.29.1", default-features = false }
 glam = { version = "0.29.0", default-features = false, features = [
     "bytemuck",
     "std",
@@ -28,3 +32,4 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 ] }
 wgpu = { version = "22.1.0", default-features = false, features = ["wgsl"] }
 winit = { version = "0.30.5", default-features = false, features = ["rwh_06"] }
+epaint = { version = "0.29.1", default-features = false, features = ["default_fonts"] }

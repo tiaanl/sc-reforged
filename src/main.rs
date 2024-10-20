@@ -1,13 +1,16 @@
-use tracing::{error, info, warn};
-
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
-use engine::{assets::Assets, renderer::Renderer, scene::Scene, vfs::FileSystem};
+use egui::Widget;
+use engine::{
+    assets::Assets, egui_integration::EguiIntegration, renderer::Renderer, scene::Scene,
+    vfs::FileSystem,
+};
 use game::{
     config::{read_compaign_defs, CampaignDef},
     scenes::world::WorldScene,
 };
+use tracing::{error, info, warn};
 
 mod engine;
 mod game;
@@ -26,6 +29,8 @@ enum App {
 
         /// The renderer.
         renderer: Renderer,
+
+        egui_integration: engine::egui_integration::EguiIntegration,
 
         _assets: Assets,
 
@@ -76,6 +81,8 @@ impl winit::application::ApplicationHandler for App {
 
                 let renderer = Renderer::new(Arc::clone(&window));
 
+                let egui_integration = EguiIntegration::new(event_loop, &renderer);
+
                 let path = opts
                     .path
                     .clone()
@@ -110,6 +117,7 @@ impl winit::application::ApplicationHandler for App {
                 *self = App::Initialized {
                     window,
                     renderer,
+                    egui_integration,
                     _assets: assets,
                     last_frame_time: Instant::now(),
                     _campaign_defs: campaign_defs,
@@ -130,7 +138,6 @@ impl winit::application::ApplicationHandler for App {
         event: winit::event::WindowEvent,
     ) {
         use winit::event::WindowEvent;
-
         match self {
             App::Uninitialzed(_) => {
                 warn!("Can't process events for uninitialized application.");
@@ -138,11 +145,18 @@ impl winit::application::ApplicationHandler for App {
             App::Initialized {
                 window,
                 renderer,
+                egui_integration,
                 last_frame_time,
                 scene,
                 ..
             } => {
                 if window_id != window.id() {
+                    return;
+                }
+
+                let egui_winit::EventResponse { consumed, repaint } =
+                    egui_integration.window_event(window.as_ref(), &event);
+                if consumed {
                     return;
                 }
 
@@ -198,11 +212,37 @@ impl winit::application::ApplicationHandler for App {
                             },
                         );
 
-                        scene.update(1.0 / last_frame_duration.as_secs_f32() / 60.0);
+                        {
+                            scene.update(1.0 / last_frame_duration.as_secs_f32() / 60.0);
 
-                        scene.begin_frame();
-                        scene.render(&renderer, &mut encoder, &view);
-                        scene.end_frame();
+                            scene.begin_frame();
+                            scene.render(&renderer, &mut encoder, &view);
+                            scene.end_frame();
+                        }
+
+                        // Render egui if it requires a repaint.
+                        if repaint {
+                            egui_integration.render(window, renderer, &mut encoder, &view, |ctx| {
+                                egui::Area::new(egui::Id::new("engine_info")).show(ctx, |ui| {
+                                    let fps_label = {
+                                        let text = egui::WidgetText::RichText(egui::RichText::new(
+                                            format!(
+                                                "{:0.1}",
+                                                1.0 / last_frame_duration.as_secs_f64()
+                                            ),
+                                        ))
+                                        .background_color(epaint::Color32::from_rgba_premultiplied(
+                                            0, 0, 0, 127,
+                                        ))
+                                        .monospace();
+                                        egui::Label::new(text.color(epaint::Color32::WHITE))
+                                            .wrap_mode(egui::TextWrapMode::Extend)
+                                    };
+
+                                    fps_label.ui(ui);
+                                });
+                            });
+                        }
 
                         renderer.queue.submit(std::iter::once(encoder.finish()));
 
