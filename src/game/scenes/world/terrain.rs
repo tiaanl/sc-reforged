@@ -1,7 +1,7 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
-use glam::Mat4;
+use glam::{vec3, Mat4, Vec3};
 use tracing::info;
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
@@ -22,6 +22,14 @@ struct Vertex {
 }
 
 pub struct Terrain {
+    height_map_width: u32,
+    height_map_height: u32,
+
+    altitude_map_height_base: f32,
+    map_dx: f32,
+    map_dy: f32,
+    nominal_edge_size: f32,
+
     vertex_buffer: wgpu::Buffer,
 
     index_buffer: wgpu::Buffer,
@@ -35,6 +43,8 @@ pub struct Terrain {
 
     model_buffer: wgpu::Buffer,
     model_bind_group: wgpu::BindGroup,
+
+    draw_wireframe: bool,
 }
 
 fn load_texture_map(data: &[u8]) -> (u32, u32, Vec<u8>) {
@@ -86,8 +96,6 @@ fn load_texture_map(data: &[u8]) -> (u32, u32, Vec<u8>) {
     let width = max_x - min_x + 1;
     let height = max_y - min_y + 1;
 
-    println!("width: {width}, height: {height}");
-
     let decoded = if encoding_method == 0 {
         let mut decoded = vec![0_u8; width as usize * height as usize];
         data.read_exact(decoded.as_mut()).unwrap();
@@ -137,7 +145,7 @@ impl Terrain {
             TerrainMapping::from(ConfigFile::new(&data))
         };
 
-        let (width, height, _height_map) = {
+        let (height_map_width, height_map_height, _height_map) = {
             let path = format!("maps/{}.pcx", terrain_name); // TODO: Get the name of the map from the [CampaignDef].
             let data = assets.load_raw(path)?;
             load_texture_map(&data)
@@ -145,7 +153,7 @@ impl Terrain {
 
         info!(
             "terrain size: {} x {}, terrain heightmap size: {} x {}",
-            map_dx, map_dy, width, height,
+            map_dx, map_dy, height_map_width, height_map_height,
         );
 
         let heights = (0..=255)
@@ -153,15 +161,18 @@ impl Terrain {
             .collect::<Vec<_>>();
 
         let (vertices, indices, wireframe_indices) = if true {
-            let mut vertices = Vec::with_capacity(width as usize * height as usize);
-            let mut indices: Vec<u16> =
-                Vec::with_capacity((width as usize - 1) * (height as usize - 1) * 6);
-            let mut wireframe_indices: Vec<u16> =
-                Vec::with_capacity((width as usize - 1) * (height as usize - 1) * 8);
+            let mut vertices =
+                Vec::with_capacity(height_map_width as usize * height_map_height as usize);
+            let mut indices: Vec<u16> = Vec::with_capacity(
+                (height_map_width as usize - 1) * (height_map_height as usize - 1) * 6,
+            );
+            let mut wireframe_indices: Vec<u16> = Vec::with_capacity(
+                (height_map_width as usize - 1) * (height_map_height as usize - 1) * 8,
+            );
 
-            for y in 0..width {
-                for x in 0..height {
-                    let height = _height_map[(y * width + x) as usize] as usize;
+            for y in 0..height_map_width {
+                for x in 0..height_map_height {
+                    let height = _height_map[(y * height_map_width + x) as usize] as usize;
                     vertices.push([
                         (x as f32) * nominal_edge_size,
                         heights[height],
@@ -175,13 +186,13 @@ impl Terrain {
                 }
             }
 
-            for y in 0..width - 1 {
-                for x in 0..height - 1 {
+            for y in 0..height_map_width - 1 {
+                for x in 0..height_map_height - 1 {
                     // Top-left, bottom-left, bottom-right, top-right vertices of the quad
-                    let bottom_left = (y * width + x) as u16;
-                    let top_left = ((y + 1) * width + x) as u16;
-                    let top_right = ((y + 1) * width + (x + 1)) as u16;
-                    let bottom_right = (y * width + (x + 1)) as u16;
+                    let bottom_left = (y * height_map_width + x) as u16;
+                    let top_left = ((y + 1) * height_map_width + x) as u16;
+                    let top_right = ((y + 1) * height_map_width + (x + 1)) as u16;
+                    let bottom_right = (y * height_map_width + (x + 1)) as u16;
 
                     // First triangle (top-left, bottom-left, bottom-right)
                     indices.push(top_left);
@@ -203,7 +214,7 @@ impl Terrain {
                 }
             }
 
-            for x in 0..width - 1 {
+            for x in 0..height_map_width - 1 {
                 let bottom_left = x as u16;
                 let bottom_right = (x + 1) as u16;
                 wireframe_indices.push(bottom_left);
@@ -211,9 +222,9 @@ impl Terrain {
             }
 
             // Add the last column's vertical edges
-            for y in 0..height - 1 {
-                let bottom_left = (y * width) as u16;
-                let top_left = ((y + 1) * width) as u16;
+            for y in 0..height_map_height - 1 {
+                let bottom_left = (y * height_map_width) as u16;
+                let top_left = ((y + 1) * height_map_width) as u16;
                 wireframe_indices.push(bottom_left);
                 wireframe_indices.push(top_left);
             }
@@ -426,6 +437,14 @@ impl Terrain {
             });
 
         Ok(Self {
+            height_map_width,
+            height_map_height,
+
+            altitude_map_height_base,
+            map_dx,
+            map_dy,
+            nominal_edge_size,
+
             vertex_buffer,
 
             index_buffer,
@@ -439,10 +458,46 @@ impl Terrain {
 
             model_buffer,
             model_bind_group,
+
+            draw_wireframe: false,
         })
     }
 
+    /// Return the max bounds of the terrain. The min value of the bound is
+    /// [`Vec3::ZERO`].
+    pub fn bounds(&self) -> Vec3 {
+        vec3(
+            self.map_dx * self.nominal_edge_size,
+            self.altitude_map_height_base * 255.0,
+            self.map_dy * self.nominal_edge_size,
+        )
+    }
+
     pub fn update(&mut self, _delta_time: f32) {}
+
+    pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
+        ui.checkbox(&mut self.draw_wireframe, "Draw wireframe");
+
+        egui::Grid::new("terrain_data").show(ui, |ui| {
+            ui.label("height map size");
+            ui.label(format!(
+                "{} x {}",
+                self.height_map_width, self.height_map_height
+            ));
+            ui.end_row();
+
+            ui.label("terrain mapping size");
+            ui.label(format!("{} x {}", self.map_dx, self.map_dy));
+            ui.end_row();
+
+            ui.label("nominal edge size");
+            ui.label(format!("{}", self.nominal_edge_size));
+            ui.end_row();
+
+            ui.label("altitude map height base");
+            ui.label(format!("{}", self.altitude_map_height_base));
+        });
+    }
 
     pub fn render(
         &self,
@@ -485,7 +540,7 @@ impl Terrain {
             render_pass.draw_indexed(0..self.index_count, 0, 0..1);
         }
 
-        {
+        if self.draw_wireframe {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("terrain_render_pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {

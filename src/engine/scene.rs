@@ -15,6 +15,8 @@ pub trait Scene {
 
     fn update(&mut self, delta_time: f32);
 
+    fn debug_panel(&mut self, egui: &egui::Context) {}
+
     fn begin_frame(&mut self) {}
 
     fn render(

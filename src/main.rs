@@ -241,6 +241,9 @@ impl winit::application::ApplicationHandler for App {
 
                                     fps_label.ui(ui);
                                 });
+
+                                // Debug stuff from the scene.
+                                scene.debug_panel(ctx);
                             });
                         }
 

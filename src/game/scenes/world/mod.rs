@@ -7,7 +7,7 @@ use crate::{
     game::config::CampaignDef,
 };
 use camera::*;
-use glam::{vec3, Mat4, Quat, Vec2};
+use glam::{vec3, Mat4, Quat, Vec2, Vec3};
 use terrain::*;
 use tracing::info;
 use wgpu::util::DeviceExt;
@@ -83,14 +83,15 @@ impl WorldScene {
                     }],
                 });
 
-        let camera = Camera::from_position_rotation(vec3(0.0, 1000.0, 1000.0), Quat::IDENTITY);
-
         let terrain = Terrain::new(
             assets,
             renderer,
             &camera_bind_group_layout,
             &model_bind_group_layout,
         )?;
+
+        let mut camera = Camera::from_position_rotation(vec3(0.0, 1000.0, 1000.0), Quat::IDENTITY);
+        camera.set_bounds(Vec3::ZERO, terrain.bounds());
 
         Ok(Self {
             campaign_def,
@@ -178,8 +179,23 @@ impl Scene for WorldScene {
 
         if let Some(pos) = self.moving_camera {
             let delta = pos - self.last_mouse_position;
-            self.camera_yaw += delta.x;
+
+            self.camera_yaw = (self.camera_yaw + delta.x) % 360.0;
+            while self.camera_yaw > 360.0 {
+                self.camera_yaw -= 360.0
+            }
+            while self.camera_yaw < 0.0 {
+                self.camera_yaw += 360.0
+            }
+
             self.camera_pitch += delta.y;
+            while self.camera_pitch > 360.0 {
+                self.camera_pitch -= 360.0
+            }
+            while self.camera_pitch < 0.0 {
+                self.camera_pitch += 360.0
+            }
+
             self.moving_camera = Some(self.last_mouse_position);
         }
     }
@@ -209,6 +225,25 @@ impl Scene for WorldScene {
 
         self.camera.position += self.camera.forward() * self.moving_forward;
         self.camera.position += self.camera.right() * self.moving_right;
+    }
+
+    fn debug_panel(&mut self, egui: &egui::Context) {
+        egui::Window::new("World").show(egui, |ui| {
+            egui::Grid::new("world_info").show(ui, |ui| {
+                ui.label("pitch");
+                ui.add(egui::Slider::new(&mut self.camera_pitch, 0.0..=360.0));
+                ui.end_row();
+
+                ui.label("yaw");
+                ui.add(egui::Slider::new(&mut self.camera_yaw, 0.0..=360.0));
+                ui.end_row();
+            });
+
+            ui.heading("Camera");
+            self.camera.debug_panel(ui);
+            ui.heading("Terrain");
+            self.terrain.debug_panel(ui);
+        });
     }
 
     fn render(
