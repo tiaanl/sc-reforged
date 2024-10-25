@@ -41,9 +41,6 @@ pub struct Terrain {
     pipeline: wgpu::RenderPipeline,
     wireframe_pipeline: wgpu::RenderPipeline,
 
-    model_buffer: wgpu::Buffer,
-    model_bind_group: wgpu::BindGroup,
-
     draw_wireframe: bool,
 }
 
@@ -124,9 +121,8 @@ impl Terrain {
         assets: &Assets,
         renderer: &Renderer,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
-        model_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
-        let terrain_name = "angola"; // TODO: Replace with campaign name.
+        let terrain_name = "training"; // TODO: Replace with campaign name.
 
         let TerrainMapping {
             altitude_map_height_base,
@@ -323,7 +319,7 @@ impl Terrain {
                     .device
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: Some("terrain_pipeline_layout"),
-                        bind_group_layouts: &[camera_bind_group_layout, model_bind_group_layout],
+                        bind_group_layouts: &[camera_bind_group_layout],
                         push_constant_ranges: &[],
                     });
 
@@ -373,7 +369,7 @@ impl Terrain {
                     .device
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: Some("terrain_writeframe_pipeline_layout"),
-                        bind_group_layouts: &[camera_bind_group_layout, model_bind_group_layout],
+                        bind_group_layouts: &[camera_bind_group_layout],
                         push_constant_ranges: &[],
                     });
 
@@ -384,7 +380,7 @@ impl Terrain {
                     layout: Some(&writeframe_pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &shader_module,
-                        entry_point: "vertex_main",
+                        entry_point: "vertex_main_wireframe",
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[wgpu::VertexBufferLayout {
                             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
@@ -400,7 +396,7 @@ impl Terrain {
                         topology: wgpu::PrimitiveTopology::LineList,
                         ..Default::default()
                     },
-                    depth_stencil: None,
+                    depth_stencil: renderer.depth_stencil_state(),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &shader_module,
@@ -416,25 +412,6 @@ impl Terrain {
                     cache: None,
                 })
         };
-
-        let model = Mat4::IDENTITY.to_cols_array_2d();
-        let model_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("model_buffer"),
-                contents: bytemuck::cast_slice(&model),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
-        let model_bind_group = renderer
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("model_bind_group"),
-                layout: &model_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: model_buffer.as_entire_binding(),
-                }],
-            });
 
         Ok(Self {
             height_map_width,
@@ -455,9 +432,6 @@ impl Terrain {
 
             pipeline,
             wireframe_pipeline,
-
-            model_buffer,
-            model_bind_group,
 
             draw_wireframe: false,
         })
@@ -506,12 +480,6 @@ impl Terrain {
         output: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
     ) {
-        // Update the model details.
-        let model = Mat4::IDENTITY.to_cols_array_2d();
-        renderer
-            .queue
-            .write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&model));
-
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("terrain_render_pass"),
@@ -536,7 +504,6 @@ impl Terrain {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.set_bind_group(0, camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.model_bind_group, &[]);
             render_pass.draw_indexed(0..self.index_count, 0, 0..1);
         }
 
@@ -551,7 +518,7 @@ impl Terrain {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: renderer.render_pass_depth_stencil_attachment(),
                 ..Default::default()
             });
 
@@ -562,7 +529,6 @@ impl Terrain {
                 wgpu::IndexFormat::Uint16,
             );
             render_pass.set_bind_group(0, camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.model_bind_group, &[]);
             render_pass.draw_indexed(0..self.wireframe_index_count, 0, 0..1);
         }
     }

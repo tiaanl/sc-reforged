@@ -7,7 +7,7 @@ use crate::{
     game::config::CampaignDef,
 };
 use camera::*;
-use glam::{vec3, Mat4, Quat, Vec2, Vec3};
+use glam::{vec3, Quat, Vec2};
 use terrain::*;
 use tracing::info;
 use wgpu::util::DeviceExt;
@@ -16,28 +16,61 @@ use winit::{event::MouseButton, keyboard::KeyCode};
 mod camera;
 mod terrain;
 
+pub struct WorldCamera {
+    pub pitch: f32,
+    pub yaw: f32,
+}
+
+impl WorldCamera {
+    pub fn new(pitch: f32, yaw: f32) -> Self {
+        WorldCamera { pitch, yaw }
+    }
+
+    pub fn rotate_right(&mut self, yaw: f32) {
+        let mut yaw = self.yaw + yaw;
+        while yaw > 360.0 {
+            yaw -= 360.0
+        }
+        while yaw < 0.0 {
+            yaw += 360.0
+        }
+        self.yaw = yaw;
+    }
+
+    pub fn rotate_up(&mut self, pitch: f32) {
+        let mut pitch = self.pitch + pitch;
+        while pitch > 360.0 {
+            pitch -= 360.0
+        }
+        while pitch < 0.0 {
+            pitch += 360.0
+        }
+        self.pitch = pitch;
+    }
+
+    pub fn calculate_rotation(&self) -> Quat {
+        Quat::from_rotation_y(self.yaw.to_radians())
+            * Quat::from_rotation_x(self.pitch.to_radians())
+    }
+}
+
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
-    campaign_def: CampaignDef,
+    _campaign_def: CampaignDef,
 
     camera: Camera,
+    world_camera: WorldCamera,
     camera_bind_group_layout: wgpu::BindGroupLayout,
-
-    model: [[f32; 4]; 4],
-    model_bind_group_layout: wgpu::BindGroupLayout,
 
     terrain: Terrain,
 
     last_mouse_position: Vec2,
 
-    moving_camera: Option<Vec2>,
+    rotating_camera: Option<Vec2>,
 
     moving_forward: f32,
     moving_right: f32,
     moving_up: f32,
-
-    camera_yaw: f32,
-    camera_pitch: f32,
 }
 
 impl WorldScene {
@@ -65,60 +98,39 @@ impl WorldScene {
                     }],
                 });
 
-        let model = Mat4::IDENTITY.to_cols_array_2d();
-        let model_bind_group_layout =
-            renderer
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("model_bind_group_layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
+        let terrain = Terrain::new(assets, renderer, &camera_bind_group_layout)?;
 
-        let terrain = Terrain::new(
-            assets,
-            renderer,
-            &camera_bind_group_layout,
-            &model_bind_group_layout,
-        )?;
-
-        let mut camera = Camera::from_position_rotation(vec3(0.0, 1000.0, 1000.0), Quat::IDENTITY);
-        camera.set_bounds(Vec3::ZERO, terrain.bounds());
+        let camera = Camera::new(
+            vec3(0.0, 1000.0, 1000.0),
+            Quat::IDENTITY,
+            45_f32.to_radians(),
+            1.0,
+            0.1,
+            100_000.0,
+        );
+        let world_camera = WorldCamera::new(0.0, 0.0);
 
         Ok(Self {
-            campaign_def,
+            _campaign_def: campaign_def,
 
             camera,
+            world_camera,
             camera_bind_group_layout,
-
-            model,
-            model_bind_group_layout,
 
             terrain,
 
             last_mouse_position: Vec2::ZERO,
 
-            moving_camera: None,
+            rotating_camera: None,
 
             moving_forward: 0.0,
             moving_right: 0.0,
             moving_up: 0.0,
-
-            camera_yaw: 0.0,
-            camera_pitch: 0.0,
         })
     }
 
     fn create_camera_bind_group(&self, renderer: &Renderer) -> (wgpu::Buffer, wgpu::BindGroup) {
-        let matrices = self.camera.create_matrices();
+        let matrices = self.camera.calculate_matrices();
 
         let buffer = renderer
             .device
@@ -145,17 +157,17 @@ impl WorldScene {
 
 impl Scene for WorldScene {
     fn resize(&mut self, width: u32, height: u32) {
-        self.camera.resize(width, height);
+        self.camera.aspect_ratio = (width as f32) / (height.max(1) as f32);
     }
 
     fn on_key_pressed(&mut self, key: winit::keyboard::KeyCode) {
         const SPEED: f32 = 100.0;
         match key {
             KeyCode::KeyW => self.moving_forward += SPEED,
-            KeyCode::KeyS => self.moving_forward += -SPEED,
-            KeyCode::KeyA => self.moving_right += -SPEED,
+            KeyCode::KeyS => self.moving_forward -= SPEED,
+            KeyCode::KeyA => self.moving_right -= SPEED,
             KeyCode::KeyD => self.moving_right += SPEED,
-            KeyCode::KeyQ => self.moving_up += -SPEED,
+            KeyCode::KeyQ => self.moving_up -= SPEED,
             KeyCode::KeyE => self.moving_up += SPEED,
             _ => info!("key pressed: {key:?}"),
         }
@@ -165,10 +177,10 @@ impl Scene for WorldScene {
         const SPEED: f32 = 100.0;
         match key {
             KeyCode::KeyW => self.moving_forward -= SPEED,
-            KeyCode::KeyS => self.moving_forward -= -SPEED,
-            KeyCode::KeyA => self.moving_right -= -SPEED,
+            KeyCode::KeyS => self.moving_forward += SPEED,
+            KeyCode::KeyA => self.moving_right += SPEED,
             KeyCode::KeyD => self.moving_right -= SPEED,
-            KeyCode::KeyQ => self.moving_up -= -SPEED,
+            KeyCode::KeyQ => self.moving_up += SPEED,
             KeyCode::KeyE => self.moving_up -= SPEED,
             _ => info!("key released: {key:?}"),
         }
@@ -177,70 +189,51 @@ impl Scene for WorldScene {
     fn on_mouse_moved(&mut self, position: glam::Vec2) {
         self.last_mouse_position = position;
 
-        if let Some(pos) = self.moving_camera {
-            let delta = pos - self.last_mouse_position;
+        if let Some(pos) = self.rotating_camera {
+            const SENSITIVITY: f32 = 0.7777;
+            let delta = (pos - self.last_mouse_position) * SENSITIVITY;
 
-            self.camera_yaw = (self.camera_yaw + delta.x) % 360.0;
-            while self.camera_yaw > 360.0 {
-                self.camera_yaw -= 360.0
-            }
-            while self.camera_yaw < 0.0 {
-                self.camera_yaw += 360.0
-            }
+            self.world_camera.pitch += delta.y;
+            self.world_camera.yaw += delta.x;
+            self.camera.rotation = self.world_camera.calculate_rotation();
 
-            self.camera_pitch += delta.y;
-            while self.camera_pitch > 360.0 {
-                self.camera_pitch -= 360.0
-            }
-            while self.camera_pitch < 0.0 {
-                self.camera_pitch += 360.0
-            }
-
-            self.moving_camera = Some(self.last_mouse_position);
+            self.rotating_camera = Some(self.last_mouse_position);
         }
     }
 
     fn on_mouse_pressed(&mut self, button: MouseButton) {
         if button == MouseButton::Left {
-            self.moving_camera = Some(self.last_mouse_position);
+            self.rotating_camera = Some(self.last_mouse_position);
         }
     }
     fn on_mouse_released(&mut self, button: MouseButton) {
         if button == MouseButton::Left {
-            self.moving_camera = None;
+            self.rotating_camera = None;
         }
     }
 
     fn update(&mut self, delta_time: f32) {
         self.terrain.update(delta_time);
 
-        // Build a rotation based on the yaw and pitch values.
-        let rotation = {
-            let yaw_rotation = Quat::from_rotation_y(self.camera_yaw.to_radians());
-            let pitch_rotation = Quat::from_rotation_x(self.camera_pitch.to_radians());
-            pitch_rotation * yaw_rotation
-        };
-
-        self.camera.rotation = rotation;
-
-        self.camera.position += self.camera.forward() * self.moving_forward;
-        self.camera.position += self.camera.right() * self.moving_right;
+        self.camera.position += self.camera.forward_vector() * self.moving_forward * delta_time;
+        self.camera.position += self.camera.right_vector() * self.moving_right * delta_time;
+        self.camera.position += self.camera.up_vector() * self.moving_up * delta_time;
     }
 
     fn debug_panel(&mut self, egui: &egui::Context) {
         egui::Window::new("World").show(egui, |ui| {
             egui::Grid::new("world_info").show(ui, |ui| {
                 ui.label("pitch");
-                ui.add(egui::Slider::new(&mut self.camera_pitch, 0.0..=360.0));
+                ui.add(egui::Slider::new(&mut self.world_camera.pitch, 0.0..=360.0));
                 ui.end_row();
 
                 ui.label("yaw");
-                ui.add(egui::Slider::new(&mut self.camera_yaw, 0.0..=360.0));
+                ui.add(egui::Slider::new(&mut self.world_camera.yaw, 0.0..=360.0));
                 ui.end_row();
             });
 
-            ui.heading("Camera");
-            self.camera.debug_panel(ui);
+            // ui.heading("Camera");
+            // self.camera.debug_panel(ui);
             ui.heading("Terrain");
             self.terrain.debug_panel(ui);
         });

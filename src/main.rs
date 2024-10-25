@@ -213,7 +213,7 @@ impl winit::application::ApplicationHandler for App {
                         );
 
                         {
-                            scene.update(1.0 / last_frame_duration.as_secs_f32() / 60.0);
+                            scene.update(last_frame_duration.as_secs_f32() * 60.0);
 
                             scene.begin_frame();
                             scene.render(&renderer, &mut encoder, &view);
