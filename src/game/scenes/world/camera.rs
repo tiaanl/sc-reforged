@@ -39,7 +39,7 @@ impl Camera {
     }
 
     pub fn forward_vector(&self) -> Vec3 {
-        self.rotation * Vec3::NEG_Z
+        self.rotation * Vec3::Z
     }
 
     pub fn right_vector(&self) -> Vec3 {
@@ -51,7 +51,7 @@ impl Camera {
     }
 
     pub fn calculate_matrices(&self) -> Matrices {
-        let projection = Mat4::perspective_rh_gl(self.fov, self.aspect_ratio, self.near, self.far);
+        let projection = Mat4::perspective_lh(self.fov, self.aspect_ratio, self.near, self.far);
 
         let rotation_matrix = Mat4::from_quat(self.rotation).transpose();
         let translation_matrix = Mat4::from_translation(-self.position);

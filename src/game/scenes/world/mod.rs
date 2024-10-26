@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use crate::{
     engine::{
         assets::{AssetError, Assets},
+        gizmos::GizmosRenderer,
         renderer::Renderer,
         scene::Scene,
     },
@@ -79,6 +80,8 @@ pub struct WorldScene {
     last_mouse_position: Vec2,
 
     rotating_camera: Option<Vec2>,
+
+    gizmos_renderer: GizmosRenderer,
 }
 
 impl WorldScene {
@@ -118,6 +121,8 @@ impl WorldScene {
         );
         let world_camera = WorldCamera::new(camera, 0.0, 0.0, Vec3::ZERO);
 
+        let gizmos_renderer = GizmosRenderer::new(renderer);
+
         Ok(Self {
             _campaign_def: campaign_def,
 
@@ -129,6 +134,8 @@ impl WorldScene {
             last_mouse_position: Vec2::ZERO,
 
             rotating_camera: None,
+
+            gizmos_renderer,
         })
     }
 
@@ -202,8 +209,8 @@ impl Scene for WorldScene {
             const SENSITIVITY: f32 = 0.5;
             let delta = (pos - self.last_mouse_position) * SENSITIVITY;
 
-            self.world_camera.pitch += delta.y;
-            self.world_camera.yaw += delta.x;
+            self.world_camera.pitch -= delta.y;
+            self.world_camera.yaw -= delta.x;
 
             self.rotating_camera = Some(self.last_mouse_position);
         }
@@ -253,6 +260,9 @@ impl Scene for WorldScene {
         let (_, camera_bind_group) = self.create_camera_bind_group(renderer);
 
         self.terrain
+            .render(renderer, encoder, output, &camera_bind_group);
+
+        self.gizmos_renderer
             .render(renderer, encoder, output, &camera_bind_group);
     }
 }
