@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use crate::{
     engine::{
         assets::{AssetError, Assets},
@@ -13,7 +11,6 @@ use camera::*;
 use glam::{vec3, Quat, Vec2, Vec3};
 use terrain::*;
 use tracing::info;
-use wgpu::util::DeviceExt;
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 mod camera;
@@ -72,7 +69,6 @@ pub struct WorldScene {
     _campaign_def: CampaignDef,
 
     world_camera: WorldCamera,
-    camera_bind_group_layout: wgpu::BindGroupLayout,
 
     gpu_camera: GpuCamera,
 
@@ -130,7 +126,6 @@ impl WorldScene {
             _campaign_def: campaign_def,
 
             world_camera,
-            camera_bind_group_layout,
             gpu_camera,
 
             terrain,
