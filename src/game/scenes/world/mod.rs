@@ -265,6 +265,9 @@ impl Scene for WorldScene {
         self.terrain
             .render(renderer, encoder, output, &self.gpu_camera.bind_group);
 
+        let mut more_vertices = self.terrain.render_normals();
+        self.gizmos_vertices.append(&mut more_vertices);
+
         self.gizmos_renderer.render(
             renderer,
             encoder,

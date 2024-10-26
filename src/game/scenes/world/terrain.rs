@@ -8,18 +8,11 @@ use wgpu::{util::DeviceExt, vertex_attr_array};
 use crate::{
     engine::{
         assets::{AssetError, Assets},
+        gizmos::GizmoVertex,
         renderer::Renderer,
     },
     game::config::{ConfigFile, TerrainMapping},
 };
-
-#[derive(Clone, Copy, bytemuck::NoUninit)]
-#[repr(C)]
-struct Vertex {
-    position: [f32; 3],
-    normal: [f32; 3],
-    tex_coord: [f32; 2],
-}
 
 pub struct Terrain {
     height_map_width: u32,
@@ -42,6 +35,9 @@ pub struct Terrain {
     wireframe_pipeline: wgpu::RenderPipeline,
 
     draw_wireframe: bool,
+    draw_normals: bool,
+
+    vertices: Vec<[f32; 8]>,
 }
 
 fn load_texture_map(data: &[u8]) -> (u32, u32, Vec<u8>) {
@@ -156,7 +152,7 @@ impl Terrain {
             .map(|h| (h as f32) * altitude_map_height_base)
             .collect::<Vec<_>>();
 
-        let (vertices, indices, wireframe_indices) = if true {
+        let (vertices, indices, wireframe_indices) = {
             let mut vertices =
                 Vec::with_capacity(height_map_width as usize * height_map_height as usize);
             let mut indices: Vec<u16> = Vec::with_capacity(
@@ -179,6 +175,57 @@ impl Terrain {
                         1.0,
                         0.0,
                     ]);
+                }
+            }
+
+            for y in 0..height_map_height {
+                for x in 0..height_map_width {
+                    let current_index = (y * height_map_width + x) as usize;
+
+                    // Get neighboring indices, clamped to the edges
+                    let left_index = if x > 0 {
+                        (y * height_map_width + (x - 1)) as usize
+                    } else {
+                        current_index
+                    };
+
+                    let right_index = if x < height_map_width - 1 {
+                        (y * height_map_width + (x + 1)) as usize
+                    } else {
+                        current_index
+                    };
+
+                    let up_index = if y > 0 {
+                        ((y - 1) * height_map_width + x) as usize
+                    } else {
+                        current_index
+                    };
+
+                    let down_index = if y < height_map_height - 1 {
+                        ((y + 1) * height_map_width + x) as usize
+                    } else {
+                        current_index
+                    };
+
+                    // Retrieve heights for tangent calculations
+                    let left_height = vertices[left_index][1];
+                    let right_height = vertices[right_index][1];
+                    let up_height = vertices[up_index][1];
+                    let down_height = vertices[down_index][1];
+
+                    // Create tangent vectors
+                    let tangent_x =
+                        Vec3::new(2.0 * nominal_edge_size, right_height - left_height, 0.0);
+                    let tangent_y =
+                        Vec3::new(0.0, down_height - up_height, 2.0 * nominal_edge_size);
+
+                    // Calculate the normal as the cross product of the tangents
+                    let normal = tangent_y.cross(tangent_x).normalize();
+
+                    // Update the vertex normal in the `vertices` vector
+                    vertices[current_index][3] = normal.x;
+                    vertices[current_index][4] = normal.y;
+                    vertices[current_index][5] = normal.z;
                 }
             }
 
@@ -227,56 +274,9 @@ impl Terrain {
 
             (
                 vertices,
-                indices.iter().map(|i| *i as u16).collect(),
+                indices.iter().map(|i| *i as u16).collect::<Vec<_>>(),
                 wireframe_indices,
             )
-        } else {
-            // vx, vy, vz, nx, ny, nz, u, v
-            let vertices = vec![
-                // Back face
-                [-0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.0, 0.0], // 0
-                [0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 0.0],  // 1
-                [0.5, 0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 1.0],   // 2
-                [-0.5, 0.5, -0.5, 0.0, 0.0, -1.0, 0.0, 1.0],  // 3
-                // Front face
-                [-0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 0.0], // 4
-                [0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 0.0],  // 5
-                [0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0],   // 6
-                [-0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 1.0],  // 7
-                // Left face
-                [-0.5, -0.5, -0.5, -1.0, 0.0, 0.0, 0.0, 0.0], // 8
-                [-0.5, 0.5, -0.5, -1.0, 0.0, 0.0, 1.0, 0.0],  // 9
-                [-0.5, 0.5, 0.5, -1.0, 0.0, 0.0, 1.0, 1.0],   // 10
-                [-0.5, -0.5, 0.5, -1.0, 0.0, 0.0, 0.0, 1.0],  // 11
-                // Right face
-                [0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.0, 0.0], // 12
-                [0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 1.0, 0.0],  // 13
-                [0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 1.0, 1.0],   // 14
-                [0.5, -0.5, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0],  // 15
-                // Top face
-                [-0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.0, 0.0], // 16
-                [0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0],  // 17
-                [0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 1.0, 1.0],   // 18
-                [-0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.0, 1.0],  // 19
-                // Bottom face
-                [-0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.0, 0.0], // 20
-                [0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 1.0, 0.0],  // 21
-                [0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 1.0, 1.0],   // 22
-                [-0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 0.0, 1.0],  // 23
-            ];
-
-            let indices: &[u16] = &[
-                0, 1, 2, 2, 3, 0, // Back face
-                4, 5, 6, 6, 7, 4, // Front face
-                8, 9, 10, 10, 11, 8, // Left face
-                12, 13, 14, 14, 15, 12, // Right face
-                16, 17, 18, 18, 19, 16, // Top face
-                20, 21, 22, 22, 23, 20, // Bottom face
-            ];
-
-            let wireframe_indices = &[0, 1, 1, 2];
-
-            (vertices, indices.to_vec(), wireframe_indices.to_vec())
         };
 
         let vertex_buffer = renderer
@@ -333,7 +333,7 @@ impl Terrain {
                         entry_point: "vertex_main",
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                            array_stride: std::mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Vertex,
                             attributes: &vertex_attr_array![
                                 0 => Float32x3,
@@ -383,7 +383,7 @@ impl Terrain {
                         entry_point: "vertex_main_wireframe",
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                            array_stride: std::mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Vertex,
                             attributes: &vertex_attr_array![
                                 0 => Float32x3,
@@ -434,6 +434,9 @@ impl Terrain {
             wireframe_pipeline,
 
             draw_wireframe: false,
+            draw_normals: false,
+
+            vertices,
         })
     }
 
@@ -447,10 +450,49 @@ impl Terrain {
         )
     }
 
+    pub fn render_normals(&self) -> Vec<GizmoVertex> {
+        const LENGTH: f32 = 100.0;
+
+        let mut vertices = vec![];
+
+        if !self.draw_normals {
+            return vertices;
+        }
+
+        let width = self.height_map_width as usize;
+        let height = self.height_map_height as usize;
+
+        let color = [0.0, 1.0, 1.0, 1.0];
+
+        for y in 0..height {
+            for x in 0..width {
+                let index = y * width + x;
+
+                let x = self.vertices[index][0];
+                let y = self.vertices[index][1];
+                let z = self.vertices[index][2];
+                vertices.push(GizmoVertex {
+                    position: [x, y, z, 1.0],
+                    color,
+                });
+
+                let x = x + self.vertices[index][3] * LENGTH;
+                let y = y + self.vertices[index][4] * LENGTH;
+                let z = z + self.vertices[index][5] * LENGTH;
+                vertices.push(GizmoVertex {
+                    position: [x, y, z, 1.0],
+                    color,
+                });
+            }
+        }
+        vertices
+    }
+
     pub fn update(&mut self, _delta_time: f32) {}
 
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
         ui.checkbox(&mut self.draw_wireframe, "Draw wireframe");
+        ui.checkbox(&mut self.draw_normals, "Draw normals");
 
         egui::Grid::new("terrain_data").show(ui, |ui| {
             ui.label("height map size");
