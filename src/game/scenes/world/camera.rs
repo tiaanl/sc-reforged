@@ -1,3 +1,5 @@
+use crate::engine::renderer::Renderer;
+
 use glam::{Mat4, Quat, Vec3};
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -7,6 +9,7 @@ pub struct Matrices {
     pub view: [f32; 16],
 }
 
+#[derive(Default)]
 pub struct Camera {
     pub position: Vec3,
     pub rotation: Quat,
@@ -58,5 +61,60 @@ impl Camera {
             projection: projection.to_cols_array(),
             view: view.to_cols_array(),
         }
+    }
+}
+
+pub struct GpuCamera {
+    buffer: wgpu::Buffer,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
+}
+
+impl GpuCamera {
+    pub fn new(renderer: &Renderer) -> Self {
+        let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("camera_bind_group_buffer"),
+            size: std::mem::size_of::<Matrices>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("camera_bind_group_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
+        let bind_group = renderer
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("camera_bind_group"),
+                layout: &bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffer.as_entire_binding(),
+                }],
+            });
+
+        Self {
+            buffer,
+            bind_group_layout,
+            bind_group,
+        }
+    }
+
+    pub fn upload_matrices(&self, renderer: &Renderer, matrices: &Matrices) {
+        todo!()
     }
 }
