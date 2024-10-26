@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use crate::{
     engine::{
         assets::{AssetError, Assets},
-        gizmos::GizmosRenderer,
+        gizmos::{GizmoVertex, GizmosRenderer},
         renderer::Renderer,
         scene::Scene,
     },
@@ -21,7 +21,7 @@ mod terrain;
 
 #[derive(Default)]
 pub struct WorldCamera {
-    camera: RefCell<Camera>,
+    camera: Camera,
 
     pub pitch: f32,
     pub yaw: f32,
@@ -32,7 +32,7 @@ pub struct WorldCamera {
 impl WorldCamera {
     pub fn new(camera: Camera, pitch: f32, yaw: f32, velocity: Vec3) -> Self {
         Self {
-            camera: RefCell::new(camera),
+            camera: camera,
             pitch,
             yaw,
             velocity,
@@ -40,11 +40,11 @@ impl WorldCamera {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        self.camera.borrow_mut().aspect_ratio = (width as f32) / (height.max(1) as f32);
+        self.camera.aspect_ratio = (width as f32) / (height.max(1) as f32);
     }
 
     pub fn update(&mut self, delta_time: f32) {
-        let mut camera = self.camera.borrow_mut();
+        let ref mut camera = self.camera;
 
         let v = camera.forward_vector();
         camera.position += v * self.velocity.z * delta_time;
@@ -61,10 +61,9 @@ impl WorldCamera {
             * Quat::from_rotation_x(self.pitch.to_radians())
     }
 
-    pub fn calculate_matrices(&self) -> Matrices {
-        let mut camera = self.camera.borrow_mut();
-        camera.rotation = self.calculate_rotation();
-        camera.calculate_matrices()
+    pub fn calculate_matrices(&mut self) -> Matrices {
+        self.camera.rotation = self.calculate_rotation();
+        self.camera.calculate_matrices()
     }
 }
 
@@ -75,6 +74,8 @@ pub struct WorldScene {
     world_camera: WorldCamera,
     camera_bind_group_layout: wgpu::BindGroupLayout,
 
+    gpu_camera: GpuCamera,
+
     terrain: Terrain,
 
     last_mouse_position: Vec2,
@@ -82,6 +83,7 @@ pub struct WorldScene {
     rotating_camera: Option<Vec2>,
 
     gizmos_renderer: GizmosRenderer,
+    gizmos_vertices: Vec<GizmoVertex>,
 }
 
 impl WorldScene {
@@ -120,14 +122,16 @@ impl WorldScene {
             100_000.0,
         );
         let world_camera = WorldCamera::new(camera, 0.0, 0.0, Vec3::ZERO);
+        let gpu_camera = GpuCamera::new(renderer);
 
-        let gizmos_renderer = GizmosRenderer::new(renderer);
+        let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
 
         Ok(Self {
             _campaign_def: campaign_def,
 
             world_camera,
             camera_bind_group_layout,
+            gpu_camera,
 
             terrain,
 
@@ -136,32 +140,8 @@ impl WorldScene {
             rotating_camera: None,
 
             gizmos_renderer,
+            gizmos_vertices: vec![],
         })
-    }
-
-    fn create_camera_bind_group(&self, renderer: &Renderer) -> (wgpu::Buffer, wgpu::BindGroup) {
-        let matrices = self.world_camera.calculate_matrices();
-
-        let buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("camera_uniform_buffer"),
-                contents: bytemuck::cast_slice(&[matrices]),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-
-        let bind_group = renderer
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("camera_bind_group"),
-                layout: &self.camera_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffer.as_entire_binding(),
-                }],
-            });
-
-        (buffer, bind_group)
     }
 }
 
@@ -230,6 +210,33 @@ impl Scene for WorldScene {
     fn update(&mut self, delta_time: f32) {
         self.world_camera.update(delta_time);
         self.terrain.update(delta_time);
+
+        self.gizmos_vertices = vec![
+            GizmoVertex {
+                position: [0.0, 0.0, 0.0, 1.0],
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            GizmoVertex {
+                position: [1_000.0, 0.0, 0.0, 1.0],
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            GizmoVertex {
+                position: [0.0, 0.0, 0.0, 1.0],
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            GizmoVertex {
+                position: [0.0, 1_000.0, 0.0, 1.0],
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            GizmoVertex {
+                position: [0.0, 0.0, 0.0, 1.0],
+                color: [0.0, 0.0, 1.0, 1.0],
+            },
+            GizmoVertex {
+                position: [0.0, 0.0, 1_000.0, 1.0],
+                color: [0.0, 0.0, 1.0, 1.0],
+            },
+        ];
     }
 
     fn debug_panel(&mut self, egui: &egui::Context) {
@@ -252,17 +259,24 @@ impl Scene for WorldScene {
     }
 
     fn render(
-        &self,
+        &mut self,
         renderer: &crate::engine::renderer::Renderer,
         encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,
     ) {
-        let (_, camera_bind_group) = self.create_camera_bind_group(renderer);
+        let matrices = self.world_camera.calculate_matrices();
+        self.gpu_camera.upload_matrices(renderer, matrices);
 
         self.terrain
-            .render(renderer, encoder, output, &camera_bind_group);
+            .render(renderer, encoder, output, &self.gpu_camera.bind_group);
 
-        self.gizmos_renderer
-            .render(renderer, encoder, output, &camera_bind_group);
+        self.gizmos_renderer.render(
+            renderer,
+            encoder,
+            output,
+            &self.gpu_camera.bind_group,
+            &self.gizmos_vertices,
+        );
+        self.gizmos_vertices.clear();
     }
 }

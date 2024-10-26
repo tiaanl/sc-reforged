@@ -66,8 +66,8 @@ impl Camera {
 
 pub struct GpuCamera {
     buffer: wgpu::Buffer,
-    bind_group_layout: wgpu::BindGroupLayout,
-    bind_group: wgpu::BindGroup,
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub bind_group: wgpu::BindGroup,
 }
 
 impl GpuCamera {
@@ -114,7 +114,9 @@ impl GpuCamera {
         }
     }
 
-    pub fn upload_matrices(&self, renderer: &Renderer, matrices: &Matrices) {
-        todo!()
+    pub fn upload_matrices(&self, renderer: &Renderer, matrices: Matrices) {
+        renderer
+            .queue
+            .write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[matrices]));
     }
 }

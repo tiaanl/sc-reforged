@@ -3,6 +3,7 @@ use winit::{event::MouseButton, keyboard::KeyCode};
 
 use super::renderer::Renderer;
 
+#[allow(unused)]
 pub trait Scene {
     fn resize(&mut self, width: u32, height: u32);
 
@@ -20,7 +21,7 @@ pub trait Scene {
     fn begin_frame(&mut self) {}
 
     fn render(
-        &self,
+        &mut self,
         renderer: &Renderer,
         encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,

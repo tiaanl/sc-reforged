@@ -4,9 +4,9 @@ use super::renderer::Renderer;
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
-struct Vertex {
-    position: [f32; 4],
-    color: [f32; 4],
+pub struct GizmoVertex {
+    pub position: [f32; 4],
+    pub color: [f32; 4],
 }
 
 pub struct GizmosRenderer {
@@ -14,7 +14,7 @@ pub struct GizmosRenderer {
 }
 
 impl GizmosRenderer {
-    pub fn new(renderer: &Renderer) -> Self {
+    pub fn new(renderer: &Renderer, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let shader = renderer
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -24,29 +24,12 @@ impl GizmosRenderer {
                 ))),
             });
 
-        let matrices_bind_group_layout =
-            renderer
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("gizmos_matrics_bind_group"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
-
         let pipeline_layout =
             renderer
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("gizmos_pipeline_layout"),
-                    bind_group_layouts: &[&matrices_bind_group_layout],
+                    bind_group_layouts: &[&camera_bind_group_layout],
                     push_constant_ranges: &[],
                 });
 
@@ -60,7 +43,7 @@ impl GizmosRenderer {
                     entry_point: "vertex_main",
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     buffers: &[wgpu::VertexBufferLayout {
-                        array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                        array_stride: std::mem::size_of::<GizmoVertex>() as wgpu::BufferAddress,
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &vertex_attr_array![
                             0 => Float32x4,
@@ -93,34 +76,8 @@ impl GizmosRenderer {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
+        vertices: &Vec<GizmoVertex>,
     ) {
-        let vertices = vec![
-            Vertex {
-                position: [0.0, 0.0, 0.0, 1.0],
-                color: [1.0, 0.0, 0.0, 1.0],
-            },
-            Vertex {
-                position: [1_000.0, 0.0, 0.0, 1.0],
-                color: [1.0, 0.0, 0.0, 1.0],
-            },
-            Vertex {
-                position: [0.0, 0.0, 0.0, 1.0],
-                color: [0.0, 1.0, 0.0, 1.0],
-            },
-            Vertex {
-                position: [0.0, 1_000.0, 0.0, 1.0],
-                color: [0.0, 1.0, 0.0, 1.0],
-            },
-            Vertex {
-                position: [0.0, 0.0, 0.0, 1.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-            },
-            Vertex {
-                position: [0.0, 0.0, 1_000.0, 1.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-            },
-        ];
-
         let buffer = renderer
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {

@@ -1,12 +1,10 @@
-use tracing::info;
-
 use crate::engine::{assets::Assets, renderer::Renderer, scene::Scene};
 
 pub struct LoadingScene {
     pipeline: wgpu::RenderPipeline,
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-    sampler: wgpu::Sampler,
+    _texture: wgpu::Texture,
+    _view: wgpu::TextureView,
+    _sampler: wgpu::Sampler,
     bind_group: wgpu::BindGroup,
 }
 
@@ -134,7 +132,7 @@ impl LoadingScene {
                     buffers: &[],
                 },
                 primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: renderer.depth_stencil_state(),
+                depth_stencil: renderer.depth_stencil_state(wgpu::CompareFunction::Less),
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: &module,
@@ -152,9 +150,9 @@ impl LoadingScene {
 
         Self {
             pipeline,
-            texture,
-            view: texture_view,
-            sampler,
+            _texture: texture,
+            _view: texture_view,
+            _sampler: sampler,
             bind_group,
         }
     }
@@ -166,7 +164,7 @@ impl Scene for LoadingScene {
     fn update(&mut self, _delta_time: f32) {}
 
     fn render(
-        &self,
+        &mut self,
         renderer: &crate::engine::renderer::Renderer,
         _encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,
@@ -186,7 +184,8 @@ impl Scene for LoadingScene {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: renderer.render_pass_depth_stencil_attachment(),
+            depth_stencil_attachment: renderer
+                .render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
             timestamp_writes: None,
             occlusion_query_set: None,
         });

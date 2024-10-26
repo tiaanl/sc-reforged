@@ -26,7 +26,7 @@ fn vertex_main(vertex: VertexInput) -> VertexOutput {
 @vertex
 fn vertex_main_wireframe(vertex: VertexInput) -> VertexOutput {
     return VertexOutput(
-        u_camera.mat_projection * u_camera.mat_view * vec4(vertex.position, 1.0),
+        u_camera.mat_projection * u_camera.mat_view * (vec4(vertex.position, 1.0) + vec4(0.0, 0.0, 0.0, 0.0)),
         vertex.tex_coord,
     );
 }

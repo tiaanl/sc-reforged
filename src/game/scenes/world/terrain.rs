@@ -1,7 +1,7 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
-use glam::{vec3, Mat4, Vec3};
+use glam::{vec3, Vec3};
 use tracing::info;
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
@@ -346,7 +346,7 @@ impl Terrain {
                         topology: wgpu::PrimitiveTopology::TriangleList,
                         ..Default::default()
                     },
-                    depth_stencil: renderer.depth_stencil_state(),
+                    depth_stencil: renderer.depth_stencil_state(wgpu::CompareFunction::Less),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &shader_module,
@@ -396,7 +396,7 @@ impl Terrain {
                         topology: wgpu::PrimitiveTopology::LineList,
                         ..Default::default()
                     },
-                    depth_stencil: renderer.depth_stencil_state(),
+                    depth_stencil: renderer.depth_stencil_state(wgpu::CompareFunction::Always),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &shader_module,
@@ -439,7 +439,7 @@ impl Terrain {
 
     /// Return the max bounds of the terrain. The min value of the bound is
     /// [`Vec3::ZERO`].
-    pub fn bounds(&self) -> Vec3 {
+    pub fn _bounds(&self) -> Vec3 {
         vec3(
             self.map_dx * self.nominal_edge_size,
             self.altitude_map_height_base * 255.0,
@@ -496,7 +496,8 @@ impl Terrain {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: renderer.render_pass_depth_stencil_attachment(),
+                depth_stencil_attachment: renderer
+                    .render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
                 ..Default::default()
             });
 
@@ -518,7 +519,8 @@ impl Terrain {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: renderer.render_pass_depth_stencil_attachment(),
+                depth_stencil_attachment: renderer
+                    .render_pass_depth_stencil_attachment(wgpu::LoadOp::Load),
                 ..Default::default()
             });
 
