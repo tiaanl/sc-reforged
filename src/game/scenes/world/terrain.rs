@@ -9,7 +9,7 @@ use crate::{
     engine::{
         assets::{AssetError, Assets},
         gizmos::GizmoVertex,
-        renderer::Renderer,
+        renderer::{GpuTexture, Renderer},
     },
     game::config::{ConfigFile, TerrainMapping},
 };
@@ -33,6 +33,9 @@ pub struct Terrain {
 
     pipeline: wgpu::RenderPipeline,
     wireframe_pipeline: wgpu::RenderPipeline,
+
+    terrain_texture_bind_group: wgpu::BindGroup,
+    terrain_texture: GpuTexture,
 
     draw_wireframe: bool,
     draw_normals: bool,
@@ -118,27 +121,136 @@ impl Terrain {
         renderer: &Renderer,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
-        let terrain_name = "training"; // TODO: Replace with campaign name.
+        // let terrain_name = "angola_2"; // TODO: Replace with campaign name.
+        let terrain_name = "kola"; // TODO: Replace with campaign name.
 
         let TerrainMapping {
             altitude_map_height_base,
             map_dx,
             map_dy,
             nominal_edge_size,
+            texture_map_base_name,
             ..
         } = {
             let terrain_mapping_path =
                 format!("textures/terrain/{}/terrain_mapping.txt", terrain_name);
-
             info!("Loading terrain mapping: {}", terrain_mapping_path);
-
             let data = assets.load_config_file(terrain_mapping_path)?;
-
             TerrainMapping::from(ConfigFile::new(&data))
         };
 
+        let terrain_texture = {
+            use crate::engine::assets::Image;
+
+            let path = format!("trnhigh/{}.jpg", texture_map_base_name);
+            info!("Loading high detail terrain texture: {path}");
+
+            let Image {
+                data,
+                width,
+                height,
+            } = assets.load_jpeg(path)?;
+
+            let size = wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            };
+
+            let texture = renderer.device.create_texture(
+                &(wgpu::TextureDescriptor {
+                    label: Some("terrain_trnhigh_texture"),
+                    size,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                }),
+            );
+
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+            let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            });
+
+            renderer.queue.write_texture(
+                wgpu::ImageCopyTextureBase {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::default(),
+                    aspect: wgpu::TextureAspect::All,
+                },
+                data.as_ref(),
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(width * 4),
+                    rows_per_image: Some(height),
+                },
+                size,
+            );
+
+            GpuTexture {
+                texture,
+                view,
+                sampler,
+            }
+        };
+
+        let terrain_texture_bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("terrain_texture_bind_group_layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
+
+        let terrain_texture_bind_group =
+            renderer
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("terrain_texture_bind_group"),
+                    layout: &terrain_texture_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&terrain_texture.view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&terrain_texture.sampler),
+                        },
+                    ],
+                });
+
         let (height_map_width, height_map_height, _height_map) = {
             let path = format!("maps/{}.pcx", terrain_name); // TODO: Get the name of the map from the [CampaignDef].
+            info!("Loading terrain height map: {path}");
             let data = assets.load_raw(path)?;
             load_texture_map(&data)
         };
@@ -162,8 +274,11 @@ impl Terrain {
                 (height_map_width as usize - 1) * (height_map_height as usize - 1) * 8,
             );
 
-            for y in 0..height_map_width {
-                for x in 0..height_map_height {
+            for y in 0..height_map_height {
+                for x in 0..height_map_width {
+                    let u = x as f32 / (height_map_width - 1) as f32;
+                    let v = y as f32 / (height_map_height - 1) as f32;
+
                     let height = _height_map[(y * height_map_width + x) as usize] as usize;
                     vertices.push([
                         (x as f32) * nominal_edge_size,
@@ -172,8 +287,8 @@ impl Terrain {
                         0.0,
                         0.0,
                         0.0,
-                        1.0,
-                        0.0,
+                        u,
+                        v,
                     ]);
                 }
             }
@@ -319,7 +434,10 @@ impl Terrain {
                     .device
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: Some("terrain_pipeline_layout"),
-                        bind_group_layouts: &[camera_bind_group_layout],
+                        bind_group_layouts: &[
+                            camera_bind_group_layout,
+                            &terrain_texture_bind_group_layout,
+                        ],
                         push_constant_ranges: &[],
                     });
 
@@ -432,6 +550,9 @@ impl Terrain {
 
             pipeline,
             wireframe_pipeline,
+
+            terrain_texture_bind_group,
+            terrain_texture,
 
             draw_wireframe: false,
             draw_normals: false,
@@ -547,6 +668,7 @@ impl Terrain {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.terrain_texture_bind_group, &[]);
             render_pass.draw_indexed(0..self.index_count, 0, 0..1);
         }
 

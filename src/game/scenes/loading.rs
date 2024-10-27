@@ -10,13 +10,17 @@ pub struct LoadingScene {
 
 impl LoadingScene {
     pub fn new(assets: &Assets, renderer: &Renderer) -> Self {
-        let data = assets.load_raw(r"textures/interface/loadscr2.jpg").unwrap();
-        let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg).unwrap();
-        let image = image.into_rgba8();
+        let crate::engine::assets::Image {
+            data,
+            width,
+            height,
+        } = assets
+            .load_jpeg(r"textures/interface/loadscr2.jpg")
+            .unwrap();
 
         let size = wgpu::Extent3d {
-            width: image.width(),
-            height: image.height(),
+            width,
+            height,
             depth_or_array_layers: 1,
         };
 
@@ -38,7 +42,7 @@ impl LoadingScene {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            image.as_ref(),
+            data.as_ref(),
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(size.width as u32 * 4),

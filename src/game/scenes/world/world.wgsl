@@ -4,6 +4,9 @@ struct Camera {
 }
 @group(0) @binding(0) var<uniform> u_camera: Camera;
 
+@group(1) @binding(0) var t_terrain_texture: texture_2d<f32>;
+@group(1) @binding(1) var s_terrain_texture: sampler;
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -39,7 +42,9 @@ fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let sun_dir = normalize(vec3(1.0, 1.0, 0.0));
     let c = dot(sun_dir, vertex.normal);
 
-    return vec4(c, c, c, 1.0);
+    let color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
+
+    return color * vec4(c, c, c, 1.0);
 }
 
 @fragment

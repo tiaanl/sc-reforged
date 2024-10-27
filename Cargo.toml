@@ -20,7 +20,6 @@ glam = { version = "0.29.0", default-features = false, features = [
     "bytemuck",
     "std",
 ] }
-image = { version = "0.25.2", default-features = false, features = ["jpeg"] }
 pollster = { version = "0.3.0", default-features = false }
 thiserror = { version = "1.0.63", default-features = false }
 tracing = { version = "0.1.40", default-features = false, features = [
@@ -35,3 +34,7 @@ winit = { version = "0.30.5", default-features = false, features = ["rwh_06"] }
 epaint = { version = "0.29.1", default-features = false, features = [
     "default_fonts",
 ] }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+
+[profile.dev.package.zune-jpeg]
+opt-level = 3
