@@ -181,7 +181,7 @@ impl Scene for WorldScene {
         self.last_mouse_position = position;
 
         if let Some(pos) = self.rotating_camera {
-            const SENSITIVITY: f32 = 0.5;
+            const SENSITIVITY: f32 = 0.25;
             let delta = (pos - self.last_mouse_position) * SENSITIVITY;
 
             self.world_camera.pitch -= delta.y;

@@ -3,6 +3,9 @@ name = "granite"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+load_normals = []
+
 [dependencies]
 ahash = { version = "0.8.11", default-features = false }
 bytemuck = { version = "1.18.0", default-features = false, features = [

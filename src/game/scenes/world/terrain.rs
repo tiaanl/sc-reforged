@@ -35,12 +35,13 @@ pub struct Terrain {
     wireframe_pipeline: wgpu::RenderPipeline,
 
     terrain_texture_bind_group: wgpu::BindGroup,
-    terrain_texture: GpuTexture,
 
     draw_wireframe: bool,
     draw_normals: bool,
 
     vertices: Vec<Vertex>,
+
+    #[cfg(feature = "load_normals")]
     normals_table: Vec<Vec3>,
 }
 
@@ -268,31 +269,34 @@ impl Terrain {
             load_texture_map(&data)
         };
 
-        let normals_lookup = {
-            let path = format!(
-                "textures/terrain/{}/{}_vn.dat",
-                campaign_def.base_name, campaign_def.base_name
-            );
-            info!("Loading normals lookup data from: {path}");
-            let mut r = std::io::Cursor::new(assets.load_raw(path)?);
-            (0..(height_map.width as usize * height_map.height as usize))
-                .into_iter()
-                .map(|_| r.read_u16::<LittleEndian>().unwrap())
-                .collect::<Vec<_>>()
-        };
+        #[cfg(feature = "load_normals")]
+        {
+            let normals_lookup = {
+                let path = format!(
+                    "textures/terrain/{}/{}_vn.dat",
+                    campaign_def.base_name, campaign_def.base_name
+                );
+                info!("Loading normals lookup data from: {path}");
+                let mut r = std::io::Cursor::new(assets.load_raw(path)?);
+                (0..(height_map.width as usize * height_map.height as usize))
+                    .into_iter()
+                    .map(|_| r.read_u16::<LittleEndian>().unwrap())
+                    .collect::<Vec<_>>()
+            };
 
-        let normals_table = {
-            let mut normals = vec![];
-            for angle_group in 0..16 {
-                let y = (angle_group as f32 * 0.09817477).sin();
-                for angle_step in 0..64 {
-                    let x = (angle_step as f32 * 0.09817477).cos();
-                    let z = (angle_step as f32 * 0.09817477).sin();
-                    normals.push(vec3(x, y, z).normalize());
+            let normals_table = {
+                let mut normals = vec![];
+                for angle_group in 0..16 {
+                    let y = (angle_group as f32 * 0.09817477).sin();
+                    for angle_step in 0..64 {
+                        let x = (angle_step as f32 * 0.09817477).cos();
+                        let z = (angle_step as f32 * 0.09817477).sin();
+                        normals.push(vec3(x, y, z).normalize());
+                    }
                 }
-            }
-            normals
-        };
+                normals
+            };
+        }
 
         info!(
             "terrain size: {} x {}, terrain heightmap size: {} x {}",
@@ -309,10 +313,14 @@ impl Terrain {
             }};
         }
 
-        let value = normals_lookup[index!(height_map.width / 2, height_map.height / 2) as usize];
-        info!("value: {}", value);
+        #[cfg(feature = "load_normals")]
+        {
+            let value =
+                normals_lookup[index!(height_map.width / 2, height_map.height / 2) as usize];
+            info!("value: {}", value);
+        }
 
-        let (vertices, indices, wireframe_indices) = {
+        let (mut vertices, indices, wireframe_indices) = {
             let mut vertices =
                 Vec::with_capacity(height_map.width as usize * height_map.height as usize);
             let mut indices = Vec::with_capacity(
@@ -324,7 +332,11 @@ impl Terrain {
             for y in 0..height_map.height {
                 for x in 0..height_map.width {
                     let altitude = heights[height_map.data[index!(x, y) as usize] as usize];
+                    #[cfg(feature = "load_normals")]
                     let normal = normals_table[normals_lookup[index!(x, y) as usize] as usize];
+
+                    #[cfg(not(feature = "load_normals"))]
+                    let normal = Vec3::Y;
 
                     vertices.push(Vertex {
                         position: vec3(
@@ -368,6 +380,30 @@ impl Terrain {
 
             (vertices, indices, wireframe_indices)
         };
+
+        // Calculate the normals of each vertex of the terrain.
+        {
+            let (width, height) = (height_map.width as usize, height_map.height as usize);
+            for y in 1..(height - 1) {
+                for x in 1..(width - 1) {
+                    let center = y * width + x;
+                    let c_pos = vertices[center].position;
+
+                    let right = (vertices[center + 1].position - c_pos).normalize();
+                    let down = (vertices[center - width].position - c_pos).normalize();
+                    let left = (vertices[center - 1].position - c_pos).normalize();
+                    let up = (vertices[center + width].position - c_pos).normalize();
+
+                    let n1 = right.cross(down);
+                    let n2 = down.cross(left);
+                    let n3 = left.cross(up);
+                    let n4 = up.cross(right);
+
+                    let normal = (n1 + n2 + n3 + n4).normalize();
+                    vertices[center].normal = normal;
+                }
+            }
+        }
 
         let vertex_buffer = renderer
             .device
@@ -527,12 +563,12 @@ impl Terrain {
             wireframe_pipeline,
 
             terrain_texture_bind_group,
-            terrain_texture,
 
             draw_wireframe: false,
             draw_normals: false,
 
             vertices,
+            #[cfg(feature = "load_normals")]
             normals_table,
         })
     }
@@ -586,6 +622,12 @@ impl Terrain {
         vertices
     }
 
+    #[cfg(not(feature = "load_normals"))]
+    pub fn render_normals_lookup(&self) -> Vec<GizmoVertex> {
+        vec![]
+    }
+
+    #[cfg(feature = "load_normals")]
     pub fn render_normals_lookup(&self) -> Vec<GizmoVertex> {
         const SIZE: f32 = 100.0;
 
