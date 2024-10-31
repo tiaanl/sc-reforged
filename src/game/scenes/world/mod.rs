@@ -107,7 +107,7 @@ impl WorldScene {
                     }],
                 });
 
-        let terrain = Terrain::new(assets, renderer, &camera_bind_group_layout)?;
+        let terrain = Terrain::new(assets, renderer, &camera_bind_group_layout, &campaign_def)?;
 
         let camera = Camera::new(
             vec3(0.0, 1000.0, 1000.0),

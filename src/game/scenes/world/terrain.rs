@@ -11,7 +11,7 @@ use crate::{
         gizmos::GizmoVertex,
         renderer::{GpuTexture, Renderer},
     },
-    game::config::{ConfigFile, TerrainMapping},
+    game::config::{CampaignDef, ConfigFile, TerrainMapping},
 };
 
 pub struct Terrain {
@@ -133,9 +133,8 @@ impl Terrain {
         assets: &Assets,
         renderer: &Renderer,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
+        campaign_def: &CampaignDef,
     ) -> Result<Self, AssetError> {
-        let terrain_name = "kola"; // TODO: Replace with campaign name.
-
         let TerrainMapping {
             altitude_map_height_base,
             map_dx,
@@ -144,8 +143,10 @@ impl Terrain {
             texture_map_base_name,
             ..
         } = {
-            let terrain_mapping_path =
-                format!("textures/terrain/{}/terrain_mapping.txt", terrain_name);
+            let terrain_mapping_path = format!(
+                "textures/terrain/{}/terrain_mapping.txt",
+                campaign_def.base_name
+            );
             info!("Loading terrain mapping: {}", terrain_mapping_path);
             let data = assets.load_config_file(terrain_mapping_path)?;
             TerrainMapping::from(ConfigFile::new(&data))
@@ -261,14 +262,17 @@ impl Terrain {
                 });
 
         let height_map = {
-            let path = format!("maps/{}.pcx", terrain_name); // TODO: Get the name of the map from the [CampaignDef].
+            let path = format!("maps/{}.pcx", campaign_def.base_name); // TODO: Get the name of the map from the [CampaignDef].
             info!("Loading terrain height map: {path}");
             let data = assets.load_raw(path)?;
             load_texture_map(&data)
         };
 
         let normals_lookup = {
-            let path = format!("textures/terrain/{terrain_name}/{terrain_name}_vn.dat");
+            let path = format!(
+                "textures/terrain/{}/{}_vn.dat",
+                campaign_def.base_name, campaign_def.base_name
+            );
             info!("Loading normals lookup data from: {path}");
             let mut r = std::io::Cursor::new(assets.load_raw(path)?);
             (0..(height_map.width as usize * height_map.height as usize))
