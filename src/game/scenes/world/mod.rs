@@ -267,6 +267,8 @@ impl Scene for WorldScene {
 
         let mut more_vertices = self.terrain.render_normals();
         self.gizmos_vertices.append(&mut more_vertices);
+        let mut more_vertices = self.terrain.render_normals_lookup();
+        self.gizmos_vertices.append(&mut more_vertices);
 
         self.gizmos_renderer.render(
             renderer,

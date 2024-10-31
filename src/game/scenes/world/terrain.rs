@@ -1,13 +1,13 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
-use glam::{vec3, Vec3};
+use glam::{vec2, vec3, Vec2, Vec3};
 use tracing::info;
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
 use crate::{
     engine::{
-        assets::{AssetError, Assets},
+        assets::{AssetError, Assets, Image},
         gizmos::GizmoVertex,
         renderer::{GpuTexture, Renderer},
     },
@@ -40,10 +40,11 @@ pub struct Terrain {
     draw_wireframe: bool,
     draw_normals: bool,
 
-    vertices: Vec<[f32; 8]>,
+    vertices: Vec<Vertex>,
+    normals_table: Vec<Vec3>,
 }
 
-fn load_texture_map(data: &[u8]) -> (u32, u32, Vec<u8>) {
+fn load_texture_map(data: &[u8]) -> Image {
     /*
     typedef struct _PcxHeader
     {
@@ -92,7 +93,7 @@ fn load_texture_map(data: &[u8]) -> (u32, u32, Vec<u8>) {
     let width = max_x - min_x + 1;
     let height = max_y - min_y + 1;
 
-    let decoded = if encoding_method == 0 {
+    let data = if encoding_method == 0 {
         let mut decoded = vec![0_u8; width as usize * height as usize];
         data.read_exact(decoded.as_mut()).unwrap();
         decoded
@@ -112,7 +113,19 @@ fn load_texture_map(data: &[u8]) -> (u32, u32, Vec<u8>) {
         panic!("Invalid PCX encoding");
     };
 
-    (width as u32, height as u32, decoded)
+    Image {
+        data,
+        width: width as u32,
+        height: height as u32,
+    }
+}
+
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[repr(C)]
+struct Vertex {
+    position: Vec3,
+    normal: Vec3,
+    tex_coord: Vec2,
 }
 
 impl Terrain {
@@ -121,7 +134,6 @@ impl Terrain {
         renderer: &Renderer,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
-        // let terrain_name = "angola_2"; // TODO: Replace with campaign name.
         let terrain_name = "kola"; // TODO: Replace with campaign name.
 
         let TerrainMapping {
@@ -248,150 +260,109 @@ impl Terrain {
                     ],
                 });
 
-        let (height_map_width, height_map_height, _height_map) = {
+        let height_map = {
             let path = format!("maps/{}.pcx", terrain_name); // TODO: Get the name of the map from the [CampaignDef].
             info!("Loading terrain height map: {path}");
             let data = assets.load_raw(path)?;
             load_texture_map(&data)
         };
 
+        let normals_lookup = {
+            let path = format!("textures/terrain/{terrain_name}/{terrain_name}_vn.dat");
+            info!("Loading normals lookup data from: {path}");
+            let mut r = std::io::Cursor::new(assets.load_raw(path)?);
+            (0..(height_map.width as usize * height_map.height as usize))
+                .into_iter()
+                .map(|_| r.read_u16::<LittleEndian>().unwrap())
+                .collect::<Vec<_>>()
+        };
+
+        let normals_table = {
+            let mut normals = vec![];
+            for angle_group in 0..16 {
+                let y = (angle_group as f32 * 0.09817477).sin();
+                for angle_step in 0..64 {
+                    let x = (angle_step as f32 * 0.09817477).cos();
+                    let z = (angle_step as f32 * 0.09817477).sin();
+                    normals.push(vec3(x, y, z).normalize());
+                }
+            }
+            normals
+        };
+
         info!(
             "terrain size: {} x {}, terrain heightmap size: {} x {}",
-            map_dx, map_dy, height_map_width, height_map_height,
+            map_dx, map_dy, height_map.width, height_map.height,
         );
 
         let heights = (0..=255)
-            .map(|h| (h as f32) * altitude_map_height_base)
+            .map(|h| ((255 - h) as f32) * altitude_map_height_base)
             .collect::<Vec<_>>();
+
+        macro_rules! index {
+            ($x:expr,$y:expr) => {{
+                (($y as u32) * height_map.height + ($x as u32)) as u32
+            }};
+        }
+
+        let value = normals_lookup[index!(height_map.width / 2, height_map.height / 2) as usize];
+        info!("value: {}", value);
 
         let (vertices, indices, wireframe_indices) = {
             let mut vertices =
-                Vec::with_capacity(height_map_width as usize * height_map_height as usize);
-            let mut indices: Vec<u16> = Vec::with_capacity(
-                (height_map_width as usize - 1) * (height_map_height as usize - 1) * 6,
+                Vec::with_capacity(height_map.width as usize * height_map.height as usize);
+            let mut indices = Vec::with_capacity(
+                (height_map.width as usize - 1) * (height_map.height as usize - 1) * 6,
             );
-            let mut wireframe_indices: Vec<u16> = Vec::with_capacity(
-                (height_map_width as usize - 1) * (height_map_height as usize - 1) * 8,
-            );
+            let mut wireframe_indices =
+                Vec::with_capacity((height_map.width as usize) * (height_map.height as usize) * 4);
 
-            for y in 0..height_map_height {
-                for x in 0..height_map_width {
-                    let u = x as f32 / (height_map_width - 1) as f32;
-                    let v = y as f32 / (height_map_height - 1) as f32;
+            for y in 0..height_map.height {
+                for x in 0..height_map.width {
+                    let altitude = heights[height_map.data[index!(x, y) as usize] as usize];
+                    let normal = normals_table[normals_lookup[index!(x, y) as usize] as usize];
 
-                    let height = _height_map[(y * height_map_width + x) as usize] as usize;
-                    vertices.push([
-                        (x as f32) * nominal_edge_size,
-                        heights[height],
-                        (y as f32) * nominal_edge_size,
-                        0.0,
-                        0.0,
-                        0.0,
-                        u,
-                        v,
-                    ]);
+                    vertices.push(Vertex {
+                        position: vec3(
+                            (x as f32) * nominal_edge_size,
+                            altitude as f32,
+                            (y as f32) * nominal_edge_size,
+                        ),
+                        normal,
+                        tex_coord: vec2(
+                            x as f32 / (height_map.width - 1) as f32,
+                            y as f32 / (height_map.height - 1) as f32,
+                        ),
+                    });
                 }
             }
 
-            for y in 0..height_map_height {
-                for x in 0..height_map_width {
-                    let current_index = (y * height_map_width + x) as usize;
+            for y in 0..(height_map.height - 1) {
+                for x in 0..(height_map.width - 1) {
+                    indices.push(index!(x, y));
+                    indices.push(index!(x + 1, y));
+                    indices.push(index!(x, y + 1));
 
-                    // Get neighboring indices, clamped to the edges
-                    let left_index = if x > 0 {
-                        (y * height_map_width + (x - 1)) as usize
-                    } else {
-                        current_index
-                    };
+                    indices.push(index!(x + 1, y));
+                    indices.push(index!(x + 1, y + 1));
+                    indices.push(index!(x, y + 1));
 
-                    let right_index = if x < height_map_width - 1 {
-                        (y * height_map_width + (x + 1)) as usize
-                    } else {
-                        current_index
-                    };
+                    wireframe_indices.push(index!(x, y));
+                    wireframe_indices.push(index!(x + 1, y));
 
-                    let up_index = if y > 0 {
-                        ((y - 1) * height_map_width + x) as usize
-                    } else {
-                        current_index
-                    };
-
-                    let down_index = if y < height_map_height - 1 {
-                        ((y + 1) * height_map_width + x) as usize
-                    } else {
-                        current_index
-                    };
-
-                    // Retrieve heights for tangent calculations
-                    let left_height = vertices[left_index][1];
-                    let right_height = vertices[right_index][1];
-                    let up_height = vertices[up_index][1];
-                    let down_height = vertices[down_index][1];
-
-                    // Create tangent vectors
-                    let tangent_x =
-                        Vec3::new(2.0 * nominal_edge_size, right_height - left_height, 0.0);
-                    let tangent_y =
-                        Vec3::new(0.0, down_height - up_height, 2.0 * nominal_edge_size);
-
-                    // Calculate the normal as the cross product of the tangents
-                    let normal = tangent_y.cross(tangent_x).normalize();
-
-                    // Update the vertex normal in the `vertices` vector
-                    vertices[current_index][3] = normal.x;
-                    vertices[current_index][4] = normal.y;
-                    vertices[current_index][5] = normal.z;
+                    wireframe_indices.push(index!(x, y));
+                    wireframe_indices.push(index!(x, y + 1));
                 }
+
+                wireframe_indices.push(index!(height_map.width - 1, y));
+                wireframe_indices.push(index!(height_map.width - 1, y + 1));
+            }
+            for x in 0..(height_map.width - 1) {
+                wireframe_indices.push(index!(x, height_map.height - 1));
+                wireframe_indices.push(index!(x + 1, height_map.height - 1));
             }
 
-            for y in 0..height_map_width - 1 {
-                for x in 0..height_map_height - 1 {
-                    // Top-left, bottom-left, bottom-right, top-right vertices of the quad
-                    let bottom_left = (y * height_map_width + x) as u16;
-                    let top_left = ((y + 1) * height_map_width + x) as u16;
-                    let top_right = ((y + 1) * height_map_width + (x + 1)) as u16;
-                    let bottom_right = (y * height_map_width + (x + 1)) as u16;
-
-                    // First triangle (top-left, bottom-left, bottom-right)
-                    indices.push(top_left);
-                    indices.push(bottom_left);
-                    indices.push(bottom_right);
-
-                    // Second triangle (top-left, bottom-right, top-right)
-                    indices.push(top_left);
-                    indices.push(bottom_right);
-                    indices.push(top_right);
-
-                    // Horizontal edges
-                    wireframe_indices.push(top_left);
-                    wireframe_indices.push(top_right);
-
-                    // Vertical edge (right of the quad)
-                    wireframe_indices.push(top_right);
-                    wireframe_indices.push(bottom_right);
-                }
-            }
-
-            for x in 0..height_map_width - 1 {
-                let bottom_left = x as u16;
-                let bottom_right = (x + 1) as u16;
-                wireframe_indices.push(bottom_left);
-                wireframe_indices.push(bottom_right);
-            }
-
-            // Add the last column's vertical edges
-            for y in 0..height_map_height - 1 {
-                let bottom_left = (y * height_map_width) as u16;
-                let top_left = ((y + 1) * height_map_width) as u16;
-                wireframe_indices.push(bottom_left);
-                wireframe_indices.push(top_left);
-            }
-
-            (
-                vertices,
-                indices.iter().map(|i| *i as u16).collect::<Vec<_>>(),
-                wireframe_indices,
-            )
+            (vertices, indices, wireframe_indices)
         };
 
         let vertex_buffer = renderer
@@ -532,8 +503,8 @@ impl Terrain {
         };
 
         Ok(Self {
-            height_map_width,
-            height_map_height,
+            height_map_width: height_map.width,
+            height_map_height: height_map.height,
 
             altitude_map_height_base,
             map_dx,
@@ -558,6 +529,7 @@ impl Terrain {
             draw_normals: false,
 
             vertices,
+            normals_table,
         })
     }
 
@@ -589,22 +561,45 @@ impl Terrain {
             for x in 0..width {
                 let index = y * width + x;
 
-                let x = self.vertices[index][0];
-                let y = self.vertices[index][1];
-                let z = self.vertices[index][2];
+                let x = self.vertices[index].position.x;
+                let y = self.vertices[index].position.y;
+                let z = self.vertices[index].position.z;
                 vertices.push(GizmoVertex {
                     position: [x, y, z, 1.0],
                     color,
                 });
 
-                let x = x + self.vertices[index][3] * LENGTH;
-                let y = y + self.vertices[index][4] * LENGTH;
-                let z = z + self.vertices[index][5] * LENGTH;
+                let x = x + self.vertices[index].normal.x * LENGTH;
+                let y = y + self.vertices[index].normal.y * LENGTH;
+                let z = z + self.vertices[index].normal.z * LENGTH;
                 vertices.push(GizmoVertex {
                     position: [x, y, z, 1.0],
                     color,
                 });
             }
+        }
+
+        vertices
+    }
+
+    pub fn render_normals_lookup(&self) -> Vec<GizmoVertex> {
+        const SIZE: f32 = 100.0;
+
+        let mut vertices = vec![];
+        for (i, v) in self.normals_table.iter().enumerate() {
+            let color = if i == 48 {
+                [0.0, 1.0, 0.0, 1.0]
+            } else {
+                [1.0, 0.0, 0.0, 1.0]
+            };
+            vertices.push(GizmoVertex {
+                position: [0.0, 0.0, 0.0, 1.0],
+                color,
+            });
+            vertices.push(GizmoVertex {
+                position: [v.x * SIZE, v.y * SIZE, v.z * SIZE, 1.0],
+                color,
+            });
         }
         vertices
     }
@@ -666,7 +661,7 @@ impl Terrain {
 
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_texture_bind_group, &[]);
             render_pass.draw_indexed(0..self.index_count, 0, 0..1);
@@ -692,7 +687,7 @@ impl Terrain {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(
                 self.wireframe_index_buffer.slice(..),
-                wgpu::IndexFormat::Uint16,
+                wgpu::IndexFormat::Uint32,
             );
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.draw_indexed(0..self.wireframe_index_count, 0, 0..1);

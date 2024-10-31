@@ -19,7 +19,7 @@ mod game;
 struct Opts {
     /// Path to the game data directory.
     /// (e.g. "C:\Program Files\Sinister Games\Shadow Comapany - Left for Dead\Data")
-    path: Option<PathBuf>,
+    path: PathBuf,
 }
 
 enum App {
@@ -83,11 +83,7 @@ impl winit::application::ApplicationHandler for App {
 
                 let egui_integration = EguiIntegration::new(event_loop, &renderer);
 
-                let path = opts
-                    .path
-                    .clone()
-                    .unwrap_or(PathBuf::from("C:\\Games\\shadow_company\\data"));
-                let vfs = FileSystem::new(path);
+                let vfs = FileSystem::new(&opts.path);
 
                 let assets = Assets::new(vfs);
 
