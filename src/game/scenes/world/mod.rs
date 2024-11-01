@@ -2,10 +2,11 @@ use crate::{
     engine::{
         assets::{AssetError, Assets},
         gizmos::{GizmoVertex, GizmosRenderer},
+        mesh::{GpuMesh, Mesh, Vertex},
         renderer::Renderer,
         scene::Scene,
     },
-    game::config::CampaignDef,
+    game::{config::CampaignDef, smf},
 };
 use camera::*;
 use glam::{vec3, Quat, Vec2, Vec3};
@@ -14,6 +15,7 @@ use tracing::info;
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 mod camera;
+mod model;
 mod terrain;
 
 #[derive(Default)]
@@ -73,6 +75,7 @@ pub struct WorldScene {
     gpu_camera: GpuCamera,
 
     terrain: Terrain,
+    model_renderer: model::ModelRenderer,
 
     last_mouse_position: Vec2,
 
@@ -80,6 +83,9 @@ pub struct WorldScene {
 
     gizmos_renderer: GizmosRenderer,
     gizmos_vertices: Vec<GizmoVertex>,
+
+    mesh: GpuMesh,
+    scene: smf::Scene,
 }
 
 impl WorldScene {
@@ -108,12 +114,31 @@ impl WorldScene {
                 });
 
         let terrain = Terrain::new(assets, renderer, &camera_bind_group_layout, &campaign_def)?;
+        let model_renderer = model::ModelRenderer::new(renderer, &camera_bind_group_layout);
 
         {
             let data =
                 assets.load_config_file(format!("maps\\{}_final.mtf", campaign_def.base_name))?;
-            let mtf = crate::game::config::read_mtf(&data);
+            let _mtf = crate::game::config::read_mtf(&data);
         }
+
+        let mut mesh = Mesh::default();
+        mesh.vertices
+            .push(Vertex::from_position(vec3(0.0, 0.0, 0.0)));
+        mesh.vertices
+            .push(Vertex::from_position(vec3(100.0, 0.0, 0.0)));
+        mesh.vertices
+            .push(Vertex::from_position(vec3(100.0, 100.0, 0.0)));
+        mesh.vertices
+            .push(Vertex::from_position(vec3(0.0, 100.0, 0.0)));
+        mesh.indices.push(0);
+        mesh.indices.push(1);
+        mesh.indices.push(2);
+        mesh.indices.push(2);
+        mesh.indices.push(3);
+        mesh.indices.push(0);
+
+        let mesh = mesh.to_gpu(renderer);
 
         let camera = Camera::new(
             vec3(0.0, 1000.0, 1000.0),
@@ -128,6 +153,10 @@ impl WorldScene {
 
         let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
 
+        let data = assets.load_raw("models\\alvhqd-hummer\\alvhqd-hummer.smf")?;
+        let mut cursor = std::io::Cursor::new(data);
+        let scene = smf::Scene::read(&mut cursor).unwrap();
+
         Ok(Self {
             _campaign_def: campaign_def,
 
@@ -135,6 +164,7 @@ impl WorldScene {
             gpu_camera,
 
             terrain,
+            model_renderer,
 
             last_mouse_position: Vec2::ZERO,
 
@@ -142,6 +172,9 @@ impl WorldScene {
 
             gizmos_renderer,
             gizmos_vertices: vec![],
+
+            mesh,
+            scene,
         })
     }
 }
@@ -270,6 +303,56 @@ impl Scene for WorldScene {
 
         self.terrain
             .render(renderer, encoder, output, &self.gpu_camera.bind_group);
+
+        fn render_node(
+            renderer: &Renderer,
+            encoder: &mut wgpu::CommandEncoder,
+            view: &wgpu::TextureView,
+            camera_bind_group: &wgpu::BindGroup,
+            mr: &model::ModelRenderer,
+            node: &smf::Node,
+        ) {
+            node.meshes
+                .iter()
+                .map(|mesh| {
+                    Mesh {
+                        vertices: mesh
+                            .vertices
+                            .iter()
+                            .map(|v| {
+                                Vertex::new(
+                                    vec3(v.position.x, v.position.z, v.position.y),
+                                    vec3(v.normal.x, v.normal.z, v.normal.y),
+                                    v.tex_coord,
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                        indices: mesh.faces.iter().flat_map(|f| f.indices).collect(),
+                    }
+                    .to_gpu(renderer)
+                })
+                .for_each(|mesh| {
+                    mr.render(
+                        renderer,
+                        encoder,
+                        view,
+                        camera_bind_group,
+                        &mesh,
+                        Vec3::ZERO,
+                    );
+                });
+        }
+
+        self.scene.nodes.iter().for_each(|node| {
+            render_node(
+                renderer,
+                encoder,
+                output,
+                &self.gpu_camera.bind_group,
+                &self.model_renderer,
+                node,
+            )
+        });
 
         let mut more_vertices = self.terrain.render_normals();
         self.gizmos_vertices.append(&mut more_vertices);
