@@ -78,7 +78,7 @@ impl ModelRenderer {
         view: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
         mesh: &GpuMesh,
-        position: Vec3,
+        _position: Vec3,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("model_render_pass"),

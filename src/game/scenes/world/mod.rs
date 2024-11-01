@@ -2,7 +2,7 @@ use crate::{
     engine::{
         assets::{AssetError, Assets},
         gizmos::{GizmoVertex, GizmosRenderer},
-        mesh::{GpuMesh, Mesh, Vertex},
+        mesh::{Mesh, Vertex},
         renderer::Renderer,
         scene::Scene,
     },
@@ -84,7 +84,6 @@ pub struct WorldScene {
     gizmos_renderer: GizmosRenderer,
     gizmos_vertices: Vec<GizmoVertex>,
 
-    mesh: GpuMesh,
     scene: smf::Scene,
 }
 
@@ -122,24 +121,6 @@ impl WorldScene {
             let _mtf = crate::game::config::read_mtf(&data);
         }
 
-        let mut mesh = Mesh::default();
-        mesh.vertices
-            .push(Vertex::from_position(vec3(0.0, 0.0, 0.0)));
-        mesh.vertices
-            .push(Vertex::from_position(vec3(100.0, 0.0, 0.0)));
-        mesh.vertices
-            .push(Vertex::from_position(vec3(100.0, 100.0, 0.0)));
-        mesh.vertices
-            .push(Vertex::from_position(vec3(0.0, 100.0, 0.0)));
-        mesh.indices.push(0);
-        mesh.indices.push(1);
-        mesh.indices.push(2);
-        mesh.indices.push(2);
-        mesh.indices.push(3);
-        mesh.indices.push(0);
-
-        let mesh = mesh.to_gpu(renderer);
-
         let camera = Camera::new(
             vec3(0.0, 1000.0, 1000.0),
             Quat::IDENTITY,
@@ -173,7 +154,6 @@ impl WorldScene {
             gizmos_renderer,
             gizmos_vertices: vec![],
 
-            mesh,
             scene,
         })
     }

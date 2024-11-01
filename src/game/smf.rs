@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use byteorder::{LittleEndian, ReadBytesExt};
 use glam::{quat, vec3, Quat, Vec2, Vec3};
 

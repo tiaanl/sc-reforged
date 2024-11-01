@@ -12,14 +12,6 @@ pub struct Vertex {
 }
 
 impl Vertex {
-    pub fn from_position(position: Vec3) -> Self {
-        Self {
-            position,
-            normal: Vec3::ZERO,
-            tex_coord: Vec2::ZERO,
-        }
-    }
-
     pub fn new(position: Vec3, normal: Vec3, tex_coord: Vec2) -> Self {
         Self {
             position,
