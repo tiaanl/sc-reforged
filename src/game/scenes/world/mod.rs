@@ -1,9 +1,10 @@
 use crate::{
     engine::{
+        arena::{Arena, Handle},
         assets::{AssetError, Assets},
         gizmos::{GizmoVertex, GizmosRenderer},
         mesh::{Mesh, Vertex},
-        renderer::Renderer,
+        renderer::{GpuTexture, Renderer},
         scene::Scene,
     },
     game::{config::CampaignDef, smf},
@@ -16,6 +17,7 @@ use winit::{event::MouseButton, keyboard::KeyCode};
 
 mod camera;
 mod model;
+mod object;
 mod terrain;
 
 #[derive(Default)]
@@ -77,6 +79,8 @@ pub struct WorldScene {
     terrain: Terrain,
     model_renderer: model::ModelRenderer,
 
+    textures: Arena<GpuTexture>,
+
     last_mouse_position: Vec2,
 
     rotating_camera: Option<Vec2>,
@@ -85,6 +89,7 @@ pub struct WorldScene {
     gizmos_vertices: Vec<GizmoVertex>,
 
     scene: smf::Scene,
+    scene_texture: Handle<GpuTexture>,
 }
 
 impl WorldScene {
@@ -134,9 +139,71 @@ impl WorldScene {
 
         let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
 
+        let mut textures = Arena::default();
+
         let data = assets.load_raw("models\\alvhqd-hummer\\alvhqd-hummer.smf")?;
         let mut cursor = std::io::Cursor::new(data);
         let scene = smf::Scene::read(&mut cursor).unwrap();
+
+        let scene_texture = {
+            let crate::engine::assets::Image {
+                data,
+                width,
+                height,
+            } = assets.load_bmp("textures\\shared\\hummer.bmp")?;
+
+            let size = wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            };
+
+            let texture = renderer.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("texture"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+            renderer.queue.write_texture(
+                wgpu::ImageCopyTextureBase {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::default(),
+                    aspect: wgpu::TextureAspect::All,
+                },
+                bytemuck::cast_slice(&data),
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(width * 4),
+                    rows_per_image: Some(height),
+                },
+                size,
+            );
+
+            let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("texture_sampler"),
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            });
+
+            textures.insert(GpuTexture {
+                texture,
+                view,
+                sampler,
+            })
+        };
 
         Ok(Self {
             _campaign_def: campaign_def,
@@ -147,6 +214,8 @@ impl WorldScene {
             terrain,
             model_renderer,
 
+            textures,
+
             last_mouse_position: Vec2::ZERO,
 
             rotating_camera: None,
@@ -155,6 +224,7 @@ impl WorldScene {
             gizmos_vertices: vec![],
 
             scene,
+            scene_texture,
         })
     }
 }
@@ -291,6 +361,7 @@ impl Scene for WorldScene {
             camera_bind_group: &wgpu::BindGroup,
             mr: &model::ModelRenderer,
             node: &smf::Node,
+            texture: &GpuTexture,
         ) {
             node.meshes
                 .iter()
@@ -318,21 +389,25 @@ impl Scene for WorldScene {
                         view,
                         camera_bind_group,
                         &mesh,
+                        &texture,
                         Vec3::ZERO,
                     );
                 });
         }
 
-        self.scene.nodes.iter().for_each(|node| {
-            render_node(
-                renderer,
-                encoder,
-                output,
-                &self.gpu_camera.bind_group,
-                &self.model_renderer,
-                node,
-            )
-        });
+        if let Some(texture) = self.textures.get(&self.scene_texture) {
+            self.scene.nodes.iter().for_each(|node| {
+                render_node(
+                    renderer,
+                    encoder,
+                    output,
+                    &self.gpu_camera.bind_group,
+                    &self.model_renderer,
+                    node,
+                    &texture,
+                )
+            });
+        }
 
         let mut more_vertices = self.terrain.render_normals();
         self.gizmos_vertices.append(&mut more_vertices);
