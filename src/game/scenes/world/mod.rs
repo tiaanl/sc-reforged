@@ -109,6 +109,12 @@ impl WorldScene {
 
         let terrain = Terrain::new(assets, renderer, &camera_bind_group_layout, &campaign_def)?;
 
+        {
+            let data =
+                assets.load_config_file(format!("maps\\{}_final.mtf", campaign_def.base_name))?;
+            let mtf = crate::game::config::read_mtf(&data);
+        }
+
         let camera = Camera::new(
             vec3(0.0, 1000.0, 1000.0),
             Quat::IDENTITY,
