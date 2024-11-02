@@ -6,37 +6,11 @@ use crate::engine::{
 };
 
 pub struct ModelRenderer {
-    texture_bind_group_layout: wgpu::BindGroupLayout,
     render_pipeline: wgpu::RenderPipeline,
 }
 
 impl ModelRenderer {
     pub fn new(renderer: &Renderer, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
-        let texture_bind_group_layout =
-            renderer
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("model_texture_bind_group_layout"),
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
-                });
-
         let shader_module =
             renderer.create_shader_module("model_renderer", include_str!("model.wgsl"));
 
@@ -46,13 +20,10 @@ impl ModelRenderer {
                 &shader_module,
             )
             .bind_group_layout(camera_bind_group_layout)
-            .bind_group_layout(&texture_bind_group_layout),
+            .bind_group_layout(renderer.texture_bind_group_layout()),
         );
 
-        Self {
-            texture_bind_group_layout,
-            render_pipeline,
-        }
+        Self { render_pipeline }
     }
 
     pub fn render(
@@ -65,22 +36,11 @@ impl ModelRenderer {
         texture: &GpuTexture,
         _position: Vec3,
     ) {
-        let texture_bind_group = renderer
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("texture_bind_group"),
-                layout: &self.texture_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&texture.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&texture.sampler),
-                    },
-                ],
-            });
+        let texture_bind_group = renderer.create_texture_bind_group(
+            "texture_bind_group",
+            &texture.view,
+            &texture.sampler,
+        );
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("model_render_pass"),

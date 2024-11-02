@@ -146,46 +146,9 @@ impl WorldScene {
         let scene = smf::Scene::read(&mut cursor).unwrap();
 
         let scene_texture = {
-            let crate::engine::assets::Image {
-                data,
-                width,
-                height,
-            } = assets.load_bmp("textures\\shared\\hummer.bmp")?;
-
-            let size = wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            };
-
-            let texture = renderer.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("texture"),
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-
-            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            renderer.queue.write_texture(
-                wgpu::ImageCopyTextureBase {
-                    texture: &texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::default(),
-                    aspect: wgpu::TextureAspect::All,
-                },
-                bytemuck::cast_slice(&data),
-                wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(width * 4),
-                    rows_per_image: Some(height),
-                },
-                size,
-            );
+            let data = assets.load_raw(r"textures\shared\hummer.bmp")?;
+            let image = image::load_from_memory_with_format(&data, image::ImageFormat::Bmp)?;
+            let view = renderer.create_texture_view("hummer", image);
 
             let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
                 label: Some("texture_sampler"),
@@ -198,11 +161,7 @@ impl WorldScene {
                 ..Default::default()
             });
 
-            textures.insert(GpuTexture {
-                texture,
-                view,
-                sampler,
-            })
+            textures.insert(GpuTexture { view, sampler })
         };
 
         Ok(Self {

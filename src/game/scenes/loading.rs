@@ -6,56 +6,16 @@ use crate::engine::{
 
 pub struct LoadingScene {
     pipeline: wgpu::RenderPipeline,
-    _texture: wgpu::Texture,
-    _view: wgpu::TextureView,
-    _sampler: wgpu::Sampler,
     bind_group: wgpu::BindGroup,
 }
 
 impl LoadingScene {
     pub fn new(assets: &Assets, renderer: &Renderer) -> Self {
-        let crate::engine::assets::Image {
-            data,
-            width,
-            height,
-        } = assets
-            .load_jpeg(r"textures/interface/loadscr2.jpg")
-            .unwrap();
+        let data = assets.load_raw(r"textures/interface/loadscr2.jpg").unwrap();
+        let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg).unwrap();
 
-        let size = wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        };
-
-        let texture = renderer.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("texture: textures/interface/loadscr2.jpg"),
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-
-        renderer.queue.write_texture(
-            wgpu::ImageCopyTexture {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            data.as_ref(),
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(size.width as u32 * 4),
-                rows_per_image: Some(size.height as u32),
-            },
-            size,
-        );
-
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let texture_view =
+            renderer.create_texture_view("texture: textures/interface/loadscr2.jpg", image);
 
         let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("sampler: textures/interface/loadscr2.jpg"),
@@ -68,98 +28,19 @@ impl LoadingScene {
             ..Default::default()
         });
 
-        let bind_group_layout =
-            renderer
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("loading_scene_bind_group_layout"),
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
-                });
-
-        let bind_group = renderer
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("loading_scene_bind_group"),
-                layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&texture_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                ],
-            });
-
-        // let pipeline_layout =
-        //     renderer
-        //         .device
-        //         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        //             label: Some("loading_scene_pipeline_layout"),
-        //             bind_group_layouts: &[&bind_group_layout],
-        //             push_constant_ranges: &[],
-        //         });
+        let bind_group =
+            renderer.create_texture_bind_group("loading_texture", &texture_view, &sampler);
 
         let shader_module =
             renderer.create_shader_module("loading_scene", include_str!("loading.wgsl"));
 
-        let pipeline = renderer.create_render_pipeline(RenderPipelineConfig::<()>::new(
-            "loading_scene",
-            &shader_module,
-        ));
-
-        // let pipeline = renderer
-        //     .device
-        //     .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        //         label: Some("loading_scene_render_pipeline"),
-        //         layout: Some(&pipeline_layout),
-        //         vertex: wgpu::VertexState {
-        //             module: &module,
-        //             entry_point: "vertex_main",
-        //             compilation_options: wgpu::PipelineCompilationOptions::default(),
-        //             buffers: &[],
-        //         },
-        //         primitive: wgpu::PrimitiveState::default(),
-        //         depth_stencil: renderer.depth_stencil_state(wgpu::CompareFunction::Less),
-        //         multisample: wgpu::MultisampleState::default(),
-        //         fragment: Some(wgpu::FragmentState {
-        //             module: &module,
-        //             entry_point: "fragment_main",
-        //             compilation_options: wgpu::PipelineCompilationOptions::default(),
-        //             targets: &[Some(wgpu::ColorTargetState {
-        //                 format: renderer.surface_config.format,
-        //                 blend: Some(wgpu::BlendState::REPLACE),
-        //                 write_mask: wgpu::ColorWrites::ALL,
-        //             })],
-        //         }),
-        //         multiview: None,
-        //         cache: None,
-        //     });
+        let pipeline = renderer.create_render_pipeline(
+            RenderPipelineConfig::<()>::new("loading_scene", &shader_module)
+                .bind_group_layout(renderer.texture_bind_group_layout()),
+        );
 
         Self {
             pipeline,
-            _texture: texture,
-            _view: texture_view,
-            _sampler: sampler,
             bind_group,
         }
     }
