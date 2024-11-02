@@ -11,22 +11,18 @@ pub struct LoadingScene {
 
 impl LoadingScene {
     pub fn new(assets: &Assets, renderer: &Renderer) -> Self {
-        let data = assets.load_raw(r"textures/interface/loadscr2.jpg").unwrap();
-        let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg).unwrap();
-
+        let image = assets
+            .load_jpeg(r"textures/interface/loadscr2.jpg")
+            .unwrap();
         let texture_view =
             renderer.create_texture_view("texture: textures/interface/loadscr2.jpg", image);
 
-        let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("sampler: textures/interface/loadscr2.jpg"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
+        let sampler = renderer.create_sampler(
+            "sampler: textures/interface/loadscr2.jpg",
+            wgpu::AddressMode::ClampToEdge,
+            wgpu::FilterMode::Linear,
+            wgpu::FilterMode::Linear,
+        );
 
         let bind_group =
             renderer.create_texture_bind_group("loading_texture", &texture_view, &sampler);

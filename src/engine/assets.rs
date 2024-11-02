@@ -17,12 +17,6 @@ pub struct Assets {
     fs: FileSystem,
 }
 
-pub struct Image {
-    pub data: Vec<u8>,
-    pub width: u32,
-    pub height: u32,
-}
-
 impl Assets {
     pub fn new(fs: FileSystem) -> Self {
         Self { fs }
@@ -32,36 +26,21 @@ impl Assets {
         Ok(self.fs.load(path)?)
     }
 
-    pub fn load_bmp(&self, path: impl AsRef<Path>) -> Result<Image, AssetError> {
+    pub fn load_bmp(&self, path: impl AsRef<Path>) -> Result<image::DynamicImage, AssetError> {
         let data = self.load_raw(path.as_ref())?;
-
-        let image = image::load_from_memory_with_format(data.as_ref(), image::ImageFormat::Bmp)?;
-        let width = image.width();
-        let height = image.height();
-
-        let data = image.into_rgba8().into_vec();
-
-        Ok(Image {
-            data,
-            width,
-            height,
-        })
+        Ok(image::load_from_memory_with_format(
+            data.as_ref(),
+            image::ImageFormat::Bmp,
+        )?)
     }
 
-    pub fn load_jpeg(&self, path: impl AsRef<Path>) -> Result<Image, AssetError> {
+    pub fn load_jpeg(&self, path: impl AsRef<Path>) -> Result<image::DynamicImage, AssetError> {
         let data = self.load_raw(path.as_ref())?;
 
-        let image = image::load_from_memory_with_format(data.as_ref(), image::ImageFormat::Jpeg)?;
-        let width = image.width();
-        let height = image.height();
-
-        let data = image.into_rgba8().into_vec();
-
-        Ok(Image {
-            data,
-            width,
-            height,
-        })
+        Ok(image::load_from_memory_with_format(
+            data.as_ref(),
+            image::ImageFormat::Jpeg,
+        )?)
     }
 
     pub fn load_config_file(&self, path: impl AsRef<Path>) -> Result<String, AssetError> {

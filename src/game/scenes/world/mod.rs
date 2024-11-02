@@ -100,25 +100,8 @@ impl WorldScene {
     ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
-        let camera_bind_group_layout =
-            renderer
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("camera_bind_group_layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
-
-        let terrain = Terrain::new(assets, renderer, &camera_bind_group_layout, &campaign_def)?;
-        let model_renderer = model::ModelRenderer::new(renderer, &camera_bind_group_layout);
+        let terrain = Terrain::new(assets, renderer, &campaign_def)?;
+        let model_renderer = model::ModelRenderer::new(renderer);
 
         {
             let data =
@@ -137,7 +120,7 @@ impl WorldScene {
         let world_camera = WorldCamera::new(camera, 0.0, 0.0, Vec3::ZERO);
         let gpu_camera = GpuCamera::new(renderer);
 
-        let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
+        let gizmos_renderer = GizmosRenderer::new(renderer);
 
         let mut textures = Arena::default();
 
@@ -146,20 +129,14 @@ impl WorldScene {
         let scene = smf::Scene::read(&mut cursor).unwrap();
 
         let scene_texture = {
-            let data = assets.load_raw(r"textures\shared\hummer.bmp")?;
-            let image = image::load_from_memory_with_format(&data, image::ImageFormat::Bmp)?;
+            let image = assets.load_bmp(r"textures\shared\hummer.bmp")?;
             let view = renderer.create_texture_view("hummer", image);
-
-            let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("texture_sampler"),
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                mipmap_filter: wgpu::FilterMode::Linear,
-                ..Default::default()
-            });
+            let sampler = renderer.create_sampler(
+                "texture_sampler",
+                wgpu::AddressMode::ClampToEdge,
+                wgpu::FilterMode::Linear,
+                wgpu::FilterMode::Linear,
+            );
 
             textures.insert(GpuTexture { view, sampler })
         };

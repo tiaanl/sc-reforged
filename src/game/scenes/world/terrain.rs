@@ -3,11 +3,10 @@ use std::io::{Read, Seek, SeekFrom};
 use byteorder::{LittleEndian, ReadBytesExt};
 use glam::{vec2, vec3, Vec2, Vec3};
 use tracing::info;
-use wgpu::{util::DeviceExt, vertex_attr_array};
 
 use crate::{
     engine::{
-        assets::{AssetError, Assets, Image},
+        assets::{AssetError, Assets},
         gizmos::GizmoVertex,
         renderer::{BufferLayout, GpuTexture, RenderPipelineConfig, Renderer},
     },
@@ -45,7 +44,13 @@ pub struct Terrain {
     normals_table: Vec<Vec3>,
 }
 
-fn load_texture_map(data: &[u8]) -> Image {
+struct HeightMap {
+    width: u32,
+    height: u32,
+    heights: Vec<u8>,
+}
+
+fn load_texture_map(data: &[u8]) -> Result<HeightMap, AssetError> {
     /*
     typedef struct _PcxHeader
     {
@@ -91,10 +96,10 @@ fn load_texture_map(data: &[u8]) -> Image {
     let _source_height = data.read_u16::<LittleEndian>().unwrap();
     data.seek(SeekFrom::Current(54)).unwrap();
 
-    let width = max_x - min_x + 1;
-    let height = max_y - min_y + 1;
+    let width = max_x as u32 - min_x as u32 + 1;
+    let height = max_y as u32 - min_y as u32 + 1;
 
-    let data = if encoding_method == 0 {
+    let heights = if encoding_method == 0 {
         let mut decoded = vec![0_u8; width as usize * height as usize];
         data.read_exact(decoded.as_mut()).unwrap();
         decoded
@@ -111,14 +116,15 @@ fn load_texture_map(data: &[u8]) -> Image {
         }
         decoded
     } else {
-        panic!("Invalid PCX encoding");
+        // panic!("Invalid PCX encoding");
+        return Err(AssetError::DecodeError);
     };
 
-    Image {
-        data,
-        width: width as u32,
-        height: height as u32,
-    }
+    Ok(HeightMap {
+        width,
+        height,
+        heights,
+    })
 }
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -131,6 +137,8 @@ struct Vertex {
 
 impl BufferLayout for Vertex {
     fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
+        use wgpu::vertex_attr_array;
+
         const VERTEX_ATTR_ARRAY: &[wgpu::VertexAttribute] = &vertex_attr_array![
             0 => Float32x3, // position
             1 => Float32x3, // normal
@@ -149,7 +157,6 @@ impl Terrain {
     pub fn new(
         assets: &Assets,
         renderer: &Renderer,
-        camera_bind_group_layout: &wgpu::BindGroupLayout,
         campaign_def: &CampaignDef,
     ) -> Result<Self, AssetError> {
         let TerrainMapping {
@@ -175,19 +182,15 @@ impl Terrain {
             let path = format!("trnhigh/{}.jpg", texture_map_base_name);
             info!("Loading high detail terrain texture: {path}");
 
-            let data = assets.load_raw(path)?;
-            let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)?;
+            let image = assets.load_jpeg(path)?;
             let texture_view = renderer.create_texture_view("terrain_texture", image);
 
-            let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                ..Default::default()
-            });
+            let sampler = renderer.create_sampler(
+                "terrain_texture_sampler",
+                wgpu::AddressMode::ClampToEdge,
+                wgpu::FilterMode::Linear,
+                wgpu::FilterMode::Linear,
+            );
 
             GpuTexture {
                 view: texture_view,
@@ -205,7 +208,7 @@ impl Terrain {
             let path = format!("maps/{}.pcx", campaign_def.base_name); // TODO: Get the name of the map from the [CampaignDef].
             info!("Loading terrain height map: {path}");
             let data = assets.load_raw(path)?;
-            load_texture_map(&data)
+            load_texture_map(&data).map_err(|_| AssetError::DecodeError)?
         };
 
         #[cfg(feature = "load_normals")]
@@ -270,7 +273,7 @@ impl Terrain {
 
             for y in 0..height_map.height {
                 for x in 0..height_map.width {
-                    let altitude = heights[height_map.data[index!(x, y) as usize] as usize];
+                    let altitude = heights[height_map.heights[index!(x, y) as usize] as usize];
                     #[cfg(feature = "load_normals")]
                     let normal = normals_table[normals_lookup[index!(x, y) as usize] as usize];
 
@@ -344,36 +347,16 @@ impl Terrain {
             }
         }
 
-        let vertex_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("terrain_vertex_buffer"),
-                contents: bytemuck::cast_slice(vertices.as_ref()),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-        let index_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("terrain_index_buffer"),
-                contents: bytemuck::cast_slice(&indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-
+        let vertex_buffer = renderer.create_vertex_buffer("terrain_vertex_buffer", &vertices);
+        let index_buffer = renderer.create_index_buffer("terrain_index_buffer", &indices);
         let wireframe_index_buffer =
-            renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("terrain_wireframe_index_buffer"),
-                    contents: bytemuck::cast_slice(&wireframe_indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
+            renderer.create_index_buffer("terrain_wireframe_index_buffer", &wireframe_indices);
 
         let shader_module = renderer.create_shader_module("terrain", include_str!("world.wgsl"));
 
         let pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<Vertex>::new("terrain", &shader_module)
-                .bind_group_layout(camera_bind_group_layout)
+                .bind_group_layout(renderer.uniform_bind_group_layout())
                 .bind_group_layout(renderer.texture_bind_group_layout()),
         );
 
@@ -381,7 +364,7 @@ impl Terrain {
             RenderPipelineConfig::<Vertex>::new("terrain_wireframe", &shader_module)
                 .vertex_entry("vertex_main_wireframe")
                 .fragment_entry("fragment_main_wireframe")
-                .bind_group_layout(camera_bind_group_layout)
+                .bind_group_layout(renderer.uniform_bind_group_layout())
                 .primitive(wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::LineList,
                     ..Default::default()

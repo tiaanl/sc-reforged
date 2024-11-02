@@ -1,5 +1,4 @@
 use glam::{Vec2, Vec3};
-use wgpu::{util::DeviceExt, vertex_attr_array};
 
 use super::renderer::{BufferLayout, Renderer};
 
@@ -23,6 +22,8 @@ impl Vertex {
 
 impl BufferLayout for Vertex {
     fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
+        use wgpu::vertex_attr_array;
+
         const VERTEX_ATTR_ARRAY: &[wgpu::VertexAttribute] = &vertex_attr_array!(
             0 => Float32x3, // position
             1 => Float32x3, // normal
@@ -54,21 +55,8 @@ impl Mesh {
         debug_assert!(!self.vertices.is_empty(), "Uploading empty vertex buffer.");
         debug_assert!(!self.indices.is_empty(), "Uploading empty index buffer.");
 
-        let vertex_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("mesh_vertex_buffer"),
-                contents: bytemuck::cast_slice(&self.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-        let index_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("mesh_index_buffer"),
-                contents: bytemuck::cast_slice(&self.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+        let vertex_buffer = renderer.create_vertex_buffer("mesh_vertex_buffer", &self.vertices);
+        let index_buffer = renderer.create_index_buffer("mesh_index_buffer", &self.indices);
 
         GpuMesh {
             vertex_buffer,

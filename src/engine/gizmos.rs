@@ -1,4 +1,4 @@
-use wgpu::{util::DeviceExt, vertex_attr_array};
+use wgpu::vertex_attr_array;
 
 use super::renderer::{BufferLayout, RenderPipelineConfig, Renderer};
 
@@ -29,12 +29,12 @@ pub struct GizmosRenderer {
 }
 
 impl GizmosRenderer {
-    pub fn new(renderer: &Renderer, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(renderer: &Renderer) -> Self {
         let shader = renderer.create_shader_module("gizmos", include_str!("gizmos.wgsl"));
 
         let pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<GizmoVertex>::new("gizmos", &shader)
-                .bind_group_layout(&camera_bind_group_layout)
+                .bind_group_layout(renderer.uniform_bind_group_layout())
                 .primitive(wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::LineList,
                     ..Default::default()
@@ -53,13 +53,7 @@ impl GizmosRenderer {
         camera_bind_group: &wgpu::BindGroup,
         vertices: &Vec<GizmoVertex>,
     ) {
-        let buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("gizmos_vertex_buffer"),
-                contents: bytemuck::cast_slice(vertices.as_ref()),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+        let vertex_buffer = renderer.create_vertex_buffer("gizmos_vertex_buffer", vertices);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("gizmos_render_pass"),
@@ -76,7 +70,7 @@ impl GizmosRenderer {
         });
 
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_vertex_buffer(0, buffer.slice(..));
+        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.draw(0..(vertices.len() as u32), 0..1);
     }

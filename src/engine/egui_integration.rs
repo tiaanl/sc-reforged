@@ -61,10 +61,7 @@ impl EguiIntegration {
         } = full_output;
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [
-                renderer.surface_config.width,
-                renderer.surface_config.height,
-            ],
+            size_in_pixels: [renderer.width(), renderer.height()],
             pixels_per_point,
         };
 

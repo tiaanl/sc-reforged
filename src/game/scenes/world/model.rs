@@ -10,7 +10,7 @@ pub struct ModelRenderer {
 }
 
 impl ModelRenderer {
-    pub fn new(renderer: &Renderer, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(renderer: &Renderer) -> Self {
         let shader_module =
             renderer.create_shader_module("model_renderer", include_str!("model.wgsl"));
 
@@ -19,7 +19,7 @@ impl ModelRenderer {
                 "model_renderer",
                 &shader_module,
             )
-            .bind_group_layout(camera_bind_group_layout)
+            .bind_group_layout(renderer.uniform_bind_group_layout())
             .bind_group_layout(renderer.texture_bind_group_layout()),
         );
 

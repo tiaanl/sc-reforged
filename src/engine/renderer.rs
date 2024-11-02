@@ -15,8 +15,10 @@ pub struct Renderer {
 
     depth_texture: wgpu::TextureView,
 
-    /// A bind group layout used for all texture bindings.
+    /// A bind group layout used for all texture bind groups.
     texture_bind_group_layout: wgpu::BindGroupLayout,
+    // A bind group layout used for all uniform bind groups.
+    uniform_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 pub trait BufferLayout: Sized {
@@ -95,10 +97,10 @@ where
         self
     }
 
-    pub fn depth_compare_function(mut self, depth_compare_function: wgpu::CompareFunction) -> Self {
-        self.depth_compare_function = Some(depth_compare_function);
-        self
-    }
+    // pub fn depth_compare_function(mut self, depth_compare_function: wgpu::CompareFunction) -> Self {
+    //     self.depth_compare_function = Some(depth_compare_function);
+    //     self
+    // }
 }
 
 impl Renderer {
@@ -171,6 +173,21 @@ impl Renderer {
                 ],
             });
 
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("uniform_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
         Self {
             device,
             queue,
@@ -178,16 +195,75 @@ impl Renderer {
             surface_config,
             depth_texture,
             texture_bind_group_layout,
+            uniform_bind_group_layout,
         }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.surface_config.width = width;
         self.surface_config.height = height;
-
         self.depth_texture = Self::create_depth_texture(&self.device, &self.surface_config);
-
         self.surface.configure(&self.device, &self.surface_config);
+    }
+
+    pub fn width(&self) -> u32 {
+        self.surface_config.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.surface_config.height
+    }
+
+    pub fn create_vertex_buffer<B>(&self, label: &str, buffer: &[B]) -> wgpu::Buffer
+    where
+        B: BufferLayout + bytemuck::NoUninit,
+    {
+        self.device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(label),
+                contents: bytemuck::cast_slice(buffer),
+                usage: wgpu::BufferUsages::VERTEX,
+            })
+    }
+
+    pub fn create_index_buffer(&self, label: &str, buffer: &[u32]) -> wgpu::Buffer {
+        self.device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(label),
+                contents: bytemuck::cast_slice(buffer),
+                usage: wgpu::BufferUsages::INDEX,
+            })
+    }
+
+    pub fn create_uniform_buffer<B>(&self, label: &str, buffer: B) -> wgpu::Buffer
+    where
+        B: bytemuck::NoUninit,
+    {
+        self.device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(label),
+                contents: bytemuck::cast_slice(&[buffer]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            })
+    }
+
+    pub fn create_uniform_bind_group(&self, label: &str, buffer: &wgpu::Buffer) -> wgpu::BindGroup {
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(label),
+            layout: &self.uniform_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            }],
+        })
+    }
+
+    pub fn uniform_bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.uniform_bind_group_layout
     }
 
     pub fn create_shader_module(&self, label: &str, source: &str) -> wgpu::ShaderModule {
@@ -309,6 +385,24 @@ impl Renderer {
                     resource: wgpu::BindingResource::Sampler(sampler),
                 },
             ],
+        })
+    }
+
+    pub fn create_sampler(
+        &self,
+        label: &str,
+        address_mode: wgpu::AddressMode,
+        mag_filter: wgpu::FilterMode,
+        min_filter: wgpu::FilterMode,
+    ) -> wgpu::Sampler {
+        self.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some(label),
+            address_mode_u: address_mode,
+            address_mode_v: address_mode,
+            address_mode_w: address_mode,
+            mag_filter,
+            min_filter,
+            ..Default::default()
         })
     }
 }
