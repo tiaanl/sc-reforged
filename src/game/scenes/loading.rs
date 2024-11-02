@@ -1,4 +1,8 @@
-use crate::engine::{assets::Assets, renderer::Renderer, scene::Scene};
+use crate::engine::{
+    assets::Assets,
+    renderer::{RenderPipelineConfig, Renderer},
+    scene::Scene,
+};
 
 pub struct LoadingScene {
     pipeline: wgpu::RenderPipeline,
@@ -106,51 +110,50 @@ impl LoadingScene {
                 ],
             });
 
-        let pipeline_layout =
-            renderer
-                .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("loading_scene_pipeline_layout"),
-                    bind_group_layouts: &[&bind_group_layout],
-                    push_constant_ranges: &[],
-                });
+        // let pipeline_layout =
+        //     renderer
+        //         .device
+        //         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        //             label: Some("loading_scene_pipeline_layout"),
+        //             bind_group_layouts: &[&bind_group_layout],
+        //             push_constant_ranges: &[],
+        //         });
 
-        let module = renderer
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("loading_scene_shader_module"),
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "loading.wgsl"
-                ))),
-            });
+        let shader_module =
+            renderer.create_shader_module("loading_scene", include_str!("loading.wgsl"));
 
-        let pipeline = renderer
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("loading_scene_render_pipeline"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &module,
-                    entry_point: "vertex_main",
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[],
-                },
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: renderer.depth_stencil_state(wgpu::CompareFunction::Less),
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &module,
-                    entry_point: "fragment_main",
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: renderer.surface_config.format,
-                        blend: Some(wgpu::BlendState::REPLACE),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                multiview: None,
-                cache: None,
-            });
+        let pipeline = renderer.create_render_pipeline(RenderPipelineConfig::<()>::new(
+            "loading_scene",
+            &shader_module,
+        ));
+
+        // let pipeline = renderer
+        //     .device
+        //     .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        //         label: Some("loading_scene_render_pipeline"),
+        //         layout: Some(&pipeline_layout),
+        //         vertex: wgpu::VertexState {
+        //             module: &module,
+        //             entry_point: "vertex_main",
+        //             compilation_options: wgpu::PipelineCompilationOptions::default(),
+        //             buffers: &[],
+        //         },
+        //         primitive: wgpu::PrimitiveState::default(),
+        //         depth_stencil: renderer.depth_stencil_state(wgpu::CompareFunction::Less),
+        //         multisample: wgpu::MultisampleState::default(),
+        //         fragment: Some(wgpu::FragmentState {
+        //             module: &module,
+        //             entry_point: "fragment_main",
+        //             compilation_options: wgpu::PipelineCompilationOptions::default(),
+        //             targets: &[Some(wgpu::ColorTargetState {
+        //                 format: renderer.surface_config.format,
+        //                 blend: Some(wgpu::BlendState::REPLACE),
+        //                 write_mask: wgpu::ColorWrites::ALL,
+        //             })],
+        //         }),
+        //         multiview: None,
+        //         cache: None,
+        //     });
 
         Self {
             pipeline,

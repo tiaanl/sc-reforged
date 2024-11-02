@@ -1,6 +1,6 @@
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
-use super::renderer::Renderer;
+use super::renderer::{BufferLayout, RenderPipelineConfig, Renderer};
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
@@ -9,63 +9,38 @@ pub struct GizmoVertex {
     pub color: [f32; 4],
 }
 
+impl BufferLayout for GizmoVertex {
+    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
+        const VERTEX_ATTR_ARRAY: &[wgpu::VertexAttribute] = &vertex_attr_array![
+            0 => Float32x4, // position
+            1 => Float32x4, // color
+        ];
+
+        &[wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: VERTEX_ATTR_ARRAY,
+        }]
+    }
+}
+
 pub struct GizmosRenderer {
     pipeline: wgpu::RenderPipeline,
 }
 
 impl GizmosRenderer {
     pub fn new(renderer: &Renderer, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
-        let shader = renderer
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("gizmos_shader_module"),
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "gizmos.wgsl"
-                ))),
-            });
+        let shader = renderer.create_shader_module("gizmos", include_str!("gizmos.wgsl"));
 
-        let pipeline_layout =
-            renderer
-                .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("gizmos_pipeline_layout"),
-                    bind_group_layouts: &[&camera_bind_group_layout],
-                    push_constant_ranges: &[],
-                });
-
-        let pipeline = renderer
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("gizmos_render_pipeline"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vertex_main",
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[wgpu::VertexBufferLayout {
-                        array_stride: std::mem::size_of::<GizmoVertex>() as wgpu::BufferAddress,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &vertex_attr_array![
-                            0 => Float32x4,
-                            1 => Float32x4,
-                        ],
-                    }],
-                },
-                primitive: wgpu::PrimitiveState {
+        let pipeline = renderer.create_render_pipeline(
+            RenderPipelineConfig::<GizmoVertex>::new("gizmos", &shader)
+                .bind_group_layout(&camera_bind_group_layout)
+                .primitive(wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::LineList,
                     ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fragment_main",
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[Some(renderer.surface_config.format.into())],
-                }),
-                multiview: None,
-                cache: None,
-            });
+                })
+                .disable_depth_buffer(),
+        );
 
         Self { pipeline }
     }

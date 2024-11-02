@@ -22,6 +22,88 @@ pub struct Renderer {
     depth_texture: DepthTexture,
 }
 
+pub trait BufferLayout: Sized {
+    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>];
+}
+
+impl BufferLayout for () {
+    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
+        &[wgpu::VertexBufferLayout {
+            array_stride: 0,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[],
+        }]
+    }
+}
+
+pub struct RenderPipelineConfig<'a, B>
+where
+    B: BufferLayout,
+{
+    label: &'a str,
+    shader_module: &'a wgpu::ShaderModule,
+    bind_group_layouts: Vec<&'a wgpu::BindGroupLayout>,
+
+    vertex_entry: Option<&'a str>,
+    fragment_entry: Option<&'a str>,
+    primitive: Option<wgpu::PrimitiveState>,
+    depth_buffer: bool,
+    depth_compare_function: Option<wgpu::CompareFunction>,
+
+    _phantom: std::marker::PhantomData<B>,
+}
+
+impl<'a, B> RenderPipelineConfig<'a, B>
+where
+    B: BufferLayout,
+{
+    pub fn new(label: &'a str, shader_module: &'a wgpu::ShaderModule) -> Self {
+        Self {
+            label,
+            shader_module,
+            bind_group_layouts: vec![],
+
+            vertex_entry: None,
+            fragment_entry: None,
+            primitive: None,
+            depth_buffer: true,
+            depth_compare_function: None,
+
+            _phantom: std::marker::PhantomData::<B>,
+        }
+    }
+
+    pub fn bind_group_layout(mut self, bind_group_layout: &'a wgpu::BindGroupLayout) -> Self {
+        self.bind_group_layouts.push(bind_group_layout);
+        self
+    }
+
+    pub fn vertex_entry(mut self, entry: &'a str) -> Self {
+        self.vertex_entry = Some(entry);
+        self
+    }
+
+    pub fn fragment_entry(mut self, entry: &'a str) -> Self {
+        self.fragment_entry = Some(entry);
+        self
+    }
+
+    pub fn primitive(mut self, primitive: wgpu::PrimitiveState) -> Self {
+        self.primitive = Some(primitive);
+        self
+    }
+
+    pub fn disable_depth_buffer(mut self) -> Self {
+        self.depth_buffer = false;
+        self
+    }
+
+    pub fn depth_compare_function(mut self, depth_compare_function: wgpu::CompareFunction) -> Self {
+        self.depth_compare_function = Some(depth_compare_function);
+        self
+    }
+}
+
 impl Renderer {
     const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
@@ -79,6 +161,77 @@ impl Renderer {
         }
     }
 
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.surface_config.width = width;
+        self.surface_config.height = height;
+
+        self.depth_texture = Self::create_depth_texture(&self.device, &self.surface_config);
+
+        self.surface.configure(&self.device, &self.surface_config);
+    }
+
+    pub fn create_shader_module(&self, label: &str, source: &str) -> wgpu::ShaderModule {
+        let shader_module_label = format!("{}_shader_module", label);
+        self.device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(&shader_module_label),
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(source)),
+            })
+    }
+
+    pub fn create_render_pipeline<B>(&self, config: RenderPipelineConfig<B>) -> wgpu::RenderPipeline
+    where
+        B: BufferLayout,
+    {
+        let layout_label = format!("{}_pipeline_layout", config.label);
+        let layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some(&layout_label),
+                bind_group_layouts: &config.bind_group_layouts,
+                push_constant_ranges: &[],
+            });
+
+        let pipeline_label = format!("{}_render_pipeline", config.label);
+        self.device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(&pipeline_label),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: config.shader_module,
+                    entry_point: config.vertex_entry.unwrap_or("vertex_main"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    buffers: B::vertex_buffers(),
+                },
+                primitive: config.primitive.unwrap_or_default(),
+                depth_stencil: if config.depth_buffer {
+                    self.depth_stencil_state(
+                        config
+                            .depth_compare_function
+                            .unwrap_or(wgpu::CompareFunction::LessEqual),
+                    )
+                } else {
+                    None
+                },
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: config.shader_module,
+                    entry_point: config.fragment_entry.unwrap_or("fragment_main"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: self.surface_config.format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview: None,
+                cache: None,
+            })
+    }
+}
+
+/// Depth texture.
+impl Renderer {
     fn create_depth_texture(
         device: &wgpu::Device,
         surface_config: &wgpu::SurfaceConfiguration,
@@ -147,14 +300,5 @@ impl Renderer {
             }),
             stencil_ops: None,
         })
-    }
-
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.surface_config.width = width;
-        self.surface_config.height = height;
-
-        self.depth_texture = Self::create_depth_texture(&self.device, &self.surface_config);
-
-        self.surface.configure(&self.device, &self.surface_config);
     }
 }

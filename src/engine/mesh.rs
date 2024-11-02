@@ -1,7 +1,7 @@
 use glam::{Vec2, Vec3};
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, vertex_attr_array};
 
-use super::renderer::Renderer;
+use super::renderer::{BufferLayout, Renderer};
 
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]
@@ -18,6 +18,22 @@ impl Vertex {
             normal,
             tex_coord,
         }
+    }
+}
+
+impl BufferLayout for Vertex {
+    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
+        const VERTEX_ATTR_ARRAY: &[wgpu::VertexAttribute] = &vertex_attr_array!(
+            0 => Float32x3, // position
+            1 => Float32x3, // normal
+            2 => Float32x2, // tex_coord
+        );
+
+        &[wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: VERTEX_ATTR_ARRAY,
+        }]
     }
 }
 

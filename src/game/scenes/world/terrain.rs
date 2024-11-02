@@ -9,7 +9,7 @@ use crate::{
     engine::{
         assets::{AssetError, Assets, Image},
         gizmos::GizmoVertex,
-        renderer::{GpuTexture, Renderer},
+        renderer::{BufferLayout, GpuTexture, RenderPipelineConfig, Renderer},
     },
     game::config::{CampaignDef, ConfigFile, TerrainMapping},
 };
@@ -127,6 +127,22 @@ struct Vertex {
     position: Vec3,
     normal: Vec3,
     tex_coord: Vec2,
+}
+
+impl BufferLayout for Vertex {
+    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
+        const VERTEX_ATTR_ARRAY: &[wgpu::VertexAttribute] = &vertex_attr_array![
+            0 => Float32x3, // position
+            1 => Float32x3, // normal
+            2 => Float32x2, // tex_coord
+        ];
+
+        &[wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: VERTEX_ATTR_ARRAY,
+        }]
+    }
 }
 
 impl Terrain {
@@ -430,117 +446,25 @@ impl Terrain {
                     usage: wgpu::BufferUsages::INDEX,
                 });
 
-        let shader_module = renderer
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("terrain_shadow_module"),
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "world.wgsl"
-                ))),
-            });
+        let shader_module = renderer.create_shader_module("terrain", include_str!("world.wgsl"));
 
-        let pipeline = {
-            let pipeline_layout =
-                renderer
-                    .device
-                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: Some("terrain_pipeline_layout"),
-                        bind_group_layouts: &[
-                            camera_bind_group_layout,
-                            &terrain_texture_bind_group_layout,
-                        ],
-                        push_constant_ranges: &[],
-                    });
+        let pipeline = renderer.create_render_pipeline(
+            RenderPipelineConfig::<Vertex>::new("terrain", &shader_module)
+                .bind_group_layout(camera_bind_group_layout)
+                .bind_group_layout(&terrain_texture_bind_group_layout),
+        );
 
-            renderer
-                .device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("terrain_render_pipeline"),
-                    layout: Some(&pipeline_layout),
-                    vertex: wgpu::VertexState {
-                        module: &shader_module,
-                        entry_point: "vertex_main",
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                            step_mode: wgpu::VertexStepMode::Vertex,
-                            attributes: &vertex_attr_array![
-                                0 => Float32x3,
-                                1 => Float32x3,
-                                2 => Float32x2,
-                            ],
-                        }],
-                    },
-                    primitive: wgpu::PrimitiveState {
-                        topology: wgpu::PrimitiveTopology::TriangleList,
-                        ..Default::default()
-                    },
-                    depth_stencil: renderer.depth_stencil_state(wgpu::CompareFunction::Less),
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader_module,
-                        entry_point: "fragment_main",
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: renderer.surface_config.format,
-                            blend: Some(wgpu::BlendState::REPLACE),
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
-                    }),
-                    multiview: None,
-                    cache: None,
+        let wireframe_pipeline = renderer.create_render_pipeline(
+            RenderPipelineConfig::<Vertex>::new("terrain_wireframe", &shader_module)
+                .vertex_entry("vertex_main_wireframe")
+                .fragment_entry("fragment_main_wireframe")
+                .bind_group_layout(camera_bind_group_layout)
+                .primitive(wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::LineList,
+                    ..Default::default()
                 })
-        };
-
-        let wireframe_pipeline = {
-            let writeframe_pipeline_layout =
-                renderer
-                    .device
-                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: Some("terrain_writeframe_pipeline_layout"),
-                        bind_group_layouts: &[camera_bind_group_layout],
-                        push_constant_ranges: &[],
-                    });
-
-            renderer
-                .device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("terrain_wireframe_render_pipeline"),
-                    layout: Some(&writeframe_pipeline_layout),
-                    vertex: wgpu::VertexState {
-                        module: &shader_module,
-                        entry_point: "vertex_main_wireframe",
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                            step_mode: wgpu::VertexStepMode::Vertex,
-                            attributes: &vertex_attr_array![
-                                0 => Float32x3,
-                                1 => Float32x3,
-                                2 => Float32x2,
-                            ],
-                        }],
-                    },
-                    primitive: wgpu::PrimitiveState {
-                        topology: wgpu::PrimitiveTopology::LineList,
-                        ..Default::default()
-                    },
-                    depth_stencil: renderer.depth_stencil_state(wgpu::CompareFunction::Always),
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader_module,
-                        entry_point: "fragment_main_wireframe",
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: renderer.surface_config.format,
-                            blend: Some(wgpu::BlendState::REPLACE),
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
-                    }),
-                    multiview: None,
-                    cache: None,
-                })
-        };
+                .disable_depth_buffer(),
+        );
 
         Ok(Self {
             height_map_width: height_map.width,
@@ -724,8 +648,8 @@ impl Terrain {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: renderer
-                    .render_pass_depth_stencil_attachment(wgpu::LoadOp::Load),
+                // depth_stencil_attachment: renderer
+                //     .render_pass_depth_stencil_attachment(wgpu::LoadOp::Load),
                 ..Default::default()
             });
 

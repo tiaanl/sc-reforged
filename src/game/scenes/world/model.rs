@@ -1,9 +1,8 @@
 use glam::Vec3;
-use wgpu::vertex_attr_array;
 
 use crate::engine::{
     mesh::{GpuMesh, RenderPassMeshExt},
-    renderer::{GpuTexture, Renderer},
+    renderer::{GpuTexture, RenderPipelineConfig, Renderer},
 };
 
 pub struct ModelRenderer {
@@ -38,61 +37,17 @@ impl ModelRenderer {
                     ],
                 });
 
-        let module = renderer
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("model_shader_module"),
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "model.wgsl"
-                ))),
-            });
+        let shader_module =
+            renderer.create_shader_module("model_renderer", include_str!("model.wgsl"));
 
-        let render_pipeline_layout =
-            renderer
-                .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("model_render_pipeline_layout"),
-                    bind_group_layouts: &[camera_bind_group_layout, &texture_bind_group_layout],
-                    push_constant_ranges: &[],
-                });
-
-        let render_pipeline =
-            renderer
-                .device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("model_render_pipeline"),
-                    layout: Some(&render_pipeline_layout),
-                    vertex: wgpu::VertexState {
-                        module: &module,
-                        entry_point: "vertex_main",
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<crate::engine::mesh::Vertex>()
-                                as wgpu::BufferAddress,
-                            step_mode: wgpu::VertexStepMode::Vertex,
-                            attributes: &vertex_attr_array![
-                                0 => Float32x3,
-                                1 => Float32x3,
-                                2 => Float32x2,
-                            ],
-                        }],
-                    },
-                    primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: renderer.depth_stencil_state(wgpu::CompareFunction::LessEqual),
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: Some(wgpu::FragmentState {
-                        module: &module,
-                        entry_point: "fragment_main",
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: renderer.surface_config.format,
-                            blend: None,
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
-                    }),
-                    multiview: None,
-                    cache: None,
-                });
+        let render_pipeline = renderer.create_render_pipeline(
+            RenderPipelineConfig::<crate::engine::mesh::Vertex>::new(
+                "model_renderer",
+                &shader_module,
+            )
+            .bind_group_layout(camera_bind_group_layout)
+            .bind_group_layout(&texture_bind_group_layout),
+        );
 
         Self {
             texture_bind_group_layout,
