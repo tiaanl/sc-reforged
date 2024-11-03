@@ -2,11 +2,6 @@ use std::sync::Arc;
 
 use wgpu::util::DeviceExt;
 
-pub struct GpuTexture {
-    pub view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
-}
-
 pub struct Renderer {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,

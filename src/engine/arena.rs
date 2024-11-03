@@ -1,5 +1,18 @@
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Copy, Eq, Hash, PartialEq)]
 pub struct Handle<T>(usize, std::marker::PhantomData<T>);
+
+impl<T> Clone for Handle<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self(self.0, std::marker::PhantomData)
+    }
+}
+
+impl<T> Handle<T> {
+    pub fn raw(id: usize) -> Self {
+        Self(id, std::marker::PhantomData)
+    }
+}
 
 pub struct Arena<T> {
     pub storage: Vec<T>,

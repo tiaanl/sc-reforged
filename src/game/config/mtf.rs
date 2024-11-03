@@ -3,20 +3,20 @@ use glam::Vec3;
 use crate::game::config::ConfigFile;
 
 #[derive(Debug)]
-struct Object {
+pub struct Object {
     // OBJECT Scenery_Strip_Light AlScLt-Runway "AlScLt-Runway"
-    typ: String,
-    name: String,
-    title: String,
+    pub typ: String,
+    pub name: String,
+    pub title: String,
 
     // OBJECT_POSITION 25413.458984 26909.134766 1202.765137
-    position: Vec3,
+    pub position: Vec3,
     // OBJECT_ROTATION 0.000000 0.000000 0.000000
-    rotation: Vec3,
+    pub rotation: Vec3,
     // OBJECT_ID 1 230
-    id: [i32; 2],
+    pub id: [i32; 2],
     // OBJECT_MTF_CONFIG 1500 900 120 350 100.000000 100.000000 1500.000000 850.000000
-    config: (i32, i32, i32, i32, f32, f32, f32, f32),
+    pub config: (i32, i32, i32, i32, f32, f32, f32, f32),
 }
 
 impl Object {
@@ -35,10 +35,10 @@ impl Object {
 
 #[derive(Debug, Default)]
 pub struct Mtf {
-    time_of_day: [u32; 2],
-    game_config_fog_enabled: [f32; 5],
-    inventory: Vec<Object>,
-    objects: Vec<Object>,
+    pub time_of_day: [u32; 2],
+    pub game_config_fog_enabled: [f32; 5],
+    pub inventory: Vec<Object>,
+    pub objects: Vec<Object>,
 }
 
 impl Mtf {}

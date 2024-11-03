@@ -8,7 +8,7 @@ use crate::{
     engine::{
         assets::{AssetError, Assets},
         gizmos::GizmoVertex,
-        renderer::{BufferLayout, GpuTexture, RenderPipelineConfig, Renderer},
+        renderer::{BufferLayout, RenderPipelineConfig, Renderer},
     },
     game::config::{CampaignDef, ConfigFile, TerrainMapping},
 };
@@ -176,7 +176,7 @@ impl Terrain {
             TerrainMapping::from(ConfigFile::new(&data))
         };
 
-        let terrain_texture = {
+        let terrain_texture_bind_group = {
             // use crate::engine::assets::Image;
 
             let path = format!("trnhigh/{}.jpg", texture_map_base_name);
@@ -185,24 +185,17 @@ impl Terrain {
             let image = assets.load_jpeg(path)?;
             let texture_view = renderer.create_texture_view("terrain_texture", image);
 
-            let sampler = renderer.create_sampler(
-                "terrain_texture_sampler",
-                wgpu::AddressMode::ClampToEdge,
-                wgpu::FilterMode::Linear,
-                wgpu::FilterMode::Linear,
-            );
-
-            GpuTexture {
-                view: texture_view,
-                sampler,
-            }
+            renderer.create_texture_bind_group(
+                "terrain_texture_bind_group",
+                &texture_view,
+                &renderer.create_sampler(
+                    "terrain_sampler",
+                    wgpu::AddressMode::ClampToEdge,
+                    wgpu::FilterMode::Linear,
+                    wgpu::FilterMode::Linear,
+                ),
+            )
         };
-
-        let terrain_texture_bind_group = renderer.create_texture_bind_group(
-            "terrain_texture_bind_group",
-            &terrain_texture.view,
-            &terrain_texture.sampler,
-        );
 
         let height_map = {
             let path = format!("maps/{}.pcx", campaign_def.base_name); // TODO: Get the name of the map from the [CampaignDef].

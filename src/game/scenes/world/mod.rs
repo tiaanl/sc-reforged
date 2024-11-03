@@ -1,10 +1,10 @@
 use crate::{
     engine::{
-        arena::{Arena, Handle},
+        arena::Arena,
         assets::{AssetError, Assets},
         gizmos::{GizmoVertex, GizmosRenderer},
-        mesh::{Mesh, Vertex},
-        renderer::{GpuTexture, Renderer},
+        mesh,
+        renderer::Renderer,
         scene::Scene,
     },
     game::{config::CampaignDef, smf},
@@ -12,13 +12,14 @@ use crate::{
 use camera::*;
 use glam::{vec3, Quat, Vec2, Vec3};
 use terrain::*;
-use tracing::info;
+use tracing::{info, warn};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 mod camera;
-mod model;
+mod models;
 mod object;
 mod terrain;
+mod textures;
 
 #[derive(Default)]
 pub struct WorldCamera {
@@ -77,9 +78,8 @@ pub struct WorldScene {
     gpu_camera: GpuCamera,
 
     terrain: Terrain,
-    model_renderer: model::ModelRenderer,
 
-    textures: Arena<GpuTexture>,
+    objects: object::Objects,
 
     last_mouse_position: Vec2,
 
@@ -87,9 +87,6 @@ pub struct WorldScene {
 
     gizmos_renderer: GizmosRenderer,
     gizmos_vertices: Vec<GizmoVertex>,
-
-    scene: smf::Scene,
-    scene_texture: Handle<GpuTexture>,
 }
 
 impl WorldScene {
@@ -101,12 +98,63 @@ impl WorldScene {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let terrain = Terrain::new(assets, renderer, &campaign_def)?;
-        let model_renderer = model::ModelRenderer::new(renderer);
+        let mut objects = object::Objects::new(renderer);
 
         {
             let data =
                 assets.load_config_file(format!("maps\\{}_final.mtf", campaign_def.base_name))?;
-            let _mtf = crate::game::config::read_mtf(&data);
+            let mtf = crate::game::config::read_mtf(&data);
+
+            let textures = &mut objects.textures;
+            let models = &mut objects.models;
+
+            let mut to_spawn = mtf
+                .objects
+                .iter()
+                .map(|object| {
+                    let data =
+                        assets.load_raw(format!(r"models\{}\{}.smf", object.name, object.name))?;
+                    let mut c = std::io::Cursor::new(data);
+                    let smf = smf::Scene::read(&mut c).map_err(|e| {
+                        AssetError::FileSystemError(crate::engine::vfs::FileSystemError::Io(e))
+                    })?;
+
+                    let model = Self::smf_to_model(renderer, assets, textures, smf)?;
+                    let model_handle = models.insert(model);
+
+                    Ok(object::Object {
+                        position: object.position,
+                        rotation: object.rotation,
+                        model_handle,
+                    })
+                })
+                .filter_map(|maybe: Result<object::Object, AssetError>| match maybe {
+                    Ok(object) => Some(object),
+                    Err(e) => {
+                        warn!("Could not load object: {:?}", e);
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            for object in to_spawn.drain(..) {
+                objects.spawn(object);
+            }
+
+            // let data = assets.load_raw(r"models\alvhqd-hummer\alvhqd-hummer.smf")?;
+            // let mut c = std::io::Cursor::new(data);
+            // let smf = smf::Scene::read(&mut c).map_err(|e| {
+            //     AssetError::FileSystemError(crate::engine::vfs::FileSystemError::Io(e))
+            // })?;
+
+            // let model = Self::smf_to_model(renderer, assets, &mut textures, smf)?;
+
+            // let object = object::Object {
+            //     position: Vec3::ZERO,
+            //     rotation: Vec3::ZERO,
+            //     model_handle: models.insert(model),
+            // };
+            // let objects = vec![object];
         }
 
         let camera = Camera::new(
@@ -122,25 +170,6 @@ impl WorldScene {
 
         let gizmos_renderer = GizmosRenderer::new(renderer);
 
-        let mut textures = Arena::default();
-
-        let data = assets.load_raw("models\\alvhqd-hummer\\alvhqd-hummer.smf")?;
-        let mut cursor = std::io::Cursor::new(data);
-        let scene = smf::Scene::read(&mut cursor).unwrap();
-
-        let scene_texture = {
-            let image = assets.load_bmp(r"textures\shared\hummer.bmp")?;
-            let view = renderer.create_texture_view("hummer", image);
-            let sampler = renderer.create_sampler(
-                "texture_sampler",
-                wgpu::AddressMode::ClampToEdge,
-                wgpu::FilterMode::Linear,
-                wgpu::FilterMode::Linear,
-            );
-
-            textures.insert(GpuTexture { view, sampler })
-        };
-
         Ok(Self {
             _campaign_def: campaign_def,
 
@@ -148,9 +177,7 @@ impl WorldScene {
             gpu_camera,
 
             terrain,
-            model_renderer,
-
-            textures,
+            objects,
 
             last_mouse_position: Vec2::ZERO,
 
@@ -158,9 +185,99 @@ impl WorldScene {
 
             gizmos_renderer,
             gizmos_vertices: vec![],
+        })
+    }
 
-            scene,
-            scene_texture,
+    fn smf_to_model(
+        renderer: &Renderer,
+        assets: &Assets,
+        textures: &mut textures::Textures,
+        smf: smf::Scene,
+    ) -> Result<models::Model, AssetError> {
+        fn do_node(
+            renderer: &Renderer,
+            assets: &Assets,
+            textures: &mut textures::Textures,
+            nodes: &[smf::Node],
+            parent_node_name: &str,
+        ) -> Vec<models::ModelNode> {
+            fn do_mesh(
+                renderer: &Renderer,
+                assets: &Assets,
+                textures: &mut textures::Textures,
+                mesh: &smf::Mesh,
+            ) -> Result<models::ModelMesh, ()> {
+                // Load the texture
+                let texture_path = format!(r"textures\shared\{}", mesh.texture_name);
+                info!("Loading texture: {}", texture_path);
+                let texture_handle = textures.get_by_path_or_insert(texture_path, |path| {
+                    let image = match assets.load_bmp(path) {
+                        Ok(image) => image,
+                        Err(e) => {
+                            warn!("Could not load texture! {:?}", e);
+                            return None;
+                        }
+                    };
+                    let texture_view = renderer.create_texture_view(path.to_str().unwrap(), image);
+
+                    // TODO: Reuse a sampler.
+                    let sampler = renderer.create_sampler(
+                        "texture_sampler",
+                        wgpu::AddressMode::ClampToEdge,
+                        wgpu::FilterMode::Linear,
+                        wgpu::FilterMode::Linear,
+                    );
+
+                    let bind_group = renderer.create_texture_bind_group(
+                        path.to_str().unwrap(),
+                        &texture_view,
+                        &sampler,
+                    );
+
+                    Some(bind_group)
+                })?;
+
+                let mesh = mesh::Mesh {
+                    vertices: mesh
+                        .vertices
+                        .iter()
+                        .map(|v| mesh::Vertex {
+                            position: v.position,
+                            normal: v.normal,
+                            tex_coord: v.tex_coord,
+                        })
+                        .collect(),
+                    indices: mesh.faces.iter().flat_map(|f| f.indices).collect(),
+                }
+                .to_gpu(renderer);
+
+                Ok(models::ModelMesh {
+                    mesh,
+                    texture_handle,
+                })
+            }
+
+            nodes
+                .iter()
+                .filter(|node| node.parent_name == parent_node_name)
+                .map(|node| {
+                    info!("doing: {}", node.parent_name);
+                    models::ModelNode {
+                        position: node.position,
+                        rotation: node.rotation,
+                        meshes: node
+                            .meshes
+                            .iter()
+                            .filter_map(|mesh| do_mesh(renderer, assets, textures, mesh).ok())
+                            .collect(),
+                        children: do_node(renderer, assets, textures, nodes, &node.name),
+                    }
+                })
+                .collect()
+        }
+
+        Ok(models::Model {
+            nodes: do_node(renderer, assets, textures, &smf.nodes, "<root>"),
         })
     }
 }
@@ -290,65 +407,13 @@ impl Scene for WorldScene {
         self.terrain
             .render(renderer, encoder, output, &self.gpu_camera.bind_group);
 
-        fn render_node(
-            renderer: &Renderer,
-            encoder: &mut wgpu::CommandEncoder,
-            view: &wgpu::TextureView,
-            camera_bind_group: &wgpu::BindGroup,
-            mr: &model::ModelRenderer,
-            node: &smf::Node,
-            texture: &GpuTexture,
-        ) {
-            node.meshes
-                .iter()
-                .map(|mesh| {
-                    Mesh {
-                        vertices: mesh
-                            .vertices
-                            .iter()
-                            .map(|v| {
-                                Vertex::new(
-                                    vec3(v.position.x, v.position.z, v.position.y),
-                                    vec3(v.normal.x, v.normal.z, v.normal.y),
-                                    v.tex_coord,
-                                )
-                            })
-                            .collect::<Vec<_>>(),
-                        indices: mesh.faces.iter().flat_map(|f| f.indices).collect(),
-                    }
-                    .to_gpu(renderer)
-                })
-                .for_each(|mesh| {
-                    mr.render(
-                        renderer,
-                        encoder,
-                        view,
-                        camera_bind_group,
-                        &mesh,
-                        &texture,
-                        Vec3::ZERO,
-                    );
-                });
-        }
-
-        if let Some(texture) = self.textures.get(&self.scene_texture) {
-            self.scene.nodes.iter().for_each(|node| {
-                render_node(
-                    renderer,
-                    encoder,
-                    output,
-                    &self.gpu_camera.bind_group,
-                    &self.model_renderer,
-                    node,
-                    &texture,
-                )
-            });
-        }
-
         let mut more_vertices = self.terrain.render_normals();
         self.gizmos_vertices.append(&mut more_vertices);
         let mut more_vertices = self.terrain.render_normals_lookup();
         self.gizmos_vertices.append(&mut more_vertices);
+
+        self.objects
+            .render(renderer, encoder, output, &self.gpu_camera.bind_group);
 
         self.gizmos_renderer.render(
             renderer,
