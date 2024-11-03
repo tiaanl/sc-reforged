@@ -7,7 +7,7 @@ use crate::engine::{
 };
 
 use super::{
-    models::{Model, Models},
+    models::{Model, Models, RenderInfo},
     textures::Textures,
 };
 
@@ -59,7 +59,13 @@ impl Objects {
         let handles = self
             .objects
             .iter()
-            .map(|object| object.model_handle.clone())
+            .map(|object| {
+                RenderInfo::new(
+                    object.position,
+                    object.rotation,
+                    object.model_handle.clone(),
+                )
+            })
             .collect::<Vec<_>>();
 
         self.models.render_multiple(
@@ -70,20 +76,5 @@ impl Objects {
             camera_bind_group,
             &handles,
         );
-
-        // self.objects.iter().for_each(|object| {
-        //     if let Some(model) = self.models.get(&object.model_handle) {
-        //         self.models.render_model(
-        //             renderer,
-        //             encoder,
-        //             output,
-        //             &self.gpu_camera.bind_group,
-        //             model,
-        //             &self.textures,
-        //         );
-        //     } else {
-        //         warn!("Model not found in arena!");
-        //     }
-        // });
     }
 }

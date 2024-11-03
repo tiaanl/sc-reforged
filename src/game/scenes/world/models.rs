@@ -1,5 +1,5 @@
-use glam::{Quat, Vec3};
-use tracing::{info, warn};
+use glam::{Mat4, Quat, Vec3};
+use tracing::warn;
 
 use crate::engine::{
     arena::{Arena, Handle},
@@ -26,6 +26,22 @@ pub struct Model {
     pub nodes: Vec<ModelNode>,
 }
 
+pub struct RenderInfo {
+    position: Vec3,
+    rotation: Vec3,
+    handle: Handle<Model>,
+}
+
+impl RenderInfo {
+    pub fn new(position: Vec3, rotation: Vec3, handle: Handle<Model>) -> Self {
+        Self {
+            position,
+            rotation,
+            handle,
+        }
+    }
+}
+
 pub struct Models {
     render_pipeline: wgpu::RenderPipeline,
     models: Arena<Model>,
@@ -41,6 +57,7 @@ impl Models {
                 "model_renderer",
                 &shader_module,
             )
+            .bind_group_layout(renderer.uniform_bind_group_layout())
             .bind_group_layout(renderer.uniform_bind_group_layout())
             .bind_group_layout(renderer.texture_bind_group_layout()),
         );
@@ -64,39 +81,28 @@ impl Models {
         output: &wgpu::TextureView,
         textures: &Textures,
         camera_bind_group: &wgpu::BindGroup,
-        models: &[Handle<Model>],
+        batch: &[RenderInfo],
     ) {
         let mut render_pass = Self::create_render_pass(renderer, encoder, output);
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        models
-            .iter()
-            .filter_map(|model_handle| self.models.get(model_handle))
-            .for_each(|model| {
-                model.nodes.iter().for_each(|node| {
-                    self.render_node(&mut render_pass, textures, node);
-                });
+        batch.iter().for_each(|render_info| {
+            let Some(model) = self.models.get(&render_info.handle) else {
+                return;
+            };
+
+            let rotation = Mat4::from_rotation_x(render_info.rotation.x)
+                * Mat4::from_rotation_y(render_info.rotation.y)
+                * Mat4::from_rotation_z(render_info.rotation.z);
+            let model_matrix = Mat4::from_translation(render_info.position) * rotation;
+            let data = model_matrix.to_cols_array_2d();
+            let buffer = renderer.create_uniform_buffer("model_matrix_buffer", data);
+            let model_bind_group = renderer.create_uniform_bind_group("model_matrix", &buffer);
+
+            render_pass.set_bind_group(1, &model_bind_group, &[]);
+            model.nodes.iter().for_each(|node| {
+                self.render_node(&mut render_pass, textures, node);
             });
-    }
-
-    pub fn render_model(
-        &self,
-        renderer: &Renderer,
-        encoder: &mut wgpu::CommandEncoder,
-        output: &wgpu::TextureView,
-        textures: &Textures,
-        camera_bind_group: &wgpu::BindGroup,
-        model_handle: Handle<Model>,
-    ) {
-        let Some(model) = self.models.get(&model_handle) else {
-            return;
-        };
-
-        let mut render_pass = Self::create_render_pass(renderer, encoder, output);
-        render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, camera_bind_group, &[]);
-        model.nodes.iter().for_each(|node| {
-            self.render_node(&mut render_pass, textures, node);
         });
     }
 
@@ -108,7 +114,7 @@ impl Models {
     ) {
         node.meshes.iter().for_each(|mesh| {
             if let Some(texture_bind_group) = textures.get(&mesh.texture_handle) {
-                render_pass.set_bind_group(1, texture_bind_group, &[]);
+                render_pass.set_bind_group(2, texture_bind_group, &[]);
                 render_pass.draw_mesh(&mesh.mesh);
             } else {
                 warn!("Could not find model texture!");
