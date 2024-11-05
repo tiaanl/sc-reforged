@@ -100,7 +100,7 @@ impl WorldScene {
         let terrain = Terrain::new(assets, renderer, &campaign_def)?;
         let mut objects = object::Objects::new(renderer);
 
-        {
+        if false {
             let data =
                 assets.load_config_file(format!("maps\\{}_final.mtf", campaign_def.base_name))?;
             let mtf = crate::game::config::read_mtf(&data);
@@ -157,8 +157,22 @@ impl WorldScene {
             // let objects = vec![object];
         }
 
+        {
+            let data = assets.load_raw(r"models\alvhqd-hummer\alvhqd-hummer.smf")?;
+            let mut cursor = std::io::Cursor::new(data);
+            let smf = smf::Scene::read(&mut cursor).expect("Could not load model data.");
+            let model = Self::smf_to_model(renderer, assets, &mut objects.textures, smf)?;
+            let model_handle = objects.models.insert(model);
+            objects.spawn(object::Object::new(Vec3::ZERO, Vec3::ZERO, model_handle));
+        }
+
+        // 6865.0	12544.0	5602.0	11550.0
+        // let initial = vec3(6865.0, 12544.0, 5602.0);
+        let initial = Vec3::ZERO;
+
         let camera = Camera::new(
-            vec3(0.0, 1000.0, 1000.0),
+            // vec3(0.0, 1000.0, 1000.0),
+            initial,
             Quat::IDENTITY,
             45_f32.to_radians(),
             1.0,
@@ -260,18 +274,15 @@ impl WorldScene {
             nodes
                 .iter()
                 .filter(|node| node.parent_name == parent_node_name)
-                .map(|node| {
-                    info!("doing: {}", node.parent_name);
-                    models::ModelNode {
-                        position: node.position,
-                        rotation: node.rotation,
-                        meshes: node
-                            .meshes
-                            .iter()
-                            .filter_map(|mesh| do_mesh(renderer, assets, textures, mesh).ok())
-                            .collect(),
-                        children: do_node(renderer, assets, textures, nodes, &node.name),
-                    }
+                .map(|node| models::ModelNode {
+                    position: node.position,
+                    rotation: node.rotation,
+                    meshes: node
+                        .meshes
+                        .iter()
+                        .filter_map(|mesh| do_mesh(renderer, assets, textures, mesh).ok())
+                        .collect(),
+                    children: do_node(renderer, assets, textures, nodes, &node.name),
                 })
                 .collect()
         }

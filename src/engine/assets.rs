@@ -1,4 +1,4 @@
-use super::vfs::{FileSystem, FileSystemError};
+use super::vfs::{FileSystemError, VirtualFileSystem};
 use std::path::Path;
 
 #[derive(Debug, thiserror::Error)]
@@ -14,12 +14,14 @@ pub enum AssetError {
 }
 
 pub struct Assets {
-    fs: FileSystem,
+    fs: VirtualFileSystem,
 }
 
 impl Assets {
-    pub fn new(fs: FileSystem) -> Self {
-        Self { fs }
+    pub fn new(data_dir: impl AsRef<Path>) -> Self {
+        Self {
+            fs: VirtualFileSystem::new(data_dir),
+        }
     }
 
     pub fn load_raw(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, AssetError> {

@@ -1,5 +1,5 @@
 use glam::{Mat4, Quat, Vec3};
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::engine::{
     arena::{Arena, Handle},
@@ -9,11 +9,13 @@ use crate::engine::{
 
 use super::textures::Textures;
 
+#[derive(Debug)]
 pub struct ModelMesh {
     pub mesh: GpuMesh,
     pub texture_handle: Handle<wgpu::BindGroup>,
 }
 
+#[derive(Debug)]
 pub struct ModelNode {
     pub position: Vec3,
     pub rotation: Quat,
@@ -21,7 +23,7 @@ pub struct ModelNode {
     pub children: Vec<ModelNode>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Model {
     pub nodes: Vec<ModelNode>,
 }
@@ -91,38 +93,65 @@ impl Models {
                 return;
             };
 
-            let rotation = Mat4::from_rotation_x(render_info.rotation.x)
-                * Mat4::from_rotation_y(render_info.rotation.y)
-                * Mat4::from_rotation_z(render_info.rotation.z);
-            let model_matrix = Mat4::from_translation(render_info.position) * rotation;
-            let data = model_matrix.to_cols_array_2d();
-            let buffer = renderer.create_uniform_buffer("model_matrix_buffer", data);
-            let model_bind_group = renderer.create_uniform_bind_group("model_matrix", &buffer);
-
-            render_pass.set_bind_group(1, &model_bind_group, &[]);
             model.nodes.iter().for_each(|node| {
-                self.render_node(&mut render_pass, textures, node);
+                self.render_node(
+                    renderer,
+                    &mut render_pass,
+                    textures,
+                    node,
+                    render_info.position,
+                    glam::Quat::from_euler(
+                        glam::EulerRot::XYZ,
+                        render_info.rotation.x,
+                        render_info.rotation.y,
+                        render_info.rotation.z,
+                    ),
+                );
             });
         });
     }
 
     fn render_node(
         &self,
+        renderer: &Renderer,
         render_pass: &mut wgpu::RenderPass<'_>,
         textures: &Textures,
         node: &ModelNode,
+        position: Vec3,
+        rotation: Quat,
     ) {
-        node.meshes.iter().for_each(|mesh| {
-            if let Some(texture_bind_group) = textures.get(&mesh.texture_handle) {
-                render_pass.set_bind_group(2, texture_bind_group, &[]);
-                render_pass.draw_mesh(&mesh.mesh);
-            } else {
-                warn!("Could not find model texture!");
-            }
-        });
+        {
+            let rotation =
+                Quat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z);
+            // let rotation = Mat4::from_rotation_x(rotation.x)
+            //     * Mat4::from_rotation_y(rotation.y)
+            //     * Mat4::from_rotation_z(rotation.z);
+            let model_matrix = Mat4::from_translation(position) * Mat4::from_quat(rotation);
+            let data = model_matrix.to_cols_array_2d();
+            let buffer = renderer.create_uniform_buffer("model_matrix_buffer", data);
+            let model_bind_group = renderer.create_uniform_bind_group("model_matrix", &buffer);
+
+            render_pass.set_bind_group(1, &model_bind_group, &[]);
+
+            node.meshes.iter().for_each(|mesh| {
+                if let Some(texture_bind_group) = textures.get(&mesh.texture_handle) {
+                    render_pass.set_bind_group(2, texture_bind_group, &[]);
+                    render_pass.draw_mesh(&mesh.mesh);
+                } else {
+                    warn!("Could not find model texture!");
+                }
+            });
+        }
 
         for node in node.children.iter() {
-            self.render_node(render_pass, textures, node)
+            self.render_node(
+                renderer,
+                render_pass,
+                textures,
+                node,
+                position + node.position,
+                rotation * node.rotation,
+            )
         }
     }
 

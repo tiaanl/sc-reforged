@@ -15,33 +15,18 @@ pub enum FileSystemError {
     Io(#[from] std::io::Error),
 }
 
-#[derive(Clone)]
-pub struct FileSystem(Rc<RefCell<VirtualFileSystem>>);
-
-impl FileSystem {
-    pub fn new(root_path: impl AsRef<Path>) -> Self {
-        Self(Rc::new(RefCell::new(VirtualFileSystem::new(root_path))))
-    }
-}
-
-impl FileSystem {
-    pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
-        self.0.borrow_mut().load(path)
-    }
-}
-
-struct VirtualFileSystem {
+pub struct VirtualFileSystem {
     root_path: PathBuf,
 }
 
 impl VirtualFileSystem {
-    fn new(root_path: impl AsRef<Path>) -> Self {
+    pub fn new(root_path: impl AsRef<Path>) -> Self {
         Self {
             root_path: root_path.as_ref().to_owned(),
         }
     }
 
-    fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
+    pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         let external_path = self.root_path.join(path.as_ref());
         if external_path.exists() {
             let mut file = std::fs::File::open(external_path)?;

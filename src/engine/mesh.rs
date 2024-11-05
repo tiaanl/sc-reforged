@@ -50,6 +50,16 @@ pub struct GpuMesh {
     index_count: u32,
 }
 
+impl std::fmt::Debug for GpuMesh {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GpuMesh")
+            .field("vertex_buffer", &self.vertex_buffer)
+            .field("index_buffer", &self.index_buffer)
+            .field("index_count", &self.index_count)
+            .finish()
+    }
+}
+
 impl Mesh {
     pub fn to_gpu(&self, renderer: &Renderer) -> GpuMesh {
         debug_assert!(!self.vertices.is_empty(), "Uploading empty vertex buffer.");

@@ -2,10 +2,7 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
 use egui::Widget;
-use engine::{
-    assets::Assets, egui_integration::EguiIntegration, renderer::Renderer, scene::Scene,
-    vfs::FileSystem,
-};
+use engine::{assets::Assets, egui_integration::EguiIntegration, renderer::Renderer, scene::Scene};
 use game::{
     config::{read_compaign_defs, CampaignDef},
     scenes::world::WorldScene,
@@ -83,15 +80,13 @@ impl winit::application::ApplicationHandler for App {
 
                 let egui_integration = EguiIntegration::new(event_loop, &renderer);
 
-                let vfs = FileSystem::new(&opts.path);
-
-                let assets = Assets::new(vfs);
+                let assets = Assets::new(&opts.path);
 
                 let s = assets.load_config_file("config/campaign_defs.txt").unwrap();
                 let campaign_defs = read_compaign_defs(&s);
                 let campaign_def = campaign_defs
                     .iter()
-                    .find(|c| c.base_name == "romania")
+                    .find(|c| c.base_name == "training")
                     .cloned()
                     .unwrap();
 
