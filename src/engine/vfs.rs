@@ -1,8 +1,6 @@
 use std::{
-    cell::RefCell,
     io::{Read, SeekFrom},
     path::{Path, PathBuf},
-    rc::Rc,
 };
 
 use byteorder::{LittleEndian, ReadBytesExt};

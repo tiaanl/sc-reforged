@@ -15,7 +15,7 @@ impl<T> std::fmt::Debug for Handle<T> {
 }
 
 impl<T> Handle<T> {
-    pub fn raw(id: usize) -> Self {
+    pub fn _from_raw(id: usize) -> Self {
         Self(id, std::marker::PhantomData)
     }
 }
@@ -41,7 +41,7 @@ impl<T> Arena<T> {
         self.storage.get(handle.0)
     }
 
-    pub fn get_mut(&mut self, handle: &Handle<T>) -> Option<&mut T> {
+    pub fn _get_mut(&mut self, handle: &Handle<T>) -> Option<&mut T> {
         self.storage.get_mut(handle.0)
     }
 }

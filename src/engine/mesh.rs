@@ -10,16 +10,6 @@ pub struct Vertex {
     pub tex_coord: Vec2,
 }
 
-impl Vertex {
-    pub fn new(position: Vec3, normal: Vec3, tex_coord: Vec2) -> Self {
-        Self {
-            position,
-            normal,
-            tex_coord,
-        }
-    }
-}
-
 impl BufferLayout for Vertex {
     fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
         use wgpu::vertex_attr_array;

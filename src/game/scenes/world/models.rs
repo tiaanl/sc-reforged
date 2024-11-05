@@ -1,5 +1,5 @@
 use glam::{Mat4, Quat, Vec3};
-use tracing::{info, warn};
+use tracing::warn;
 
 use crate::engine::{
     arena::{Arena, Handle},

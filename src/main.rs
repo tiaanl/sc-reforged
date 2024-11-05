@@ -22,23 +22,24 @@ struct Opts {
 enum App {
     Uninitialzed(Opts),
     Initialized {
+        /// The main window the engine is rendering to. This is also the window
+        /// that is receiving all the input events.
         window: Arc<winit::window::Window>,
-
         /// The renderer.
         renderer: Renderer,
-
+        /// egui integration.
         egui_integration: engine::egui_integration::EguiIntegration,
-
+        /// The main way of loading assets from the /data directory.
         _assets: Assets,
-
         // The instant that the last frame started to render.
         last_frame_time: Instant,
-
-        // All the available campaign definitions.
-        _campaign_defs: Vec<CampaignDef>,
-
         /// The scene we are currently rendering to the screen.
         scene: Box<dyn Scene>,
+
+        /// All the available campaign definitions.
+        /// This is temporary at the moment, and should go into the main menu
+        /// scene.
+        _campaign_defs: Vec<CampaignDef>,
     },
 }
 

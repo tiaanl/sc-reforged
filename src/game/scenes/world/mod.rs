@@ -1,6 +1,5 @@
 use crate::{
     engine::{
-        arena::Arena,
         assets::{AssetError, Assets},
         gizmos::{GizmoVertex, GizmosRenderer},
         mesh,
@@ -10,7 +9,7 @@ use crate::{
     game::{config::CampaignDef, smf},
 };
 use camera::*;
-use glam::{vec3, Quat, Vec2, Vec3};
+use glam::{Quat, Vec2, Vec3};
 use terrain::*;
 use tracing::{info, warn};
 use winit::{event::MouseButton, keyboard::KeyCode};

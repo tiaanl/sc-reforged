@@ -1,10 +1,6 @@
 use glam::Vec3;
-use tracing::info;
 
-use crate::engine::{
-    arena::{Arena, Handle},
-    renderer::Renderer,
-};
+use crate::engine::{arena::Handle, renderer::Renderer};
 
 use super::{
     models::{Model, Models, RenderInfo},
