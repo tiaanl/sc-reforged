@@ -99,6 +99,13 @@ impl WorldScene {
         let terrain = Terrain::new(assets, renderer, &campaign_def)?;
         let mut objects = object::Objects::new(renderer);
 
+        {
+            // Load the image defs.
+            let data = assets.load_raw(r"config\image_defs.txt")?;
+            let str = String::from_utf8(data).unwrap();
+            let _image_defs = crate::game::config::read_image_defs(&str);
+        }
+
         if false {
             let data =
                 assets.load_config_file(format!("maps\\{}_final.mtf", campaign_def.base_name))?;

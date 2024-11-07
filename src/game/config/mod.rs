@@ -3,14 +3,15 @@
 
 mod campaigns;
 mod config_file;
-mod images;
+mod image_defs;
 mod mtf;
 mod terrain;
 mod windows;
 
 pub use campaigns::*;
 pub use config_file::*;
-pub use images::*;
+pub use image_defs::*;
+pub use image_defs::*;
 pub use mtf::*;
 pub use terrain::*;
 pub use windows::*;
