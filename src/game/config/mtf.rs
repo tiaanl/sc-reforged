@@ -134,5 +134,11 @@ pub fn read_mtf(data: &str) -> Mtf {
         config.next();
     }
 
+    match state {
+        State::None => {}
+        State::ObjectInventory(object) => mtf.inventory.push(object),
+        State::Object(object) => mtf.objects.push(object),
+    }
+
     mtf
 }

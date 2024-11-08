@@ -8,6 +8,7 @@ use super::{
 };
 
 /// Represents an object inside the game world.
+#[derive(Debug)]
 pub struct Object {
     pub position: Vec3,
     pub rotation: Vec3,
@@ -64,13 +65,15 @@ impl Objects {
             })
             .collect::<Vec<_>>();
 
-        self.models.render_multiple(
-            renderer,
-            encoder,
-            output,
-            &self.textures,
-            camera_bind_group,
-            &handles,
-        );
+        if !handles.is_empty() {
+            self.models.render_multiple(
+                renderer,
+                encoder,
+                output,
+                &self.textures,
+                camera_bind_group,
+                &handles,
+            );
+        }
     }
 }

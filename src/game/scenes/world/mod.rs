@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
     engine::{
         assets::{AssetError, Assets},
@@ -11,7 +13,7 @@ use crate::{
 use camera::*;
 use glam::{Quat, Vec2, Vec3};
 use terrain::*;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 mod camera;
@@ -58,7 +60,7 @@ impl WorldCamera {
     }
 
     fn calculate_rotation(&self) -> Quat {
-        Quat::from_rotation_y(self.yaw.to_radians())
+        Quat::from_rotation_z(self.yaw.to_radians())
             * Quat::from_rotation_x(self.pitch.to_radians())
     }
 
@@ -106,9 +108,11 @@ impl WorldScene {
             let _image_defs = crate::game::config::read_image_defs(&str);
         }
 
-        if false {
-            let data =
-                assets.load_config_file(format!("maps\\{}_final.mtf", campaign_def.base_name))?;
+        if true {
+            let path = PathBuf::from("maps")
+                .join(format!("{}_final", campaign_def.base_name))
+                .with_extension("mtf");
+            let data = assets.load_config_file(&path)?;
             let mtf = crate::game::config::read_mtf(&data);
 
             let textures = &mut objects.textures;
@@ -117,15 +121,35 @@ impl WorldScene {
             let mut to_spawn = mtf
                 .objects
                 .iter()
-                .map(|object| {
-                    let data =
-                        assets.load_raw(format!(r"models\{}\{}.smf", object.name, object.name))?;
-                    let mut c = std::io::Cursor::new(data);
-                    let smf = smf::Scene::read(&mut c).map_err(|e| {
-                        AssetError::FileSystemError(crate::engine::vfs::FileSystemError::Io(e))
-                    })?;
+                .flat_map(|object| {
+                    let path = PathBuf::from("models")
+                        .join(&object.name)
+                        .join(&object.name)
+                        .with_extension("smf");
+                    let data = match assets.load_raw(&path) {
+                        Ok(data) => data,
+                        Err(err) => {
+                            error!("Could not load model {}: {}", path.display(), err);
+                            return Err(err);
+                        }
+                    };
 
-                    let model = Self::smf_to_model(renderer, assets, textures, smf)?;
+                    let mut c = std::io::Cursor::new(data);
+                    let smf = match smf::Scene::read(&mut c) {
+                        Ok(smf) => smf,
+                        Err(_) => {
+                            error!("Could not read smf model: {}", path.display());
+                            return Err(AssetError::DecodeError);
+                        }
+                    };
+
+                    let model = match Self::smf_to_model(renderer, assets, textures, smf) {
+                        Ok(model) => model,
+                        Err(err) => {
+                            error!("Could not load model: {}", path.display());
+                            return Err(err);
+                        }
+                    };
                     let model_handle = models.insert(model);
 
                     Ok(object::Object {
@@ -133,13 +157,6 @@ impl WorldScene {
                         rotation: object.rotation,
                         model_handle,
                     })
-                })
-                .filter_map(|maybe: Result<object::Object, AssetError>| match maybe {
-                    Ok(object) => Some(object),
-                    Err(e) => {
-                        warn!("Could not load object: {:?}", e);
-                        None
-                    }
                 })
                 .collect::<Vec<_>>();
 
@@ -163,7 +180,7 @@ impl WorldScene {
             // let objects = vec![object];
         }
 
-        {
+        if false {
             let data = assets.load_raw(r"models\alvhqd-hummer\alvhqd-hummer.smf")?;
             let mut cursor = std::io::Cursor::new(data);
             let smf = smf::Scene::read(&mut cursor).expect("Could not load model data.");
@@ -228,8 +245,9 @@ impl WorldScene {
                 mesh: &smf::Mesh,
             ) -> Result<models::ModelMesh, ()> {
                 // Load the texture
-                let texture_path = format!(r"textures\shared\{}", mesh.texture_name);
-                info!("Loading texture: {}", texture_path);
+                let texture_path = PathBuf::from("textures")
+                    .join("shared")
+                    .join(&mesh.texture_name);
                 let texture_handle = textures.get_by_path_or_insert(texture_path, |path| {
                     let image = match assets.load_bmp(path) {
                         Ok(image) => image,

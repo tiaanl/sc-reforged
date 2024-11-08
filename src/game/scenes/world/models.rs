@@ -28,6 +28,7 @@ pub struct Model {
     pub nodes: Vec<ModelNode>,
 }
 
+#[derive(Debug)]
 pub struct RenderInfo {
     position: Vec3,
     rotation: Vec3,
@@ -121,12 +122,7 @@ impl Models {
         rotation: Quat,
     ) {
         {
-            let rotation =
-                Quat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z);
-            // let rotation = Mat4::from_rotation_x(rotation.x)
-            //     * Mat4::from_rotation_y(rotation.y)
-            //     * Mat4::from_rotation_z(rotation.z);
-            let model_matrix = Mat4::from_translation(position) * Mat4::from_quat(rotation);
+            let model_matrix = Mat4::from_rotation_translation(rotation, position);
             let data = model_matrix.to_cols_array_2d();
             let buffer = renderer.create_uniform_buffer("model_matrix_buffer", data);
             let model_bind_group = renderer.create_uniform_bind_group("model_matrix", &buffer);

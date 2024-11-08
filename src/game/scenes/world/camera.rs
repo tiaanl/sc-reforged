@@ -39,7 +39,7 @@ impl Camera {
     }
 
     pub fn forward_vector(&self) -> Vec3 {
-        self.rotation * Vec3::Z
+        self.rotation * -Vec3::Y
     }
 
     pub fn right_vector(&self) -> Vec3 {
@@ -47,7 +47,7 @@ impl Camera {
     }
 
     pub fn up_vector(&self) -> Vec3 {
-        self.rotation * Vec3::Y
+        self.rotation * Vec3::Z
     }
 
     pub fn calculate_matrices(&self) -> Matrices {
@@ -56,6 +56,10 @@ impl Camera {
         let rotation_matrix = Mat4::from_quat(self.rotation).transpose();
         let translation_matrix = Mat4::from_translation(-self.position);
         let view = rotation_matrix * translation_matrix;
+
+        // Adjust the view matrix to account for Z being up
+        let adjust_matrix = Mat4::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+        let view = adjust_matrix * view;
 
         Matrices {
             projection: projection.to_cols_array(),

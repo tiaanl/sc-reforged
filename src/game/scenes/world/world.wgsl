@@ -39,8 +39,9 @@ fn vertex_main_wireframe(vertex: VertexInput) -> VertexOutput {
 
 @fragment
 fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let sun_dir = normalize(vec3(1.0, 1.0, 0.0));
-    let c = dot(sun_dir, vertex.normal);
+    // let sun_dir = normalize(vec3(1.0, 1.0, 0.0));
+    // let c = dot(sun_dir, vertex.normal);
+    let c = 1.0;
 
     let color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
 

@@ -276,8 +276,8 @@ impl Terrain {
                     vertices.push(Vertex {
                         position: vec3(
                             (x as f32) * nominal_edge_size,
-                            altitude as f32,
                             (y as f32) * nominal_edge_size,
+                            altitude as f32,
                         ),
                         normal,
                         tex_coord: vec2(

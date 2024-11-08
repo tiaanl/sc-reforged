@@ -32,8 +32,9 @@ fn vertex_main(vertex: VertexInput) -> VertexOutput {
 
 @fragment
 fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let sun_dir = normalize(vec3(1.0, 1.0, 0.0));
-    let c = dot(sun_dir, vertex.normal) * 0.5 + 0.5;
+    // let sun_dir = normalize(vec3(0.0, 1.0, 0.0));
+    // let c = dot(sun_dir, vertex.normal) * 0.5 + 0.5;
+    let c = 1.0;
 
     let color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
     return color * vec4(c, c, c, 1.0);
