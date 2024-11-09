@@ -2,7 +2,6 @@
 
 use byteorder::{LittleEndian as LE, ReadBytesExt};
 use glam::{vec2, vec3, Quat, Vec2, Vec3};
-use tracing::info;
 
 fn smf_version(s: &str) -> u32 {
     if s.starts_with("SMF V1.0") {
@@ -158,13 +157,13 @@ impl Vertex {
 }
 
 #[derive(Clone, Debug)]
-pub struct CollisionBox {
+pub struct BoundingBox {
     pub max: Vec3,
     pub min: Vec3,
     pub u0: f32,
 }
 
-impl CollisionBox {
+impl BoundingBox {
     fn read(r: &mut impl std::io::Read) -> Self {
         let mut max = Vec3::ZERO;
         max.x = r.read_f32::<LE>().unwrap();
@@ -176,7 +175,7 @@ impl CollisionBox {
         min.z = r.read_f32::<LE>().unwrap();
         let u0 = r.read_f32::<LE>().unwrap();
 
-        CollisionBox { max, min, u0 }
+        BoundingBox { max, min, u0 }
     }
 }
 
@@ -188,7 +187,7 @@ pub struct Node {
     pub position: Vec3,
     pub rotation: Quat,
     pub meshes: Vec<Mesh>,
-    pub collision_boxes: Vec<CollisionBox>,
+    pub bounding_boxes: Vec<BoundingBox>,
 }
 
 impl Node {
@@ -211,7 +210,7 @@ impl Node {
         let rotation = Quat::from_xyzw(x, y, z, w);
 
         let mesh_count = r.read_u32::<LE>()?;
-        let collision_box_count = r.read_u32::<LE>()?;
+        let bounding_box_count = r.read_u32::<LE>()?;
 
         if smf_version > 1 {
             let _ = r.read_u32::<LE>()?;
@@ -222,9 +221,9 @@ impl Node {
             meshes.push(Mesh::read(r)?);
         }
 
-        let mut collision_boxes = Vec::with_capacity(collision_box_count as usize);
-        for _ in 0..collision_box_count {
-            collision_boxes.push(CollisionBox::read(r));
+        let mut bounding_boxes = Vec::with_capacity(bounding_box_count as usize);
+        for _ in 0..bounding_box_count {
+            bounding_boxes.push(BoundingBox::read(r));
         }
 
         Ok(Node {
@@ -234,7 +233,7 @@ impl Node {
             position,
             rotation,
             meshes,
-            collision_boxes,
+            bounding_boxes,
         })
     }
 }
