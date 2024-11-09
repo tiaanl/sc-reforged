@@ -43,6 +43,7 @@ where
     primitive: Option<wgpu::PrimitiveState>,
     depth_buffer: bool,
     depth_compare_function: Option<wgpu::CompareFunction>,
+    blend_state: Option<wgpu::BlendState>,
 
     _phantom: std::marker::PhantomData<B>,
 }
@@ -62,6 +63,7 @@ where
             primitive: None,
             depth_buffer: true,
             depth_compare_function: None,
+            blend_state: None,
 
             _phantom: std::marker::PhantomData::<B>,
         }
@@ -89,6 +91,11 @@ where
 
     pub fn disable_depth_buffer(mut self) -> Self {
         self.depth_buffer = false;
+        self
+    }
+
+    pub fn blend_state(mut self, blend_state: wgpu::BlendState) -> Self {
+        self.blend_state = Some(blend_state);
         self
     }
 
@@ -311,7 +318,7 @@ impl Renderer {
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: self.surface_config.format,
-                        blend: None,
+                        blend: config.blend_state,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                 }),

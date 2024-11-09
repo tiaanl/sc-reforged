@@ -210,8 +210,6 @@ impl Node {
         let w = r.read_f32::<LE>()?;
         let rotation = Quat::from_xyzw(x, y, z, w);
 
-        info!("rotation: {rotation}");
-
         let mesh_count = r.read_u32::<LE>()?;
         let collision_box_count = r.read_u32::<LE>()?;
 

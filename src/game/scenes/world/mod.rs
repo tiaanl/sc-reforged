@@ -10,12 +10,14 @@ use crate::{
     },
     game::{config::CampaignDef, smf},
 };
+use bounding_boxes::BoundingBoxes;
 use camera::*;
-use glam::{Quat, Vec2, Vec3};
+use glam::{vec3, Quat, Vec2, Vec3};
 use terrain::*;
 use tracing::{error, info, warn};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
+mod bounding_boxes;
 mod camera;
 mod models;
 mod object;
@@ -88,6 +90,8 @@ pub struct WorldScene {
 
     gizmos_renderer: GizmosRenderer,
     gizmos_vertices: Vec<GizmoVertex>,
+
+    bounding_boxes: bounding_boxes::BoundingBoxes,
 }
 
 impl WorldScene {
@@ -207,6 +211,20 @@ impl WorldScene {
 
         let gizmos_renderer = GizmosRenderer::new(renderer);
 
+        let mut bounding_boxes = BoundingBoxes::new(renderer).unwrap();
+        bounding_boxes.insert(
+            vec3(300.0, 300.0, 300.0),
+            Quat::from_rotation_z(45.0_f32.to_radians()),
+            vec3(0.0, 0.0, 0.0),
+            vec3(100.0, 100.0, 100.0),
+        );
+        bounding_boxes.insert(
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            vec3(100.0, 100.0, 100.0),
+            vec3(300.0, 300.0, 300.0),
+        );
+
         Ok(Self {
             _campaign_def: campaign_def,
 
@@ -222,6 +240,8 @@ impl WorldScene {
 
             gizmos_renderer,
             gizmos_vertices: vec![],
+
+            bounding_boxes,
         })
     }
 
@@ -434,13 +454,13 @@ impl Scene for WorldScene {
         &mut self,
         renderer: &crate::engine::renderer::Renderer,
         encoder: &mut wgpu::CommandEncoder,
-        output: &wgpu::TextureView,
+        view: &wgpu::TextureView,
     ) {
         let matrices = self.world_camera.calculate_matrices();
         self.gpu_camera.upload_matrices(renderer, matrices);
 
         self.terrain
-            .render(renderer, encoder, output, &self.gpu_camera.bind_group);
+            .render(renderer, encoder, view, &self.gpu_camera.bind_group);
 
         let mut more_vertices = self.terrain.render_normals();
         self.gizmos_vertices.append(&mut more_vertices);
@@ -448,12 +468,15 @@ impl Scene for WorldScene {
         self.gizmos_vertices.append(&mut more_vertices);
 
         self.objects
-            .render(renderer, encoder, output, &self.gpu_camera.bind_group);
+            .render(renderer, encoder, view, &self.gpu_camera.bind_group);
+
+        self.bounding_boxes
+            .render_all(renderer, encoder, view, &self.gpu_camera.bind_group);
 
         self.gizmos_renderer.render(
             renderer,
             encoder,
-            output,
+            view,
             &self.gpu_camera.bind_group,
             &self.gizmos_vertices,
         );

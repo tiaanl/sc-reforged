@@ -29,8 +29,8 @@ impl BufferLayout for Vertex {
 }
 
 #[derive(Default)]
-pub struct Mesh {
-    pub vertices: Vec<Vertex>,
+pub struct Mesh<V: BufferLayout> {
+    pub vertices: Vec<V>,
     pub indices: Vec<u32>,
 }
 
@@ -50,7 +50,7 @@ impl std::fmt::Debug for GpuMesh {
     }
 }
 
-impl Mesh {
+impl<V: BufferLayout + bytemuck::NoUninit> Mesh<V> {
     pub fn to_gpu(&self, renderer: &Renderer) -> GpuMesh {
         debug_assert!(!self.vertices.is_empty(), "Uploading empty vertex buffer.");
         debug_assert!(!self.indices.is_empty(), "Uploading empty index buffer.");
