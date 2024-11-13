@@ -19,12 +19,13 @@ clap = { version = "4.5.17", default-features = false, features = [
 egui = { version = "0.29.1", default-features = false }
 egui-winit = { version = "0.29.1", default-features = false }
 egui-wgpu = { version = "0.29.1", default-features = false }
-glam = { version = "0.29.0", default-features = false, features = [
+glam = { version = "0.29", default-features = false, features = [
     "bytemuck",
     "std",
 ] }
-pollster = { version = "0.3.0", default-features = false }
-thiserror = { version = "1.0.63", default-features = false }
+pollster = { version = "0.4", default-features = false }
+shadow_company_tools = { path = "../shadow_company_tools" }
+thiserror = { version = "2.0", default-features = false }
 tracing = { version = "0.1.40", default-features = false, features = [
     "max_level_debug",
     "release_max_level_info",

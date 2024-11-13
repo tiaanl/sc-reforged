@@ -8,11 +8,12 @@ use crate::{
         renderer::Renderer,
         scene::Scene,
     },
-    game::{config::CampaignDef, smf},
+    game::config::CampaignDef,
 };
 use bounding_boxes::BoundingBoxes;
 use camera::*;
 use glam::{vec3, Quat, Vec2, Vec3};
+use shadow_company_tools::smf;
 use terrain::*;
 use tracing::{error, info, warn};
 use winit::{event::MouseButton, keyboard::KeyCode};
@@ -139,7 +140,7 @@ impl WorldScene {
                     };
 
                     let mut c = std::io::Cursor::new(data);
-                    let smf = match smf::Scene::read(&mut c) {
+                    let smf = match smf::Model::read(&mut c) {
                         Ok(smf) => smf,
                         Err(_) => {
                             error!("Could not read smf model: {}", path.display());
@@ -187,7 +188,7 @@ impl WorldScene {
         if false {
             let data = assets.load_raw(r"models\alvhqd-hummer\alvhqd-hummer.smf")?;
             let mut cursor = std::io::Cursor::new(data);
-            let smf = smf::Scene::read(&mut cursor).expect("Could not load model data.");
+            let smf = smf::Model::read(&mut cursor).expect("Could not load model data.");
             let model = Self::smf_to_model(renderer, assets, &mut objects.textures, smf)?;
             let model_handle = objects.models.insert(model);
             objects.spawn(object::Object::new(Vec3::ZERO, Vec3::ZERO, model_handle));
@@ -249,7 +250,7 @@ impl WorldScene {
         renderer: &Renderer,
         assets: &Assets,
         textures: &mut textures::Textures,
-        smf: smf::Scene,
+        smf: smf::Model,
     ) -> Result<models::Model, AssetError> {
         fn do_node(
             renderer: &Renderer,
