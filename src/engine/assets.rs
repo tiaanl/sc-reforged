@@ -1,3 +1,5 @@
+use shadow_company_tools::smf;
+
 use super::vfs::{FileSystemError, VirtualFileSystem};
 use std::path::Path;
 
@@ -47,5 +49,12 @@ impl Assets {
 
     pub fn load_config_file(&self, path: impl AsRef<Path>) -> Result<String, AssetError> {
         String::from_utf8(self.load_raw(path)?).map_err(|_| AssetError::DecodeError)
+    }
+
+    pub fn load_smf(&self, path: impl AsRef<Path>) -> Result<smf::Model, AssetError> {
+        let data = self.load_raw(path)?;
+        let mut cursor = std::io::Cursor::new(data);
+        smf::Model::read(&mut cursor)
+            .map_err(|err| AssetError::FileSystemError(FileSystemError::Io(err)))
     }
 }

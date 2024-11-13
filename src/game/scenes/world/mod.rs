@@ -13,9 +13,8 @@ use crate::{
 use bounding_boxes::BoundingBoxes;
 use camera::*;
 use glam::{vec3, Quat, Vec2, Vec3};
-use shadow_company_tools::smf;
 use terrain::*;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 mod bounding_boxes;
@@ -113,14 +112,13 @@ impl WorldScene {
             let _image_defs = crate::game::config::read_image_defs(&str);
         }
 
-        if true {
+        if false {
             let path = PathBuf::from("maps")
                 .join(format!("{}_final", campaign_def.base_name))
                 .with_extension("mtf");
             let data = assets.load_config_file(&path)?;
             let mtf = crate::game::config::read_mtf(&data);
 
-            let textures = &mut objects.textures;
             let models = &mut objects.models;
 
             let mut to_spawn = mtf
@@ -131,31 +129,24 @@ impl WorldScene {
                         .join(&object.name)
                         .join(&object.name)
                         .with_extension("smf");
-                    let data = match assets.load_raw(&path) {
-                        Ok(data) => data,
+                    let smf = match assets.load_smf(&path) {
+                        Ok(smf) => smf,
                         Err(err) => {
                             error!("Could not load model {}: {}", path.display(), err);
                             return Err(err);
                         }
                     };
 
-                    let mut c = std::io::Cursor::new(data);
-                    let smf = match smf::Model::read(&mut c) {
-                        Ok(smf) => smf,
-                        Err(_) => {
-                            error!("Could not read smf model: {}", path.display());
-                            return Err(AssetError::DecodeError);
-                        }
-                    };
+                    let model_handle = models.insert(renderer, assets, &smf);
 
-                    let model = match Self::smf_to_model(renderer, assets, textures, smf) {
-                        Ok(model) => model,
-                        Err(err) => {
-                            error!("Could not load model: {}", path.display());
-                            return Err(err);
-                        }
-                    };
-                    let model_handle = models.insert(model);
+                    // let model = match Self::smf_to_model(renderer, assets, textures, smf) {
+                    //     Ok(model) => model,
+                    //     Err(err) => {
+                    //         error!("Could not load model: {}", path.display());
+                    //         return Err(err);
+                    //     }
+                    // };
+                    // let model_handle = models.insert(model);
 
                     Ok(object::Object {
                         position: object.position,
@@ -168,29 +159,11 @@ impl WorldScene {
             for object in to_spawn.drain(..) {
                 objects.spawn(object);
             }
-
-            // let data = assets.load_raw(r"models\alvhqd-hummer\alvhqd-hummer.smf")?;
-            // let mut c = std::io::Cursor::new(data);
-            // let smf = smf::Scene::read(&mut c).map_err(|e| {
-            //     AssetError::FileSystemError(crate::engine::vfs::FileSystemError::Io(e))
-            // })?;
-
-            // let model = Self::smf_to_model(renderer, assets, &mut textures, smf)?;
-
-            // let object = object::Object {
-            //     position: Vec3::ZERO,
-            //     rotation: Vec3::ZERO,
-            //     model_handle: models.insert(model),
-            // };
-            // let objects = vec![object];
         }
 
-        if false {
-            let data = assets.load_raw(r"models\alvhqd-hummer\alvhqd-hummer.smf")?;
-            let mut cursor = std::io::Cursor::new(data);
-            let smf = smf::Model::read(&mut cursor).expect("Could not load model data.");
-            let model = Self::smf_to_model(renderer, assets, &mut objects.textures, smf)?;
-            let model_handle = objects.models.insert(model);
+        if true {
+            let smf = assets.load_smf(r"models\alvhqd-hummer\alvhqd-hummer.smf")?;
+            let model_handle = objects.models.insert(renderer, assets, &smf);
             objects.spawn(object::Object::new(Vec3::ZERO, Vec3::ZERO, model_handle));
         }
 
@@ -243,97 +216,6 @@ impl WorldScene {
             gizmos_vertices: vec![],
 
             bounding_boxes,
-        })
-    }
-
-    fn smf_to_model(
-        renderer: &Renderer,
-        assets: &Assets,
-        textures: &mut textures::Textures,
-        smf: smf::Model,
-    ) -> Result<models::Model, AssetError> {
-        fn do_node(
-            renderer: &Renderer,
-            assets: &Assets,
-            textures: &mut textures::Textures,
-            nodes: &[smf::Node],
-            parent_node_name: &str,
-        ) -> Vec<models::ModelNode> {
-            fn do_mesh(
-                renderer: &Renderer,
-                assets: &Assets,
-                textures: &mut textures::Textures,
-                mesh: &smf::Mesh,
-            ) -> Result<models::ModelMesh, ()> {
-                // Load the texture
-                let texture_path = PathBuf::from("textures")
-                    .join("shared")
-                    .join(&mesh.texture_name);
-                let texture_handle = textures.get_by_path_or_insert(texture_path, |path| {
-                    let image = match assets.load_bmp(path) {
-                        Ok(image) => image,
-                        Err(e) => {
-                            warn!("Could not load texture! {:?}", e);
-                            return None;
-                        }
-                    };
-                    let texture_view = renderer.create_texture_view(path.to_str().unwrap(), image);
-
-                    // TODO: Reuse a sampler.
-                    let sampler = renderer.create_sampler(
-                        "texture_sampler",
-                        wgpu::AddressMode::ClampToEdge,
-                        wgpu::FilterMode::Linear,
-                        wgpu::FilterMode::Linear,
-                    );
-
-                    let bind_group = renderer.create_texture_bind_group(
-                        path.to_str().unwrap(),
-                        &texture_view,
-                        &sampler,
-                    );
-
-                    Some(bind_group)
-                })?;
-
-                let mesh = mesh::Mesh {
-                    vertices: mesh
-                        .vertices
-                        .iter()
-                        .map(|v| mesh::Vertex {
-                            position: v.position,
-                            normal: v.normal,
-                            tex_coord: v.tex_coord,
-                        })
-                        .collect(),
-                    indices: mesh.faces.iter().flat_map(|f| f.indices).collect(),
-                }
-                .to_gpu(renderer);
-
-                Ok(models::ModelMesh {
-                    mesh,
-                    texture_handle,
-                })
-            }
-
-            nodes
-                .iter()
-                .filter(|node| node.parent_name == parent_node_name)
-                .map(|node| models::ModelNode {
-                    position: node.position,
-                    rotation: node.rotation,
-                    meshes: node
-                        .meshes
-                        .iter()
-                        .filter_map(|mesh| do_mesh(renderer, assets, textures, mesh).ok())
-                        .collect(),
-                    children: do_node(renderer, assets, textures, nodes, &node.name),
-                })
-                .collect()
-        }
-
-        Ok(models::Model {
-            nodes: do_node(renderer, assets, textures, &smf.nodes, "<root>"),
         })
     }
 }
