@@ -5,5 +5,6 @@ pub mod gizmos;
 pub mod mesh;
 pub mod renderer;
 pub mod scene;
+pub mod shaders;
 pub mod utils;
 pub mod vfs;

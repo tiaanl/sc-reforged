@@ -1,6 +1,6 @@
 use glam::Vec3;
 
-use crate::engine::{arena::Handle, renderer::Renderer};
+use crate::engine::{arena::Handle, renderer::Renderer, shaders::Shaders};
 
 use super::{
     models::{Model, Models, RenderInfo},
@@ -32,9 +32,9 @@ pub struct Objects {
 }
 
 impl Objects {
-    pub fn new(renderer: &Renderer) -> Self {
+    pub fn new(renderer: &Renderer, shaders: &mut Shaders) -> Self {
         let textures = Textures::default();
-        let models = Models::new(renderer);
+        let models = Models::new(renderer, shaders);
         Self {
             models,
             textures,

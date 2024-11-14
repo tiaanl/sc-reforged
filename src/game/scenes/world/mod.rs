@@ -4,9 +4,9 @@ use crate::{
     engine::{
         assets::{AssetError, Assets},
         gizmos::{GizmoVertex, GizmosRenderer},
-        mesh,
         renderer::Renderer,
         scene::Scene,
+        shaders::Shaders,
     },
     game::config::CampaignDef,
 };
@@ -77,7 +77,6 @@ pub struct WorldScene {
     _campaign_def: CampaignDef,
 
     world_camera: WorldCamera,
-
     gpu_camera: GpuCamera,
 
     terrain: Terrain,
@@ -102,8 +101,11 @@ impl WorldScene {
     ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
-        let terrain = Terrain::new(assets, renderer, &campaign_def)?;
-        let mut objects = object::Objects::new(renderer);
+        let mut shaders = Shaders::default();
+        shaders.add_module(include_str!("camera.wgsl"), "camera.wgsl");
+
+        let terrain = Terrain::new(assets, renderer, &mut shaders, &campaign_def)?;
+        let mut objects = object::Objects::new(renderer, &mut shaders);
 
         {
             // Load the image defs.

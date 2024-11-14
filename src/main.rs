@@ -2,7 +2,10 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
 use egui::Widget;
-use engine::{assets::Assets, egui_integration::EguiIntegration, renderer::Renderer, scene::Scene};
+use engine::{
+    assets::Assets, egui_integration::EguiIntegration, renderer::Renderer, scene::Scene,
+    shaders::Shaders,
+};
 use game::{
     config::{read_compaign_defs, CampaignDef},
     scenes::world::WorldScene,

@@ -1,8 +1,6 @@
-struct Camera {
-    mat_projection: mat4x4<f32>,
-    mat_view: mat4x4<f32>,
-}
-@group(0) @binding(0) var<uniform> u_camera: Camera;
+#import world::camera
+
+@group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
 @group(1) @binding(0) var<uniform> u_model: mat4x4<f32>;
 

@@ -9,6 +9,7 @@ use crate::{
         assets::{AssetError, Assets},
         gizmos::GizmoVertex,
         renderer::{BufferLayout, RenderPipelineConfig, Renderer},
+        shaders::Shaders,
     },
     game::config::{CampaignDef, ConfigFile, TerrainMapping},
 };
@@ -157,6 +158,7 @@ impl Terrain {
     pub fn new(
         assets: &Assets,
         renderer: &Renderer,
+        shaders: &mut Shaders,
         campaign_def: &CampaignDef,
     ) -> Result<Self, AssetError> {
         let TerrainMapping {
@@ -345,7 +347,12 @@ impl Terrain {
         let wireframe_index_buffer =
             renderer.create_index_buffer("terrain_wireframe_index_buffer", &wireframe_indices);
 
-        let shader_module = renderer.create_shader_module("terrain", include_str!("world.wgsl"));
+        let shader_module = shaders.create_shader(
+            renderer,
+            "terrain",
+            include_str!("terrain.wgsl"),
+            "terrain.wgsl",
+        );
 
         let pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<Vertex>::new("terrain", &shader_module)

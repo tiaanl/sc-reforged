@@ -7,6 +7,7 @@ use crate::engine::{
     assets::Assets,
     mesh::{GpuMesh, RenderPassMeshExt},
     renderer::{RenderPipelineConfig, Renderer},
+    shaders::Shaders,
 };
 
 use super::textures::Textures;
@@ -55,9 +56,13 @@ pub struct Models {
 }
 
 impl Models {
-    pub fn new(renderer: &Renderer) -> Self {
-        let shader_module =
-            renderer.create_shader_module("model_renderer", include_str!("model.wgsl"));
+    pub fn new(renderer: &Renderer, shaders: &mut Shaders) -> Self {
+        let shader_module = shaders.create_shader(
+            renderer,
+            "model_renderer",
+            include_str!("model.wgsl"),
+            "model.wgsl",
+        );
 
         let render_pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<crate::engine::mesh::Vertex>::new(
