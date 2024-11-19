@@ -1,7 +1,7 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
-use glam::{vec2, vec3, Vec2, Vec3};
+use glam::{vec2, vec3, Vec2, Vec3, Vec4};
 use tracing::info;
 
 use crate::{
@@ -425,27 +425,14 @@ impl Terrain {
         let width = self.height_map_width as usize;
         let height = self.height_map_height as usize;
 
-        let color = [0.0, 1.0, 1.0, 1.0];
+        let color = Vec4::new(0.0, 1.0, 1.0, 1.0);
 
         for y in 0..height {
             for x in 0..width {
                 let index = y * width + x;
-
-                let x = self.vertices[index].position.x;
-                let y = self.vertices[index].position.y;
-                let z = self.vertices[index].position.z;
-                vertices.push(GizmoVertex {
-                    position: [x, y, z, 1.0],
-                    color,
-                });
-
-                let x = x + self.vertices[index].normal.x * LENGTH;
-                let y = y + self.vertices[index].normal.y * LENGTH;
-                let z = z + self.vertices[index].normal.z * LENGTH;
-                vertices.push(GizmoVertex {
-                    position: [x, y, z, 1.0],
-                    color,
-                });
+                vertices.push(GizmoVertex::new(self.vertices[index].position, color));
+                let n = self.vertices[index].position + self.vertices[index].normal * LENGTH;
+                vertices.push(GizmoVertex::new(n, color));
             }
         }
 

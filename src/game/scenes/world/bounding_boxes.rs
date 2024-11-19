@@ -147,6 +147,10 @@ impl BoundingBoxes {
         });
     }
 
+    pub fn clear(&mut self) {
+        self.boxes.clear();
+    }
+
     pub fn render_all(
         &self,
         renderer: &Renderer,

@@ -1,3 +1,4 @@
+use glam::{Vec3, Vec4};
 use wgpu::vertex_attr_array;
 
 use super::renderer::{BufferLayout, RenderPipelineConfig, Renderer};
@@ -5,8 +6,19 @@ use super::renderer::{BufferLayout, RenderPipelineConfig, Renderer};
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct GizmoVertex {
-    pub position: [f32; 4],
-    pub color: [f32; 4],
+    position: Vec3,
+    _padding: f32,
+    color: Vec4,
+}
+
+impl GizmoVertex {
+    pub fn new(position: Vec3, color: Vec4) -> Self {
+        Self {
+            position,
+            _padding: 1.0,
+            color,
+        }
+    }
 }
 
 impl BufferLayout for GizmoVertex {

@@ -10,11 +10,11 @@ use crate::{
     },
     game::config::CampaignDef,
 };
+use ahash::HashSet;
 use bounding_boxes::BoundingBoxes;
-use camera::*;
-use glam::{vec3, Quat, Vec2, Vec3};
+use glam::{vec3, Mat4, Quat, Vec2, Vec3, Vec4};
 use terrain::*;
-use tracing::{error, info};
+use tracing::error;
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 mod bounding_boxes;
@@ -24,6 +24,18 @@ mod object;
 mod terrain;
 mod textures;
 
+#[inline]
+fn sinister_transform() -> Mat4 {
+    Mat4::from_cols(
+        Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        Vec4::new(0.0, 0.0, -1.0, 0.0),
+        Vec4::new(0.0, 1.0, 0.0, 0.0),
+        Vec4::new(0.0, 0.0, 0.0, 1.0),
+    )
+    // Mat4::IDENTITY
+}
+
+/*
 #[derive(Default)]
 pub struct WorldCamera {
     camera: Camera,
@@ -61,9 +73,14 @@ impl WorldCamera {
         camera.position += v * self.velocity.y * delta_time;
     }
 
-    fn calculate_rotation(&self) -> Quat {
-        Quat::from_rotation_z(self.yaw.to_radians())
-            * Quat::from_rotation_x(self.pitch.to_radians())
+    fn calculate_rotation(&mut self) -> Quat {
+        let pitch = Quat::from_rotation_x(self.pitch.to_radians());
+        let yaw = Quat::from_rotation_z(self.yaw.to_radians());
+        yaw * pitch
+
+        // let pitch_rotation = Quat::from_rotation_x(self.pitch.to_radians());
+        // let yaw_rotation = Quat::from_rotation_y(self.yaw.to_radians());
+        // yaw_rotation * pitch_rotation
     }
 
     pub fn calculate_matrices(&mut self) -> Matrices {
@@ -71,17 +88,23 @@ impl WorldCamera {
         self.camera.calculate_matrices()
     }
 }
+*/
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
     _campaign_def: CampaignDef,
 
-    world_camera: WorldCamera,
-    gpu_camera: GpuCamera,
+    // world_camera: WorldCamera,
+    camera: camera::Camera,
+    gpu_camera: camera::GpuCamera,
+    camera_pitch: f32,
+    camera_yaw: f32,
 
     terrain: Terrain,
 
     objects: object::Objects,
+
+    held_keys: HashSet<KeyCode>,
 
     last_mouse_position: Vec2,
 
@@ -114,7 +137,7 @@ impl WorldScene {
             let _image_defs = crate::game::config::read_image_defs(&str);
         }
 
-        if false {
+        if true {
             let path = PathBuf::from("maps")
                 .join(format!("{}_final", campaign_def.base_name))
                 .with_extension("mtf");
@@ -165,25 +188,29 @@ impl WorldScene {
 
         if true {
             let smf = assets.load_smf(r"models\alvhqd-hummer\alvhqd-hummer.smf")?;
+            // let smf = assets.load_smf(r"models\anstbk-chem_tank\anstbk-chem_tank.smf")?;
             let model_handle = objects.models.insert(renderer, assets, &smf);
             objects.spawn(object::Object::new(Vec3::ZERO, Vec3::ZERO, model_handle));
         }
 
-        // 6865.0	12544.0	5602.0	11550.0
-        // let initial = vec3(6865.0, 12544.0, 5602.0);
-        let initial = Vec3::ZERO;
-
-        let camera = Camera::new(
-            // vec3(0.0, 1000.0, 1000.0),
-            initial,
+        // let camera = Camera::new(
+        //     Vec3::Z * 1000.0,
+        //     Quat::IDENTITY,
+        //     45_f32.to_radians(),
+        //     1.0,
+        //     0.1,
+        //     100_000.0,
+        // );
+        // let world_camera = WorldCamera::new(camera, 0.0, 0.0, Vec3::ZERO);
+        let camera = camera::Camera::new(
+            Vec3::ZERO,
             Quat::IDENTITY,
-            45_f32.to_radians(),
+            45.0_f32.to_radians(),
             1.0,
-            0.1,
+            1.0,
             100_000.0,
         );
-        let world_camera = WorldCamera::new(camera, 0.0, 0.0, Vec3::ZERO);
-        let gpu_camera = GpuCamera::new(renderer);
+        let gpu_camera = camera::GpuCamera::new(renderer);
 
         let gizmos_renderer = GizmosRenderer::new(renderer);
 
@@ -204,11 +231,15 @@ impl WorldScene {
         Ok(Self {
             _campaign_def: campaign_def,
 
-            world_camera,
+            camera,
             gpu_camera,
+            camera_pitch: 0.0,
+            camera_yaw: 0.0,
 
             terrain,
             objects,
+
+            held_keys: ahash::HashSet::default(),
 
             last_mouse_position: Vec2::ZERO,
 
@@ -224,108 +255,114 @@ impl WorldScene {
 
 impl Scene for WorldScene {
     fn resize(&mut self, width: u32, height: u32) {
-        self.world_camera.resize(width, height);
+        self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
-    fn on_key_pressed(&mut self, key: winit::keyboard::KeyCode) {
-        const SPEED: f32 = 100.0;
-
-        let mut velocity = self.world_camera.velocity;
-        match key {
-            KeyCode::KeyW => velocity.z += SPEED,
-            KeyCode::KeyS => velocity.z -= SPEED,
-            KeyCode::KeyD => velocity.x += SPEED,
-            KeyCode::KeyA => velocity.x -= SPEED,
-            KeyCode::KeyQ => velocity.y -= SPEED,
-            KeyCode::KeyE => velocity.y += SPEED,
-            _ => info!("key pressed: {key:?}"),
-        }
-        self.world_camera.velocity = velocity;
+    fn on_key_pressed(&mut self, key: KeyCode) {
+        self.held_keys.insert(key);
     }
 
-    fn on_key_released(&mut self, key: winit::keyboard::KeyCode) {
-        const SPEED: f32 = 100.0;
-
-        let mut velocity = self.world_camera.velocity;
-        match key {
-            KeyCode::KeyW => velocity.z -= SPEED,
-            KeyCode::KeyS => velocity.z += SPEED,
-            KeyCode::KeyD => velocity.x -= SPEED,
-            KeyCode::KeyA => velocity.x += SPEED,
-            KeyCode::KeyQ => velocity.y += SPEED,
-            KeyCode::KeyE => velocity.y -= SPEED,
-            _ => info!("key released: {key:?}"),
-        }
-        self.world_camera.velocity = velocity;
+    fn on_key_released(&mut self, key: KeyCode) {
+        self.held_keys.remove(&key);
     }
 
     fn on_mouse_moved(&mut self, position: glam::Vec2) {
         self.last_mouse_position = position;
 
         if let Some(pos) = self.rotating_camera {
-            const SENSITIVITY: f32 = 0.25;
+            const SENSITIVITY: f32 = 0.1;
             let delta = (pos - self.last_mouse_position) * SENSITIVITY;
-
-            self.world_camera.pitch -= delta.y;
-            self.world_camera.yaw -= delta.x;
+            self.camera_pitch += delta.y;
+            self.camera_yaw -= delta.x;
 
             self.rotating_camera = Some(self.last_mouse_position);
         }
     }
 
     fn on_mouse_pressed(&mut self, button: MouseButton) {
-        if button == MouseButton::Left {
+        if button == MouseButton::Right {
             self.rotating_camera = Some(self.last_mouse_position);
         }
     }
+
     fn on_mouse_released(&mut self, button: MouseButton) {
-        if button == MouseButton::Left {
+        if button == MouseButton::Right {
             self.rotating_camera = None;
         }
     }
 
     fn update(&mut self, delta_time: f32) {
-        self.world_camera.update(delta_time);
+        const SPEED: f32 = 50.0;
+        if self.held_keys.contains(&KeyCode::KeyW) {
+            self.camera.move_forward(SPEED * delta_time);
+        }
+        if self.held_keys.contains(&KeyCode::KeyS) {
+            self.camera.move_forward(-SPEED * delta_time);
+        }
+        if self.held_keys.contains(&KeyCode::KeyA) {
+            self.camera.move_right(SPEED * delta_time);
+        }
+        if self.held_keys.contains(&KeyCode::KeyD) {
+            self.camera.move_right(-SPEED * delta_time);
+        }
+        if self.held_keys.contains(&KeyCode::KeyE) {
+            self.camera.move_up(SPEED * delta_time);
+        }
+        if self.held_keys.contains(&KeyCode::KeyQ) {
+            self.camera.move_up(-SPEED * delta_time);
+        }
+
+        let rot = Quat::from_rotation_z(self.camera_yaw.to_radians())
+            * Quat::from_rotation_x(self.camera_pitch.to_radians());
+        self.camera.rotation = rot;
+
+        // self.camera.rotation = Quat::from_euler(
+        //     glam::EulerRot::XYZ,
+        //     self.camera_pitch.to_radians(),
+        //     0.0,
+        //     self.camera_yaw.to_radians(),
+        // );
+
+        // self.world_camera.update(delta_time);
         self.terrain.update(delta_time);
 
+        const GIZMO_SCALE: f32 = 1000.0;
+        const CENTER: Vec3 = Vec3::ZERO;
+        const RED: Vec4 = Vec4::new(1.0, 0.0, 0.0, 1.0);
+        const GREEN: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
+        const BLUE: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
         self.gizmos_vertices = vec![
-            GizmoVertex {
-                position: [0.0, 0.0, 0.0, 1.0],
-                color: [1.0, 0.0, 0.0, 1.0],
-            },
-            GizmoVertex {
-                position: [1_000.0, 0.0, 0.0, 1.0],
-                color: [1.0, 0.0, 0.0, 1.0],
-            },
-            GizmoVertex {
-                position: [0.0, 0.0, 0.0, 1.0],
-                color: [0.0, 1.0, 0.0, 1.0],
-            },
-            GizmoVertex {
-                position: [0.0, 1_000.0, 0.0, 1.0],
-                color: [0.0, 1.0, 0.0, 1.0],
-            },
-            GizmoVertex {
-                position: [0.0, 0.0, 0.0, 1.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-            },
-            GizmoVertex {
-                position: [0.0, 0.0, 1_000.0, 1.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-            },
+            // X+
+            GizmoVertex::new(CENTER, RED),
+            GizmoVertex::new(Vec3::X * GIZMO_SCALE, RED),
+            // Y+
+            GizmoVertex::new(CENTER, GREEN),
+            GizmoVertex::new(Vec3::Y * GIZMO_SCALE, GREEN),
+            // Z+
+            GizmoVertex::new(CENTER, BLUE),
+            GizmoVertex::new(Vec3::Z * GIZMO_SCALE, BLUE),
         ];
     }
 
     fn debug_panel(&mut self, egui: &egui::Context) {
         egui::Window::new("World").show(egui, |ui| {
             egui::Grid::new("world_info").show(ui, |ui| {
-                ui.label("pitch");
-                ui.add(egui::Label::new(format!("{}", self.world_camera.pitch)));
-                ui.end_row();
+                // ui.label("position");
+                // ui.add(egui::Label::new(format!(
+                //     "{}, {}, {}",
+                //     self.world_camera.camera.position.x,
+                //     self.world_camera.camera.position.y,
+                //     self.world_camera.camera.position.z,
+                // )));
+                // ui.end_row();
 
-                ui.label("yaw");
-                ui.add(egui::Label::new(format!("{}", self.world_camera.yaw)));
-                ui.end_row();
+                // ui.label("pitch");
+                // ui.add(egui::Label::new(format!("{}", self.world_camera.pitch)));
+                // ui.end_row();
+
+                // ui.label("yaw");
+                // ui.add(egui::Label::new(format!("{}", self.world_camera.yaw)));
+                // ui.end_row();
             });
 
             // ui.heading("Camera");
@@ -341,7 +378,33 @@ impl Scene for WorldScene {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
     ) {
-        let matrices = self.world_camera.calculate_matrices();
+        let matrices = if false {
+            let aspect =
+                renderer.surface_config.width as f32 / renderer.surface_config.height.max(1) as f32;
+            let view = Mat4::from_cols(
+                Vec4::from((Vec3::NEG_X, 0.0)),
+                Vec4::from((Vec3::Z, 0.0)),
+                Vec4::from((Vec3::NEG_Y, 0.0)),
+                Vec4::from((Vec3::ZERO, 1.0)),
+            );
+            let view = Mat4::from_euler(
+                glam::EulerRot::XYZ,
+                self.camera_pitch.to_radians(),
+                self.camera_yaw.to_radians(),
+                0.0,
+            ) * view;
+
+            // self.view_matrix = view;
+
+            camera::Matrices {
+                projection: Mat4::perspective_lh(45.0_f32.to_radians(), aspect, 1.0, 100_000.0)
+                    .to_cols_array_2d(),
+                view: view.to_cols_array_2d(),
+            }
+        } else {
+            self.camera.calculate_matrices()
+        };
+
         self.gpu_camera.upload_matrices(renderer, matrices);
 
         self.terrain
@@ -352,11 +415,17 @@ impl Scene for WorldScene {
         let mut more_vertices = self.terrain.render_normals_lookup();
         self.gizmos_vertices.append(&mut more_vertices);
 
-        self.objects
-            .render(renderer, encoder, view, &self.gpu_camera.bind_group);
+        self.objects.render(
+            renderer,
+            encoder,
+            view,
+            &self.gpu_camera.bind_group,
+            &mut self.bounding_boxes,
+        );
 
         self.bounding_boxes
             .render_all(renderer, encoder, view, &self.gpu_camera.bind_group);
+        self.bounding_boxes.clear();
 
         self.gizmos_renderer.render(
             renderer,

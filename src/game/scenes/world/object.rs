@@ -3,6 +3,7 @@ use glam::Vec3;
 use crate::engine::{arena::Handle, renderer::Renderer, shaders::Shaders};
 
 use super::{
+    bounding_boxes::BoundingBoxes,
     models::{Model, Models, RenderInfo},
     textures::Textures,
 };
@@ -52,6 +53,7 @@ impl Objects {
         encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
+        bounding_boxes: &mut BoundingBoxes,
     ) {
         let handles = self
             .objects
@@ -73,6 +75,7 @@ impl Objects {
                 &self.textures,
                 camera_bind_group,
                 &handles,
+                bounding_boxes,
             );
         }
     }

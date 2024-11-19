@@ -1,4 +1,4 @@
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat3, Mat4, Quat, Vec3};
 use shadow_company_tools::smf;
 use tracing::warn;
 
@@ -10,7 +10,7 @@ use crate::engine::{
     shaders::Shaders,
 };
 
-use super::textures::Textures;
+use super::{bounding_boxes::BoundingBoxes, textures::Textures};
 
 #[derive(Debug)]
 pub struct Mesh {
@@ -19,11 +19,18 @@ pub struct Mesh {
 }
 
 #[derive(Debug)]
+struct BoundingBox {
+    min: Vec3,
+    max: Vec3,
+}
+
+#[derive(Debug)]
 pub struct Node {
     pub position: Vec3,
     pub rotation: Quat,
     pub meshes: Vec<Mesh>,
     pub children: Vec<Node>,
+    pub bounding_boxes: Vec<BoundingBox>,
 }
 
 #[derive(Debug)]
@@ -105,6 +112,7 @@ impl Models {
         textures: &Textures,
         camera_bind_group: &wgpu::BindGroup,
         batch: &[RenderInfo],
+        bounding_boxes: &mut BoundingBoxes,
     ) {
         let mut render_pass = Self::create_render_pass(renderer, encoder, output);
         render_pass.set_pipeline(&self.render_pipeline);
@@ -120,12 +128,8 @@ impl Models {
                     &mut render_pass,
                     node,
                     render_info.position,
-                    glam::Quat::from_euler(
-                        glam::EulerRot::XYZ,
-                        render_info.rotation.x,
-                        render_info.rotation.y,
-                        render_info.rotation.z,
-                    ),
+                    Quat::IDENTITY,
+                    bounding_boxes,
                 );
             });
         });
@@ -138,6 +142,7 @@ impl Models {
         node: &Node,
         position: Vec3,
         rotation: Quat,
+        bounding_boxes: &mut BoundingBoxes,
     ) {
         {
             let model_matrix = Mat4::from_rotation_translation(rotation, position);
@@ -155,6 +160,10 @@ impl Models {
                     warn!("Could not find model texture!");
                 }
             });
+
+            for b in node.bounding_boxes.iter() {
+                bounding_boxes.insert(position, rotation, b.min, b.max);
+            }
         }
 
         for node in node.children.iter() {
@@ -164,6 +173,7 @@ impl Models {
                 node,
                 position + node.position,
                 rotation * node.rotation,
+                bounding_boxes,
             )
         }
     }
@@ -213,19 +223,35 @@ impl Models {
         nodes: &[smf::Node],
         parent_name: &str,
     ) -> Vec<Node> {
+        // 180-degree rotation around the Y-axis
+        let rotation_y_180 = Quat::from_rotation_y(std::f32::consts::PI);
+        // -90-degree rotation around the X-axis
+        let rotation_x_neg_90 = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+
+        // Combine the rotations
+        let transform_quat = rotation_x_neg_90 * rotation_y_180;
+
         // Find all the child nodes.
         nodes
             .iter()
             .filter(|node| node.parent_name == parent_name)
             .map(|node| Node {
                 position: node.position,
-                rotation: node.rotation,
+                rotation: transform_quat * node.rotation,
                 meshes: node
                     .meshes
                     .iter()
                     .map(|mesh| self.smf_mesh_to_mesh(renderer, assets, mesh))
                     .collect(),
                 children: self.children_of(renderer, assets, nodes, &node.name),
+                bounding_boxes: node
+                    .collision_boxes
+                    .iter()
+                    .map(|b| BoundingBox {
+                        min: b.min,
+                        max: b.max,
+                    })
+                    .collect(),
             })
             .collect()
     }
@@ -259,7 +285,7 @@ impl Models {
                 let image = match assets.load_bmp(path) {
                     Ok(image) => image,
                     Err(e) => {
-                        warn!("Could not load texture! {:?}", e);
+                        warn!("Could not load texture! {} {:?}", path.display(), e);
                         return None;
                     }
                 };
@@ -289,96 +315,3 @@ impl Models {
         }
     }
 }
-
-/*
-fn smf_to_model(
-    renderer: &Renderer,
-    assets: &Assets,
-    textures: &mut textures::Textures,
-    smf: smf::Model,
-) -> Result<models::Model, AssetError> {
-    fn do_node(
-        renderer: &Renderer,
-        assets: &Assets,
-        textures: &mut textures::Textures,
-        nodes: &[smf::Node],
-        parent_node_name: &str,
-    ) -> Vec<models::Node> {
-        fn do_mesh(
-            renderer: &Renderer,
-            assets: &Assets,
-            textures: &mut textures::Textures,
-            mesh: &smf::Mesh,
-        ) -> Result<models::ModelMesh, ()> {
-            // Load the texture
-            let texture_path = PathBuf::from("textures")
-                .join("shared")
-                .join(&mesh.texture_name);
-            let texture_handle = textures.get_by_path_or_insert(texture_path, |path| {
-                let image = match assets.load_bmp(path) {
-                    Ok(image) => image,
-                    Err(e) => {
-                        warn!("Could not load texture! {:?}", e);
-                        return None;
-                    }
-                };
-                let texture_view = renderer.create_texture_view(path.to_str().unwrap(), image);
-
-                // TODO: Reuse a sampler.
-                let sampler = renderer.create_sampler(
-                    "texture_sampler",
-                    wgpu::AddressMode::ClampToEdge,
-                    wgpu::FilterMode::Linear,
-                    wgpu::FilterMode::Linear,
-                );
-
-                let bind_group = renderer.create_texture_bind_group(
-                    path.to_str().unwrap(),
-                    &texture_view,
-                    &sampler,
-                );
-
-                Some(bind_group)
-            })?;
-
-            let mesh = mesh::Mesh {
-                vertices: mesh
-                    .vertices
-                    .iter()
-                    .map(|v| mesh::Vertex {
-                        position: v.position,
-                        normal: v.normal,
-                        tex_coord: v.tex_coord,
-                    })
-                    .collect(),
-                indices: mesh.faces.iter().flat_map(|f| f.indices).collect(),
-            }
-            .to_gpu(renderer);
-
-            Ok(models::ModelMesh {
-                mesh,
-                texture_handle,
-            })
-        }
-
-        nodes
-            .iter()
-            .filter(|node| node.parent_name == parent_node_name)
-            .map(|node| models::ModelNode {
-                position: node.position,
-                rotation: node.rotation,
-                meshes: node
-                    .meshes
-                    .iter()
-                    .filter_map(|mesh| do_mesh(renderer, assets, textures, mesh).ok())
-                    .collect(),
-                children: do_node(renderer, assets, textures, nodes, &node.name),
-            })
-            .collect()
-    }
-
-    Ok(models::Model {
-        nodes: do_node(renderer, assets, textures, &smf.nodes, "<root>"),
-    })
-}
-*/

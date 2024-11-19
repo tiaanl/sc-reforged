@@ -1,15 +1,15 @@
 use crate::engine::renderer::Renderer;
 
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec3, Vec4};
 
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct Matrices {
-    pub projection: [f32; 16],
-    pub view: [f32; 16],
+    pub projection: [[f32; 4]; 4],
+    pub view: [[f32; 4]; 4],
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Camera {
     pub position: Vec3,
     pub rotation: Quat,
@@ -20,6 +20,17 @@ pub struct Camera {
 }
 
 impl Camera {
+    const CONVERT: Mat4 = Mat4::from_cols(
+        Vec4::new(Vec3::NEG_X.x, Vec3::NEG_X.y, Vec3::NEG_X.z, 0.0),
+        Vec4::new(Vec3::Z.x, Vec3::Z.y, Vec3::Z.z, 0.0),
+        Vec4::new(Vec3::Y.x, Vec3::Y.y, Vec3::Y.z, 0.0),
+        Vec4::new(0.0, 0.0, 0.0, 1.0),
+    );
+
+    pub const FORWARD: Vec3 = Vec3::Y;
+    pub const RIGHT: Vec3 = Vec3::X;
+    pub const UP: Vec3 = Vec3::Z;
+
     pub fn new(
         position: Vec3,
         rotation: Quat,
@@ -38,32 +49,30 @@ impl Camera {
         }
     }
 
-    pub fn forward_vector(&self) -> Vec3 {
-        self.rotation * -Vec3::Y
+    pub fn move_forward(&mut self, distance: f32) {
+        let v = self.rotation * Self::FORWARD;
+        self.position += v * distance;
     }
 
-    pub fn right_vector(&self) -> Vec3 {
-        self.rotation * Vec3::X
+    pub fn move_right(&mut self, distance: f32) {
+        let v = self.rotation * Self::RIGHT;
+        self.position += v * distance;
     }
 
-    pub fn up_vector(&self) -> Vec3 {
-        self.rotation * Vec3::Z
+    pub fn move_up(&mut self, distance: f32) {
+        let v = self.rotation * Self::UP;
+        self.position += v * distance;
     }
 
     pub fn calculate_matrices(&self) -> Matrices {
         let projection = Mat4::perspective_lh(self.fov, self.aspect_ratio, self.near, self.far);
 
-        let rotation_matrix = Mat4::from_quat(self.rotation).transpose();
-        let translation_matrix = Mat4::from_translation(-self.position);
-        let view = rotation_matrix * translation_matrix;
-
-        // Adjust the view matrix to account for Z being up
-        let adjust_matrix = Mat4::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-        let view = adjust_matrix * view;
+        let view = Mat4::from_translation(self.position) * Mat4::from_quat(self.rotation);
+        let view = Self::CONVERT * view.inverse();
 
         Matrices {
-            projection: projection.to_cols_array(),
-            view: view.to_cols_array(),
+            projection: projection.to_cols_array_2d(),
+            view: view.to_cols_array_2d(),
         }
     }
 }
