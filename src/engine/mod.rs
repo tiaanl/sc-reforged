@@ -1,4 +1,3 @@
-pub mod arena;
 pub mod assets;
 pub mod egui_integration;
 pub mod gizmos;

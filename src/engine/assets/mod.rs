@@ -107,7 +107,7 @@ impl<A: Asset> Assets<A> {
         self.storage.get(&handle.0)
     }
 
-    pub fn remove(&mut self, handle: Handle<A>) {
+    pub fn _remove(&mut self, handle: Handle<A>) {
         self.storage.remove(&handle.0);
     }
 }

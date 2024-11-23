@@ -46,24 +46,6 @@ impl Camera {
         }
     }
 
-    /// Move the camera in local space.
-    pub fn translate(&mut self, offset: Vec3) {
-        let translation = self.rotation * offset;
-        self.position += translation;
-    }
-
-    pub fn move_forward(&mut self, distance: f32) {
-        self.translate(Self::FORWARD * distance);
-    }
-
-    pub fn move_right(&mut self, distance: f32) {
-        self.translate(Self::RIGHT * distance);
-    }
-
-    pub fn move_up(&mut self, distance: f32) {
-        self.translate(Self::UP * distance);
-    }
-
     pub fn calculate_matrices(&self) -> Matrices {
         let projection = Mat4::perspective_lh(self.fov, self.aspect_ratio, self.near, self.far);
 
@@ -188,7 +170,7 @@ impl ArcBacllCameraController {
 }
 
 impl CameraController for ArcBacllCameraController {
-    fn on_input(&mut self, input: &input::InputState, delta_time: f32) {
+    fn on_input(&mut self, input: &input::InputState, _delta_time: f32) {
         if input.mouse_pressed(input::MouseButton::Left) {
             let delta = input.mouse_delta() * self.mouse_sensitivity;
             self.yaw += delta.x;

@@ -1,12 +1,12 @@
 use super::Asset;
 
 pub struct TextureView {
-    pub view: wgpu::TextureView,
+    pub _view: wgpu::TextureView,
 }
 
 impl From<wgpu::TextureView> for TextureView {
     fn from(value: wgpu::TextureView) -> Self {
-        Self { view: value }
+        Self { _view: value }
     }
 }
 

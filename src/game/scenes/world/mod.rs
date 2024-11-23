@@ -18,7 +18,6 @@ use tracing::{error, info};
 mod bounding_boxes;
 mod object;
 mod terrain;
-mod textures;
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
@@ -87,19 +86,11 @@ impl WorldScene {
 
                     let model_handle = objects.model_renderer.add(renderer, assets, &smf);
 
-                    // Convert the XYZ angles of the rotation to a quaternion.
-                    let rotation = Quat::from_euler(
-                        glam::EulerRot::XYZ,
-                        object.rotation.x,
-                        object.rotation.y,
-                        object.rotation.z,
-                    );
-
-                    Ok(object::Object {
-                        position: object.position,
-                        rotation,
+                    Ok(object::Object::new(
+                        object.position,
+                        object.rotation,
                         model_handle,
-                    })
+                    ))
                 })
                 .collect::<Vec<_>>();
 
@@ -192,24 +183,24 @@ impl Scene for WorldScene {
 
     fn debug_panel(&mut self, egui: &egui::Context) {
         egui::Window::new("World").show(egui, |ui| {
-            egui::Grid::new("world_info").show(ui, |ui| {
-                // ui.label("position");
-                // ui.add(egui::Label::new(format!(
-                //     "{}, {}, {}",
-                //     self.world_camera.camera.position.x,
-                //     self.world_camera.camera.position.y,
-                //     self.world_camera.camera.position.z,
-                // )));
-                // ui.end_row();
+            // egui::Grid::new("world_info").show(ui, |ui| {
+            //     ui.label("position");
+            //     ui.add(egui::Label::new(format!(
+            //         "{}, {}, {}",
+            //         self.world_camera.camera.position.x,
+            //         self.world_camera.camera.position.y,
+            //         self.world_camera.camera.position.z,
+            //     )));
+            //     ui.end_row();
 
-                // ui.label("pitch");
-                // ui.add(egui::Label::new(format!("{}", self.world_camera.pitch)));
-                // ui.end_row();
+            //     ui.label("pitch");
+            //     ui.add(egui::Label::new(format!("{}", self.world_camera.pitch)));
+            //     ui.end_row();
 
-                // ui.label("yaw");
-                // ui.add(egui::Label::new(format!("{}", self.world_camera.yaw)));
-                // ui.end_row();
-            });
+            //     ui.label("yaw");
+            //     ui.add(egui::Label::new(format!("{}", self.world_camera.yaw)));
+            //     ui.end_row();
+            // });
 
             // ui.heading("Camera");
             // self.camera.debug_panel(ui);

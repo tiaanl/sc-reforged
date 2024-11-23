@@ -20,6 +20,8 @@ use crate::{
 pub struct ModelViewer {
     model_renderer: ModelRenderer,
     model_handle: Handle<Model>,
+    model_position: Vec3,
+    model_rotation: Vec3,
 
     gizmos: GizmosRenderer,
 
@@ -71,6 +73,8 @@ impl ModelViewer {
         Ok(Self {
             model_renderer,
             model_handle,
+            model_position: Vec3::ZERO,
+            model_rotation: Vec3::ZERO,
 
             gizmos,
 
@@ -115,8 +119,8 @@ impl Scene for ModelViewer {
         self.gpu_camera.upload_matrices(renderer, matrices);
 
         let render_info = RenderInfo {
-            position: Vec3::ZERO,
-            rotation: Quat::IDENTITY,
+            position: self.model_position,
+            rotation: self.model_rotation,
             handle: self.model_handle.clone(),
         };
 
@@ -214,6 +218,21 @@ impl Scene for ModelViewer {
                     );
                     ui.end_row();
                 }
+                ui.end_row();
+            });
+
+            ui.heading("Model");
+            egui::Grid::new("model_info").show(ui, |ui| {
+                ui.label("Position");
+                ui.add(egui::DragValue::new(&mut self.model_position.x).speed(0.1));
+                ui.add(egui::DragValue::new(&mut self.model_position.y).speed(0.1));
+                ui.add(egui::DragValue::new(&mut self.model_position.z).speed(0.1));
+                ui.end_row();
+
+                ui.label("Rotation");
+                ui.add(egui::DragValue::new(&mut self.model_rotation.x).speed(0.1));
+                ui.add(egui::DragValue::new(&mut self.model_rotation.y).speed(0.1));
+                ui.add(egui::DragValue::new(&mut self.model_rotation.z).speed(0.1));
                 ui.end_row();
             });
         });

@@ -1,4 +1,4 @@
-use glam::{Quat, Vec3};
+use glam::Vec3;
 
 use crate::{
     engine::{assets::Handle, renderer::Renderer, shaders::Shaders},
@@ -9,12 +9,12 @@ use crate::{
 #[derive(Debug)]
 pub struct Object {
     pub position: Vec3,
-    pub rotation: Quat,
+    pub rotation: Vec3,
     pub model_handle: Handle<Model>,
 }
 
 impl Object {
-    pub fn new(position: Vec3, rotation: Quat, model: Handle<Model>) -> Self {
+    pub fn new(position: Vec3, rotation: Vec3, model: Handle<Model>) -> Self {
         Self {
             position,
             rotation,

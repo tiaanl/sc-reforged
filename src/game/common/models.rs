@@ -15,9 +15,9 @@ pub struct Mesh {
 }
 
 #[derive(Debug)]
-struct BoundingBox {
-    min: Vec3,
-    max: Vec3,
+pub struct BoundingBox {
+    _min: Vec3,
+    _max: Vec3,
 }
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ pub struct Node {
     pub rotation: Quat,
     pub meshes: Vec<Mesh>,
     pub children: Vec<Node>,
-    pub bounding_boxes: Vec<BoundingBox>,
+    pub _bounding_boxes: Vec<BoundingBox>,
 }
 
 #[derive(Debug)]
@@ -39,12 +39,12 @@ impl Asset for Model {}
 #[derive(Debug)]
 pub struct RenderInfo {
     pub position: Vec3,
-    pub rotation: Quat,
+    pub rotation: Vec3,
     pub handle: Handle<Model>,
 }
 
 impl RenderInfo {
-    pub fn new(position: Vec3, rotation: Quat, handle: Handle<Model>) -> Self {
+    pub fn new(position: Vec3, rotation: Vec3, handle: Handle<Model>) -> Self {
         Self {
             position,
             rotation,
@@ -119,13 +119,22 @@ impl ModelRenderer {
                 return;
             };
 
+            let transform = Mat4::from_rotation_translation(
+                Quat::from_euler(
+                    glam::EulerRot::XYZ,
+                    -render_info.rotation.x,
+                    -render_info.rotation.y,
+                    -render_info.rotation.z,
+                ),
+                render_info.position,
+            );
+
             model.nodes.iter().for_each(|node| {
                 self.render_node(
                     renderer,
                     &mut render_pass,
                     node,
-                    render_info.position,
-                    render_info.rotation,
+                    transform,
                     // bounding_boxes,
                 );
             });
@@ -137,14 +146,15 @@ impl ModelRenderer {
         renderer: &Renderer,
         render_pass: &mut wgpu::RenderPass<'_>,
         node: &Node,
-        position: Vec3,
-        rotation: Quat,
+        transform: Mat4,
         // bounding_boxes: &mut BoundingBoxes,
     ) {
+        // Apply the node's transform to the incoming transform.
+        let transform = transform * Mat4::from_rotation_translation(node.rotation, node.position);
+
         {
-            let model_matrix = Mat4::from_rotation_translation(rotation, position);
-            let data = model_matrix.to_cols_array_2d();
-            let buffer = renderer.create_uniform_buffer("model_matrix_buffer", data);
+            let buffer =
+                renderer.create_uniform_buffer("model_matrix_buffer", transform.to_cols_array_2d());
             let model_bind_group = renderer.create_uniform_bind_group("model_matrix", &buffer);
 
             render_pass.set_bind_group(1, &model_bind_group, &[]);
@@ -172,8 +182,7 @@ impl ModelRenderer {
                 renderer,
                 render_pass,
                 node,
-                position + node.position,
-                rotation * node.rotation,
+                transform,
                 // bounding_boxes,
             )
         }
@@ -225,14 +234,6 @@ impl ModelRenderer {
         nodes: &[smf::Node],
         parent_name: &str,
     ) -> Vec<Node> {
-        // 180-degree rotation around the Y-axis
-        // let rotation_y_180 = Quat::from_rotation_y(std::f32::consts::PI);
-        // -90-degree rotation around the X-axis
-        // let rotation_x_neg_90 = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-
-        // Combine the rotations
-        // let transform_quat = rotation_x_neg_90 * rotation_y_180;
-
         // Find all the child nodes.
         nodes
             .iter()
@@ -247,12 +248,12 @@ impl ModelRenderer {
                     .map(|mesh| self.smf_mesh_to_mesh(renderer, assets, mesh))
                     .collect(),
                 children: self.children_of(renderer, assets, nodes, &node.name),
-                bounding_boxes: node
+                _bounding_boxes: node
                     .bounding_boxes
                     .iter()
                     .map(|b| BoundingBox {
-                        min: b.min,
-                        max: b.max,
+                        _min: b.min,
+                        _max: b.max,
                     })
                     .collect(),
             })
