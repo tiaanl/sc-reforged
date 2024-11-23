@@ -1,5 +1,5 @@
 use crate::engine::{
-    assets::Assets,
+    assets::AssetLoader,
     renderer::{RenderPipelineConfig, Renderer},
     scene::Scene,
 };
@@ -10,7 +10,7 @@ pub struct LoadingScene {
 }
 
 impl LoadingScene {
-    pub fn new(assets: &Assets, renderer: &Renderer) -> Self {
+    pub fn new(assets: &AssetLoader, renderer: &Renderer) -> Self {
         let image = assets
             .load_jpeg(r"textures/interface/loadscr2.jpg")
             .unwrap();

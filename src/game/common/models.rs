@@ -1,21 +1,17 @@
-use glam::{Mat3, Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec3};
 use shadow_company_tools::smf;
-use tracing::warn;
 
 use crate::engine::{
-    arena::{Arena, Handle},
-    assets::Assets,
+    assets::{texture::TextureBindGroup, Asset, AssetLoader, Assets, Handle},
     mesh::{GpuMesh, RenderPassMeshExt},
     renderer::{RenderPipelineConfig, Renderer},
     shaders::Shaders,
 };
 
-use super::{bounding_boxes::BoundingBoxes, textures::Textures};
-
 #[derive(Debug)]
 pub struct Mesh {
-    pub mesh: GpuMesh,
-    pub texture: Handle<wgpu::BindGroup>,
+    pub mesh: Handle<GpuMesh>,
+    pub texture: Handle<TextureBindGroup>,
 }
 
 #[derive(Debug)]
@@ -38,15 +34,17 @@ pub struct Model {
     pub nodes: Vec<Node>,
 }
 
+impl Asset for Model {}
+
 #[derive(Debug)]
 pub struct RenderInfo {
-    position: Vec3,
-    rotation: Vec3,
-    handle: Handle<Model>,
+    pub position: Vec3,
+    pub rotation: Quat,
+    pub handle: Handle<Model>,
 }
 
 impl RenderInfo {
-    pub fn new(position: Vec3, rotation: Vec3, handle: Handle<Model>) -> Self {
+    pub fn new(position: Vec3, rotation: Quat, handle: Handle<Model>) -> Self {
         Self {
             position,
             rotation,
@@ -55,14 +53,15 @@ impl RenderInfo {
     }
 }
 
-pub struct Models {
+pub struct ModelRenderer {
     render_pipeline: wgpu::RenderPipeline,
 
-    textures: Textures,
-    models: Arena<Model>,
+    textures: Assets<TextureBindGroup>,
+    meshes: Assets<GpuMesh>,
+    models: Assets<Model>,
 }
 
-impl Models {
+impl ModelRenderer {
     pub fn new(renderer: &Renderer, shaders: &mut Shaders) -> Self {
         let shader_module = shaders.create_shader(
             renderer,
@@ -81,27 +80,25 @@ impl Models {
             .bind_group_layout(renderer.texture_bind_group_layout()),
         );
 
-        let textures = Textures::default();
-
-        let models = Arena::default();
-
         Self {
             render_pipeline,
-            textures,
-            models,
+            textures: Assets::default(),
+            meshes: Assets::default(),
+            models: Assets::default(),
         }
     }
 
-    pub fn insert(
+    pub fn add(
         &mut self,
         renderer: &Renderer,
-        assets: &Assets,
+        assets: &AssetLoader,
         smf: &smf::Model,
     ) -> Handle<Model> {
         let model = self
             .smf_to_model(renderer, assets, smf)
             .expect("Could not load model! FIX THIS");
-        self.models.insert(model)
+
+        self.models.add(model)
     }
 
     pub fn render_multiple(
@@ -109,12 +106,12 @@ impl Models {
         renderer: &Renderer,
         encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,
-        textures: &Textures,
         camera_bind_group: &wgpu::BindGroup,
         batch: &[RenderInfo],
-        bounding_boxes: &mut BoundingBoxes,
+        // bounding_boxes: &mut BoundingBoxes,
+        load: wgpu::LoadOp<wgpu::Color>,
     ) {
-        let mut render_pass = Self::create_render_pass(renderer, encoder, output);
+        let mut render_pass = Self::create_render_pass(renderer, encoder, output, load);
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         batch.iter().for_each(|render_info| {
@@ -128,8 +125,8 @@ impl Models {
                     &mut render_pass,
                     node,
                     render_info.position,
-                    Quat::IDENTITY,
-                    bounding_boxes,
+                    render_info.rotation,
+                    // bounding_boxes,
                 );
             });
         });
@@ -142,7 +139,7 @@ impl Models {
         node: &Node,
         position: Vec3,
         rotation: Quat,
-        bounding_boxes: &mut BoundingBoxes,
+        // bounding_boxes: &mut BoundingBoxes,
     ) {
         {
             let model_matrix = Mat4::from_rotation_translation(rotation, position);
@@ -153,17 +150,21 @@ impl Models {
             render_pass.set_bind_group(1, &model_bind_group, &[]);
 
             node.meshes.iter().for_each(|mesh| {
-                if let Some(texture_bind_group) = self.textures.get(&mesh.texture) {
-                    render_pass.set_bind_group(2, texture_bind_group, &[]);
-                    render_pass.draw_mesh(&mesh.mesh);
-                } else {
-                    warn!("Could not find model texture!");
-                }
+                let Some(texture_bind_group) = self.textures.get(&mesh.texture) else {
+                    return;
+                };
+
+                let Some(gpu_mesh) = self.meshes.get(&mesh.mesh) else {
+                    return;
+                };
+
+                render_pass.set_bind_group(2, &texture_bind_group.0, &[]);
+                render_pass.draw_mesh(gpu_mesh);
             });
 
-            for b in node.bounding_boxes.iter() {
-                bounding_boxes.insert(position, rotation, b.min, b.max);
-            }
+            // for b in node.bounding_boxes.iter() {
+            //     bounding_boxes.insert(position, rotation, b.min, b.max);
+            // }
         }
 
         for node in node.children.iter() {
@@ -173,7 +174,7 @@ impl Models {
                 node,
                 position + node.position,
                 rotation * node.rotation,
-                bounding_boxes,
+                // bounding_boxes,
             )
         }
     }
@@ -181,31 +182,32 @@ impl Models {
     fn create_render_pass<'encoder>(
         renderer: &Renderer,
         encoder: &'encoder mut wgpu::CommandEncoder,
-        output: &wgpu::TextureView,
+        view: &wgpu::TextureView,
+        load: wgpu::LoadOp<wgpu::Color>,
     ) -> wgpu::RenderPass<'encoder> {
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("model_render_pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: output,
+                view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                    load,
                     store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: renderer
-                .render_pass_depth_stencil_attachment(wgpu::LoadOp::Load),
+                .render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
             timestamp_writes: None,
             occlusion_query_set: None,
         })
     }
 }
 
-impl Models {
+impl ModelRenderer {
     fn smf_to_model(
         &mut self,
         renderer: &Renderer,
-        assets: &Assets,
+        assets: &AssetLoader,
         smf: &smf::Model,
     ) -> Option<Model> {
         let nodes = self.children_of(renderer, assets, &smf.nodes, "<root>");
@@ -219,17 +221,17 @@ impl Models {
     fn children_of(
         &mut self,
         renderer: &Renderer,
-        assets: &Assets,
+        assets: &AssetLoader,
         nodes: &[smf::Node],
         parent_name: &str,
     ) -> Vec<Node> {
         // 180-degree rotation around the Y-axis
-        let rotation_y_180 = Quat::from_rotation_y(std::f32::consts::PI);
+        // let rotation_y_180 = Quat::from_rotation_y(std::f32::consts::PI);
         // -90-degree rotation around the X-axis
-        let rotation_x_neg_90 = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+        // let rotation_x_neg_90 = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
 
         // Combine the rotations
-        let transform_quat = rotation_x_neg_90 * rotation_y_180;
+        // let transform_quat = rotation_x_neg_90 * rotation_y_180;
 
         // Find all the child nodes.
         nodes
@@ -237,7 +239,8 @@ impl Models {
             .filter(|node| node.parent_name == parent_name)
             .map(|node| Node {
                 position: node.position,
-                rotation: transform_quat * node.rotation,
+                // rotation: transform_quat * node.rotation,
+                rotation: Quat::IDENTITY,
                 meshes: node
                     .meshes
                     .iter()
@@ -245,7 +248,7 @@ impl Models {
                     .collect(),
                 children: self.children_of(renderer, assets, nodes, &node.name),
                 bounding_boxes: node
-                    .collision_boxes
+                    .bounding_boxes
                     .iter()
                     .map(|b| BoundingBox {
                         min: b.min,
@@ -256,7 +259,12 @@ impl Models {
             .collect()
     }
 
-    fn smf_mesh_to_mesh(&mut self, renderer: &Renderer, assets: &Assets, mesh: &smf::Mesh) -> Mesh {
+    fn smf_mesh_to_mesh(
+        &mut self,
+        renderer: &Renderer,
+        assets: &AssetLoader,
+        mesh: &smf::Mesh,
+    ) -> Mesh {
         let vertices = mesh
             .vertices
             .iter()
@@ -279,39 +287,30 @@ impl Models {
             .join("shared")
             .join(&mesh.texture_name);
 
-        let texture_handle = self
-            .textures
-            .get_by_path_or_insert(texture_path, |path| {
-                let image = match assets.load_bmp(path) {
-                    Ok(image) => image,
-                    Err(e) => {
-                        warn!("Could not load texture! {} {:?}", path.display(), e);
-                        return None;
-                    }
-                };
-                let texture_view = renderer.create_texture_view(path.to_str().unwrap(), image);
+        // TODO: Avoid uploding duplicate textures to the GPU.
 
-                // TODO: Reuse a sampler.
-                let sampler = renderer.create_sampler(
-                    "texture_sampler",
-                    wgpu::AddressMode::ClampToEdge,
-                    wgpu::FilterMode::Linear,
-                    wgpu::FilterMode::Linear,
-                );
+        let image = assets
+            .load_bmp(&texture_path)
+            .expect("Could not load .bmp file.");
+        let texture_view = renderer.create_texture_view(texture_path.to_str().unwrap(), image);
 
-                let bind_group = renderer.create_texture_bind_group(
-                    path.to_str().unwrap(),
-                    &texture_view,
-                    &sampler,
-                );
+        // TODO: Reuse samplers.
+        let sampler = renderer.create_sampler(
+            "texture_sampler",
+            wgpu::AddressMode::ClampToEdge,
+            wgpu::FilterMode::Linear,
+            wgpu::FilterMode::Linear,
+        );
 
-                Some(bind_group)
-            })
-            .expect("Could not create texture");
+        let bind_group = renderer.create_texture_bind_group(
+            texture_path.to_str().unwrap(),
+            &texture_view,
+            &sampler,
+        );
 
-        Mesh {
-            mesh: gpu_mesh,
-            texture: texture_handle,
-        }
+        let mesh = self.meshes.add(gpu_mesh);
+        let texture = self.textures.add(bind_group);
+
+        Mesh { mesh, texture }
     }
 }

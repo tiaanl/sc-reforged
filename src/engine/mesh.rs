@@ -1,6 +1,9 @@
 use glam::{Vec2, Vec3};
 
-use super::renderer::{BufferLayout, Renderer};
+use super::{
+    assets::Asset,
+    renderer::{BufferLayout, Renderer},
+};
 
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]
@@ -39,6 +42,8 @@ pub struct GpuMesh {
     index_buffer: wgpu::Buffer,
     index_count: u32,
 }
+
+impl Asset for GpuMesh {}
 
 impl std::fmt::Debug for GpuMesh {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

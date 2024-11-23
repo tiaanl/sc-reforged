@@ -1,23 +1,20 @@
-use glam::Vec3;
+use glam::{Quat, Vec3};
 
-use crate::engine::{arena::Handle, renderer::Renderer, shaders::Shaders};
-
-use super::{
-    bounding_boxes::BoundingBoxes,
-    models::{Model, Models, RenderInfo},
-    textures::Textures,
+use crate::{
+    engine::{assets::Handle, renderer::Renderer, shaders::Shaders},
+    game::models::{Model, ModelRenderer, RenderInfo},
 };
 
 /// Represents an object inside the game world.
 #[derive(Debug)]
 pub struct Object {
     pub position: Vec3,
-    pub rotation: Vec3,
+    pub rotation: Quat,
     pub model_handle: Handle<Model>,
 }
 
 impl Object {
-    pub fn new(position: Vec3, rotation: Vec3, model: Handle<Model>) -> Self {
+    pub fn new(position: Vec3, rotation: Quat, model: Handle<Model>) -> Self {
         Self {
             position,
             rotation,
@@ -27,18 +24,15 @@ impl Object {
 }
 
 pub struct Objects {
-    pub models: Models,
-    pub textures: Textures,
+    pub model_renderer: ModelRenderer,
     pub objects: Vec<Object>,
 }
 
 impl Objects {
     pub fn new(renderer: &Renderer, shaders: &mut Shaders) -> Self {
-        let textures = Textures::default();
-        let models = Models::new(renderer, shaders);
+        let models = ModelRenderer::new(renderer, shaders);
         Self {
-            models,
-            textures,
+            model_renderer: models,
             objects: vec![],
         }
     }
@@ -53,7 +47,7 @@ impl Objects {
         encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
-        bounding_boxes: &mut BoundingBoxes,
+        // bounding_boxes: &mut BoundingBoxes,
     ) {
         let handles = self
             .objects
@@ -68,14 +62,14 @@ impl Objects {
             .collect::<Vec<_>>();
 
         if !handles.is_empty() {
-            self.models.render_multiple(
+            self.model_renderer.render_multiple(
                 renderer,
                 encoder,
                 output,
-                &self.textures,
                 camera_bind_group,
                 &handles,
-                bounding_boxes,
+                // bounding_boxes,
+                wgpu::LoadOp::Load,
             );
         }
     }

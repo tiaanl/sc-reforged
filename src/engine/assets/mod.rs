@@ -1,7 +1,10 @@
+use ahash::HashMap;
 use shadow_company_tools::smf;
 
 use super::vfs::{FileSystemError, VirtualFileSystem};
 use std::path::Path;
+
+pub mod texture;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AssetError {
@@ -15,11 +18,11 @@ pub enum AssetError {
     ImageLoadError(#[from] image::ImageError),
 }
 
-pub struct Assets {
+pub struct AssetLoader {
     fs: VirtualFileSystem,
 }
 
-impl Assets {
+impl AssetLoader {
     pub fn new(data_dir: impl AsRef<Path>) -> Self {
         Self {
             fs: VirtualFileSystem::new(data_dir),
@@ -56,5 +59,55 @@ impl Assets {
         let mut cursor = std::io::Cursor::new(data);
         smf::Model::read(&mut cursor)
             .map_err(|err| AssetError::FileSystemError(FileSystemError::Io(err)))
+    }
+}
+
+pub trait Asset {}
+
+pub struct Handle<A: Asset>(usize, std::marker::PhantomData<A>);
+
+impl<A: Asset> Clone for Handle<A> {
+    fn clone(&self) -> Self {
+        Self(self.0, std::marker::PhantomData)
+    }
+}
+
+impl<A: Asset> std::fmt::Debug for Handle<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Handle").field(&self.0).finish()
+    }
+}
+
+pub struct Assets<A: Asset> {
+    next_id: usize,
+    storage: HashMap<usize, A>,
+}
+
+impl<A: Asset> Default for Assets<A> {
+    fn default() -> Self {
+        Self {
+            next_id: 0,
+            storage: HashMap::default(),
+        }
+    }
+}
+
+impl<A: Asset> Assets<A> {
+    pub fn add(&mut self, asset: impl Into<A>) -> Handle<A> {
+        let id = self.next_id;
+        self.next_id += 1;
+
+        let _result = self.storage.insert(id, asset.into());
+        assert!(_result.is_none(), "Killed an existing asset!");
+
+        Handle(id, std::marker::PhantomData)
+    }
+
+    pub fn get(&self, handle: &Handle<A>) -> Option<&A> {
+        self.storage.get(&handle.0)
+    }
+
+    pub fn remove(&mut self, handle: Handle<A>) {
+        self.storage.remove(&handle.0);
     }
 }

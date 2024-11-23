@@ -3,12 +3,11 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 use clap::Parser;
 use egui::Widget;
 use engine::{
-    assets::Assets, egui_integration::EguiIntegration, renderer::Renderer, scene::Scene,
-    shaders::Shaders,
+    assets::AssetLoader, egui_integration::EguiIntegration, input, renderer::Renderer, scene::Scene,
 };
 use game::{
     config::{read_compaign_defs, CampaignDef},
-    scenes::world::WorldScene,
+    scenes::{model_viewer::ModelViewer, world::WorldScene},
 };
 use tracing::{error, info, warn};
 
@@ -33,7 +32,10 @@ enum App {
         /// egui integration.
         egui_integration: engine::egui_integration::EguiIntegration,
         /// The main way of loading assets from the /data directory.
-        _assets: Assets,
+        _assets: AssetLoader,
+
+        input: input::InputState,
+
         // The instant that the last frame started to render.
         last_frame_time: Instant,
         /// The scene we are currently rendering to the screen.
@@ -63,7 +65,7 @@ impl winit::application::ApplicationHandler for App {
                 ));
 
                 let attributes = winit::window::WindowAttributes::default()
-                    .with_title("Shadow Company - Left for Dead (granite)")
+                    .with_title("Shadow Company - Reforged")
                     // .with_inner_size(winit::dpi::LogicalSize::new(640, 480))
                     .with_inner_size(winit::dpi::LogicalSize::new(1280, 800))
                     .with_position(position)
@@ -84,7 +86,7 @@ impl winit::application::ApplicationHandler for App {
 
                 let egui_integration = EguiIntegration::new(event_loop, &renderer);
 
-                let assets = Assets::new(&opts.path);
+                let assets = AssetLoader::new(&opts.path);
 
                 let s = assets.load_config_file("config/campaign_defs.txt").unwrap();
                 let campaign_defs = read_compaign_defs(&s);
@@ -95,9 +97,13 @@ impl winit::application::ApplicationHandler for App {
                     .unwrap();
 
                 let scene: Box<dyn Scene> = if false {
+                    // LoadingScene
+
                     use game::scenes::loading::LoadingScene;
                     Box::new(LoadingScene::new(&assets, &renderer))
-                } else {
+                } else if true {
+                    // WorldScene
+
                     Box::new(match WorldScene::new(&assets, &renderer, campaign_def) {
                         Ok(scene) => scene,
                         Err(err) => {
@@ -105,6 +111,23 @@ impl winit::application::ApplicationHandler for App {
                             panic!();
                         }
                     })
+                } else {
+                    // ModelViewer
+
+                    Box::new(
+                        match ModelViewer::new(
+                            &assets,
+                            &renderer,
+                            r"models\alvhqd-hummer\alvhqd-hummer.smf", // r"models\AlVhAp-Cessna\AlVhAp-Cessna.smf",
+                                                                       // r"models\agsths-metalshack\agsths-metalshack.smf",
+                        ) {
+                            Ok(scene) => scene,
+                            Err(err) => {
+                                error!("Could not create model viewer scene! - {}", err);
+                                panic!();
+                            }
+                        },
+                    )
                 };
 
                 info!("Application initialized!");
@@ -114,6 +137,7 @@ impl winit::application::ApplicationHandler for App {
                     renderer,
                     egui_integration,
                     _assets: assets,
+                    input: input::InputState::default(),
                     last_frame_time: Instant::now(),
                     _campaign_defs: campaign_defs,
                     scene,
@@ -141,6 +165,7 @@ impl winit::application::ApplicationHandler for App {
                 window,
                 renderer,
                 egui_integration,
+                input,
                 last_frame_time,
                 scene,
                 ..
@@ -167,30 +192,6 @@ impl winit::application::ApplicationHandler for App {
                         window.request_redraw();
                     }
 
-                    WindowEvent::KeyboardInput { event, .. } => {
-                        if let winit::keyboard::PhysicalKey::Code(key) = event.physical_key {
-                            if !event.repeat {
-                                if event.state == winit::event::ElementState::Pressed {
-                                    scene.on_key_pressed(key);
-                                } else {
-                                    scene.on_key_released(key);
-                                }
-                            }
-                        }
-                    }
-
-                    WindowEvent::MouseInput { state, button, .. } => {
-                        if state == winit::event::ElementState::Pressed {
-                            scene.on_mouse_pressed(button);
-                        } else {
-                            scene.on_mouse_released(button);
-                        }
-                    }
-
-                    WindowEvent::CursorMoved { position, .. } => {
-                        scene.on_mouse_moved(glam::vec2(position.x as f32, position.y as f32));
-                    }
-
                     WindowEvent::RedrawRequested => {
                         let now = Instant::now();
                         let last_frame_duration = now - *last_frame_time;
@@ -208,11 +209,17 @@ impl winit::application::ApplicationHandler for App {
                         );
 
                         {
-                            scene.update(last_frame_duration.as_secs_f32() * 60.0);
+                            let delta_time = last_frame_duration.as_secs_f32() * 60.0;
+
+                            scene.on_input(input, delta_time);
+
+                            scene.update(delta_time);
 
                             scene.begin_frame();
                             scene.render(&renderer, &mut encoder, &view);
                             scene.end_frame();
+
+                            input.reset_current_frame();
                         }
 
                         // Render egui if it requires a repaint.
@@ -249,7 +256,7 @@ impl winit::application::ApplicationHandler for App {
                         window.request_redraw();
                     }
 
-                    _ => {}
+                    _ => input.handle_window_event(event),
                 }
             }
         }

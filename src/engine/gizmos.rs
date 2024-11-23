@@ -63,7 +63,7 @@ impl GizmosRenderer {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
-        vertices: &Vec<GizmoVertex>,
+        vertices: &[GizmoVertex],
     ) {
         let vertex_buffer = renderer.create_vertex_buffer("gizmos_vertex_buffer", vertices);
 

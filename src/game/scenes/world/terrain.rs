@@ -6,7 +6,7 @@ use tracing::info;
 
 use crate::{
     engine::{
-        assets::{AssetError, Assets},
+        assets::{AssetError, AssetLoader},
         gizmos::GizmoVertex,
         renderer::{BufferLayout, RenderPipelineConfig, Renderer},
         shaders::Shaders,
@@ -156,7 +156,7 @@ impl BufferLayout for Vertex {
 
 impl Terrain {
     pub fn new(
-        assets: &Assets,
+        assets: &AssetLoader,
         renderer: &Renderer,
         shaders: &mut Shaders,
         campaign_def: &CampaignDef,
