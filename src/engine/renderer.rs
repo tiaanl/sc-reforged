@@ -327,11 +327,7 @@ impl Renderer {
             })
     }
 
-    pub fn create_texture_view(
-        &self,
-        label: &str,
-        image: image::DynamicImage,
-    ) -> wgpu::TextureView {
+    pub fn create_texture_view(&self, label: &str, image: image::RgbaImage) -> wgpu::TextureView {
         let (width, height) = (image.width(), image.height());
 
         let size = wgpu::Extent3d {
@@ -339,8 +335,6 @@ impl Renderer {
             height,
             depth_or_array_layers: 1,
         };
-
-        let data = image.into_rgba8();
 
         let texture = self.device.create_texture_with_data(
             &self.queue,
@@ -355,7 +349,7 @@ impl Renderer {
                 view_formats: &[],
             },
             wgpu::util::TextureDataOrder::LayerMajor,
-            data.as_ref(),
+            image.as_ref(),
         );
 
         texture.create_view(&wgpu::TextureViewDescriptor {

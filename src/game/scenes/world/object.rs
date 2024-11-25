@@ -5,20 +5,40 @@ use crate::{
     game::models::{Model, ModelRenderer, RenderInfo},
 };
 
+/// Data only needed for a specific type of object.
+#[derive(Debug)]
+pub enum ObjectType {
+    _4x4,
+    Scenery,
+    SceneryBush,
+    SceneryLit,
+    SceneryStripLight,
+    Structure,
+    StructureFence,
+    StructureSwingDoor,
+}
+
 /// Represents an object inside the game world.
 #[derive(Debug)]
 pub struct Object {
     pub position: Vec3,
     pub rotation: Vec3,
     pub model_handle: Handle<Model>,
+    pub _object_type: ObjectType,
 }
 
 impl Object {
-    pub fn new(position: Vec3, rotation: Vec3, model: Handle<Model>) -> Self {
+    pub fn new(
+        position: Vec3,
+        rotation: Vec3,
+        model_handle: Handle<Model>,
+        object_type: ObjectType,
+    ) -> Self {
         Self {
             position,
             rotation,
-            model_handle: model,
+            model_handle,
+            _object_type: object_type,
         }
     }
 }

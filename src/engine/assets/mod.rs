@@ -33,21 +33,40 @@ impl AssetLoader {
         Ok(self.fs.load(path)?)
     }
 
-    pub fn load_bmp(&self, path: impl AsRef<Path>) -> Result<image::DynamicImage, AssetError> {
-        let data = self.load_raw(path.as_ref())?;
-        Ok(image::load_from_memory_with_format(
-            data.as_ref(),
-            image::ImageFormat::Bmp,
-        )?)
+    pub fn load_bmp(&self, path: impl AsRef<Path>) -> Result<image::RgbaImage, AssetError> {
+        // Check if there exists a .raw file with alpha data.
+        // let raw_data = self.load_raw(path.as_ref().with_extension("raw")).ok();
+        // shadow_company_tools::images::load_raw_file(std::io::Cursor::new(raw_data), width, height)
+
+        let bmp = shadow_company_tools::images::load_bmp_file(&mut std::io::Cursor::new(
+            self.load_raw(path.as_ref())?,
+        ))?;
+        let raw = if let Some(raw_data) = self.load_raw(path.as_ref().with_extension("raw")).ok() {
+            Some(shadow_company_tools::images::load_raw_file(
+                &mut std::io::Cursor::new(raw_data),
+                bmp.width(),
+                bmp.height(),
+            )?)
+        } else {
+            None
+        };
+
+        if let Some(raw) = raw {
+            Ok(shadow_company_tools::images::combine_bmp_and_raw(
+                &bmp, &raw,
+            ))
+        } else {
+            Ok(image::DynamicImage::from(bmp).into_rgba8())
+        }
     }
 
-    pub fn load_jpeg(&self, path: impl AsRef<Path>) -> Result<image::DynamicImage, AssetError> {
+    pub fn load_jpeg(&self, path: impl AsRef<Path>) -> Result<image::RgbaImage, AssetError> {
         let data = self.load_raw(path.as_ref())?;
 
-        Ok(image::load_from_memory_with_format(
-            data.as_ref(),
-            image::ImageFormat::Jpeg,
-        )?)
+        Ok(
+            image::load_from_memory_with_format(data.as_ref(), image::ImageFormat::Jpeg)?
+                .into_rgba8(),
+        )
     }
 
     pub fn load_config_file(&self, path: impl AsRef<Path>) -> Result<String, AssetError> {

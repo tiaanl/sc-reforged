@@ -75,6 +75,7 @@ impl ModelRenderer {
                 "model_renderer",
                 &shader_module,
             )
+            .blend_state(wgpu::BlendState::ALPHA_BLENDING)
             .bind_group_layout(renderer.uniform_bind_group_layout())
             .bind_group_layout(renderer.uniform_bind_group_layout())
             .bind_group_layout(renderer.texture_bind_group_layout()),

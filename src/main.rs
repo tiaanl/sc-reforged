@@ -118,8 +118,9 @@ impl winit::application::ApplicationHandler for App {
                         match ModelViewer::new(
                             &assets,
                             &renderer,
-                            r"models\alvhqd-hummer\alvhqd-hummer.smf", // r"models\AlVhAp-Cessna\AlVhAp-Cessna.smf",
-                                                                       // r"models\agsths-metalshack\agsths-metalshack.smf",
+                            r"models\alvhqd-hummer\alvhqd-hummer.smf",
+                            // r"models\AlVhAp-Cessna\AlVhAp-Cessna.smf",
+                            // r"models\agsths-metalshack\agsths-metalshack.smf",
                         ) {
                             Ok(scene) => scene,
                             Err(err) => {

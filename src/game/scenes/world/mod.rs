@@ -13,7 +13,7 @@ use crate::{
 use bounding_boxes::BoundingBoxes;
 use glam::{vec3, Quat, Vec3, Vec4};
 use terrain::*;
-use tracing::{error, info};
+use tracing::error;
 
 mod bounding_boxes;
 mod object;
@@ -74,8 +74,6 @@ impl WorldScene {
                         .join(&object.name)
                         .with_extension("smf");
 
-                    info!("Loading mode: {}", &path.display());
-
                     let smf = match assets.load_smf(&path) {
                         Ok(smf) => smf,
                         Err(err) => {
@@ -86,10 +84,23 @@ impl WorldScene {
 
                     let model_handle = objects.model_renderer.add(renderer, assets, &smf);
 
+                    let object_type = match object.typ.as_str() {
+                        "4x4" => object::ObjectType::_4x4,
+                        "Scenery_Bush" => object::ObjectType::SceneryBush,
+                        "Scenery_Lit" => object::ObjectType::SceneryLit,
+                        "Scenery_Strip_Light" => object::ObjectType::SceneryStripLight,
+                        "Scenery" => object::ObjectType::Scenery,
+                        "Structure_Fence" => object::ObjectType::StructureFence,
+                        "Structure_Swing_Door" => object::ObjectType::StructureSwingDoor,
+                        "Structure" => object::ObjectType::Structure,
+                        _ => panic!("Invalid object type: {}", object.typ),
+                    };
+
                     Ok(object::Object::new(
                         object.position,
                         object.rotation,
                         model_handle,
+                        object_type,
                     ))
                 })
                 .collect::<Vec<_>>();

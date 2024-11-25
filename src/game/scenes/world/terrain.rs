@@ -184,8 +184,8 @@ impl Terrain {
             let path = format!("trnhigh/{}.jpg", texture_map_base_name);
             info!("Loading high detail terrain texture: {path}");
 
-            let image = assets.load_jpeg(path)?;
-            let texture_view = renderer.create_texture_view("terrain_texture", image);
+            let texture_view =
+                renderer.create_texture_view("terrain_texture", assets.load_jpeg(path)?);
 
             renderer.create_texture_bind_group(
                 "terrain_texture_bind_group",
