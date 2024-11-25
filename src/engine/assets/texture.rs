@@ -12,6 +12,7 @@ impl From<wgpu::TextureView> for TextureView {
 
 impl Asset for TextureView {}
 
+#[allow(unused)]
 pub struct TextureBindGroup(pub wgpu::BindGroup);
 
 impl Asset for TextureBindGroup {}

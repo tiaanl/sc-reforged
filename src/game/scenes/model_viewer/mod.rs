@@ -13,7 +13,7 @@ use crate::{
     },
     game::{
         camera::{self, CameraController},
-        models::{Model, ModelRenderer, RenderInfo},
+        models::{Model, ModelRenderer, RenderJob},
     },
 };
 
@@ -119,7 +119,7 @@ impl Scene for ModelViewer {
         let matrices = self.camera.calculate_matrices();
         self.gpu_camera.upload_matrices(renderer, matrices);
 
-        let render_info = RenderInfo {
+        let render_info = RenderJob {
             position: self.model_position,
             rotation: self.model_rotation,
             handle: self.model_handle.clone(),

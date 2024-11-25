@@ -2,7 +2,7 @@ use glam::Vec3;
 
 use crate::{
     engine::{assets::Handle, renderer::Renderer, shaders::Shaders},
-    game::models::{Model, ModelRenderer, RenderInfo},
+    game::models::{Model, ModelRenderer, RenderJob},
 };
 
 /// Data only needed for a specific type of object.
@@ -73,7 +73,7 @@ impl Objects {
             .objects
             .iter()
             .map(|object| {
-                RenderInfo::new(
+                RenderJob::new(
                     object.position,
                     object.rotation,
                     object.model_handle.clone(),

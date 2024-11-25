@@ -15,18 +15,29 @@ pub struct Mesh {
 }
 
 #[derive(Debug)]
-pub struct BoundingBox {
-    _min: Vec3,
-    _max: Vec3,
+pub struct NodeTransform {
+    pub translation: Vec3,
+    pub rotation: Quat,
+}
+
+impl NodeTransform {
+    fn new(translation: Vec3, rotation: Quat) -> Self {
+        Self {
+            translation,
+            rotation,
+        }
+    }
+
+    fn to_mat4(&self) -> Mat4 {
+        Mat4::from_rotation_translation(self.rotation, self.translation)
+    }
 }
 
 #[derive(Debug)]
 pub struct Node {
-    pub position: Vec3,
-    pub rotation: Quat,
+    pub transform: NodeTransform,
     pub meshes: Vec<Mesh>,
     pub children: Vec<Node>,
-    pub _bounding_boxes: Vec<BoundingBox>,
 }
 
 #[derive(Debug)]
@@ -37,13 +48,13 @@ pub struct Model {
 impl Asset for Model {}
 
 #[derive(Debug)]
-pub struct RenderInfo {
+pub struct RenderJob {
     pub position: Vec3,
     pub rotation: Vec3,
     pub handle: Handle<Model>,
 }
 
-impl RenderInfo {
+impl RenderJob {
     pub fn new(position: Vec3, rotation: Vec3, handle: Handle<Model>) -> Self {
         Self {
             position,
@@ -103,7 +114,7 @@ impl ModelRenderer {
         encoder: &mut wgpu::CommandEncoder,
         output: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
-        batch: &[RenderInfo],
+        batch: &[RenderJob],
         // bounding_boxes: &mut BoundingBoxes,
         load: wgpu::LoadOp<wgpu::Color>,
     ) {
@@ -146,7 +157,7 @@ impl ModelRenderer {
         // bounding_boxes: &mut BoundingBoxes,
     ) {
         // Apply the node's transform to the incoming transform.
-        let transform = transform * Mat4::from_rotation_translation(node.rotation, node.position);
+        let transform = transform * node.transform.to_mat4();
 
         {
             let buffer =
@@ -159,10 +170,6 @@ impl ModelRenderer {
                 render_pass.set_bind_group(2, &mesh.texture, &[]);
                 render_pass.draw_mesh(&mesh.gpu_mesh);
             });
-
-            // for b in node.bounding_boxes.iter() {
-            //     bounding_boxes.insert(position, rotation, b.min, b.max);
-            // }
         }
 
         for node in node.children.iter() {
@@ -227,23 +234,17 @@ impl ModelRenderer {
             .iter()
             .filter(|node| node.parent_name == parent_name)
             .map(|node| Node {
-                position: node.position,
-                // rotation: transform_quat * node.rotation,
-                rotation: Quat::IDENTITY,
+                transform: NodeTransform::new(
+                    node.position,
+                    // TODO: Why is this IDENTITY?
+                    Quat::IDENTITY,
+                ),
                 meshes: node
                     .meshes
                     .iter()
                     .map(|mesh| self.smf_mesh_to_mesh(renderer, assets, mesh))
                     .collect(),
                 children: self.children_of(renderer, assets, nodes, &node.name),
-                _bounding_boxes: node
-                    .bounding_boxes
-                    .iter()
-                    .map(|b| BoundingBox {
-                        _min: b.min,
-                        _max: b.max,
-                    })
-                    .collect(),
             })
             .collect()
     }
