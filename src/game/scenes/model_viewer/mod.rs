@@ -55,6 +55,7 @@ impl ModelViewer {
             ..Default::default()
         };
         let camera_controller = camera::ArcBacllCameraController {
+            distance: 1_500.0,
             mouse_sensitivity: MOUSE_SENSITIVITY,
             ..Default::default()
         };
@@ -230,9 +231,9 @@ impl Scene for ModelViewer {
                 ui.end_row();
 
                 ui.label("Rotation");
-                ui.add(egui::DragValue::new(&mut self.model_rotation.x).speed(0.1));
-                ui.add(egui::DragValue::new(&mut self.model_rotation.y).speed(0.1));
-                ui.add(egui::DragValue::new(&mut self.model_rotation.z).speed(0.1));
+                ui.add(egui::DragValue::new(&mut self.model_rotation.x).speed(0.01));
+                ui.add(egui::DragValue::new(&mut self.model_rotation.y).speed(0.01));
+                ui.add(egui::DragValue::new(&mut self.model_rotation.z).speed(0.01));
                 ui.end_row();
             });
         });

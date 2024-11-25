@@ -101,7 +101,7 @@ impl winit::application::ApplicationHandler for App {
 
                     use game::scenes::loading::LoadingScene;
                     Box::new(LoadingScene::new(&assets, &renderer))
-                } else if true {
+                } else if false {
                     // WorldScene
 
                     Box::new(match WorldScene::new(&assets, &renderer, campaign_def) {
