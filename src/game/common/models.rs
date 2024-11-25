@@ -2,7 +2,7 @@ use glam::{Mat4, Quat, Vec3};
 use shadow_company_tools::smf;
 
 use crate::engine::{
-    assets::{texture::TextureBindGroup, Asset, AssetLoader, Assets, Handle},
+    assets::{Asset, AssetLoader, Assets, Handle},
     mesh::{GpuMesh, RenderPassMeshExt},
     renderer::{RenderPipelineConfig, Renderer},
     shaders::Shaders,
@@ -10,8 +10,8 @@ use crate::engine::{
 
 #[derive(Debug)]
 pub struct Mesh {
-    pub mesh: Handle<GpuMesh>,
-    pub texture: Handle<TextureBindGroup>,
+    pub gpu_mesh: GpuMesh,
+    pub texture: wgpu::BindGroup,
 }
 
 #[derive(Debug)]
@@ -55,9 +55,6 @@ impl RenderInfo {
 
 pub struct ModelRenderer {
     render_pipeline: wgpu::RenderPipeline,
-
-    textures: Assets<TextureBindGroup>,
-    meshes: Assets<GpuMesh>,
     models: Assets<Model>,
 }
 
@@ -83,8 +80,6 @@ impl ModelRenderer {
 
         Self {
             render_pipeline,
-            textures: Assets::default(),
-            meshes: Assets::default(),
             models: Assets::default(),
         }
     }
@@ -161,16 +156,8 @@ impl ModelRenderer {
             render_pass.set_bind_group(1, &model_bind_group, &[]);
 
             node.meshes.iter().for_each(|mesh| {
-                let Some(texture_bind_group) = self.textures.get(&mesh.texture) else {
-                    return;
-                };
-
-                let Some(gpu_mesh) = self.meshes.get(&mesh.mesh) else {
-                    return;
-                };
-
-                render_pass.set_bind_group(2, &texture_bind_group.0, &[]);
-                render_pass.draw_mesh(gpu_mesh);
+                render_pass.set_bind_group(2, &mesh.texture, &[]);
+                render_pass.draw_mesh(&mesh.gpu_mesh);
             });
 
             // for b in node.bounding_boxes.iter() {
@@ -310,9 +297,9 @@ impl ModelRenderer {
             &sampler,
         );
 
-        let mesh = self.meshes.add(gpu_mesh);
-        let texture = self.textures.add(bind_group);
-
-        Mesh { mesh, texture }
+        Mesh {
+            gpu_mesh,
+            texture: bind_group,
+        }
     }
 }
