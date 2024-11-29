@@ -16,6 +16,9 @@ pub enum AssetError {
 
     #[error("Image load error: {0}")]
     ImageLoadError(#[from] image::ImageError),
+
+    #[error("{0}")]
+    Custom(String),
 }
 
 pub struct AssetLoader {

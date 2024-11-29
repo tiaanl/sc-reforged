@@ -1,6 +1,8 @@
 use core::f32;
+use std::f32::consts::{FRAC_PI_2, PI};
 
-use glam::{Quat, Vec3, Vec4};
+use glam::{Quat, Vec2, Vec3, Vec4};
+use shadow_company_tools::smf;
 
 use crate::{
     engine::{
@@ -33,6 +35,81 @@ pub struct ModelViewer {
     gpu_camera: camera::GpuCamera,
 }
 
+fn create_cube_smf() -> smf::Model {
+    fn create_node(size: f32, position: Vec3, rotation: Quat) -> smf::Node {
+        let half_size = size * 0.5;
+        let mesh = smf::Mesh {
+            name: "Cube".to_owned(),
+            texture_name: "yelcrane_ck.bmp".to_owned(),
+            vertices: vec![
+                smf::Vertex {
+                    index: 0,
+                    position: Vec3::new(-half_size, -half_size, 0.0),
+                    tex_coord: Vec2::new(0.0, 0.0),
+                    normal: Vec3::Z,
+                },
+                smf::Vertex {
+                    index: 1,
+                    position: Vec3::new(half_size, -half_size, 0.0),
+                    tex_coord: Vec2::new(1.0, 0.0),
+                    normal: Vec3::Z,
+                },
+                smf::Vertex {
+                    index: 2,
+                    position: Vec3::new(half_size, half_size, 0.0),
+                    tex_coord: Vec2::new(1.0, 1.0),
+                    normal: Vec3::Z,
+                },
+                smf::Vertex {
+                    index: 3,
+                    position: Vec3::new(-half_size, half_size, 0.0),
+                    tex_coord: Vec2::new(0.0, 1.0),
+                    normal: Vec3::Z,
+                },
+            ],
+            faces: vec![
+                smf::Face {
+                    index: 0,
+                    indices: [0, 1, 2],
+                },
+                smf::Face {
+                    index: 0,
+                    indices: [2, 3, 0],
+                },
+            ],
+        };
+
+        smf::Node {
+            name: "Cube".to_owned(),
+            parent_name: "<root>".to_owned(),
+            tree_id: 0,
+            position,
+            rotation,
+            meshes: vec![mesh],
+            bounding_boxes: vec![],
+        }
+    }
+
+    let top = create_node(100.0, Vec3::new(0.0, 0.0, 50.0), Quat::IDENTITY);
+    let bottom = create_node(100.0, Vec3::new(0.0, 0.0, -50.0), Quat::from_rotation_x(PI));
+    let right = create_node(
+        100.0,
+        Vec3::new(50.0, 0.0, 0.0),
+        Quat::from_rotation_y(FRAC_PI_2),
+    );
+    let left = create_node(
+        100.0,
+        Vec3::new(-50.0, 0.0, 0.0),
+        Quat::from_rotation_y(-FRAC_PI_2),
+    );
+
+    smf::Model {
+        name: "cube".to_owned(),
+        scale: Vec3::ZERO,
+        nodes: vec![top, bottom, right, left],
+    }
+}
+
 impl ModelViewer {
     pub fn new(
         assets: &AssetLoader,
@@ -43,6 +120,10 @@ impl ModelViewer {
         camera::register_camera_shader(&mut shaders);
 
         let mut model_renderer = ModelRenderer::new(renderer, &mut shaders);
+
+        // let cube = create_cube_smf();
+        // let model_handle = model_renderer.add(renderer, assets, &cube);
+
         let model_handle = model_renderer.add(renderer, assets, &assets.load_smf(path)?);
 
         let gizmos = GizmosRenderer::new(renderer);

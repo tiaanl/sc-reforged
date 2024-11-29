@@ -2,12 +2,16 @@
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
-@group(1) @binding(0) var<uniform> u_model: mat4x4<f32>;
+struct Transforms {
+    transforms: array<mat4x4<f32>>,
+};
+@group(1) @binding(0) var<storage, read> u_transforms: Transforms;
 
 @group(2) @binding(0) var t_terrain_texture: texture_2d<f32>;
 @group(2) @binding(1) var s_terrain_texture: sampler;
 
 struct VertexInput {
+    @builtin(instance_index) node_id: u32,
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) tex_coord: vec2<f32>,
@@ -21,8 +25,10 @@ struct VertexOutput {
 
 @vertex
 fn vertex_main(vertex: VertexInput) -> VertexOutput {
+    let node_id = vertex.node_id;
+    let model = u_transforms.transforms[node_id];
     return VertexOutput(
-        u_camera.mat_projection * u_camera.mat_view * u_model * vec4(vertex.position, 1.0),
+        u_camera.mat_projection * u_camera.mat_view * model * vec4(vertex.position, 1.0),
         vertex.normal,
         vertex.tex_coord,
     );

@@ -72,13 +72,13 @@ impl<V: BufferLayout + bytemuck::NoUninit> Mesh<V> {
 }
 
 pub trait RenderPassMeshExt {
-    fn draw_mesh(&mut self, mesh: &GpuMesh);
+    fn draw_mesh(&mut self, mesh: &GpuMesh, instances: std::ops::Range<u32>);
 }
 
 impl<'encoder> RenderPassMeshExt for wgpu::RenderPass<'encoder> {
-    fn draw_mesh(&mut self, mesh: &GpuMesh) {
+    fn draw_mesh(&mut self, mesh: &GpuMesh, instances: std::ops::Range<u32>) {
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        self.draw_indexed(0..mesh.index_count, 0, 0..1);
+        self.draw_indexed(0..mesh.index_count, 0, instances);
     }
 }

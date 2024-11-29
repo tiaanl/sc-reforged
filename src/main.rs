@@ -6,7 +6,7 @@ use engine::{
     assets::AssetLoader, egui_integration::EguiIntegration, input, renderer::Renderer, scene::Scene,
 };
 use game::{
-    config::{read_compaign_defs, CampaignDef},
+    config::read_compaign_defs,
     scenes::{model_viewer::ModelViewer, world::WorldScene},
 };
 use tracing::{error, info, warn};
@@ -40,11 +40,6 @@ enum App {
         last_frame_time: Instant,
         /// The scene we are currently rendering to the screen.
         scene: Box<dyn Scene>,
-
-        /// All the available campaign definitions.
-        /// This is temporary at the moment, and should go into the main menu
-        /// scene.
-        _campaign_defs: Vec<CampaignDef>,
     },
 }
 
@@ -88,14 +83,6 @@ impl winit::application::ApplicationHandler for App {
 
                 let assets = AssetLoader::new(&opts.path);
 
-                let s = assets.load_config_file("config/campaign_defs.txt").unwrap();
-                let campaign_defs = read_compaign_defs(&s);
-                let campaign_def = campaign_defs
-                    .iter()
-                    .find(|c| c.base_name == "training")
-                    .cloned()
-                    .unwrap();
-
                 let scene: Box<dyn Scene> = if false {
                     // LoadingScene
 
@@ -103,6 +90,14 @@ impl winit::application::ApplicationHandler for App {
                     Box::new(LoadingScene::new(&assets, &renderer))
                 } else if false {
                     // WorldScene
+
+                    let s = assets.load_config_file("config/campaign_defs.txt").unwrap();
+                    let campaign_defs = read_compaign_defs(&s);
+                    let campaign_def = campaign_defs
+                        .iter()
+                        .find(|c| c.base_name == "training")
+                        .cloned()
+                        .unwrap();
 
                     Box::new(match WorldScene::new(&assets, &renderer, campaign_def) {
                         Ok(scene) => scene,
@@ -118,9 +113,11 @@ impl winit::application::ApplicationHandler for App {
                         match ModelViewer::new(
                             &assets,
                             &renderer,
-                            r"models\alvhqd-hummer\alvhqd-hummer.smf",
+                            // r"models\pusths-compound\pusths-compound.smf",
+                            // r"models\alvhqd-hummer\alvhqd-hummer.smf",
                             // r"models\AlVhAp-Cessna\AlVhAp-Cessna.smf",
                             // r"models\agsths-metalshack\agsths-metalshack.smf",
+                            r"models\agsths-shanty01\agsths-shanty01.smf",
                         ) {
                             Ok(scene) => scene,
                             Err(err) => {
@@ -140,7 +137,6 @@ impl winit::application::ApplicationHandler for App {
                     _assets: assets,
                     input: input::InputState::default(),
                     last_frame_time: Instant::now(),
-                    _campaign_defs: campaign_defs,
                     scene,
                 };
             }
