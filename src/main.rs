@@ -114,10 +114,10 @@ impl winit::application::ApplicationHandler for App {
                             &assets,
                             &renderer,
                             // r"models\pusths-compound\pusths-compound.smf",
-                            // r"models\alvhqd-hummer\alvhqd-hummer.smf",
+                            r"models\alvhqd-hummer\alvhqd-hummer.smf",
                             // r"models\AlVhAp-Cessna\AlVhAp-Cessna.smf",
                             // r"models\agsths-metalshack\agsths-metalshack.smf",
-                            r"models\agsths-shanty01\agsths-shanty01.smf",
+                            // r"models\agsths-shanty01\agsths-shanty01.smf",
                         ) {
                             Ok(scene) => scene,
                             Err(err) => {

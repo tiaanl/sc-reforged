@@ -31,13 +31,17 @@ tracing = { version = "0.1.40", default-features = false, features = [
     "release_max_level_info",
 ] }
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [
+    "ansi",
     "fmt",
 ] }
 wgpu = { version = "22.1.0", default-features = false, features = [
     "wgsl",
     "naga-ir",
 ] }
-winit = { version = "0.30.5", default-features = false, features = ["rwh_06"] }
+winit = { version = "0.30.5", default-features = false, features = [
+    "rwh_06",
+    "x11",
+] }
 epaint = { version = "0.29.1", default-features = false, features = [
     "default_fonts",
 ] }

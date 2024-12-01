@@ -13,19 +13,38 @@ pub enum FileSystemError {
     Io(#[from] std::io::Error),
 }
 
+fn change_separator(path: impl AsRef<Path>, separator: char) -> PathBuf {
+    PathBuf::from(
+        path.as_ref()
+            .to_string_lossy()
+            .chars()
+            .map(|c| if c == '/' || c == '\\' { separator } else { c })
+            .collect::<String>(),
+    )
+}
+
 pub struct VirtualFileSystem {
     root_path: PathBuf,
 }
 
 impl VirtualFileSystem {
-    pub fn new(root_path: impl AsRef<Path>) -> Self {
-        Self {
-            root_path: root_path.as_ref().to_owned(),
+    pub fn new(root_path: impl AsRef<Path>) -> std::io::Result<Self> {
+        // Make sure the root_path uses the OS separators.
+        let root_path = change_separator(root_path, std::path::MAIN_SEPARATOR);
+
+        if !root_path.exists() {
+            return Err(std::io::ErrorKind::NotFound.into());
         }
+
+        Ok(Self { root_path })
     }
 
     pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
-        let external_path = self.root_path.join(path.as_ref());
+        // We are going to check an external file, so make sure we're using the OS separator.
+        let external_path = self
+            .root_path
+            .join(change_separator(path.as_ref(), std::path::MAIN_SEPARATOR));
+
         if external_path.exists() {
             let mut file = std::fs::File::open(external_path)?;
             let file_size = file.metadata()?.len();
@@ -36,7 +55,8 @@ impl VirtualFileSystem {
 
         if let Some(gut_file_path) = self.find_gut_file_path_for(path.as_ref()) {
             let gut_file = GutFile::from_file(gut_file_path)?;
-            let buf = gut_file.get_contents(path.as_ref())?;
+            // Make sure to use the internal .gut separator for the path.
+            let buf = gut_file.get_contents(change_separator(path.as_ref(), '\\'))?;
             return Ok(buf);
         }
 
@@ -45,7 +65,9 @@ impl VirtualFileSystem {
     }
 
     fn find_gut_file_path_for(&self, path: impl AsRef<Path>) -> Option<PathBuf> {
-        let path = path.as_ref().to_path_buf();
+        // Use OS separators for the path, because we'll be checking the filesystem with it.
+        let path = change_separator(path, std::path::MAIN_SEPARATOR);
+
         let first = path.components().next()?;
         let path = self.root_path.join(first).with_extension("gut");
 
@@ -111,7 +133,10 @@ impl GutFile {
             let mut name = vec![0; name_length as usize - 1];
             r.read_exact(&mut name)?;
             utils::crypt(&mut name);
-            let name = String::from_utf8_lossy(&name).to_string();
+            // Store the names in all lowercase for comparisons.
+            let name = String::from_utf8_lossy(&name)
+                .to_ascii_lowercase()
+                .to_string();
             // Read the null terminator after the name.
             r.read_u8()?;
 
@@ -130,7 +155,10 @@ impl GutFile {
         use std::io::Seek;
 
         // The entries in the .gut file uses "\".
-        let path = path.as_ref().to_string_lossy().replace("/", "\\");
+        // Do a case-insensitive camparison.
+        let path = change_separator(path, '\\')
+            .to_string_lossy()
+            .to_ascii_lowercase();
 
         let entry = self.entries.iter().find(|e| e.name == path);
 

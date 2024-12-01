@@ -35,7 +35,7 @@ pub struct ModelViewer {
     gpu_camera: camera::GpuCamera,
 }
 
-fn create_cube_smf() -> smf::Model {
+fn _create_cube_smf() -> smf::Model {
     fn create_node(size: f32, position: Vec3, rotation: Quat) -> smf::Node {
         let half_size = size * 0.5;
         let mesh = smf::Mesh {
