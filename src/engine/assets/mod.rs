@@ -26,10 +26,10 @@ pub struct AssetLoader {
 }
 
 impl AssetLoader {
-    pub fn new(data_dir: impl AsRef<Path>) -> Self {
-        Self {
-            fs: VirtualFileSystem::new(data_dir),
-        }
+    pub fn new(data_dir: impl AsRef<Path>) -> std::io::Result<Self> {
+        Ok(Self {
+            fs: VirtualFileSystem::new(data_dir)?,
+        })
     }
 
     pub fn load_raw(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, AssetError> {

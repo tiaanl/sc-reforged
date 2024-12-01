@@ -81,7 +81,7 @@ impl winit::application::ApplicationHandler for App {
 
                 let egui_integration = EguiIntegration::new(event_loop, &renderer);
 
-                let assets = AssetLoader::new(&opts.path);
+                let assets = AssetLoader::new(&opts.path).expect("Could not initialize assets.");
 
                 let scene: Box<dyn Scene> = if false {
                     // LoadingScene

@@ -1547,6 +1547,7 @@ name = "shadow_company_tools"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.6.0",
+ "bytemuck",
  "byteorder",
  "glam",
  "image",
