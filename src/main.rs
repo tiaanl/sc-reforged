@@ -263,7 +263,13 @@ impl winit::application::ApplicationHandler for App {
 fn main() {
     tracing_subscriber::fmt().init();
 
-    let opts = Opts::parse();
+    let opts = match Opts::try_parse() {
+        Ok(opts) => opts,
+        Err(err) => {
+            err.print().unwrap();
+            return;
+        }
+    };
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
 
