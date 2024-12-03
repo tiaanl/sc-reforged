@@ -3,9 +3,11 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 use clap::Parser;
 use egui::Widget;
 use engine::{
-    assets::AssetLoader, egui_integration::EguiIntegration, input, renderer::Renderer, scene::Scene,
+    assets::AssetManager, egui_integration::EguiIntegration, input, renderer::Renderer,
+    scene::Scene,
 };
 use game::{
+    asset_loader::AssetLoader,
     config::read_compaign_defs,
     scenes::{model_viewer::ModelViewer, world::WorldScene},
 };
@@ -33,6 +35,7 @@ enum App {
         egui_integration: engine::egui_integration::EguiIntegration,
         /// The main way of loading assets from the /data directory.
         _assets: AssetLoader,
+        _asset_manager: AssetManager,
 
         input: input::InputState,
 
@@ -81,14 +84,16 @@ impl winit::application::ApplicationHandler for App {
 
                 let egui_integration = EguiIntegration::new(event_loop, &renderer);
 
-                let assets = AssetLoader::new(&opts.path).expect("Could not initialize assets.");
+                let asset_manager = AssetManager::default();
+                let assets = AssetLoader::new(asset_manager.clone(), &opts.path)
+                    .expect("Could not initialize assets.");
 
                 let scene: Box<dyn Scene> = if false {
                     // LoadingScene
 
                     use game::scenes::loading::LoadingScene;
                     Box::new(LoadingScene::new(&assets, &renderer))
-                } else if false {
+                } else if true {
                     // WorldScene
 
                     let s = assets.load_config_file("config/campaign_defs.txt").unwrap();
@@ -99,25 +104,33 @@ impl winit::application::ApplicationHandler for App {
                         .cloned()
                         .unwrap();
 
-                    Box::new(match WorldScene::new(&assets, &renderer, campaign_def) {
-                        Ok(scene) => scene,
-                        Err(err) => {
-                            error!("Could not create world scene! - {}", err);
-                            panic!();
-                        }
-                    })
+                    Box::new(
+                        match WorldScene::new(
+                            &assets,
+                            asset_manager.clone(),
+                            &renderer,
+                            campaign_def,
+                        ) {
+                            Ok(scene) => scene,
+                            Err(err) => {
+                                error!("Could not create world scene! - {}", err);
+                                panic!();
+                            }
+                        },
+                    )
                 } else {
                     // ModelViewer
 
                     Box::new(
                         match ModelViewer::new(
                             &assets,
+                            asset_manager.clone(),
                             &renderer,
                             // r"models\pusths-compound\pusths-compound.smf",
-                            r"models\alvhqd-hummer\alvhqd-hummer.smf",
+                            // r"models\alvhqd-hummer\alvhqd-hummer.smf",
                             // r"models\AlVhAp-Cessna\AlVhAp-Cessna.smf",
                             // r"models\agsths-metalshack\agsths-metalshack.smf",
-                            // r"models\agsths-shanty01\agsths-shanty01.smf",
+                            r"models\agsths-shanty01\agsths-shanty01.smf",
                         ) {
                             Ok(scene) => scene,
                             Err(err) => {
@@ -135,6 +148,7 @@ impl winit::application::ApplicationHandler for App {
                     renderer,
                     egui_integration,
                     _assets: assets,
+                    _asset_manager: asset_manager,
                     input: input::InputState::default(),
                     last_frame_time: Instant::now(),
                     scene,

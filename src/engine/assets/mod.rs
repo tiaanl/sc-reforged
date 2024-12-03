@@ -1,92 +1,32 @@
 use ahash::HashMap;
-use shadow_company_tools::smf;
 
-use super::vfs::{FileSystemError, VirtualFileSystem};
-use std::path::Path;
+use std::{
+    any::{Any, TypeId},
+    sync::{Arc, RwLock},
+};
 
 pub mod texture;
 
-#[derive(Debug, thiserror::Error)]
-pub enum AssetError {
-    #[error("File system error: {0}")]
-    FileSystemError(#[from] FileSystemError),
-
-    #[error("Decode error")]
-    DecodeError,
-
-    #[error("Image load error: {0}")]
-    ImageLoadError(#[from] image::ImageError),
-
-    #[error("{0}")]
-    Custom(String),
-}
-
-pub struct AssetLoader {
-    fs: VirtualFileSystem,
-}
-
-impl AssetLoader {
-    pub fn new(data_dir: impl AsRef<Path>) -> std::io::Result<Self> {
-        Ok(Self {
-            fs: VirtualFileSystem::new(data_dir)?,
-        })
-    }
-
-    pub fn load_raw(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, AssetError> {
-        Ok(self.fs.load(path)?)
-    }
-
-    pub fn load_bmp(&self, path: impl AsRef<Path>) -> Result<image::RgbaImage, AssetError> {
-        // Check if there exists a .raw file with alpha data.
-        // let raw_data = self.load_raw(path.as_ref().with_extension("raw")).ok();
-        // shadow_company_tools::images::load_raw_file(std::io::Cursor::new(raw_data), width, height)
-
-        let bmp = shadow_company_tools::images::load_bmp_file(&mut std::io::Cursor::new(
-            self.load_raw(path.as_ref())?,
-        ))?;
-        let raw = if let Some(raw_data) = self.load_raw(path.as_ref().with_extension("raw")).ok() {
-            Some(shadow_company_tools::images::load_raw_file(
-                &mut std::io::Cursor::new(raw_data),
-                bmp.width(),
-                bmp.height(),
-            )?)
-        } else {
-            None
-        };
-
-        if let Some(raw) = raw {
-            Ok(shadow_company_tools::images::combine_bmp_and_raw(
-                &bmp, &raw,
-            ))
-        } else {
-            Ok(image::DynamicImage::from(bmp).into_rgba8())
-        }
-    }
-
-    pub fn load_jpeg(&self, path: impl AsRef<Path>) -> Result<image::RgbaImage, AssetError> {
-        let data = self.load_raw(path.as_ref())?;
-
-        Ok(
-            image::load_from_memory_with_format(data.as_ref(), image::ImageFormat::Jpeg)?
-                .into_rgba8(),
-        )
-    }
-
-    pub fn load_config_file(&self, path: impl AsRef<Path>) -> Result<String, AssetError> {
-        String::from_utf8(self.load_raw(path)?).map_err(|_| AssetError::DecodeError)
-    }
-
-    pub fn load_smf(&self, path: impl AsRef<Path>) -> Result<smf::Model, AssetError> {
-        let data = self.load_raw(path)?;
-        let mut cursor = std::io::Cursor::new(data);
-        smf::Model::read(&mut cursor)
-            .map_err(|err| AssetError::FileSystemError(FileSystemError::Io(err)))
-    }
-}
-
 pub trait Asset {}
 
-pub struct Handle<A: Asset>(usize, std::marker::PhantomData<A>);
+pub struct Handle<A: Asset>(u64, std::marker::PhantomData<A>);
+
+impl<A: Asset> Copy for Handle<A> {}
+
+impl<A: Asset> std::hash::Hash for Handle<A> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<A: Asset> PartialEq for Handle<A> {
+    fn eq(&self, other: &Self) -> bool {
+        // Just compare the ID's
+        self.0 == other.0
+    }
+}
+
+impl<A: Asset> Eq for Handle<A> {}
 
 impl<A: Asset> Clone for Handle<A> {
     fn clone(&self) -> Self {
@@ -96,40 +36,83 @@ impl<A: Asset> Clone for Handle<A> {
 
 impl<A: Asset> std::fmt::Debug for Handle<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Handle").field(&self.0).finish()
+        write!(f, "Handle({})", self.0)
     }
 }
 
-pub struct Assets<A: Asset> {
-    next_id: usize,
-    storage: HashMap<usize, A>,
+// AssetManager with assets stored in Arc
+#[derive(Clone, Default)]
+pub struct AssetManager {
+    next_id: Arc<RwLock<u64>>,
+    storages: Arc<RwLock<HashMap<TypeId, Box<dyn Any + Send + Sync>>>>,
 }
 
-impl<A: Asset> Default for Assets<A> {
-    fn default() -> Self {
-        Self {
-            next_id: 0,
-            storage: HashMap::default(),
-        }
-    }
-}
-
-impl<A: Asset> Assets<A> {
-    pub fn add(&mut self, asset: impl Into<A>) -> Handle<A> {
-        let id = self.next_id;
-        self.next_id += 1;
-
-        let _result = self.storage.insert(id, asset.into());
-        assert!(_result.is_none(), "Killed an existing asset!");
-
+impl AssetManager {
+    fn generate_handle<A>(&self) -> Handle<A>
+    where
+        A: Asset + Send + Sync + 'static,
+    {
+        let mut next_id = self.next_id.write().unwrap();
+        let id = *next_id;
+        *next_id += 1;
         Handle(id, std::marker::PhantomData)
     }
 
-    pub fn get(&self, handle: &Handle<A>) -> Option<&A> {
-        self.storage.get(&handle.0)
+    pub fn add<A>(&self, asset: A) -> Handle<A>
+    where
+        A: Asset + Send + Sync + 'static,
+    {
+        let handle = self.generate_handle::<A>();
+
+        // Access or create the storage for the asset type
+        let mut storages = self.storages.write().unwrap();
+        let type_id = TypeId::of::<A>();
+        let storage = storages
+            .entry(type_id)
+            .or_insert_with(|| Box::new(RwLock::new(HashMap::<u64, Arc<A>>::default())))
+            .downcast_mut::<RwLock<HashMap<u64, Arc<A>>>>()
+            .expect("Type mismatch in storage");
+
+        // Add the asset to the storage
+        storage.write().unwrap().insert(handle.0, Arc::new(asset));
+        handle
     }
 
-    pub fn _remove(&mut self, handle: Handle<A>) {
-        self.storage.remove(&handle.0);
+    // Retrieve an asset of type A
+    pub fn get<A>(&self, handle: Handle<A>) -> Option<Arc<A>>
+    where
+        A: Asset + Send + Sync + 'static,
+    {
+        let storages = self.storages.read().unwrap();
+        let type_id = TypeId::of::<A>();
+
+        // Access the storage for the requested type
+        storages.get(&type_id).and_then(|storage| {
+            storage
+                .downcast_ref::<RwLock<HashMap<u64, Arc<A>>>>()
+                .expect("Type mismatch in storage")
+                .read()
+                .unwrap()
+                .get(&handle.0)
+                .cloned()
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Number(i32);
+    impl Asset for Number {}
+
+    #[test]
+    fn basic() {
+        let asset_manager = AssetManager::default();
+        let h = asset_manager.add(Number(10));
+        let maybe = asset_manager.get(h);
+        assert!(maybe.is_some());
+        let value = maybe.unwrap();
+        assert_eq!(value.0, 10);
     }
 }

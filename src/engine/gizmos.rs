@@ -41,12 +41,12 @@ pub struct GizmosRenderer {
 }
 
 impl GizmosRenderer {
-    pub fn new(renderer: &Renderer) -> Self {
+    pub fn new(renderer: &Renderer, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let shader = renderer.create_shader_module("gizmos", include_str!("gizmos.wgsl"));
 
         let pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<GizmoVertex>::new("gizmos", &shader)
-                .bind_group_layout(renderer.uniform_bind_group_layout())
+                .bind_group_layout(camera_bind_group_layout)
                 .primitive(wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::LineList,
                     ..Default::default()

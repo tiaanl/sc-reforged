@@ -1,6 +1,7 @@
 use crate::engine::{input, renderer::Renderer, shaders::Shaders};
 
 use glam::{Mat4, Quat, Vec3};
+use wgpu::util::DeviceExt;
 
 pub fn register_camera_shader(shaders: &mut Shaders) {
     shaders.add_module(include_str!("camera.wgsl"), "camera.wgsl");
@@ -61,16 +62,54 @@ impl Camera {
 
 pub struct GpuCamera {
     buffer: wgpu::Buffer,
+    pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
 }
 
 impl GpuCamera {
     pub fn new(renderer: &Renderer) -> Self {
-        let buffer = renderer.create_uniform_buffer("camera_buffer", Matrices::default());
+        let matrices = Matrices::default();
+        let buffer = renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("camera_buffer"),
+                contents: bytemuck::cast_slice(&[matrices]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
 
-        let bind_group = renderer.create_uniform_bind_group("camera_bind_group", &buffer);
+        let bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("camera_bind_group_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
 
-        Self { buffer, bind_group }
+        let bind_group = renderer
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("camera_bind_group"),
+                layout: &bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(buffer.as_entire_buffer_binding()),
+                }],
+            });
+
+        Self {
+            buffer,
+            bind_group_layout,
+            bind_group,
+        }
     }
 
     pub fn upload_matrices(&self, renderer: &Renderer, matrices: Matrices) {

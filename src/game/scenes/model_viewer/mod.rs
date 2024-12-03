@@ -1,12 +1,12 @@
 use core::f32;
 use std::f32::consts::{FRAC_PI_2, PI};
 
-use glam::{Quat, Vec2, Vec3, Vec4};
+use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use shadow_company_tools::smf;
 
 use crate::{
     engine::{
-        assets::{AssetError, AssetLoader, Handle},
+        assets::{Asset, AssetManager, Handle},
         gizmos::{GizmoVertex, GizmosRenderer},
         input,
         renderer::Renderer,
@@ -14,14 +14,18 @@ use crate::{
         shaders::Shaders,
     },
     game::{
+        asset_loader::{AssetError, AssetLoader},
         camera::{self, CameraController},
-        models::{Model, ModelRenderer, RenderJob},
+        mesh_renderer::{MeshItem, MeshList, MeshRenderer},
+        model::{Model, NodeIndex},
     },
 };
 
 pub struct ModelViewer {
-    model_renderer: ModelRenderer,
-    model_handle: Handle<Model>,
+    asset_manager: AssetManager,
+
+    mesh_renderer: MeshRenderer,
+    model: Handle<Model>,
     model_position: Vec3,
     model_rotation: Vec3,
 
@@ -110,23 +114,39 @@ fn _create_cube_smf() -> smf::Model {
     }
 }
 
+impl Asset for smf::Model {}
+
 impl ModelViewer {
     pub fn new(
-        assets: &AssetLoader,
+        asset_loader: &AssetLoader,
+        asset_manager: AssetManager,
         renderer: &Renderer,
         path: impl AsRef<std::path::Path>,
     ) -> Result<Self, AssetError> {
         let mut shaders = Shaders::default();
         camera::register_camera_shader(&mut shaders);
 
-        let mut model_renderer = ModelRenderer::new(renderer, &mut shaders);
+        let camera = camera::Camera {
+            position: Vec3::new(100.0, -2500.0, 1000.0),
+            rotation: Quat::IDENTITY,
+            fov: 45.0,
+            aspect_ratio: 1.0,
+            near: 1.0,
+            far: 10_000.0,
+        };
 
-        // let cube = create_cube_smf();
-        // let model_handle = model_renderer.add(renderer, assets, &cube);
+        let gpu_camera = camera::GpuCamera::new(renderer);
 
-        let model_handle = model_renderer.add(renderer, assets, &assets.load_smf(path)?);
+        let mesh_renderer = MeshRenderer::new(
+            asset_manager.clone(),
+            renderer,
+            &mut shaders,
+            &gpu_camera.bind_group_layout,
+        );
 
-        let gizmos = GizmosRenderer::new(renderer);
+        let model = asset_loader.load_smf_model(path, renderer)?;
+
+        let gizmos = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
 
         const CAM_SPEED: f32 = 10.0;
         const MOUSE_SENSITIVITY: f32 = 0.4;
@@ -141,20 +161,11 @@ impl ModelViewer {
             ..Default::default()
         };
 
-        let camera = camera::Camera {
-            position: Vec3::new(100.0, -2500.0, 1000.0),
-            rotation: Quat::IDENTITY,
-            fov: 45.0,
-            aspect_ratio: 1.0,
-            near: 1.0,
-            far: 10_000.0,
-        };
-
-        let gpu_camera = camera::GpuCamera::new(renderer);
-
         Ok(Self {
-            model_renderer,
-            model_handle,
+            asset_manager,
+
+            mesh_renderer,
+            model,
             model_position: Vec3::ZERO,
             model_rotation: Vec3::ZERO,
 
@@ -200,18 +211,47 @@ impl Scene for ModelViewer {
         let matrices = self.camera.calculate_matrices();
         self.gpu_camera.upload_matrices(renderer, matrices);
 
-        let render_info = RenderJob {
-            position: self.model_position,
-            rotation: self.model_rotation,
-            handle: self.model_handle.clone(),
+        let Some(model) = self.asset_manager.get(self.model) else {
+            tracing::error!("Invalid model");
+            return;
         };
 
-        self.model_renderer.render_multiple(
+        let meshes = model
+            .meshes
+            .iter()
+            .map(|mesh| {
+                // Calculate the global transform for the model.
+                let mut transform = Mat4::from_rotation_translation(
+                    Quat::from_euler(
+                        glam::EulerRot::XYZ,
+                        self.model_rotation.x,
+                        self.model_rotation.y,
+                        self.model_rotation.z,
+                    ),
+                    self.model_position,
+                );
+                let mut node_id = mesh.node_id;
+                while node_id != NodeIndex::MAX {
+                    let node = &model.nodes[node_id];
+                    transform = node.transform.to_mat4() * transform;
+                    node_id = node.parent;
+                }
+
+                MeshItem {
+                    transform,
+                    mesh: mesh.mesh,
+                }
+            })
+            .collect();
+
+        let list = MeshList { meshes };
+
+        self.mesh_renderer.render_multiple(
             renderer,
             encoder,
             output,
             &self.gpu_camera.bind_group,
-            &[render_info],
+            list,
             wgpu::LoadOp::Clear(wgpu::Color {
                 r: 0.1,
                 g: 0.2,

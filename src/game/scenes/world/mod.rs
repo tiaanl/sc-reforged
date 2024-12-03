@@ -2,21 +2,25 @@ use std::path::PathBuf;
 
 use crate::{
     engine::{
-        assets::{AssetError, AssetLoader},
+        assets::AssetManager,
         gizmos::{GizmoVertex, GizmosRenderer},
         renderer::Renderer,
         scene::Scene,
         shaders::Shaders,
+        Transform,
     },
-    game::{camera, config::CampaignDef},
+    game::{
+        asset_loader::{AssetError, AssetLoader},
+        camera,
+        config::CampaignDef,
+    },
 };
 use bounding_boxes::BoundingBoxes;
 use glam::{vec3, Quat, Vec3, Vec4};
 use terrain::*;
-use tracing::error;
 
 mod bounding_boxes;
-mod object;
+mod entities;
 mod terrain;
 
 /// The [Scene] that renders the ingame world view.
@@ -29,7 +33,7 @@ pub struct WorldScene {
 
     terrain: Terrain,
 
-    objects: object::Objects,
+    objects: entities::Entities,
 
     gizmos_renderer: GizmosRenderer,
     gizmos_vertices: Vec<GizmoVertex>,
@@ -40,6 +44,7 @@ pub struct WorldScene {
 impl WorldScene {
     pub fn new(
         assets: &AssetLoader,
+        asset_manager: AssetManager,
         renderer: &Renderer,
         campaign_def: CampaignDef,
     ) -> Result<Self, AssetError> {
@@ -48,8 +53,29 @@ impl WorldScene {
         let mut shaders = Shaders::default();
         camera::register_camera_shader(&mut shaders);
 
-        let terrain = Terrain::new(assets, renderer, &mut shaders, &campaign_def)?;
-        let mut objects = object::Objects::new(renderer, &mut shaders);
+        let camera = camera::Camera::new(
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            45.0_f32.to_radians(),
+            1.0,
+            1.0,
+            100_000.0,
+        );
+        let gpu_camera = camera::GpuCamera::new(renderer);
+
+        let terrain = Terrain::new(
+            assets,
+            renderer,
+            &mut shaders,
+            &campaign_def,
+            &gpu_camera.bind_group_layout,
+        )?;
+        let mut entities = entities::Entities::new(
+            asset_manager,
+            renderer,
+            &mut shaders,
+            &gpu_camera.bind_group_layout,
+        );
 
         {
             // Load the image defs.
@@ -74,39 +100,40 @@ impl WorldScene {
                         .join(&object.name)
                         .with_extension("smf");
 
-                    let smf = match assets.load_smf(&path) {
-                        Ok(smf) => smf,
-                        Err(err) => {
-                            error!("Could not load model {}: {}", path.display(), err);
-                            return Err(err);
-                        }
-                    };
-
-                    let model_handle = objects.model_renderer.add(renderer, assets, &smf);
+                    let model_handle = assets.load_smf_model(&path, renderer)?;
 
                     let object_type = match object.typ.as_str() {
-                        "4x4" => object::ObjectType::_4x4,
-                        "Scenery_Bush" => object::ObjectType::SceneryBush,
-                        "Scenery_Lit" => object::ObjectType::SceneryLit,
-                        "Scenery_Strip_Light" => object::ObjectType::SceneryStripLight,
-                        "Scenery" => object::ObjectType::Scenery,
-                        "Structure_Fence" => object::ObjectType::StructureFence,
-                        "Structure_Swing_Door" => object::ObjectType::StructureSwingDoor,
-                        "Structure" => object::ObjectType::Structure,
+                        "4x4" => entities::ObjectType::_4x4,
+                        "Scenery_Bush" => entities::ObjectType::SceneryBush,
+                        "Scenery_Lit" => entities::ObjectType::SceneryLit,
+                        "Scenery_Strip_Light" => entities::ObjectType::SceneryStripLight,
+                        "Scenery" => entities::ObjectType::Scenery,
+                        "Structure_Fence" => entities::ObjectType::StructureFence,
+                        "Structure_Swing_Door" => entities::ObjectType::StructureSwingDoor,
+                        "Structure" => entities::ObjectType::Structure,
                         _ => panic!("Invalid object type: {}", object.typ),
                     };
 
-                    Ok(object::Object::new(
-                        object.position,
-                        object.rotation,
+                    let entity = entities::Entity::new(
+                        Transform::new(
+                            object.position,
+                            Quat::from_euler(
+                                glam::EulerRot::XYZ,
+                                object.rotation.x,
+                                object.rotation.y,
+                                object.rotation.z,
+                            ),
+                        ),
                         model_handle,
                         object_type,
-                    ))
+                    );
+
+                    Ok::<_, AssetError>(entity)
                 })
                 .collect::<Vec<_>>();
 
-            for object in to_spawn.drain(..) {
-                objects.spawn(object);
+            for entity in to_spawn.drain(..) {
+                entities.spawn(entity);
             }
         }
 
@@ -116,19 +143,10 @@ impl WorldScene {
             ..Default::default()
         };
 
-        let camera = camera::Camera::new(
-            Vec3::ZERO,
-            Quat::IDENTITY,
-            45.0_f32.to_radians(),
-            1.0,
-            1.0,
-            100_000.0,
-        );
-        let gpu_camera = camera::GpuCamera::new(renderer);
+        let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
 
-        let gizmos_renderer = GizmosRenderer::new(renderer);
-
-        let mut bounding_boxes = BoundingBoxes::new(renderer).unwrap();
+        let mut bounding_boxes =
+            BoundingBoxes::new(renderer, &gpu_camera.bind_group_layout).unwrap();
         bounding_boxes.insert(
             vec3(300.0, 300.0, 300.0),
             Quat::from_rotation_z(45.0_f32.to_radians()),
@@ -150,7 +168,7 @@ impl WorldScene {
             gpu_camera,
 
             terrain,
-            objects,
+            objects: entities,
 
             gizmos_renderer,
             gizmos_vertices: vec![],
@@ -250,8 +268,8 @@ impl Scene for WorldScene {
             // &mut self.bounding_boxes,
         );
 
-        self.bounding_boxes
-            .render_all(renderer, encoder, view, &self.gpu_camera.bind_group);
+        // self.bounding_boxes
+        //     .render_all(renderer, encoder, view, &self.gpu_camera.bind_group);
         self.bounding_boxes.clear();
 
         self.gizmos_renderer.render(

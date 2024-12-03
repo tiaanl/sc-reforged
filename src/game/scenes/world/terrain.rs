@@ -6,12 +6,14 @@ use tracing::info;
 
 use crate::{
     engine::{
-        assets::{AssetError, AssetLoader},
         gizmos::GizmoVertex,
         renderer::{BufferLayout, RenderPipelineConfig, Renderer},
         shaders::Shaders,
     },
-    game::config::{CampaignDef, ConfigFile, TerrainMapping},
+    game::{
+        asset_loader::{AssetError, AssetLoader},
+        config::{CampaignDef, ConfigFile, TerrainMapping},
+    },
 };
 
 pub struct Terrain {
@@ -160,6 +162,7 @@ impl Terrain {
         renderer: &Renderer,
         shaders: &mut Shaders,
         campaign_def: &CampaignDef,
+        camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
         let TerrainMapping {
             altitude_map_height_base,
@@ -356,7 +359,7 @@ impl Terrain {
 
         let pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<Vertex>::new("terrain", &shader_module)
-                .bind_group_layout(renderer.uniform_bind_group_layout())
+                .bind_group_layout(camera_bind_group_layout)
                 .bind_group_layout(renderer.texture_bind_group_layout()),
         );
 
@@ -364,7 +367,8 @@ impl Terrain {
             RenderPipelineConfig::<Vertex>::new("terrain_wireframe", &shader_module)
                 .vertex_entry("vertex_main_wireframe")
                 .fragment_entry("fragment_main_wireframe")
-                .bind_group_layout(renderer.uniform_bind_group_layout())
+                .bind_group_layout(camera_bind_group_layout)
+                // .bind_group_layout(renderer.uniform_bind_group_layout())
                 .primitive(wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::LineList,
                     ..Default::default()

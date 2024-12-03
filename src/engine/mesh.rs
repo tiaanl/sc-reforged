@@ -32,20 +32,20 @@ impl BufferLayout for Vertex {
 }
 
 #[derive(Default)]
-pub struct Mesh<V: BufferLayout> {
+pub struct IndexedMesh<V: BufferLayout> {
     pub vertices: Vec<V>,
     pub indices: Vec<u32>,
 }
 
-pub struct GpuMesh {
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    index_count: u32,
+pub struct GpuIndexedMesh {
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub index_count: u32,
 }
 
-impl Asset for GpuMesh {}
+impl Asset for GpuIndexedMesh {}
 
-impl std::fmt::Debug for GpuMesh {
+impl std::fmt::Debug for GpuIndexedMesh {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GpuMesh")
             .field("vertex_buffer", &self.vertex_buffer)
@@ -55,15 +55,15 @@ impl std::fmt::Debug for GpuMesh {
     }
 }
 
-impl<V: BufferLayout + bytemuck::NoUninit> Mesh<V> {
-    pub fn to_gpu(&self, renderer: &Renderer) -> GpuMesh {
+impl<V: BufferLayout + bytemuck::NoUninit> IndexedMesh<V> {
+    pub fn to_gpu(&self, renderer: &Renderer) -> GpuIndexedMesh {
         debug_assert!(!self.vertices.is_empty(), "Uploading empty vertex buffer.");
         debug_assert!(!self.indices.is_empty(), "Uploading empty index buffer.");
 
         let vertex_buffer = renderer.create_vertex_buffer("mesh_vertex_buffer", &self.vertices);
         let index_buffer = renderer.create_index_buffer("mesh_index_buffer", &self.indices);
 
-        GpuMesh {
+        GpuIndexedMesh {
             vertex_buffer,
             index_buffer,
             index_count: self.indices.len() as u32,
@@ -72,11 +72,11 @@ impl<V: BufferLayout + bytemuck::NoUninit> Mesh<V> {
 }
 
 pub trait RenderPassMeshExt {
-    fn draw_mesh(&mut self, mesh: &GpuMesh, instances: std::ops::Range<u32>);
+    fn draw_mesh(&mut self, mesh: &GpuIndexedMesh, instances: std::ops::Range<u32>);
 }
 
 impl<'encoder> RenderPassMeshExt for wgpu::RenderPass<'encoder> {
-    fn draw_mesh(&mut self, mesh: &GpuMesh, instances: std::ops::Range<u32>) {
+    fn draw_mesh(&mut self, mesh: &GpuIndexedMesh, instances: std::ops::Range<u32>) {
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         self.draw_indexed(0..mesh.index_count, 0, instances);

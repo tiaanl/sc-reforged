@@ -87,11 +87,31 @@ impl BoundingBoxes {
         ]
     };
 
-    pub fn new(renderer: &Renderer) -> Result<Self, ()> {
+    pub fn new(
+        renderer: &Renderer,
+        camera_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> Result<Self, ()> {
         let shader = renderer.create_shader_module(
             "bounding_boxes_shader_module",
             include_str!("bounding_boxes.wgsl"),
         );
+
+        let box_data_bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("bounding_boxes_box_data_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
 
         let pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<Vertex>::new("bounding_boxes_render_pipeline", &shader)
@@ -101,8 +121,8 @@ impl BoundingBoxes {
                     ..Default::default()
                 })
                 .blend_state(wgpu::BlendState::ALPHA_BLENDING)
-                .bind_group_layout(renderer.uniform_bind_group_layout())
-                .bind_group_layout(renderer.uniform_bind_group_layout()),
+                .bind_group_layout(camera_bind_group_layout)
+                .bind_group_layout(&box_data_bind_group_layout),
         );
 
         let index_buffer = renderer.create_index_buffer("bounding_box_index_buffer", Self::INDICES);
@@ -116,8 +136,8 @@ impl BoundingBoxes {
                     ..Default::default()
                 })
                 .blend_state(wgpu::BlendState::ALPHA_BLENDING)
-                .bind_group_layout(renderer.uniform_bind_group_layout())
-                .bind_group_layout(renderer.uniform_bind_group_layout()),
+                .bind_group_layout(camera_bind_group_layout)
+                .bind_group_layout(&box_data_bind_group_layout),
         );
 
         let wireframe_index_buffer =
@@ -153,56 +173,56 @@ impl BoundingBoxes {
 
     pub fn render_all(
         &self,
-        renderer: &Renderer,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        camera_bind_group: &wgpu::BindGroup,
+        _renderer: &Renderer,
+        _encoder: &mut wgpu::CommandEncoder,
+        _view: &wgpu::TextureView,
+        _camera_bind_group: &wgpu::BindGroup,
     ) {
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("bounding_boxes_render_pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: renderer
-                .render_pass_depth_stencil_attachment(wgpu::LoadOp::Load),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+        // let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        //     label: Some("bounding_boxes_render_pass"),
+        //     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+        //         view,
+        //         resolve_target: None,
+        //         ops: wgpu::Operations {
+        //             load: wgpu::LoadOp::Load,
+        //             store: wgpu::StoreOp::Store,
+        //         },
+        //     })],
+        //     depth_stencil_attachment: renderer
+        //         .render_pass_depth_stencil_attachment(wgpu::LoadOp::Load),
+        //     timestamp_writes: None,
+        //     occlusion_query_set: None,
+        // });
 
-        let bind_groups = self
-            .boxes
-            .iter()
-            .map(|b| {
-                let buffer = renderer.create_uniform_buffer("bounding_box_buffer", *b);
-                renderer.create_uniform_bind_group("bounding_box_bind_group", &buffer)
-            })
-            .collect::<Vec<_>>();
+        // let bind_groups = self
+        //     .boxes
+        //     .iter()
+        //     .map(|b| {
+        //         let buffer = renderer.create_uniform_buffer("bounding_box_buffer", *b);
+        //         renderer.create_uniform_bind_group("bounding_box_bind_group", &buffer)
+        //     })
+        //     .collect::<Vec<_>>();
 
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        // render_pass.set_pipeline(&self.pipeline);
+        // render_pass.set_bind_group(0, camera_bind_group, &[]);
+        // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        // render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
-        for bind_group in bind_groups.iter() {
-            render_pass.set_bind_group(1, bind_group, &[]);
-            render_pass.draw_indexed(0..Self::INDICES.len() as u32, 0, 0..1);
-        }
+        // for bind_group in bind_groups.iter() {
+        //     render_pass.set_bind_group(1, bind_group, &[]);
+        //     render_pass.draw_indexed(0..Self::INDICES.len() as u32, 0, 0..1);
+        // }
 
-        render_pass.set_pipeline(&self.wireframe_pipeline);
-        render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_index_buffer(
-            self.wireframe_index_buffer.slice(..),
-            wgpu::IndexFormat::Uint32,
-        );
+        // render_pass.set_pipeline(&self.wireframe_pipeline);
+        // render_pass.set_bind_group(0, camera_bind_group, &[]);
+        // render_pass.set_index_buffer(
+        //     self.wireframe_index_buffer.slice(..),
+        //     wgpu::IndexFormat::Uint32,
+        // );
 
-        for bind_group in bind_groups.iter() {
-            render_pass.set_bind_group(1, bind_group, &[]);
-            render_pass.draw_indexed(0..Self::WIREFRAME_INDICES.len() as u32, 0, 0..1);
-        }
+        // for bind_group in bind_groups.iter() {
+        //     render_pass.set_bind_group(1, bind_group, &[]);
+        //     render_pass.draw_indexed(0..Self::WIREFRAME_INDICES.len() as u32, 0, 0..1);
+        // }
     }
 }

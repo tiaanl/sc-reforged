@@ -1,7 +1,9 @@
-use crate::engine::{
-    assets::AssetLoader,
-    renderer::{RenderPipelineConfig, Renderer},
-    scene::Scene,
+use crate::{
+    engine::{
+        renderer::{RenderPipelineConfig, Renderer},
+        scene::Scene,
+    },
+    game::asset_loader::AssetLoader,
 };
 
 pub struct LoadingScene {
