@@ -7,6 +7,11 @@ pub fn register_camera_shader(shaders: &mut Shaders) {
     shaders.add_module(include_str!("camera.wgsl"), "camera.wgsl");
 }
 
+pub struct Ray {
+    pub origin: Vec3,
+    pub direction: Vec3,
+}
+
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct Matrices {
@@ -54,6 +59,32 @@ impl Camera {
         let view = Mat4::look_at_lh(self.position, target, self.rotation * Self::UP);
 
         Matrices { projection, view }
+    }
+
+    // let ndc_x = (2.0 * mouse_position.x / screen_size.x) - 1.0;
+    // let ndc_y = 1.0 - (2.0 * mouse_position.y / screen_size.y); // Flip Y-axis
+    // let ndc = Vec3::new(ndc_x, ndc_y, 1.0); // Use Z=1 for the far plane
+
+    /// Generates a ray in world space based on the mouse position.
+    pub fn generate_ray(&self, mouse_ndc: Vec2) -> Ray {
+        let ndc = Vec3::new(mouse_ndc.x, mouse_ndc.y, 1.0);
+
+        // TODO: Can we cache the matrices somewhere?
+        let matrices = self.calculate_matrices();
+        let projection_matrix = matrices.projection;
+        let view_matrix = matrices.view;
+
+        let inverse_view_proj = (projection_matrix * view_matrix).inverse();
+
+        let world_coords = inverse_view_proj.project_point3(ndc);
+
+        let ray_origin = self.position;
+        let ray_direction = (world_coords - ray_origin).normalize();
+
+        Ray {
+            origin: ray_origin,
+            direction: ray_direction,
+        }
     }
 }
 
