@@ -11,34 +11,16 @@ use crate::{
     },
 };
 
-/// Data only needed for a specific type of object.
-#[derive(Debug)]
-pub enum ObjectType {
-    _4x4,
-    Scenery,
-    SceneryBush,
-    SceneryLit,
-    SceneryStripLight,
-    Structure,
-    StructureFence,
-    StructureSwingDoor,
-}
-
 /// Represents an object inside the game world.
 #[derive(Debug)]
 pub struct Entity {
     pub transform: Transform,
     pub model: Handle<Model>,
-    pub _object_type: ObjectType,
 }
 
 impl Entity {
-    pub fn new(transform: Transform, model: Handle<Model>, object_type: ObjectType) -> Self {
-        Self {
-            transform,
-            model,
-            _object_type: object_type,
-        }
+    pub fn new(transform: Transform, model: Handle<Model>) -> Self {
+        Self { transform, model }
     }
 }
 

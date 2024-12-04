@@ -17,7 +17,6 @@ use crate::{
     },
 };
 use bounding_boxes::BoundingBoxes;
-use entities::ObjectType;
 use glam::{vec3, Quat, Vec3, Vec4};
 use terrain::*;
 
@@ -129,7 +128,6 @@ impl WorldScene {
                             ),
                         ),
                         model_handle,
-                        ObjectType::Scenery,
                     );
 
                     Ok::<_, AssetError>(entity)
