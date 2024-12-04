@@ -13,8 +13,8 @@ pub use winit::keyboard::KeyCode;
 pub struct InputState {
     key_pressed: HashSet<KeyCode>,
     mouse_pressed: HashSet<MouseButton>,
-    last_mouse_position: Vec2,
-    mouse_delta: Vec2,
+    last_mouse_position: Option<Vec2>,
+    mouse_delta: Option<Vec2>,
     wheel_delta: f32,
 }
 
@@ -43,8 +43,8 @@ impl InputState {
 
             WindowEvent::CursorMoved { position, .. } => {
                 let current = Vec2::new(position.x as f32, position.y as f32);
-                self.mouse_delta = current - self.last_mouse_position;
-                self.last_mouse_position = current;
+                self.mouse_delta = self.last_mouse_position.map(|p| current - p);
+                self.last_mouse_position = Some(current);
             }
 
             WindowEvent::MouseWheel { delta, .. } => {
@@ -60,7 +60,7 @@ impl InputState {
 
     /// Reset data being tracked per frame.
     pub(crate) fn reset_current_frame(&mut self) {
-        self.mouse_delta = Vec2::ZERO;
+        self.mouse_delta = None;
         self.wheel_delta = 0.0;
     }
 }
@@ -74,7 +74,7 @@ impl InputState {
         self.mouse_pressed.contains(&button)
     }
 
-    pub fn mouse_delta(&self) -> Vec2 {
+    pub fn mouse_delta(&self) -> Option<Vec2> {
         self.mouse_delta
     }
 

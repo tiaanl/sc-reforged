@@ -180,15 +180,13 @@ impl Scene for ModelViewer {
         self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
-    fn on_input(&mut self, input: &input::InputState, delta_time: f32) {
+    fn update(&mut self, delta_time: f32, input: &input::InputState) {
         if self.control_debug_camera {
             self.debug_camera_controller.on_input(input, delta_time);
         } else {
             self.camera_controller.on_input(input, delta_time);
         }
     }
-
-    fn update(&mut self, _delta_time: f32) {}
 
     fn render(
         &mut self,

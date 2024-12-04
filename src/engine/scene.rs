@@ -4,9 +4,7 @@ use super::{input::InputState, renderer::Renderer};
 pub trait Scene {
     fn resize(&mut self, width: u32, height: u32);
 
-    fn on_input(&mut self, input: &InputState, delta_time: f32) {}
-
-    fn update(&mut self, delta_time: f32);
+    fn update(&mut self, delta_time: f32, input: &InputState);
 
     fn debug_panel(&mut self, egui: &egui::Context) {}
 

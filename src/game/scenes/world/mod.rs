@@ -4,6 +4,7 @@ use crate::{
     engine::{
         assets::AssetManager,
         gizmos::{GizmoVertex, GizmosRenderer},
+        input::InputState,
         renderer::Renderer,
         scene::Scene,
         shaders::Shaders,
@@ -182,11 +183,9 @@ impl Scene for WorldScene {
         self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
-    fn on_input(&mut self, input: &crate::engine::input::InputState, delta_time: f32) {
+    fn update(&mut self, delta_time: f32, input: &InputState) {
         self.camera_controller.on_input(input, delta_time);
-    }
 
-    fn update(&mut self, delta_time: f32) {
         // self.world_camera.update(delta_time);
         self.terrain.update(delta_time);
 

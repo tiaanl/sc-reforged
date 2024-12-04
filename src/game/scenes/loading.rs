@@ -1,5 +1,6 @@
 use crate::{
     engine::{
+        input::InputState,
         renderer::{RenderPipelineConfig, Renderer},
         scene::Scene,
     },
@@ -47,7 +48,7 @@ impl LoadingScene {
 impl Scene for LoadingScene {
     fn resize(&mut self, _width: u32, _height: u32) {}
 
-    fn update(&mut self, _delta_time: f32) {}
+    fn update(&mut self, _delta_time: f32, _input: &InputState) {}
 
     fn render(
         &mut self,

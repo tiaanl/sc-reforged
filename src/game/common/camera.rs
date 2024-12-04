@@ -1,6 +1,6 @@
 use crate::engine::{input, renderer::Renderer, shaders::Shaders, Dirty};
 
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec2, Vec3};
 use wgpu::util::DeviceExt;
 
 pub fn register_camera_shader(shaders: &mut Shaders) {
@@ -183,11 +183,13 @@ impl FreeCameraController {
         }
 
         if input.mouse_pressed(input::MouseButton::Left) {
-            let delta = input.mouse_delta() * self.mouse_sensitivity;
-            if delta.x != 0.0 || delta.y != 0.0 {
-                self.yaw += delta.x;
-                self.pitch -= delta.y;
-                self.dirty.smudge();
+            if let Some(delta) = input.mouse_delta() {
+                let delta = delta * self.mouse_sensitivity;
+                if delta.x != 0.0 || delta.y != 0.0 {
+                    self.yaw += delta.x;
+                    self.pitch -= delta.y;
+                    self.dirty.smudge();
+                }
             }
         }
     }
@@ -232,10 +234,12 @@ impl ArcBacllCameraController {
 
     pub fn on_input(&mut self, input: &input::InputState, _delta_time: f32) {
         if input.mouse_pressed(input::MouseButton::Left) {
-            let delta = input.mouse_delta() * self.mouse_sensitivity;
-            self.yaw += delta.x;
-            self.pitch -= delta.y;
-            self.pitch = self.pitch.clamp(-89.0_f32, 89.0_f32);
+            if let Some(delta) = input.mouse_delta() {
+                let delta = delta * self.mouse_sensitivity;
+                self.yaw += delta.x;
+                self.pitch -= delta.y;
+                self.pitch = self.pitch.clamp(-89.0_f32, 89.0_f32);
+            }
         }
         let distance = self.distance / 10.0;
         self.distance -= input.wheel_delta() * distance;

@@ -100,7 +100,7 @@ impl winit::application::ApplicationHandler for App {
                     let campaign_defs = read_compaign_defs(&s);
                     let campaign_def = campaign_defs
                         .iter()
-                        .find(|c| c.base_name == "angola")
+                        .find(|c| c.base_name == "training")
                         .cloned()
                         .unwrap();
 
@@ -222,9 +222,7 @@ impl winit::application::ApplicationHandler for App {
                         {
                             let delta_time = last_frame_duration.as_secs_f32() * 60.0;
 
-                            scene.on_input(input, delta_time);
-
-                            scene.update(delta_time);
+                            scene.update(delta_time, input);
 
                             scene.begin_frame();
                             scene.render(&renderer, &mut encoder, &view);
