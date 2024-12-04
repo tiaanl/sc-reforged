@@ -100,7 +100,7 @@ impl winit::application::ApplicationHandler for App {
                     let campaign_defs = read_compaign_defs(&s);
                     let campaign_def = campaign_defs
                         .iter()
-                        .find(|c| c.base_name == "training")
+                        .find(|c| c.base_name == "angola")
                         .cloned()
                         .unwrap();
 

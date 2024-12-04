@@ -16,6 +16,7 @@ use crate::{
     },
 };
 use bounding_boxes::BoundingBoxes;
+use entities::ObjectType;
 use glam::{vec3, Quat, Vec3, Vec4};
 use terrain::*;
 
@@ -102,17 +103,19 @@ impl WorldScene {
 
                     let model_handle = assets.load_smf_model(&path, renderer)?;
 
-                    let object_type = match object.typ.as_str() {
-                        "4x4" => entities::ObjectType::_4x4,
-                        "Scenery_Bush" => entities::ObjectType::SceneryBush,
-                        "Scenery_Lit" => entities::ObjectType::SceneryLit,
-                        "Scenery_Strip_Light" => entities::ObjectType::SceneryStripLight,
-                        "Scenery" => entities::ObjectType::Scenery,
-                        "Structure_Fence" => entities::ObjectType::StructureFence,
-                        "Structure_Swing_Door" => entities::ObjectType::StructureSwingDoor,
-                        "Structure" => entities::ObjectType::Structure,
-                        _ => panic!("Invalid object type: {}", object.typ),
-                    };
+                    // let object_type = match object.typ.as_str() {
+                    //     "4x4" => entities::ObjectType::_4x4,
+                    //     "Scenery_Bush" => entities::ObjectType::SceneryBush,
+                    //     "Scenery_Lit" => entities::ObjectType::SceneryLit,
+                    //     "Scenery_Strip_Light" => entities::ObjectType::SceneryStripLight,
+                    //     "Scenery" => entities::ObjectType::Scenery,
+                    //     "Scenery_Alarm" => entities::ObjectType::Scenery,
+                    //     "Structure_Building" => entities::ObjectType::Scenery,
+                    //     "Structure_Fence" => entities::ObjectType::StructureFence,
+                    //     "Structure_Swing_Door" => entities::ObjectType::StructureSwingDoor,
+                    //     "Structure" => entities::ObjectType::Structure,
+                    //     _ => tracing::warn!("Invalid object type: {}", object.typ),
+                    // };
 
                     let entity = entities::Entity::new(
                         Transform::new(
@@ -125,7 +128,7 @@ impl WorldScene {
                             ),
                         ),
                         model_handle,
-                        object_type,
+                        ObjectType::Scenery,
                     );
 
                     Ok::<_, AssetError>(entity)
