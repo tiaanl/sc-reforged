@@ -15,7 +15,7 @@ use crate::{
     },
     game::{
         asset_loader::{AssetError, AssetLoader},
-        camera::{self, CameraController},
+        camera,
         mesh_renderer::{MeshItem, MeshList, MeshRenderer},
         model::{Model, NodeIndex},
     },
@@ -150,16 +150,10 @@ impl ModelViewer {
 
         const CAM_SPEED: f32 = 10.0;
         const MOUSE_SENSITIVITY: f32 = 0.4;
-        let debug_camera_controller = camera::FreeCameraController {
-            movement_speed: CAM_SPEED,
-            mouse_sensitivity: MOUSE_SENSITIVITY,
-            ..Default::default()
-        };
-        let camera_controller = camera::ArcBacllCameraController {
-            distance: 1_500.0,
-            mouse_sensitivity: MOUSE_SENSITIVITY,
-            ..Default::default()
-        };
+        let debug_camera_controller =
+            camera::FreeCameraController::new(CAM_SPEED, MOUSE_SENSITIVITY);
+        let mut camera_controller = camera::ArcBacllCameraController::new(MOUSE_SENSITIVITY);
+        camera_controller.distance = 1_500.0;
 
         Ok(Self {
             asset_manager,
@@ -203,9 +197,11 @@ impl Scene for ModelViewer {
         output: &wgpu::TextureView,
     ) {
         if self.view_debug_camera {
-            self.debug_camera_controller.update_camera(&mut self.camera);
+            self.debug_camera_controller
+                .update_camera_if_dirty(&mut self.camera);
         } else {
-            self.camera_controller.update_camera(&mut self.camera);
+            self.camera_controller
+                .update_camera_if_changed(&mut self.camera);
         }
 
         let matrices = self.camera.calculate_matrices();

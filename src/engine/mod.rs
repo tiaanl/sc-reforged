@@ -10,6 +10,10 @@ pub mod scene;
 pub mod shaders;
 pub mod utils;
 
+mod dirty;
+mod tracked;
 mod transform;
 
+pub use dirty::*;
+pub use tracked::*;
 pub use transform::*;

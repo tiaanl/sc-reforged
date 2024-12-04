@@ -137,11 +137,7 @@ impl WorldScene {
             }
         }
 
-        let camera_controller = camera::FreeCameraController {
-            movement_speed: 50.0,
-            mouse_sensitivity: 0.4,
-            ..Default::default()
-        };
+        let camera_controller = camera::FreeCameraController::new(50.0, 0.4);
 
         let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
 
@@ -184,7 +180,6 @@ impl Scene for WorldScene {
     }
 
     fn on_input(&mut self, input: &crate::engine::input::InputState, delta_time: f32) {
-        use camera::CameraController;
         self.camera_controller.on_input(input, delta_time);
     }
 
@@ -246,10 +241,13 @@ impl Scene for WorldScene {
     ) {
         {
             // Update the camera.
-            use crate::game::camera::CameraController;
-            self.camera_controller.update_camera(&mut self.camera);
-            let matrices = self.camera.calculate_matrices();
-            self.gpu_camera.upload_matrices(renderer, matrices);
+            if self
+                .camera_controller
+                .update_camera_if_dirty(&mut self.camera)
+            {
+                let matrices = self.camera.calculate_matrices();
+                self.gpu_camera.upload_matrices(renderer, matrices);
+            }
         }
 
         self.terrain

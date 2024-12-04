@@ -1,4 +1,4 @@
-use crate::engine::{input, renderer::Renderer, shaders::Shaders};
+use crate::engine::{input, renderer::Renderer, shaders::Shaders, Dirty};
 
 use glam::{Mat4, Quat, Vec3};
 use wgpu::util::DeviceExt;
@@ -119,12 +119,6 @@ impl GpuCamera {
     }
 }
 
-pub trait CameraController {
-    fn on_input(&mut self, input: &input::InputState, delta_time: f32);
-    fn update_camera(&mut self, camera: &mut Camera);
-}
-
-#[derive(Default)]
 pub struct FreeCameraController {
     pub position: Vec3,
     pub yaw: f32,   // degrees
@@ -132,9 +126,23 @@ pub struct FreeCameraController {
 
     pub movement_speed: f32,
     pub mouse_sensitivity: f32,
+
+    // Track whether the values have changed since last update.
+    dirty: Dirty,
 }
 
 impl FreeCameraController {
+    pub fn new(movement_speed: f32, mouse_sensitivity: f32) -> Self {
+        Self {
+            position: Vec3::ZERO,
+            yaw: 0.0,
+            pitch: 0.0,
+            movement_speed,
+            mouse_sensitivity,
+            dirty: Dirty::dirty(),
+        }
+    }
+
     #[inline]
     fn rotation(&self) -> Quat {
         Quat::from_rotation_z(self.yaw.to_radians())
@@ -142,20 +150,21 @@ impl FreeCameraController {
     }
 
     pub fn move_forward(&mut self, distance: f32) {
+        self.dirty.smudge();
         self.position += self.rotation() * Camera::FORWARD * distance;
     }
 
     pub fn move_right(&mut self, distance: f32) {
+        self.dirty.smudge();
         self.position += self.rotation() * Camera::RIGHT * distance;
     }
 
     pub fn move_up(&mut self, distance: f32) {
+        self.dirty.smudge();
         self.position += self.rotation() * Camera::UP * distance;
     }
-}
 
-impl CameraController for FreeCameraController {
-    fn on_input(&mut self, input: &input::InputState, delta_time: f32) {
+    pub fn on_input(&mut self, input: &input::InputState, delta_time: f32) {
         let delta = delta_time * self.movement_speed;
         if input.key_pressed(input::KeyCode::KeyW) {
             self.move_forward(delta);
@@ -178,14 +187,19 @@ impl CameraController for FreeCameraController {
 
         if input.mouse_pressed(input::MouseButton::Left) {
             let delta = input.mouse_delta() * self.mouse_sensitivity;
-            self.yaw += delta.x;
-            self.pitch -= delta.y;
+            if delta.x != 0.0 || delta.y != 0.0 {
+                self.yaw += delta.x;
+                self.pitch -= delta.y;
+                self.dirty.smudge();
+            }
         }
     }
 
-    fn update_camera(&mut self, camera: &mut Camera) {
-        camera.position = self.position;
-        camera.rotation = self.rotation();
+    pub fn update_camera_if_dirty(&self, camera: &mut Camera) -> bool {
+        self.dirty.if_dirty(|| {
+            camera.position = self.position;
+            camera.rotation = self.rotation();
+        })
     }
 }
 
@@ -196,9 +210,21 @@ pub struct ArcBacllCameraController {
     pub distance: f32,
 
     pub mouse_sensitivity: f32,
+
+    dirty: Dirty,
 }
 
 impl ArcBacllCameraController {
+    pub fn new(mouse_sensitivity: f32) -> Self {
+        Self {
+            yaw: 0.0,
+            pitch: 0.0,
+            distance: 0.0,
+            mouse_sensitivity,
+            dirty: Dirty::dirty(),
+        }
+    }
+
     pub fn position_and_rotation(&self) -> (Vec3, Quat) {
         let rotation = Quat::from_rotation_z(self.yaw.to_radians())
             * Quat::from_rotation_x(self.pitch.to_radians());
@@ -206,26 +232,24 @@ impl ArcBacllCameraController {
 
         (position, rotation)
     }
-}
 
-impl CameraController for ArcBacllCameraController {
-    fn on_input(&mut self, input: &input::InputState, _delta_time: f32) {
+    pub fn on_input(&mut self, input: &input::InputState, _delta_time: f32) {
         if input.mouse_pressed(input::MouseButton::Left) {
             let delta = input.mouse_delta() * self.mouse_sensitivity;
             self.yaw += delta.x;
             self.pitch -= delta.y;
+            self.pitch = self.pitch.clamp(-89.0_f32, 89.0_f32);
         }
         let distance = self.distance / 10.0;
         self.distance -= input.wheel_delta() * distance;
+        // self.distance = self.distance.clamp(camera.near, camera.far);
     }
 
-    fn update_camera(&mut self, camera: &mut Camera) {
-        self.pitch = self.pitch.clamp(-89.0_f32, 89.0_f32);
-        self.distance = self.distance.clamp(camera.near, camera.far);
-
-        let (position, rotation) = self.position_and_rotation();
-
-        camera.position = position;
-        camera.rotation = rotation;
+    pub fn update_camera_if_changed(&self, camera: &mut Camera) -> bool {
+        self.dirty.if_dirty(|| {
+            let (position, rotation) = self.position_and_rotation();
+            camera.position = position;
+            camera.rotation = rotation;
+        })
     }
 }
