@@ -10,8 +10,8 @@ pub fn register_camera_shader(shaders: &mut Shaders) {
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct Matrices {
-    pub projection: [[f32; 4]; 4],
-    pub view: [[f32; 4]; 4],
+    pub projection: Mat4,
+    pub view: Mat4,
 }
 
 #[derive(Debug, Default)]
@@ -53,10 +53,7 @@ impl Camera {
         let target = self.position + self.rotation * Self::FORWARD;
         let view = Mat4::look_at_lh(self.position, target, self.rotation * Self::UP);
 
-        Matrices {
-            projection: projection.to_cols_array_2d(),
-            view: view.to_cols_array_2d(),
-        }
+        Matrices { projection, view }
     }
 }
 
