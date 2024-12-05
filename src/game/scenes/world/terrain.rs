@@ -487,17 +487,13 @@ impl Terrain {
                     view: output,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 0.4,
-                        }),
+                        load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: renderer
-                    .render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
+                depth_stencil_attachment: Some(
+                    renderer.render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
+                ),
                 ..Default::default()
             });
 

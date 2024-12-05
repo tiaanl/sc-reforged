@@ -246,12 +246,6 @@ impl Scene for ModelViewer {
             output,
             &self.gpu_camera.bind_group,
             list,
-            wgpu::LoadOp::Clear(wgpu::Color {
-                r: 0.1,
-                g: 0.2,
-                b: 0.3,
-                a: 1.0,
-            }),
         );
 
         const AXIS_SIZE: f32 = 100.0;

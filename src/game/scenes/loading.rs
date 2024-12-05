@@ -71,8 +71,9 @@ impl Scene for LoadingScene {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: renderer
-                .render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
+            depth_stencil_attachment: Some(
+                renderer.render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
+            ),
             timestamp_writes: None,
             occlusion_query_set: None,
         });

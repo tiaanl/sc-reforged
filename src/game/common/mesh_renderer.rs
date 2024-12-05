@@ -160,7 +160,6 @@ impl MeshRenderer {
         output: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
         meshes: MeshList,
-        load: wgpu::LoadOp<wgpu::Color>,
     ) {
         if meshes.meshes.is_empty() {
             return;
@@ -174,7 +173,7 @@ impl MeshRenderer {
             matrices.push(mesh.transform);
         }
 
-        let mut render_pass = Self::create_render_pass(renderer, encoder, output, load);
+        let mut render_pass = Self::create_render_pass(renderer, encoder, output);
 
         for (mesh, matrices) in instances.into_iter() {
             let mesh = self.asset_manager.get(mesh).unwrap();
@@ -220,7 +219,6 @@ impl MeshRenderer {
         renderer: &Renderer,
         encoder: &'encoder mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        load: wgpu::LoadOp<wgpu::Color>,
     ) -> wgpu::RenderPass<'encoder> {
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("model_render_pass"),
@@ -228,12 +226,13 @@ impl MeshRenderer {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load,
+                    load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: renderer
-                .render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
+            depth_stencil_attachment: Some(
+                renderer.render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
+            ),
             timestamp_writes: None,
             occlusion_query_set: None,
         })

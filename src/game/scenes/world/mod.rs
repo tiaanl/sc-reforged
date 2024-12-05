@@ -177,6 +177,37 @@ impl WorldScene {
             bounding_boxes,
         })
     }
+
+    /// Clear the color buffer, if required and clear the depth buffer to the given value.
+    fn clear_color_and_depth(
+        &self,
+        renderer: &Renderer,
+        encoder: &mut wgpu::CommandEncoder,
+        surface: &wgpu::TextureView,
+    ) {
+        // Creating and dropping the render pass will clear the buffers.
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("world_clear_render_pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: surface,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.2,
+                        g: 0.1,
+                        b: 0.4,
+                        a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(
+                renderer.render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
+            ),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+    }
 }
 
 impl Scene for WorldScene {
@@ -252,6 +283,8 @@ impl Scene for WorldScene {
                 self.gpu_camera.upload_matrices(renderer, matrices);
             }
         }
+
+        self.clear_color_and_depth(renderer, encoder, view);
 
         self.terrain
             .render(renderer, encoder, view, &self.gpu_camera.bind_group);

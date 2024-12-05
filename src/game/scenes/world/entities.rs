@@ -80,13 +80,7 @@ impl Entities {
             }
         }
 
-        self.model_renderer.render_multiple(
-            renderer,
-            encoder,
-            output,
-            camera_bind_group,
-            list,
-            wgpu::LoadOp::Load,
-        );
+        self.model_renderer
+            .render_multiple(renderer, encoder, output, camera_bind_group, list);
     }
 }

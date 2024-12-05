@@ -397,14 +397,14 @@ impl Renderer {
     pub fn render_pass_depth_stencil_attachment(
         &self,
         load: wgpu::LoadOp<f32>,
-    ) -> Option<wgpu::RenderPassDepthStencilAttachment> {
-        Some(wgpu::RenderPassDepthStencilAttachment {
+    ) -> wgpu::RenderPassDepthStencilAttachment {
+        wgpu::RenderPassDepthStencilAttachment {
             view: &self.depth_texture,
             depth_ops: Some(wgpu::Operations {
                 load,
                 store: wgpu::StoreOp::Store,
             }),
             stencil_ops: None,
-        })
+        }
     }
 }
