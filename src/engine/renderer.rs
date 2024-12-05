@@ -219,18 +219,6 @@ impl Renderer {
             })
     }
 
-    pub fn create_uniform_buffer<B>(&self, label: &str, buffer: B) -> wgpu::Buffer
-    where
-        B: bytemuck::NoUninit,
-    {
-        self.device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(label),
-                contents: bytemuck::cast_slice(&[buffer]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            })
-    }
-
     pub fn create_shader_module(&self, label: &str, source: &str) -> wgpu::ShaderModule {
         let shader_module_label = format!("{}_shader_module", label);
         self.device

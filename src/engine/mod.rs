@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub mod assets;
 pub mod egui_integration;
 pub mod gizmos;
@@ -10,11 +8,19 @@ pub mod scene;
 pub mod shaders;
 pub mod utils;
 
-mod dirty;
-mod tracked;
-mod transform;
+pub mod dirty;
+pub mod tracked;
+pub mod transform;
 
-pub use dirty::*;
-#[allow(unused)]
-pub use tracked::*;
-pub use transform::*;
+pub mod prelude {
+    #![allow(unused_imports)]
+    pub use super::assets::{Asset, AssetManager, Handle};
+    pub use super::dirty::*;
+    pub use super::input::*;
+    pub use super::renderer::*;
+    pub use super::scene::*;
+    pub use super::shaders::*;
+    pub use super::tracked::*;
+    pub use super::transform::*;
+    pub use glam::{Mat4, Quat, Vec2, Vec3};
+}

@@ -1,14 +1,17 @@
 use std::path::PathBuf;
 
+use crate::engine::prelude::*;
+
+use crate::engine::shaders::Shaders;
 use crate::{
     engine::{
-        assets::AssetManager,
+        //     assets::AssetManager,
         gizmos::{GizmoVertex, GizmosRenderer},
-        input::InputState,
-        renderer::Renderer,
-        scene::Scene,
-        shaders::Shaders,
-        Transform,
+        //     input::InputState,
+        //     renderer::Renderer,
+        //     scene::Scene,
+        //     shaders::Shaders,
+        //     Transform,
     },
     game::{
         asset_loader::{AssetError, AssetLoader},

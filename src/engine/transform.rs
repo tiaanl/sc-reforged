@@ -15,11 +15,13 @@ impl Transform {
         }
     }
 
+    #[allow(unused)]
     pub fn with_translation(mut self, translation: Vec3) -> Self {
         self.translation = translation;
         self
     }
 
+    #[allow(unused)]
     pub fn with_rotation(mut self, rotation: Quat) -> Self {
         self.rotation = rotation;
         self

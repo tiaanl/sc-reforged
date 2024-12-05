@@ -1,10 +1,5 @@
 use crate::{
-    engine::{
-        assets::{AssetManager, Handle},
-        renderer::Renderer,
-        shaders::Shaders,
-        Transform,
-    },
+    engine::prelude::*,
     game::{
         mesh_renderer::{MeshItem, MeshList, MeshRenderer},
         model::{Model, NodeIndex},

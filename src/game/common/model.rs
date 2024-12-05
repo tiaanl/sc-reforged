@@ -1,10 +1,6 @@
 use shadow_company_tools::smf;
 
-use crate::engine::{
-    assets::{Asset, Handle},
-    renderer::Renderer,
-    Transform,
-};
+use crate::engine::prelude::*;
 
 use super::{
     asset_loader::{AssetError, AssetLoader},

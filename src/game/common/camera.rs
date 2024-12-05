@@ -1,4 +1,4 @@
-use crate::engine::{input, renderer::Renderer, shaders::Shaders, Dirty};
+use crate::engine::prelude::*;
 
 use glam::{Mat4, Quat, Vec2, Vec3};
 use wgpu::util::DeviceExt;
@@ -192,28 +192,28 @@ impl FreeCameraController {
         self.position += self.rotation() * Camera::UP * distance;
     }
 
-    pub fn on_input(&mut self, input: &input::InputState, delta_time: f32) {
+    pub fn on_input(&mut self, input: &InputState, delta_time: f32) {
         let delta = delta_time * self.movement_speed;
-        if input.key_pressed(input::KeyCode::KeyW) {
+        if input.key_pressed(KeyCode::KeyW) {
             self.move_forward(delta);
         }
-        if input.key_pressed(input::KeyCode::KeyS) {
+        if input.key_pressed(KeyCode::KeyS) {
             self.move_forward(-delta);
         }
-        if input.key_pressed(input::KeyCode::KeyA) {
+        if input.key_pressed(KeyCode::KeyA) {
             self.move_right(delta);
         }
-        if input.key_pressed(input::KeyCode::KeyD) {
+        if input.key_pressed(KeyCode::KeyD) {
             self.move_right(-delta);
         }
-        if input.key_pressed(input::KeyCode::KeyE) {
+        if input.key_pressed(KeyCode::KeyE) {
             self.move_up(delta);
         }
-        if input.key_pressed(input::KeyCode::KeyQ) {
+        if input.key_pressed(KeyCode::KeyQ) {
             self.move_up(-delta);
         }
 
-        if input.mouse_pressed(input::MouseButton::Left) {
+        if input.mouse_pressed(MouseButton::Left) {
             if let Some(delta) = input.mouse_delta() {
                 let delta = delta * self.mouse_sensitivity;
                 if delta.x != 0.0 || delta.y != 0.0 {
@@ -263,8 +263,8 @@ impl ArcBacllCameraController {
         (position, rotation)
     }
 
-    pub fn on_input(&mut self, input: &input::InputState, _delta_time: f32) {
-        if input.mouse_pressed(input::MouseButton::Left) {
+    pub fn on_input(&mut self, input: &InputState, _delta_time: f32) {
+        if input.mouse_pressed(MouseButton::Left) {
             if let Some(delta) = input.mouse_delta() {
                 let delta = delta * self.mouse_sensitivity;
                 self.yaw += delta.x;
