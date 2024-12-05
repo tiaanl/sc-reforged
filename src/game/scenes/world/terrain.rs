@@ -1,13 +1,14 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
-use glam::{vec2, vec3, Vec2, Vec3, Vec4};
+use glam::{Vec2, Vec3, Vec4};
 use tracing::info;
 
 use crate::{
     engine::{
         gizmos::GizmoVertex,
-        renderer::{BufferLayout, RenderPipelineConfig, Renderer},
+        mesh::Vertex,
+        renderer::{RenderPipelineConfig, Renderer},
         shaders::Shaders,
     },
     game::{
@@ -128,32 +129,6 @@ fn load_texture_map(data: &[u8]) -> Result<HeightMap, AssetError> {
         height,
         heights,
     })
-}
-
-#[derive(Clone, Copy, bytemuck::NoUninit)]
-#[repr(C)]
-struct Vertex {
-    position: Vec3,
-    normal: Vec3,
-    tex_coord: Vec2,
-}
-
-impl BufferLayout for Vertex {
-    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
-        use wgpu::vertex_attr_array;
-
-        const VERTEX_ATTR_ARRAY: &[wgpu::VertexAttribute] = &vertex_attr_array![
-            0 => Float32x3, // position
-            1 => Float32x3, // normal
-            2 => Float32x2, // tex_coord
-        ];
-
-        &[wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: VERTEX_ATTR_ARRAY,
-        }]
-    }
 }
 
 impl Terrain {
@@ -279,13 +254,13 @@ impl Terrain {
                     let normal = Vec3::Y;
 
                     vertices.push(Vertex {
-                        position: vec3(
+                        position: Vec3::new(
                             (x as f32) * nominal_edge_size,
                             (y as f32) * nominal_edge_size,
                             altitude as f32,
                         ),
                         normal,
-                        tex_coord: vec2(
+                        tex_coord: Vec2::new(
                             x as f32 / (height_map.width - 1) as f32,
                             y as f32 / (height_map.height - 1) as f32,
                         ),
@@ -410,7 +385,7 @@ impl Terrain {
     /// Return the max bounds of the terrain. The min value of the bound is
     /// [`Vec3::ZERO`].
     pub fn _bounds(&self) -> Vec3 {
-        vec3(
+        Vec3::new(
             self.map_dx * self.nominal_edge_size,
             self.altitude_map_height_base * 255.0,
             self.map_dy * self.nominal_edge_size,
