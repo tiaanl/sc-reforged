@@ -2,12 +2,7 @@ use ahash::HashMap;
 use glam::Mat4;
 use wgpu::{util::DeviceExt, vertex_attr_array, ShaderStages};
 
-use crate::engine::{
-    assets::{Asset, AssetManager, Handle},
-    mesh::{GpuIndexedMesh, Vertex},
-    renderer::Renderer,
-    shaders::Shaders,
-};
+use crate::engine::prelude::*;
 
 use super::asset_loader::AssetLoader;
 
@@ -74,7 +69,7 @@ impl MeshRenderer {
                     label: Some("mesh_renderer_pipeline_layout"),
                     bind_group_layouts: &[
                         // u_camera
-                        &camera_bind_group_layout,
+                        camera_bind_group_layout,
                         // u_texture
                         renderer.texture_bind_group_layout(),
                     ],
@@ -155,9 +150,7 @@ impl MeshRenderer {
 
     pub fn render_multiple(
         &self,
-        renderer: &Renderer,
-        encoder: &mut wgpu::CommandEncoder,
-        output: &wgpu::TextureView,
+        frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
         meshes: MeshList,
     ) {
@@ -173,19 +166,23 @@ impl MeshRenderer {
             matrices.push(mesh.transform);
         }
 
-        let mut render_pass = Self::create_render_pass(renderer, encoder, output);
+        let device = frame.device.clone();
+
+        let mut render_pass = Self::create_render_pass(frame);
 
         for (mesh, matrices) in instances.into_iter() {
-            let mesh = self.asset_manager.get(mesh).unwrap();
+            let Some(mesh) = self.asset_manager.get(mesh) else {
+                // Ignore meshes we can't find.
+                tracing::warn!("Mesh not found: {:?}", mesh);
+                continue;
+            };
 
             // Create a buffer to render to.
-            let buffer = renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("mesh_indices_buffer"),
-                    contents: bytemuck::cast_slice(&matrices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
+            let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("mesh_indices_buffer"),
+                contents: bytemuck::cast_slice(&matrices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, mesh.gpu_mesh.vertex_buffer.slice(..));
@@ -198,43 +195,31 @@ impl MeshRenderer {
             render_pass.set_bind_group(1, &mesh.texture, &[]);
             render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..matrices.len() as u32);
         }
-
-        // render_pass.set_pipeline(&self.render_pipeline);
-        // render_pass.set_bind_group(0, camera_bind_group, &[]);
-        // batch.iter().for_each(|job| {
-        //     let Some(model) = self.models.get(&job.handle) else {
-        //         return;
-        //     };
-
-        //     for mesh in model.meshes.iter() {
-        //         let node_index = mesh.node_index as u32;
-        //         render_pass.set_bind_group(1, &model.transforms_bind_group, &[]);
-        //         render_pass.set_bind_group(2, &mesh.texture, &[]);
-        //         render_pass.draw_mesh(&mesh.gpu_mesh, node_index..node_index + 1);
-        //     }
-        // });
     }
 
-    fn create_render_pass<'encoder>(
-        renderer: &Renderer,
-        encoder: &'encoder mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-    ) -> wgpu::RenderPass<'encoder> {
-        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("model_render_pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(
-                renderer.render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
-            ),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        })
+    fn create_render_pass(frame: &mut Frame) -> wgpu::RenderPass {
+        frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("mesh_renderer_render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &frame.depth_texture,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            })
     }
 }

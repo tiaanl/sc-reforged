@@ -1,5 +1,7 @@
 use glam::{Vec3, Vec4};
-use wgpu::vertex_attr_array;
+use wgpu::{util::DeviceExt, vertex_attr_array};
+
+use crate::Frame;
 
 use super::renderer::{BufferLayout, RenderPipelineConfig, Renderer};
 
@@ -57,29 +59,35 @@ impl GizmosRenderer {
         Self { pipeline }
     }
 
-    pub fn render(
+    pub fn render_frame(
         &self,
-        renderer: &Renderer,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
+        frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
         vertices: &[GizmoVertex],
     ) {
-        let vertex_buffer = renderer.create_vertex_buffer("gizmos_vertex_buffer", vertices);
+        let vertex_buffer = frame
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("gizmos_vertex_buffer"),
+                contents: bytemuck::cast_slice(vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
 
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("gizmos_render_pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            ..Default::default()
-        });
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("gizmos_render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                ..Default::default()
+            });
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));

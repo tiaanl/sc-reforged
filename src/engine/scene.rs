@@ -1,4 +1,4 @@
-use super::{input::InputState, renderer::Renderer};
+use super::{input::InputState, renderer::Frame};
 
 #[allow(unused)]
 pub trait Scene {
@@ -8,14 +8,7 @@ pub trait Scene {
 
     fn debug_panel(&mut self, egui: &egui::Context) {}
 
-    fn begin_frame(&mut self) {}
+    fn render_update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {}
 
-    fn render(
-        &mut self,
-        renderer: &Renderer,
-        encoder: &mut wgpu::CommandEncoder,
-        output: &wgpu::TextureView,
-    );
-
-    fn end_frame(&mut self) {}
+    fn render_frame(&self, frame: &mut Frame) {}
 }

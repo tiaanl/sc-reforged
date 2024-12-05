@@ -30,7 +30,7 @@ impl<A: Asset> Eq for Handle<A> {}
 
 impl<A: Asset> Clone for Handle<A> {
     fn clone(&self) -> Self {
-        Self(self.0, std::marker::PhantomData)
+        *self
     }
 }
 

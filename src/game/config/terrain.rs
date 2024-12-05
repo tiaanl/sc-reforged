@@ -45,7 +45,7 @@ impl Default for TerrainMapping {
     }
 }
 
-impl<'lines> From<ConfigFile<'lines>> for TerrainMapping {
+impl From<ConfigFile<'_>> for TerrainMapping {
     fn from(mut value: ConfigFile) -> Self {
         let mut result = TerrainMapping::default();
 

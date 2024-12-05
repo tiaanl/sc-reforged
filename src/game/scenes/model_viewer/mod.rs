@@ -6,12 +6,8 @@ use shadow_company_tools::smf;
 
 use crate::{
     engine::{
-        assets::{Asset, AssetManager, Handle},
         gizmos::{GizmoVertex, GizmosRenderer},
-        input,
-        renderer::Renderer,
-        scene::Scene,
-        shaders::Shaders,
+        prelude::*,
     },
     game::{
         asset_loader::{AssetError, AssetLoader},
@@ -180,7 +176,7 @@ impl Scene for ModelViewer {
         self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
-    fn update(&mut self, delta_time: f32, input: &input::InputState) {
+    fn update(&mut self, delta_time: f32, input: &InputState) {
         if self.control_debug_camera {
             self.debug_camera_controller.on_input(input, delta_time);
         } else {
@@ -188,12 +184,7 @@ impl Scene for ModelViewer {
         }
     }
 
-    fn render(
-        &mut self,
-        renderer: &crate::engine::renderer::Renderer,
-        encoder: &mut wgpu::CommandEncoder,
-        output: &wgpu::TextureView,
-    ) {
+    fn render_update(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
         if self.view_debug_camera {
             self.debug_camera_controller
                 .update_camera_if_dirty(&mut self.camera);
@@ -203,8 +194,10 @@ impl Scene for ModelViewer {
         }
 
         let matrices = self.camera.calculate_matrices();
-        self.gpu_camera.upload_matrices(renderer, matrices);
+        self.gpu_camera.upload_matrices(queue, matrices);
+    }
 
+    fn render_frame(&self, frame: &mut Frame) {
         let Some(model) = self.asset_manager.get(self.model) else {
             tracing::error!("Invalid model");
             return;
@@ -240,13 +233,8 @@ impl Scene for ModelViewer {
 
         let list = MeshList { meshes };
 
-        self.mesh_renderer.render_multiple(
-            renderer,
-            encoder,
-            output,
-            &self.gpu_camera.bind_group,
-            list,
-        );
+        self.mesh_renderer
+            .render_multiple(frame, &self.gpu_camera.bind_group, list);
 
         const AXIS_SIZE: f32 = 100.0;
         let mut vertices = vec![
@@ -271,13 +259,8 @@ impl Scene for ModelViewer {
             ));
         }
 
-        self.gizmos.render(
-            renderer,
-            encoder,
-            output,
-            &self.gpu_camera.bind_group,
-            &vertices,
-        );
+        self.gizmos
+            .render_frame(frame, &self.gpu_camera.bind_group, &vertices);
     }
 
     fn debug_panel(&mut self, egui: &egui::Context) {

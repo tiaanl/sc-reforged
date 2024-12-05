@@ -140,10 +140,8 @@ impl GpuCamera {
         }
     }
 
-    pub fn upload_matrices(&self, renderer: &Renderer, matrices: Matrices) {
-        renderer
-            .queue
-            .write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[matrices]));
+    pub fn upload_matrices(&self, queue: &wgpu::Queue, matrices: Matrices) {
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[matrices]));
     }
 }
 
@@ -167,7 +165,7 @@ impl FreeCameraController {
             pitch: 0.0,
             movement_speed,
             mouse_sensitivity,
-            dirty: Dirty::dirty(),
+            dirty: Dirty::smudged(),
         }
     }
 
@@ -251,7 +249,7 @@ impl ArcBacllCameraController {
             pitch: 0.0,
             distance: 0.0,
             mouse_sensitivity,
-            dirty: Dirty::dirty(),
+            dirty: Dirty::smudged(),
         }
     }
 

@@ -177,37 +177,6 @@ impl WorldScene {
             bounding_boxes,
         })
     }
-
-    /// Clear the color buffer, if required and clear the depth buffer to the given value.
-    fn clear_color_and_depth(
-        &self,
-        renderer: &Renderer,
-        encoder: &mut wgpu::CommandEncoder,
-        surface: &wgpu::TextureView,
-    ) {
-        // Creating and dropping the render pass will clear the buffers.
-        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("world_clear_render_pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: surface,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.2,
-                        g: 0.1,
-                        b: 0.4,
-                        a: 1.0,
-                    }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(
-                renderer.render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
-            ),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-    }
 }
 
 impl Scene for WorldScene {
@@ -267,52 +236,47 @@ impl Scene for WorldScene {
         });
     }
 
-    fn render(
-        &mut self,
-        renderer: &crate::engine::renderer::Renderer,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-    ) {
+    fn render_update(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
+        // Update the camera.
+        if self
+            .camera_controller
+            .update_camera_if_dirty(&mut self.camera)
         {
-            // Update the camera.
-            if self
-                .camera_controller
-                .update_camera_if_dirty(&mut self.camera)
-            {
-                let matrices = self.camera.calculate_matrices();
-                self.gpu_camera.upload_matrices(renderer, matrices);
-            }
+            let matrices = self.camera.calculate_matrices();
+            self.gpu_camera.upload_matrices(queue, matrices);
         }
+    }
 
-        self.clear_color_and_depth(renderer, encoder, view);
-
-        self.terrain
-            .render(renderer, encoder, view, &self.gpu_camera.bind_group);
-
-        let mut more_vertices = self.terrain.render_normals();
-        self.gizmos_vertices.append(&mut more_vertices);
-        let mut more_vertices = self.terrain.render_normals_lookup();
-        self.gizmos_vertices.append(&mut more_vertices);
-
-        self.objects.render(
-            renderer,
-            encoder,
-            view,
-            &self.gpu_camera.bind_group,
-            // &mut self.bounding_boxes,
+    fn render_frame(&self, frame: &mut Frame) {
+        frame.clear_color_and_depth(
+            wgpu::Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
+            1.0,
         );
 
-        // self.bounding_boxes
-        //     .render_all(renderer, encoder, view, &self.gpu_camera.bind_group);
-        self.bounding_boxes.clear();
+        self.terrain
+            .render_frame(frame, &self.gpu_camera.bind_group);
 
-        self.gizmos_renderer.render(
-            renderer,
-            encoder,
-            view,
+        // let mut more_vertices = self.terrain.render_normals();
+        // self.gizmos_vertices.append(&mut more_vertices);
+        // let mut more_vertices = self.terrain.render_normals_lookup();
+        // self.gizmos_vertices.append(&mut more_vertices);
+
+        self.objects
+            .render_frame(frame, &self.gpu_camera.bind_group);
+
+        // self.bounding_boxes.clear();
+
+        self.gizmos_renderer.render_frame(
+            frame,
             &self.gpu_camera.bind_group,
             &self.gizmos_vertices,
         );
-        self.gizmos_vertices.clear();
+
+        // self.gizmos_vertices.clear();
     }
 }

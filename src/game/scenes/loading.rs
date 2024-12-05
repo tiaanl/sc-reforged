@@ -1,11 +1,4 @@
-use crate::{
-    engine::{
-        input::InputState,
-        renderer::{RenderPipelineConfig, Renderer},
-        scene::Scene,
-    },
-    game::asset_loader::AssetLoader,
-};
+use crate::{engine::prelude::*, game::asset_loader::AssetLoader};
 
 pub struct LoadingScene {
     pipeline: wgpu::RenderPipeline,
@@ -50,33 +43,35 @@ impl Scene for LoadingScene {
 
     fn update(&mut self, _delta_time: f32, _input: &InputState) {}
 
-    fn render(
-        &mut self,
-        renderer: &crate::engine::renderer::Renderer,
-        _encoder: &mut wgpu::CommandEncoder,
-        output: &wgpu::TextureView,
-    ) {
-        let mut render_pass = _encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("loading_scene_render_pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: output,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
+    fn render_frame(&self, frame: &mut Frame) {
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("loading_scene_render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &frame.depth_texture,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
                     }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(
-                renderer.render_pass_depth_stencil_attachment(wgpu::LoadOp::Clear(1.0)),
-            ),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.bind_group, &[]);

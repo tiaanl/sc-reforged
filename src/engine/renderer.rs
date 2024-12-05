@@ -1,14 +1,48 @@
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use wgpu::util::DeviceExt;
 
+#[derive(Clone)]
+pub struct RenderDevice(Arc<wgpu::Device>);
+
+impl From<wgpu::Device> for RenderDevice {
+    fn from(value: wgpu::Device) -> Self {
+        Self(Arc::new(value))
+    }
+}
+
+impl Deref for RenderDevice {
+    type Target = wgpu::Device;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+#[derive(Clone)]
+pub struct RenderQueue(Arc<wgpu::Queue>);
+
+impl From<wgpu::Queue> for RenderQueue {
+    fn from(value: wgpu::Queue) -> Self {
+        Self(Arc::new(value))
+    }
+}
+
+impl Deref for RenderQueue {
+    type Target = wgpu::Queue;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
 pub struct Renderer {
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
+    pub device: RenderDevice,
+    pub queue: RenderQueue,
     pub surface: wgpu::Surface<'static>,
     pub surface_config: wgpu::SurfaceConfiguration,
 
-    depth_texture: wgpu::TextureView,
+    pub depth_texture: Arc<wgpu::TextureView>,
 
     /// A bind group layout used for all texture bind groups.
     texture_bind_group_layout: wgpu::BindGroupLayout,
@@ -148,7 +182,7 @@ impl Renderer {
 
         surface.configure(&device, &surface_config);
 
-        let depth_texture = Self::create_depth_texture(&device, &surface_config);
+        let depth_texture = Arc::new(Self::create_depth_texture(&device, &surface_config));
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -174,8 +208,8 @@ impl Renderer {
             });
 
         Self {
-            device,
-            queue,
+            device: device.into(),
+            queue: queue.into(),
             surface,
             surface_config,
             depth_texture,
@@ -186,7 +220,10 @@ impl Renderer {
     pub fn resize(&mut self, width: u32, height: u32) {
         self.surface_config.width = width;
         self.surface_config.height = height;
-        self.depth_texture = Self::create_depth_texture(&self.device, &self.surface_config);
+        self.depth_texture = Arc::new(Self::create_depth_texture(
+            &self.device,
+            &self.surface_config,
+        ));
         self.surface.configure(&self.device, &self.surface_config);
     }
 
@@ -393,18 +430,42 @@ impl Renderer {
             bias: wgpu::DepthBiasState::default(),
         })
     }
+}
 
-    pub fn render_pass_depth_stencil_attachment(
-        &self,
-        load: wgpu::LoadOp<f32>,
-    ) -> wgpu::RenderPassDepthStencilAttachment {
-        wgpu::RenderPassDepthStencilAttachment {
-            view: &self.depth_texture,
-            depth_ops: Some(wgpu::Operations {
-                load,
-                store: wgpu::StoreOp::Store,
+pub struct Frame {
+    pub device: RenderDevice,
+    pub _queue: RenderQueue,
+    pub depth_texture: Arc<wgpu::TextureView>,
+
+    /// The encoder to use for creating render passes.
+    pub encoder: wgpu::CommandEncoder,
+    /// The window surface.
+    pub surface: wgpu::TextureView,
+}
+
+impl Frame {
+    pub fn clear_color_and_depth(&mut self, color: wgpu::Color, depth: f32) {
+        // Creating and dropping the render pass will clear the buffers.
+        self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("world_clear_render_pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &self.surface,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(color),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: self.depth_texture.as_ref(),
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(depth),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
             }),
-            stencil_ops: None,
-        }
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
     }
 }

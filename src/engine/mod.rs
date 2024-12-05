@@ -17,6 +17,7 @@ pub mod prelude {
     pub use super::assets::{Asset, AssetManager, Handle};
     pub use super::dirty::*;
     pub use super::input::*;
+    pub use super::mesh::*;
     pub use super::renderer::*;
     pub use super::scene::*;
     pub use super::shaders::*;

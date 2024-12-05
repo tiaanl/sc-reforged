@@ -49,13 +49,7 @@ impl Entities {
         self.entities.push(entity);
     }
 
-    pub fn render(
-        &self,
-        renderer: &Renderer,
-        encoder: &mut wgpu::CommandEncoder,
-        output: &wgpu::TextureView,
-        camera_bind_group: &wgpu::BindGroup,
-    ) {
+    pub fn render_frame(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         // Build a list of all the meshes that needs rendering.
         let mut list = MeshList::default();
         for entity in self.entities.iter() {
@@ -69,7 +63,7 @@ impl Entities {
                 let mut transform = entity.transform.to_mat4();
                 while node_id != NodeIndex::MAX {
                     let node = &model.nodes[node_id];
-                    transform = transform * node.transform.to_mat4();
+                    transform *= node.transform.to_mat4();
                     node_id = node.parent;
                 }
 
@@ -81,6 +75,6 @@ impl Entities {
         }
 
         self.model_renderer
-            .render_multiple(renderer, encoder, output, camera_bind_group, list);
+            .render_multiple(frame, camera_bind_group, list);
     }
 }

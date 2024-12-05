@@ -3,7 +3,7 @@ use std::cell::Cell;
 pub struct Dirty(Cell<bool>);
 
 impl Dirty {
-    pub fn dirty() -> Self {
+    pub fn smudged() -> Self {
         Self(Cell::new(true))
     }
 

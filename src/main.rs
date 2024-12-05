@@ -2,10 +2,7 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
 use egui::Widget;
-use engine::{
-    assets::AssetManager, egui_integration::EguiIntegration, input, renderer::Renderer,
-    scene::Scene,
-};
+use engine::{egui_integration::EguiIntegration, prelude::*};
 use game::{
     asset_loader::AssetLoader,
     config::read_compaign_defs,
@@ -37,7 +34,7 @@ enum App {
         _assets: AssetLoader,
         _asset_manager: AssetManager,
 
-        input: input::InputState,
+        input: InputState,
 
         // The instant that the last frame started to render.
         last_frame_time: Instant,
@@ -149,7 +146,7 @@ impl winit::application::ApplicationHandler for App {
                     egui_integration,
                     _assets: assets,
                     _asset_manager: asset_manager,
-                    input: input::InputState::default(),
+                    input: InputState::default(),
                     last_frame_time: Instant::now(),
                     scene,
                 };
@@ -208,57 +205,73 @@ impl winit::application::ApplicationHandler for App {
                         let last_frame_duration = now - *last_frame_time;
                         *last_frame_time = now;
 
+                        let delta_time = last_frame_duration.as_secs_f32() * 60.0;
+                        scene.update(delta_time, input);
+
                         let output = renderer.surface.get_current_texture().unwrap();
-                        let view = output
+                        let surface = output
                             .texture
                             .create_view(&wgpu::TextureViewDescriptor::default());
 
-                        let mut encoder = renderer.device.create_command_encoder(
+                        let encoder = renderer.device.create_command_encoder(
                             &wgpu::CommandEncoderDescriptor {
                                 label: Some("main command encoder"),
                             },
                         );
 
+                        let mut frame = Frame {
+                            device: renderer.device.clone(),
+                            _queue: renderer.queue.clone(),
+                            depth_texture: renderer.depth_texture.clone(),
+                            encoder,
+                            surface,
+                        };
+
                         {
-                            let delta_time = last_frame_duration.as_secs_f32() * 60.0;
-
-                            scene.update(delta_time, input);
-
-                            scene.begin_frame();
-                            scene.render(&renderer, &mut encoder, &view);
-                            scene.end_frame();
+                            scene.render_update(&renderer.device, &renderer.queue);
+                            scene.render_frame(&mut frame);
 
                             input.reset_current_frame();
                         }
 
                         // Render egui if it requires a repaint.
                         if repaint {
-                            egui_integration.render(window, renderer, &mut encoder, &view, |ctx| {
-                                egui::Area::new(egui::Id::new("engine_info")).show(ctx, |ui| {
-                                    let fps_label = {
-                                        let text = egui::WidgetText::RichText(egui::RichText::new(
-                                            format!(
-                                                "{:0.1}",
-                                                1.0 / last_frame_duration.as_secs_f64()
-                                            ),
-                                        ))
-                                        .background_color(epaint::Color32::from_rgba_premultiplied(
-                                            0, 0, 0, 127,
-                                        ))
-                                        .monospace();
-                                        egui::Label::new(text.color(epaint::Color32::WHITE))
-                                            .wrap_mode(egui::TextWrapMode::Extend)
-                                    };
+                            egui_integration.render(
+                                window,
+                                renderer,
+                                &mut frame.encoder,
+                                &frame.surface,
+                                |ctx| {
+                                    egui::Area::new(egui::Id::new("engine_info")).show(ctx, |ui| {
+                                        let fps_label = {
+                                            let text = egui::WidgetText::RichText(
+                                                egui::RichText::new(format!(
+                                                    "{:0.1}",
+                                                    1.0 / last_frame_duration.as_secs_f64()
+                                                )),
+                                            )
+                                            .background_color(
+                                                epaint::Color32::from_rgba_premultiplied(
+                                                    0, 0, 0, 127,
+                                                ),
+                                            )
+                                            .monospace();
+                                            egui::Label::new(text.color(epaint::Color32::WHITE))
+                                                .wrap_mode(egui::TextWrapMode::Extend)
+                                        };
 
-                                    fps_label.ui(ui);
-                                });
+                                        fps_label.ui(ui);
+                                    });
 
-                                // Debug stuff from the scene.
-                                scene.debug_panel(ctx);
-                            });
+                                    // Debug stuff from the scene.
+                                    scene.debug_panel(ctx);
+                                },
+                            );
                         }
 
-                        renderer.queue.submit(std::iter::once(encoder.finish()));
+                        renderer
+                            .queue
+                            .submit(std::iter::once(frame.encoder.finish()));
 
                         output.present();
 

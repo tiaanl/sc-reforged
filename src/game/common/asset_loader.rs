@@ -66,7 +66,7 @@ impl AssetLoader {
         let bmp = shadow_company_tools::images::load_bmp_file(&mut std::io::Cursor::new(
             self.load_raw(path.as_ref())?,
         ))?;
-        let raw = if let Some(raw_data) = self.load_raw(path.as_ref().with_extension("raw")).ok() {
+        let raw = if let Ok(raw_data) = self.load_raw(path.as_ref().with_extension("raw")) {
             Some(shadow_company_tools::images::load_raw_file(
                 &mut std::io::Cursor::new(raw_data),
                 bmp.width(),
