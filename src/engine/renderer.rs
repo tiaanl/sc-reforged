@@ -468,4 +468,32 @@ impl Frame {
             occlusion_query_set: None,
         });
     }
+
+    pub fn begin_basic_render_pass(&mut self, label: &str, depth_test: bool) -> wgpu::RenderPass {
+        self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some(label),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &self.surface,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: if depth_test {
+                Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                })
+            } else {
+                None
+            },
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        })
+    }
 }

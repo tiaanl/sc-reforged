@@ -168,7 +168,7 @@ impl MeshRenderer {
 
         let device = frame.device.clone();
 
-        let mut render_pass = Self::create_render_pass(frame);
+        let mut render_pass = frame.begin_basic_render_pass("mesh_renderer_render_pass", true);
 
         for (mesh, matrices) in instances.into_iter() {
             let Some(mesh) = self.asset_manager.get(mesh) else {
@@ -195,31 +195,5 @@ impl MeshRenderer {
             render_pass.set_bind_group(1, &mesh.texture, &[]);
             render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..matrices.len() as u32);
         }
-    }
-
-    fn create_render_pass(frame: &mut Frame) -> wgpu::RenderPass {
-        frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("mesh_renderer_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &frame.depth_texture,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            })
     }
 }

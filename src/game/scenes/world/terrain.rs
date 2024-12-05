@@ -470,28 +470,7 @@ impl Terrain {
 
     pub fn render_frame(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         {
-            let mut render_pass = frame
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("terrain_render_pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &frame.surface,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &frame.depth_texture,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        }),
-                        stencil_ops: None,
-                    }),
-                    ..Default::default()
-                });
+            let mut render_pass = frame.begin_basic_render_pass("terrain_render_pass", true);
 
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
@@ -502,22 +481,8 @@ impl Terrain {
         }
 
         if self.draw_wireframe {
-            let mut render_pass = frame
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("terrain_render_pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &frame.surface,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    // depth_stencil_attachment: renderer
-                    //     .render_pass_depth_stencil_attachment(wgpu::LoadOp::Load),
-                    ..Default::default()
-                });
+            let mut render_pass =
+                frame.begin_basic_render_pass("terrain_wireframe_render_pass", false);
 
             render_pass.set_pipeline(&self.wireframe_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
