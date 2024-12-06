@@ -1,17 +1,10 @@
 use std::path::PathBuf;
 
-use crate::engine::prelude::*;
-
-use crate::engine::shaders::Shaders;
 use crate::{
     engine::{
-        //     assets::AssetManager,
         gizmos::{GizmoVertex, GizmosRenderer},
-        //     input::InputState,
-        //     renderer::Renderer,
-        //     scene::Scene,
-        //     shaders::Shaders,
-        //     Transform,
+        prelude::*,
+        shaders::Shaders,
     },
     game::{
         asset_loader::{AssetError, AssetLoader},
@@ -33,7 +26,11 @@ pub struct WorldScene {
 
     camera_controller: camera::FreeCameraController,
     camera: camera::Camera,
+    camera_matrices: Tracked<camera::Matrices>,
     gpu_camera: camera::GpuCamera,
+
+    window_size: Vec2,
+    intersection: Option<Vec3>,
 
     terrain: Terrain,
 
@@ -65,6 +62,7 @@ impl WorldScene {
             1.0,
             100_000.0,
         );
+        let camera_matrices = camera.calculate_matrices().into();
         let gpu_camera = camera::GpuCamera::new(renderer);
 
         let terrain = Terrain::new(
@@ -166,7 +164,11 @@ impl WorldScene {
 
             camera_controller,
             camera,
+            camera_matrices,
             gpu_camera,
+
+            window_size: Vec2::ZERO,
+            intersection: None,
 
             terrain,
             objects: entities,
@@ -181,70 +183,76 @@ impl WorldScene {
 
 impl Scene for WorldScene {
     fn resize(&mut self, width: u32, height: u32) {
+        self.window_size = Vec2::new(width as f32, height as f32);
         self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
-        self.camera_controller.on_input(input, delta_time);
-
-        // self.world_camera.update(delta_time);
-        self.terrain.update(delta_time);
-
         const GIZMO_SCALE: f32 = 1000.0;
         const CENTER: Vec3 = Vec3::ZERO;
         const RED: Vec4 = Vec4::new(1.0, 0.0, 0.0, 1.0);
         const GREEN: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
         const BLUE: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
-        self.gizmos_vertices = vec![
-            // X+
-            GizmoVertex::new(CENTER, RED),
-            GizmoVertex::new(Vec3::X * GIZMO_SCALE, RED),
-            // Y+
-            GizmoVertex::new(CENTER, GREEN),
-            GizmoVertex::new(Vec3::Y * GIZMO_SCALE, GREEN),
-            // Z+
-            GizmoVertex::new(CENTER, BLUE),
-            GizmoVertex::new(Vec3::Z * GIZMO_SCALE, BLUE),
-        ];
-    }
 
-    fn debug_panel(&mut self, egui: &egui::Context) {
-        egui::Window::new("World").show(egui, |ui| {
-            // egui::Grid::new("world_info").show(ui, |ui| {
-            //     ui.label("position");
-            //     ui.add(egui::Label::new(format!(
-            //         "{}, {}, {}",
-            //         self.world_camera.camera.position.x,
-            //         self.world_camera.camera.position.y,
-            //         self.world_camera.camera.position.z,
-            //     )));
-            //     ui.end_row();
-
-            //     ui.label("pitch");
-            //     ui.add(egui::Label::new(format!("{}", self.world_camera.pitch)));
-            //     ui.end_row();
-
-            //     ui.label("yaw");
-            //     ui.add(egui::Label::new(format!("{}", self.world_camera.yaw)));
-            //     ui.end_row();
-            // });
-
-            // ui.heading("Camera");
-            // self.camera.debug_panel(ui);
-            ui.heading("Terrain");
-            self.terrain.debug_panel(ui);
-        });
-    }
-
-    fn render_update(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
-        // Update the camera.
+        self.camera_controller.update(input, delta_time);
         if self
             .camera_controller
             .update_camera_if_dirty(&mut self.camera)
         {
-            let matrices = self.camera.calculate_matrices();
-            self.gpu_camera.upload_matrices(queue, matrices);
+            *self.camera_matrices = self.camera.calculate_matrices();
         }
+
+        if let Some(Vec2 { x, y }) = input.mouse_position() {
+            let ndc = Vec2::new(
+                x / self.window_size.x.max(1.0) * 2.0 - 1.0,
+                (1.0 - y / self.window_size.y.max(1.0)) * 2.0 - 1.0,
+            );
+
+            let ray = self.camera.generate_ray(ndc);
+
+            let plane = camera::Plane {
+                point: Vec3::ZERO,
+                normal: Vec3::Z,
+            };
+            self.intersection = ray.intersect_plane(&plane);
+
+            if let Some(intersection) = self.intersection {
+                self.gizmos_vertices = vec![
+                    // X+
+                    GizmoVertex::new(intersection, RED),
+                    GizmoVertex::new(intersection + Vec3::X * 100.0, RED),
+                    // Y+
+                    GizmoVertex::new(intersection, GREEN),
+                    GizmoVertex::new(intersection + Vec3::Y * 100.0, GREEN),
+                    // Z+
+                    GizmoVertex::new(intersection, BLUE),
+                    GizmoVertex::new(intersection + Vec3::Z * 100.0, BLUE),
+                ];
+            }
+        }
+
+        // self.world_camera.update(delta_time);
+        self.terrain.update(delta_time);
+
+        {
+            self.gizmos_vertices.append(&mut vec![
+                // X+
+                GizmoVertex::new(CENTER, RED),
+                GizmoVertex::new(Vec3::X * GIZMO_SCALE, RED),
+                // Y+
+                GizmoVertex::new(CENTER, GREEN),
+                GizmoVertex::new(Vec3::Y * GIZMO_SCALE, GREEN),
+                // Z+
+                GizmoVertex::new(CENTER, BLUE),
+                GizmoVertex::new(Vec3::Z * GIZMO_SCALE, BLUE),
+            ]);
+        }
+    }
+
+    fn render_update(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
+        self.camera_matrices.if_changed(|m| {
+            self.gpu_camera.upload_matrices(queue, m);
+        });
     }
 
     fn render_frame(&self, frame: &mut Frame) {
@@ -278,5 +286,38 @@ impl Scene for WorldScene {
         );
 
         // self.gizmos_vertices.clear();
+    }
+
+    fn debug_panel(&mut self, egui: &egui::Context) {
+        egui::Window::new("World").show(egui, |ui| {
+            if let Some(intersection) = self.intersection {
+                ui.label("Intersection");
+                ui.label(format!("{}", intersection));
+            }
+
+            // egui::Grid::new("world_info").show(ui, |ui| {
+            //     ui.label("position");
+            //     ui.add(egui::Label::new(format!(
+            //         "{}, {}, {}",
+            //         self.world_camera.camera.position.x,
+            //         self.world_camera.camera.position.y,
+            //         self.world_camera.camera.position.z,
+            //     )));
+            //     ui.end_row();
+
+            //     ui.label("pitch");
+            //     ui.add(egui::Label::new(format!("{}", self.world_camera.pitch)));
+            //     ui.end_row();
+
+            //     ui.label("yaw");
+            //     ui.add(egui::Label::new(format!("{}", self.world_camera.yaw)));
+            //     ui.end_row();
+            // });
+
+            // ui.heading("Camera");
+            // self.camera.debug_panel(ui);
+            ui.heading("Terrain");
+            self.terrain.debug_panel(ui);
+        });
     }
 }

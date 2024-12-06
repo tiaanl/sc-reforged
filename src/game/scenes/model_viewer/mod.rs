@@ -178,7 +178,7 @@ impl Scene for ModelViewer {
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
         if self.control_debug_camera {
-            self.debug_camera_controller.on_input(input, delta_time);
+            self.debug_camera_controller.update(input, delta_time);
         } else {
             self.camera_controller.on_input(input, delta_time);
         }
@@ -194,7 +194,7 @@ impl Scene for ModelViewer {
         }
 
         let matrices = self.camera.calculate_matrices();
-        self.gpu_camera.upload_matrices(queue, matrices);
+        self.gpu_camera.upload_matrices(queue, &matrices);
     }
 
     fn render_frame(&self, frame: &mut Frame) {

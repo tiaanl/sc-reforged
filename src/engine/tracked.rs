@@ -7,6 +7,12 @@ pub struct Tracked<T> {
     changed: Cell<bool>,
 }
 
+impl<T> From<T> for Tracked<T> {
+    fn from(value: T) -> Self {
+        Tracked::new(value)
+    }
+}
+
 /// A value that can track whether it has been changed.
 impl<T> Tracked<T> {
     /// Create a new value with a changed status.

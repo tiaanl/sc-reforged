@@ -7,9 +7,37 @@ pub fn register_camera_shader(shaders: &mut Shaders) {
     shaders.add_module(include_str!("camera.wgsl"), "camera.wgsl");
 }
 
+#[derive(Debug)]
 pub struct Ray {
     pub origin: Vec3,
     pub direction: Vec3,
+}
+
+#[derive(Debug)]
+pub struct Plane {
+    pub point: Vec3,
+    pub normal: Vec3,
+}
+
+impl Ray {
+    pub fn intersect_plane(&self, plane: &Plane) -> Option<Vec3> {
+        let denom = self.direction.dot(plane.normal);
+
+        // Check if the ray is parallel to the plane
+        if denom.abs() < 1e-6 {
+            return None;
+        }
+
+        let t = (plane.point - self.origin).dot(plane.normal) / denom;
+
+        // Check if the intersection is behind the ray's origin
+        if t < 0.0 {
+            return None;
+        }
+
+        // Compute the intersection point
+        Some(self.origin + t * self.direction)
+    }
 }
 
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
@@ -60,10 +88,6 @@ impl Camera {
 
         Matrices { projection, view }
     }
-
-    // let ndc_x = (2.0 * mouse_position.x / screen_size.x) - 1.0;
-    // let ndc_y = 1.0 - (2.0 * mouse_position.y / screen_size.y); // Flip Y-axis
-    // let ndc = Vec3::new(ndc_x, ndc_y, 1.0); // Use Z=1 for the far plane
 
     /// Generates a ray in world space based on the mouse position.
     pub fn generate_ray(&self, mouse_ndc: Vec2) -> Ray {
@@ -140,8 +164,8 @@ impl GpuCamera {
         }
     }
 
-    pub fn upload_matrices(&self, queue: &wgpu::Queue, matrices: Matrices) {
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[matrices]));
+    pub fn upload_matrices(&self, queue: &wgpu::Queue, matrices: &Matrices) {
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[*matrices]));
     }
 }
 
@@ -190,7 +214,7 @@ impl FreeCameraController {
         self.position += self.rotation() * Camera::UP * distance;
     }
 
-    pub fn on_input(&mut self, input: &InputState, delta_time: f32) {
+    pub fn update(&mut self, input: &InputState, delta_time: f32) {
         let delta = delta_time * self.movement_speed;
         if input.key_pressed(KeyCode::KeyW) {
             self.move_forward(delta);

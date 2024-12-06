@@ -70,6 +70,10 @@ impl InputState {
         self.key_pressed.contains(&key)
     }
 
+    pub fn mouse_position(&self) -> Option<Vec2> {
+        self.last_mouse_position
+    }
+
     pub fn mouse_pressed(&self, button: MouseButton) -> bool {
         self.mouse_pressed.contains(&button)
     }
