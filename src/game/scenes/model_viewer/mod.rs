@@ -1,7 +1,7 @@
 use core::f32;
 use std::f32::consts::{FRAC_PI_2, PI};
 
-use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
+use glam::{Quat, Vec2, Vec3, Vec4};
 use shadow_company_tools::smf;
 
 use crate::{
@@ -12,8 +12,8 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera,
-        mesh_renderer::{MeshItem, MeshList, MeshRenderer},
-        model::{Model, NodeIndex},
+        mesh_renderer::MeshRenderer,
+        model::Model,
     },
 };
 
@@ -29,7 +29,7 @@ pub struct ModelViewer {
 
     view_debug_camera: bool,
     control_debug_camera: bool,
-    camera_controller: camera::ArcBacllCameraController,
+    camera_controller: camera::ArcBallCameraController,
     debug_camera_controller: camera::FreeCameraController,
     camera: camera::Camera,
     gpu_camera: camera::GpuCamera,
@@ -148,7 +148,7 @@ impl ModelViewer {
         const MOUSE_SENSITIVITY: f32 = 0.4;
         let debug_camera_controller =
             camera::FreeCameraController::new(CAM_SPEED, MOUSE_SENSITIVITY);
-        let mut camera_controller = camera::ArcBacllCameraController::new(MOUSE_SENSITIVITY);
+        let mut camera_controller = camera::ArcBallCameraController::new(MOUSE_SENSITIVITY);
         camera_controller.distance = 1_500.0;
 
         Ok(Self {
@@ -185,16 +185,18 @@ impl Scene for ModelViewer {
     }
 
     fn render_update(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
-        if self.view_debug_camera {
+        let changed = if self.view_debug_camera {
             self.debug_camera_controller
-                .update_camera_if_dirty(&mut self.camera);
+                .update_camera_if_dirty(&mut self.camera)
         } else {
             self.camera_controller
-                .update_camera_if_changed(&mut self.camera);
-        }
+                .update_camera_if_changed(&mut self.camera)
+        };
 
-        let matrices = self.camera.calculate_matrices();
-        self.gpu_camera.upload_matrices(queue, &matrices);
+        if changed {
+            let matrices = self.camera.calculate_matrices();
+            self.gpu_camera.upload_matrices(queue, &matrices);
+        }
     }
 
     fn render_frame(&self, frame: &mut Frame) {
@@ -203,35 +205,19 @@ impl Scene for ModelViewer {
             return;
         };
 
-        let meshes = model
-            .meshes
-            .iter()
-            .map(|mesh| {
-                // Calculate the global transform for the model.
-                let mut transform = Mat4::from_rotation_translation(
-                    Quat::from_euler(
-                        glam::EulerRot::XYZ,
-                        self.model_rotation.x,
-                        self.model_rotation.y,
-                        self.model_rotation.z,
-                    ),
-                    self.model_position,
-                );
-                let mut node_id = mesh.node_id;
-                while node_id != NodeIndex::MAX {
-                    let node = &model.nodes[node_id];
-                    transform = node.transform.to_mat4() * transform;
-                    node_id = node.parent;
-                }
+        frame.clear_color_and_depth(
+            wgpu::Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
+            1.0,
+        );
 
-                MeshItem {
-                    transform,
-                    mesh: mesh.mesh,
-                }
-            })
-            .collect();
-
-        let list = MeshList { meshes };
+        let transform = Transform::from_translation(self.model_position)
+            .with_euler_rotation(self.model_rotation);
+        let list = MeshRenderer::mesh_list_from_model(&model, transform);
 
         self.mesh_renderer
             .render_multiple(frame, &self.gpu_camera.bind_group, list);

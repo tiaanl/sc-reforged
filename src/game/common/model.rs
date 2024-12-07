@@ -19,6 +19,8 @@ pub struct Model {
     pub nodes: Vec<ModelNode>,
     /// A list of [Mesh]es contained in this [Model]. They link back to [Node]s by index.
     pub meshes: Vec<ModelMesh>,
+    /// A list of [BoundingBox]es contained in this [Model].
+    pub bounding_boxes: Vec<ModelBoundingBox>,
     /// A map of node names to their indices in `nodes`.
     names: NameLookup,
 }
@@ -38,6 +40,7 @@ impl Model {
         let mut names = NameLookup::default();
         let mut nodes = Vec::with_capacity(smf.nodes.len());
         let mut meshes = Vec::new();
+        let mut bounding_boxes = Vec::new();
 
         for (node_index, smf_node) in smf.nodes.iter().enumerate() {
             names.insert(smf_node.name.clone(), node_index);
@@ -69,11 +72,20 @@ impl Model {
                     mesh: asset_loader.asset_manager().add(mesh),
                 });
             }
+
+            for smf_bounding_box in smf_node.bounding_boxes.iter() {
+                bounding_boxes.push(ModelBoundingBox {
+                    node_id: node_index,
+                    min: smf_bounding_box.min,
+                    max: smf_bounding_box.max,
+                });
+            }
         }
 
         Ok(Model {
             nodes,
             meshes,
+            bounding_boxes,
             names,
         })
     }
@@ -143,4 +155,14 @@ pub struct ModelMesh {
     pub node_id: NodeIndex,
     /// Local transform.
     pub mesh: Handle<TexturedMesh>,
+}
+
+#[derive(Debug)]
+pub struct ModelBoundingBox {
+    /// An index to the [ModelNode] this mesh is attached to.
+    pub node_id: NodeIndex,
+    /// Minimum values for the bounding box.
+    pub min: Vec3,
+    /// Maximum values for the bounding box.
+    pub max: Vec3,
 }

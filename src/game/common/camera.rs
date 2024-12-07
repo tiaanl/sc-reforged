@@ -256,7 +256,7 @@ impl FreeCameraController {
 }
 
 #[derive(Default)]
-pub struct ArcBacllCameraController {
+pub struct ArcBallCameraController {
     pub yaw: f32,   // degrees
     pub pitch: f32, // degrees
     pub distance: f32,
@@ -266,7 +266,7 @@ pub struct ArcBacllCameraController {
     dirty: Dirty,
 }
 
-impl ArcBacllCameraController {
+impl ArcBallCameraController {
     pub fn new(mouse_sensitivity: f32) -> Self {
         Self {
             yaw: 0.0,
@@ -287,6 +287,7 @@ impl ArcBacllCameraController {
 
     pub fn on_input(&mut self, input: &InputState, _delta_time: f32) {
         if input.mouse_pressed(MouseButton::Left) {
+            self.dirty.smudge();
             if let Some(delta) = input.mouse_delta() {
                 let delta = delta * self.mouse_sensitivity;
                 self.yaw += delta.x;
@@ -294,9 +295,13 @@ impl ArcBacllCameraController {
                 self.pitch = self.pitch.clamp(-89.0_f32, 89.0_f32);
             }
         }
-        let distance = self.distance / 10.0;
-        self.distance -= input.wheel_delta() * distance;
-        // self.distance = self.distance.clamp(camera.near, camera.far);
+        let delta = input.wheel_delta();
+        if delta != 0.0 {
+            self.dirty.smudge();
+            let distance = self.distance / 10.0;
+            self.distance -= delta * distance;
+            // self.distance = self.distance.clamp(camera.near, camera.far);
+        }
     }
 
     pub fn update_camera_if_changed(&self, camera: &mut Camera) -> bool {

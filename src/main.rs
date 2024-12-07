@@ -90,7 +90,7 @@ impl winit::application::ApplicationHandler for App {
 
                     use game::scenes::loading::LoadingScene;
                     Box::new(LoadingScene::new(&assets, &renderer))
-                } else if true {
+                } else if false {
                     // WorldScene
 
                     let s = assets.load_config_file("config/campaign_defs.txt").unwrap();

@@ -7,6 +7,7 @@ pub struct Transform {
     pub rotation: Quat,
 }
 
+#[allow(unused)]
 impl Transform {
     pub fn new(translation: Vec3, rotation: Quat) -> Self {
         Self {
@@ -15,15 +16,34 @@ impl Transform {
         }
     }
 
-    #[allow(unused)]
+    /// Create a new transform from a translation.
+    pub fn from_translation(translation: Vec3) -> Self {
+        Self {
+            translation,
+            rotation: Quat::IDENTITY,
+        }
+    }
+
+    /// Create a new transform from euler angles as a rotation.
+    pub fn from_euler_rotation(rotation: Vec3) -> Self {
+        Self {
+            translation: Vec3::ZERO,
+            rotation: Quat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z),
+        }
+    }
+
     pub fn with_translation(mut self, translation: Vec3) -> Self {
         self.translation = translation;
         self
     }
 
-    #[allow(unused)]
     pub fn with_rotation(mut self, rotation: Quat) -> Self {
         self.rotation = rotation;
+        self
+    }
+
+    pub fn with_euler_rotation(mut self, rotation: Vec3) -> Self {
+        self.rotation = Quat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z);
         self
     }
 
