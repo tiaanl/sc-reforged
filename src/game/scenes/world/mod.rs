@@ -189,6 +189,14 @@ impl Scene for WorldScene {
         self.debug_camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
+    fn event(&mut self, event: &SceneEvent) {
+        match event {
+            SceneEvent::MouseDown { position, button } => {}
+            SceneEvent::MouseMove { delta } => {}
+            SceneEvent::MouseUp { button } => {}
+        }
+    }
+
     fn update(&mut self, delta_time: f32, input: &InputState) {
         const GIZMO_SCALE: f32 = 1000.0;
         const CENTER: Vec3 = Vec3::ZERO;

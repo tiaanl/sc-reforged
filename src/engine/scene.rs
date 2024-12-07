@@ -1,4 +1,13 @@
+use glam::Vec2;
+use winit::event::MouseButton;
+
 use super::{input::InputState, renderer::Frame};
+
+pub enum SceneEvent {
+    MouseDown { position: Vec2, button: MouseButton },
+    MouseMove { delta: Vec2 },
+    MouseUp { button: MouseButton },
+}
 
 /// A trait that represents a scene in the engine. I splits each stage of the render pipeline into
 /// separate function calls.
@@ -6,6 +15,9 @@ use super::{input::InputState, renderer::Frame};
 pub trait Scene {
     /// Called when the size of the window surface is changed.
     fn resize(&mut self, width: u32, height: u32);
+
+    /// Called when an engine event occurs. This includes input events.
+    fn event(&mut self, event: &SceneEvent) {}
 
     /// Called each frame with the `delta_time` based on the time the last frame took and the state
     /// of all input devices.

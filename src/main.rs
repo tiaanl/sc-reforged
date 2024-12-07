@@ -9,6 +9,7 @@ use game::{
     scenes::{model_viewer::ModelViewer, world::WorldScene},
 };
 use tracing::{error, info, warn};
+use winit::dpi::PhysicalPosition;
 
 mod engine;
 mod game;
@@ -36,6 +37,9 @@ enum App {
 
         input: InputState,
 
+        /// The last position the mouse was on the window client area.
+        last_mouse_position: Option<Vec2>,
+
         // The instant that the last frame started to render.
         last_frame_time: Instant,
         /// The scene we are currently rendering to the screen.
@@ -54,7 +58,7 @@ impl winit::application::ApplicationHandler for App {
                     .expect("get primary monitor info")
                     .size();
 
-                let position = winit::dpi::Position::Physical(winit::dpi::PhysicalPosition::new(
+                let position = winit::dpi::Position::Physical(PhysicalPosition::new(
                     screen_size.width as i32 / 4,
                     screen_size.height as i32 / 4,
                 ));
@@ -147,6 +151,7 @@ impl winit::application::ApplicationHandler for App {
                     _assets: assets,
                     _asset_manager: asset_manager,
                     input: InputState::default(),
+                    last_mouse_position: None,
                     last_frame_time: Instant::now(),
                     scene,
                 };
@@ -174,6 +179,7 @@ impl winit::application::ApplicationHandler for App {
                 renderer,
                 egui_integration,
                 input,
+                last_mouse_position,
                 last_frame_time,
                 scene,
                 ..
@@ -279,8 +285,42 @@ impl winit::application::ApplicationHandler for App {
                         window.request_redraw();
                     }
 
-                    _ => input.handle_window_event(event),
+                    WindowEvent::MouseInput { button, state, .. } => {
+                        let position =
+                            last_mouse_position.expect("mouse button without a position?");
+
+                        let event = if state.is_pressed() {
+                            SceneEvent::MouseDown { position, button }
+                        } else {
+                            SceneEvent::MouseUp { button }
+                        };
+
+                        scene.event(&event);
+                    }
+
+                    WindowEvent::CursorMoved {
+                        position: PhysicalPosition { x, y },
+                        ..
+                    } => {
+                        let position = Vec2::new(x as f32, y as f32);
+
+                        let delta = last_mouse_position
+                            .map(|p| position - p)
+                            .unwrap_or(Vec2::ZERO);
+
+                        *last_mouse_position = Some(position);
+                        let event = SceneEvent::MouseMove { delta };
+                        scene.event(&event);
+                    }
+
+                    WindowEvent::CursorLeft { .. } => {
+                        *last_mouse_position = None;
+                    }
+
+                    _ => {}
                 }
+
+                input.handle_window_event(event);
             }
         }
     }
