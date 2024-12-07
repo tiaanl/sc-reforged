@@ -28,6 +28,18 @@ pub struct Model {
 impl Asset for Model {}
 
 impl Model {
+    /// Calculate the global transform for the given node.
+    pub fn global_transform(&self, node_index: NodeIndex) -> Mat4 {
+        let mut transform = Mat4::IDENTITY;
+        let mut current = node_index;
+        while current != NodeIndex::MAX {
+            let node = &self.nodes[current];
+            transform *= node.transform.to_mat4();
+            current = node.parent;
+        }
+        transform
+    }
+
     pub fn from_smf(smf: &smf::Model, renderer: &Renderer, asset_loader: &AssetLoader) -> Self {
         Self::smf_to_model(renderer, asset_loader, smf).unwrap()
     }

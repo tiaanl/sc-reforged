@@ -1,29 +1,97 @@
-use glam::{vec2, vec3, Mat4, Quat, Vec3, Vec4};
+use glam::{vec2, vec3, Mat4};
+use wgpu::{util::DeviceExt, vertex_attr_array};
 
-use crate::engine::{
-    mesh::Vertex,
-    renderer::{RenderPipelineConfig, Renderer},
-};
+use crate::{engine::prelude::*, game::camera::Ray};
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
-struct BoundingBox {
-    model_matrix: Mat4,
-    min: Vec4,
-    max: Vec4,
+pub struct BoundingBox {
+    transform: Mat4,
+    min: Vec3,
+    highlight: u32,
+    max: Vec3,
+    _padding: u32,
 }
 
-pub struct BoundingBoxes {
+impl BoundingBox {
+    pub fn new(transform: Mat4, min: Vec3, max: Vec3, highlight: bool) -> Self {
+        Self {
+            transform,
+            min: min,
+            highlight: if highlight { 1 } else { 0 },
+            max: max,
+            _padding: 0,
+        }
+    }
+}
+
+impl BoundingBox {
+    pub fn intersect_ray(&self, ray: &Ray) -> Option<f32> {
+        // Compute inverse transform
+        let inverse_transform = self.transform.inverse();
+
+        // Transform ray into the box's local space
+        let local_origin = inverse_transform.transform_point3(ray.origin);
+        let local_direction = inverse_transform.transform_vector3(ray.direction);
+
+        // Ray-AABB intersection
+        let mut t_min = 0.0_f32;
+        let mut t_max = f32::MAX;
+
+        for i in 0..3 {
+            let o = local_origin[i];
+            let d = local_direction[i];
+            let min_val = self.min[i];
+            let max_val = self.max[i];
+
+            if d.abs() < 1e-8 {
+                // The ray is parallel to this axis
+                if o < min_val || o > max_val {
+                    // No intersection
+                    return None;
+                }
+            } else {
+                let inv_d = 1.0 / d;
+                let mut t0 = (min_val - o) * inv_d;
+                let mut t1 = (max_val - o) * inv_d;
+
+                if t0 > t1 {
+                    std::mem::swap(&mut t0, &mut t1);
+                }
+
+                // Narrow down the intersection range
+                t_min = t_min.max(t0);
+                t_max = t_max.min(t1);
+
+                if t_max < t_min {
+                    // No intersection
+                    return None;
+                }
+            }
+        }
+
+        // t_min is the first point of intersection
+        if t_min < 0.0 && t_max < 0.0 {
+            // Both intersections are behind the origin
+            None
+        } else if t_min < 0.0 {
+            // Origin is inside the box, intersection going outward at t_max
+            Some(t_max)
+        } else {
+            Some(t_min)
+        }
+    }
+}
+
+pub struct BoundingBoxRenderer {
     pipeline: wgpu::RenderPipeline,
     index_buffer: wgpu::Buffer,
     wireframe_pipeline: wgpu::RenderPipeline,
     wireframe_index_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
-
-    boxes: Vec<BoundingBox>,
 }
 
-impl BoundingBoxes {
+impl BoundingBoxRenderer {
     const INDICES: &[u32] = &[
         0, 1, 2, 2, 3, 0, //
         4, 5, 6, 6, 7, 4, //
@@ -87,57 +155,96 @@ impl BoundingBoxes {
         ]
     };
 
-    pub fn new(
-        renderer: &Renderer,
-        camera_bind_group_layout: &wgpu::BindGroupLayout,
-    ) -> Result<Self, ()> {
+    pub fn new(renderer: &Renderer, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let shader = renderer.create_shader_module(
             "bounding_boxes_shader_module",
             include_str!("bounding_boxes.wgsl"),
         );
 
-        let box_data_bind_group_layout =
+        let pipeline_layout =
             renderer
                 .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("bounding_boxes_box_data_layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("bounding_box_renderer_render_pipeline_layout"),
+                    bind_group_layouts: &[camera_bind_group_layout],
+                    push_constant_ranges: &[],
                 });
 
-        let pipeline = renderer.create_render_pipeline(
-            RenderPipelineConfig::<Vertex>::new("bounding_boxes_render_pipeline", &shader)
-                .primitive(wgpu::PrimitiveState {
-                    front_face: wgpu::FrontFace::Cw,
-                    cull_mode: Some(wgpu::Face::Back),
-                    ..Default::default()
-                })
-                .blend_state(wgpu::BlendState::ALPHA_BLENDING)
-                .bind_group_layout(camera_bind_group_layout)
-                .bind_group_layout(&box_data_bind_group_layout),
+        macro_rules! create_render_pipeline {
+            ($renderer:expr, $primitive:expr) => {{
+                renderer
+                    .device
+                    .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: Some("bounding_box_renderer_render_pipeline"),
+                        layout: Some(&pipeline_layout),
+                        vertex: wgpu::VertexState {
+                            module: &shader,
+                            entry_point: "vertex_main",
+                            compilation_options: wgpu::PipelineCompilationOptions::default(),
+                            buffers: &[
+                                wgpu::VertexBufferLayout {
+                                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                                    step_mode: wgpu::VertexStepMode::Vertex,
+                                    attributes: &vertex_attr_array![
+                                        0 => Float32x3,
+                                        1 => Float32x3,
+                                        2 => Float32x2,
+                                    ],
+                                },
+                                wgpu::VertexBufferLayout {
+                                    array_stride: std::mem::size_of::<BoundingBox>() as wgpu::BufferAddress,
+                                    step_mode: wgpu::VertexStepMode::Instance,
+                                    attributes: &vertex_attr_array![
+                                        10 => Float32x4,  // model_mat_0
+                                        11 => Float32x4,  // model_mat_1
+                                        12 => Float32x4,  // model_mat_2
+                                        13 => Float32x4,  // model_mat_3
+                                        14 => Float32x3,  // min
+                                        15 => Uint32,     // highlight
+                                        16 => Float32x3,  // max
+                                        17 => Uint32,     // padding
+                                    ],
+                                },
+                            ],
+                        },
+                        primitive: $primitive,
+                        depth_stencil: None,
+                        multisample: wgpu::MultisampleState::default(),
+                        fragment: Some(wgpu::FragmentState {
+                            module: &shader,
+                            entry_point: "fragment_main",
+                            compilation_options: wgpu::PipelineCompilationOptions::default(),
+                            targets: &[Some(wgpu::ColorTargetState {
+                                format: renderer.surface_config.format,
+                                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                                write_mask: wgpu::ColorWrites::ALL,
+                            })],
+                        }),
+                        multiview: None,
+                        cache: None,
+                    })
+            }};
+        }
+
+        let pipeline = create_render_pipeline!(
+            renderer,
+            wgpu::PrimitiveState {
+                front_face: wgpu::FrontFace::Cw,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            }
         );
 
         let index_buffer = renderer.create_index_buffer("bounding_box_index_buffer", Self::INDICES);
 
-        let wireframe_pipeline = renderer.create_render_pipeline(
-            RenderPipelineConfig::<Vertex>::new("bounding_boxes_render_pipeline", &shader)
-                .fragment_entry("fragment_main_wireframe")
-                .primitive(wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::LineList,
-                    cull_mode: Some(wgpu::Face::Back),
-                    ..Default::default()
-                })
-                .blend_state(wgpu::BlendState::ALPHA_BLENDING)
-                .bind_group_layout(camera_bind_group_layout)
-                .bind_group_layout(&box_data_bind_group_layout),
+        let wireframe_pipeline = create_render_pipeline!(
+            renderer,
+            wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList,
+                front_face: wgpu::FrontFace::Cw,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            }
         );
 
         let wireframe_index_buffer =
@@ -146,83 +253,55 @@ impl BoundingBoxes {
         let vertex_buffer =
             renderer.create_vertex_buffer("bounding_boxes_vertex_buffer", Self::VERTICES);
 
-        Ok(Self {
+        Self {
             pipeline,
             index_buffer,
             wireframe_pipeline,
             wireframe_index_buffer,
-
             vertex_buffer,
-
-            boxes: vec![],
-        })
-    }
-
-    pub fn insert(&mut self, position: Vec3, rotation: Quat, min: Vec3, max: Vec3) {
-        let model_matrix = Mat4::from_rotation_translation(rotation, position);
-        self.boxes.push(BoundingBox {
-            model_matrix,
-            min: Vec4::from((min, 0.0)),
-            max: Vec4::from((max, 0.0)),
-        });
-    }
-
-    pub fn clear(&mut self) {
-        self.boxes.clear();
+        }
     }
 
     pub fn render_all(
         &self,
-        _renderer: &Renderer,
-        _encoder: &mut wgpu::CommandEncoder,
-        _view: &wgpu::TextureView,
-        _camera_bind_group: &wgpu::BindGroup,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        bounding_boxes: &[BoundingBox],
     ) {
-        // let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        //     label: Some("bounding_boxes_render_pass"),
-        //     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-        //         view,
-        //         resolve_target: None,
-        //         ops: wgpu::Operations {
-        //             load: wgpu::LoadOp::Load,
-        //             store: wgpu::StoreOp::Store,
-        //         },
-        //     })],
-        //     depth_stencil_attachment: renderer
-        //         .render_pass_depth_stencil_attachment(wgpu::LoadOp::Load),
-        //     timestamp_writes: None,
-        //     occlusion_query_set: None,
-        // });
+        let device = frame.device.clone();
 
-        // let bind_groups = self
-        //     .boxes
-        //     .iter()
-        //     .map(|b| {
-        //         let buffer = renderer.create_uniform_buffer("bounding_box_buffer", *b);
-        //         renderer.create_uniform_bind_group("bounding_box_bind_group", &buffer)
-        //     })
-        //     .collect::<Vec<_>>();
+        let mut render_pass =
+            frame.begin_basic_render_pass("bounding_box_renderer_render_pass", false);
 
-        // render_pass.set_pipeline(&self.pipeline);
-        // render_pass.set_bind_group(0, camera_bind_group, &[]);
-        // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        // render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("bounding_box_renderer_transforms"),
+            contents: bytemuck::cast_slice(bounding_boxes),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
 
-        // for bind_group in bind_groups.iter() {
-        //     render_pass.set_bind_group(1, bind_group, &[]);
-        //     render_pass.draw_indexed(0..Self::INDICES.len() as u32, 0, 0..1);
-        // }
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, buffer.slice(..));
+        render_pass.set_bind_group(0, camera_bind_group, &[]);
+        render_pass.draw_indexed(
+            0..Self::INDICES.len() as u32,
+            0,
+            0..bounding_boxes.len() as u32,
+        );
 
-        // render_pass.set_pipeline(&self.wireframe_pipeline);
-        // render_pass.set_bind_group(0, camera_bind_group, &[]);
-        // render_pass.set_index_buffer(
-        //     self.wireframe_index_buffer.slice(..),
-        //     wgpu::IndexFormat::Uint32,
-        // );
-
-        // for bind_group in bind_groups.iter() {
-        //     render_pass.set_bind_group(1, bind_group, &[]);
-        //     render_pass.draw_indexed(0..Self::WIREFRAME_INDICES.len() as u32, 0, 0..1);
-        // }
+        render_pass.set_pipeline(&self.wireframe_pipeline);
+        render_pass.set_index_buffer(
+            self.wireframe_index_buffer.slice(..),
+            wgpu::IndexFormat::Uint32,
+        );
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, buffer.slice(..));
+        render_pass.set_bind_group(0, camera_bind_group, &[]);
+        render_pass.draw_indexed(
+            0..Self::WIREFRAME_INDICES.len() as u32,
+            0,
+            0..bounding_boxes.len() as u32,
+        );
     }
 }

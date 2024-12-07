@@ -4,10 +4,7 @@ use wgpu::{util::DeviceExt, vertex_attr_array, ShaderStages};
 
 use crate::engine::prelude::*;
 
-use super::{
-    asset_loader::AssetLoader,
-    model::{Model, NodeIndex},
-};
+use super::{asset_loader::AssetLoader, model::Model};
 
 /// A mesh containing gpu resources that we can render.
 #[derive(Debug)]
@@ -155,17 +152,8 @@ impl MeshRenderer {
         let mut list = MeshList::default();
 
         for mesh in model.meshes.iter() {
-            // Calculate the mesh's global transform.
-            let mut node_id = mesh.node_id;
-            let mut transform = transform.to_mat4();
-            while node_id != NodeIndex::MAX {
-                let node = &model.nodes[node_id];
-                transform *= node.transform.to_mat4();
-                node_id = node.parent;
-            }
-
             list.meshes.push(MeshItem {
-                transform,
+                transform: transform.to_mat4() * model.global_transform(mesh.node_id),
                 mesh: mesh.mesh,
             });
         }

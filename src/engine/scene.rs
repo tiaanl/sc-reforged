@@ -13,10 +13,13 @@ pub trait Scene {
 
     /// Called before `render_frame`, but after `update` to allow render resources to be created and
     /// updated before rendering.
-    fn render_update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {}
+    fn begin_frame(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {}
 
     /// Called to render the the frame to the surface.
     fn render_frame(&self, frame: &mut Frame) {}
+
+    /// Called after rendering the frame to do any cleanup.
+    fn end_frame(&mut self) {}
 
     /// Called to allow debug panels to be added to the window.
     fn debug_panel(&mut self, egui: &egui::Context) {}

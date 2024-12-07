@@ -12,8 +12,7 @@ use crate::{
         config::CampaignDef,
     },
 };
-use bounding_boxes::BoundingBoxes;
-use glam::{vec3, Quat, Vec3, Vec4};
+use glam::{Quat, Vec3, Vec4};
 use terrain::*;
 
 mod bounding_boxes;
@@ -24,8 +23,13 @@ mod terrain;
 pub struct WorldScene {
     _campaign_def: CampaignDef,
 
+    use_debug_camera: bool,
+
     camera_controller: camera::FreeCameraController,
     camera: camera::Camera,
+    debug_camera_controller: camera::FreeCameraController,
+    debug_camera: camera::Camera,
+
     camera_matrices: Tracked<camera::Matrices>,
     gpu_camera: camera::GpuCamera,
 
@@ -34,12 +38,10 @@ pub struct WorldScene {
 
     terrain: Terrain,
 
-    objects: entities::Entities,
+    entities: entities::Entities,
 
     gizmos_renderer: GizmosRenderer,
     gizmos_vertices: Vec<GizmoVertex>,
-
-    bounding_boxes: bounding_boxes::BoundingBoxes,
 }
 
 impl WorldScene {
@@ -54,6 +56,7 @@ impl WorldScene {
         let mut shaders = Shaders::default();
         camera::register_camera_shader(&mut shaders);
 
+        let camera_controller = camera::FreeCameraController::new(50.0, 0.4);
         let camera = camera::Camera::new(
             Vec3::ZERO,
             Quat::IDENTITY,
@@ -62,6 +65,17 @@ impl WorldScene {
             1.0,
             100_000.0,
         );
+
+        let debug_camera_controller = camera::FreeCameraController::new(50.0, 0.4);
+        let debug_camera = camera::Camera::new(
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            45.0_f32.to_radians(),
+            1.0,
+            1.0,
+            100_000.0,
+        );
+
         let camera_matrices = camera.calculate_matrices().into();
         let gpu_camera = camera::GpuCamera::new(renderer);
 
@@ -140,30 +154,19 @@ impl WorldScene {
             }
         }
 
-        let camera_controller = camera::FreeCameraController::new(50.0, 0.4);
-
         let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
-
-        let mut bounding_boxes =
-            BoundingBoxes::new(renderer, &gpu_camera.bind_group_layout).unwrap();
-        bounding_boxes.insert(
-            vec3(300.0, 300.0, 300.0),
-            Quat::from_rotation_z(45.0_f32.to_radians()),
-            vec3(0.0, 0.0, 0.0),
-            vec3(100.0, 100.0, 100.0),
-        );
-        bounding_boxes.insert(
-            Vec3::ZERO,
-            Quat::IDENTITY,
-            vec3(100.0, 100.0, 100.0),
-            vec3(300.0, 300.0, 300.0),
-        );
 
         Ok(Self {
             _campaign_def: campaign_def,
 
+            use_debug_camera: false,
+
             camera_controller,
             camera,
+
+            debug_camera_controller,
+            debug_camera,
+
             camera_matrices,
             gpu_camera,
 
@@ -171,12 +174,10 @@ impl WorldScene {
             intersection: None,
 
             terrain,
-            objects: entities,
+            entities,
 
             gizmos_renderer,
             gizmos_vertices: vec![],
-
-            bounding_boxes,
         })
     }
 }
@@ -185,6 +186,7 @@ impl Scene for WorldScene {
     fn resize(&mut self, width: u32, height: u32) {
         self.window_size = Vec2::new(width as f32, height as f32);
         self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
+        self.debug_camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
@@ -194,12 +196,18 @@ impl Scene for WorldScene {
         const GREEN: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
         const BLUE: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
 
-        self.camera_controller.update(input, delta_time);
-        if self
-            .camera_controller
-            .update_camera_if_dirty(&mut self.camera)
-        {
-            *self.camera_matrices = self.camera.calculate_matrices();
+        if self.use_debug_camera {
+            self.debug_camera_controller.update(input, delta_time);
+            self.debug_camera_controller
+                .update_camera_if_dirty(&mut self.debug_camera);
+        } else {
+            self.camera_controller.update(input, delta_time);
+            if self
+                .camera_controller
+                .update_camera_if_dirty(&mut self.camera)
+            {
+                *self.camera_matrices = self.camera.calculate_matrices();
+            }
         }
 
         if let Some(Vec2 { x, y }) = input.mouse_position() {
@@ -210,28 +218,14 @@ impl Scene for WorldScene {
 
             let ray = self.camera.generate_ray(ndc);
 
-            let plane = camera::Plane {
-                point: Vec3::ZERO,
-                normal: Vec3::Z,
-            };
-            self.intersection = ray.intersect_plane(&plane);
+            self.gizmos_vertices.append(&mut vec![
+                GizmoVertex::new(ray.origin, RED),
+                GizmoVertex::new(ray.origin + ray.direction * 1000.0, RED),
+            ]);
 
-            if let Some(intersection) = self.intersection {
-                self.gizmos_vertices = vec![
-                    // X+
-                    GizmoVertex::new(intersection, RED),
-                    GizmoVertex::new(intersection + Vec3::X * 100.0, RED),
-                    // Y+
-                    GizmoVertex::new(intersection, GREEN),
-                    GizmoVertex::new(intersection + Vec3::Y * 100.0, GREEN),
-                    // Z+
-                    GizmoVertex::new(intersection, BLUE),
-                    GizmoVertex::new(intersection + Vec3::Z * 100.0, BLUE),
-                ];
-            }
+            self.entities.update(&ray);
         }
 
-        // self.world_camera.update(delta_time);
         self.terrain.update(delta_time);
 
         {
@@ -249,10 +243,17 @@ impl Scene for WorldScene {
         }
     }
 
-    fn render_update(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
-        self.camera_matrices.if_changed(|m| {
-            self.gpu_camera.upload_matrices(queue, m);
-        });
+    fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
+        if self.use_debug_camera {
+            self.gpu_camera
+                .upload_matrices(queue, &self.debug_camera.calculate_matrices());
+        } else {
+            self.gpu_camera
+                .upload_matrices(queue, &self.camera.calculate_matrices());
+            // self.camera_matrices.if_changed(|m| {
+            //     self.gpu_camera.upload_matrices(queue, m);
+            // });
+        }
     }
 
     fn render_frame(&self, frame: &mut Frame) {
@@ -269,23 +270,22 @@ impl Scene for WorldScene {
         self.terrain
             .render_frame(frame, &self.gpu_camera.bind_group);
 
-        // let mut more_vertices = self.terrain.render_normals();
-        // self.gizmos_vertices.append(&mut more_vertices);
-        // let mut more_vertices = self.terrain.render_normals_lookup();
-        // self.gizmos_vertices.append(&mut more_vertices);
+        let more_vertices = self.terrain.render_normals();
+        self.gizmos_renderer
+            .render_frame(frame, &self.gpu_camera.bind_group, &more_vertices);
 
-        self.objects
-            .render_frame(frame, &self.gpu_camera.bind_group);
-
-        // self.bounding_boxes.clear();
+        self.entities
+            .render_frame(frame, &self.gpu_camera.bind_group, &self.gizmos_renderer);
 
         self.gizmos_renderer.render_frame(
             frame,
             &self.gpu_camera.bind_group,
             &self.gizmos_vertices,
         );
+    }
 
-        // self.gizmos_vertices.clear();
+    fn end_frame(&mut self) {
+        self.gizmos_vertices.clear();
     }
 
     fn debug_panel(&mut self, egui: &egui::Context) {
@@ -294,6 +294,8 @@ impl Scene for WorldScene {
                 ui.label("Intersection");
                 ui.label(format!("{}", intersection));
             }
+
+            ui.toggle_value(&mut self.use_debug_camera, "Use debug camera");
 
             // egui::Grid::new("world_info").show(ui, |ui| {
             //     ui.label("position");
@@ -318,6 +320,9 @@ impl Scene for WorldScene {
             // self.camera.debug_panel(ui);
             ui.heading("Terrain");
             self.terrain.debug_panel(ui);
+
+            ui.heading("Entities");
+            self.entities.debug_panel(ui);
         });
     }
 }

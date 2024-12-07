@@ -80,6 +80,7 @@ where
     _phantom: std::marker::PhantomData<B>,
 }
 
+#[allow(unused)]
 impl<'a, B> RenderPipelineConfig<'a, B>
 where
     B: BufferLayout,

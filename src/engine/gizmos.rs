@@ -1,4 +1,4 @@
-use glam::{Vec3, Vec4};
+use glam::{Mat4, Vec3, Vec4};
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
 use crate::Frame;
@@ -93,5 +93,26 @@ impl GizmosRenderer {
         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.draw(0..(vertices.len() as u32), 0..1);
+    }
+
+    pub fn create_axis(transform: &Mat4, size: f32) -> Vec<GizmoVertex> {
+        let zero = transform.project_point3(Vec3::ZERO);
+        vec![
+            GizmoVertex::new(zero, Vec4::new(1.0, 0.0, 0.0, 1.0)),
+            GizmoVertex::new(
+                transform.project_point3(Vec3::X * size),
+                Vec4::new(1.0, 0.0, 0.0, 1.0),
+            ),
+            GizmoVertex::new(zero, Vec4::new(0.0, 1.0, 0.0, 1.0)),
+            GizmoVertex::new(
+                transform.project_point3(Vec3::Y * size),
+                Vec4::new(0.0, 1.0, 0.0, 1.0),
+            ),
+            GizmoVertex::new(zero, Vec4::new(0.0, 0.0, 1.0, 1.0)),
+            GizmoVertex::new(
+                transform.project_point3(Vec3::Z * size),
+                Vec4::new(0.0, 0.0, 1.0, 1.0),
+            ),
+        ]
     }
 }

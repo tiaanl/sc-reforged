@@ -90,7 +90,7 @@ impl winit::application::ApplicationHandler for App {
 
                     use game::scenes::loading::LoadingScene;
                     Box::new(LoadingScene::new(&assets, &renderer))
-                } else if false {
+                } else if true {
                     // WorldScene
 
                     let s = assets.load_config_file("config/campaign_defs.txt").unwrap();
@@ -228,8 +228,9 @@ impl winit::application::ApplicationHandler for App {
                         };
 
                         {
-                            scene.render_update(&renderer.device, &renderer.queue);
+                            scene.begin_frame(&renderer.device, &renderer.queue);
                             scene.render_frame(&mut frame);
+                            scene.end_frame();
 
                             input.reset_current_frame();
                         }

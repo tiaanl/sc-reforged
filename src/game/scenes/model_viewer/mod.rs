@@ -184,7 +184,7 @@ impl Scene for ModelViewer {
         }
     }
 
-    fn render_update(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
+    fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
         let changed = if self.view_debug_camera {
             self.debug_camera_controller
                 .update_camera_if_dirty(&mut self.camera)

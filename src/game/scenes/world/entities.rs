@@ -1,10 +1,13 @@
 use crate::{
-    engine::prelude::*,
+    engine::{gizmos::GizmosRenderer, prelude::*},
     game::{
+        camera::Ray,
         mesh_renderer::{MeshItem, MeshList, MeshRenderer},
-        model::{Model, NodeIndex},
+        model::Model,
     },
 };
+
+use super::bounding_boxes::{BoundingBox, BoundingBoxRenderer};
 
 /// Represents an object inside the game world.
 #[derive(Debug)]
@@ -21,8 +24,15 @@ impl Entity {
 
 pub struct Entities {
     asset_manager: AssetManager,
+
     pub model_renderer: MeshRenderer,
+
+    render_bounding_boxes: bool,
+    pub bounding_box_renderer: BoundingBoxRenderer,
+
     pub entities: Vec<Entity>,
+    /// The entity index that the mouse is currently over.
+    entity_hover: Option<usize>,
 }
 
 impl Entities {
@@ -32,16 +42,22 @@ impl Entities {
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let models = MeshRenderer::new(
+        let model_renderer = MeshRenderer::new(
             asset_manager.clone(),
             renderer,
             shaders,
             camera_bind_group_layout,
         );
+
+        let bounding_box_renderer = BoundingBoxRenderer::new(renderer, camera_bind_group_layout);
+
         Self {
             asset_manager,
-            model_renderer: models,
+            model_renderer,
+            render_bounding_boxes: false,
+            bounding_box_renderer,
             entities: vec![],
+            entity_hover: None,
         }
     }
 
@@ -49,32 +65,95 @@ impl Entities {
         self.entities.push(entity);
     }
 
-    pub fn render_frame(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
-        // Build a list of all the meshes that needs rendering.
-        let mut list = MeshList::default();
-        for entity in self.entities.iter() {
+    pub fn ray_intersection(&self, ray: &Ray) -> Option<usize> {
+        let mut closest = f32::MAX;
+        let mut closest_entity = None;
+
+        // Gather up a list of bounding boxes for each entity/model.
+        for (entity_index, entity) in self.entities.iter().enumerate() {
             let Some(model) = self.asset_manager.get(entity.model) else {
                 continue;
             };
 
-            for mesh in model.meshes.iter() {
-                // Calculate the model's global transform.
-                let mut node_id = mesh.node_id;
-                let mut transform = entity.transform.to_mat4();
-                while node_id != NodeIndex::MAX {
-                    let node = &model.nodes[node_id];
-                    transform *= node.transform.to_mat4();
-                    node_id = node.parent;
+            for bounding_box in model.bounding_boxes.iter() {
+                let transform =
+                    entity.transform.to_mat4() * model.global_transform(bounding_box.node_id);
+                let bbox = BoundingBox::new(transform, bounding_box.min, bounding_box.max, false);
+                if let Some(distance) = bbox.intersect_ray(ray) {
+                    if distance < closest {
+                        closest = distance;
+                        closest_entity = Some(entity_index);
+                    }
                 }
+            }
+        }
 
-                list.meshes.push(MeshItem {
+        closest_entity
+    }
+
+    pub fn update(&mut self, ray: &Ray) {
+        self.entity_hover = self.ray_intersection(&ray);
+    }
+
+    pub fn render_frame(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        gizmos: &GizmosRenderer,
+    ) {
+        // Build a list of all the meshes that needs rendering.
+        let mut meshes = MeshList::default();
+        let mut boxes = vec![];
+        let mut gv = vec![];
+
+        for (entity_index, entity) in self.entities.iter().enumerate() {
+            let Some(model) = self.asset_manager.get(entity.model) else {
+                continue;
+            };
+
+            let entity_transform = entity.transform.to_mat4();
+
+            for mesh in model.meshes.iter() {
+                let transform = entity_transform * model.global_transform(mesh.node_id);
+
+                gv.append(&mut GizmosRenderer::create_axis(&transform, 100.0));
+
+                meshes.meshes.push(MeshItem {
                     transform,
                     mesh: mesh.mesh,
                 });
             }
+
+            if self.render_bounding_boxes {
+                for bounding_box in model.bounding_boxes.iter() {
+                    let transform = entity_transform * model.global_transform(bounding_box.node_id);
+                    let highlight = if let Some(hover_index) = self.entity_hover {
+                        hover_index == entity_index
+                    } else {
+                        false
+                    };
+                    boxes.push(BoundingBox::new(
+                        transform,
+                        bounding_box.min,
+                        bounding_box.max,
+                        highlight,
+                    ));
+                }
+            }
         }
 
         self.model_renderer
-            .render_multiple(frame, camera_bind_group, list);
+            .render_multiple(frame, camera_bind_group, meshes);
+
+        if self.render_bounding_boxes {
+            self.bounding_box_renderer
+                .render_all(frame, camera_bind_group, &boxes);
+        }
+
+        gizmos.render_frame(frame, camera_bind_group, &gv);
+    }
+
+    pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
+        ui.toggle_value(&mut self.render_bounding_boxes, "Render bounding boxes");
     }
 }
