@@ -1,5 +1,5 @@
 use glam::Vec2;
-use winit::event::MouseButton;
+use winit::{event::MouseButton, keyboard::KeyCode};
 
 use super::{input::InputState, renderer::Frame};
 
@@ -8,6 +8,8 @@ pub enum SceneEvent {
     MouseDown { position: Vec2, button: MouseButton },
     MouseMove { position: Vec2 },
     MouseUp { position: Vec2, button: MouseButton },
+    KeyDown { key: KeyCode },
+    KeyUp { key: KeyCode },
 }
 
 /// A trait that represents a scene in the engine. I splits each stage of the render pipeline into

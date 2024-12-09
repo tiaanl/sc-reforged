@@ -17,9 +17,9 @@ impl BoundingBox {
     pub fn new(transform: Mat4, min: Vec3, max: Vec3, highlight: bool) -> Self {
         Self {
             transform,
-            min: min,
+            min,
             highlight: if highlight { 1 } else { 0 },
-            max: max,
+            max,
             _padding: 0,
         }
     }

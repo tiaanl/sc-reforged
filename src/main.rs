@@ -9,7 +9,11 @@ use game::{
     scenes::{model_viewer::ModelViewer, world::WorldScene},
 };
 use tracing::{error, info, warn};
-use winit::dpi::PhysicalPosition;
+use winit::{
+    dpi::PhysicalPosition,
+    event::{ElementState, KeyEvent},
+    keyboard::PhysicalKey,
+};
 
 mod engine;
 mod game;
@@ -21,6 +25,7 @@ struct Opts {
     path: PathBuf,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum App {
     Uninitialzed(Opts),
     Initialized {
@@ -311,6 +316,19 @@ impl winit::application::ApplicationHandler for App {
                     WindowEvent::CursorLeft { .. } => {
                         *last_mouse_position = None;
                     }
+
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(code),
+                                state,
+                                ..
+                            },
+                        ..
+                    } => scene.event(&match state {
+                        ElementState::Pressed => SceneEvent::KeyDown { key: code },
+                        ElementState::Released => SceneEvent::KeyUp { key: code },
+                    }),
 
                     _ => {}
                 }

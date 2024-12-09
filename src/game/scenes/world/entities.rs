@@ -149,7 +149,7 @@ impl Entities {
             for mesh in model.meshes.iter() {
                 let mut transform = entity_transform * model.global_transform(mesh.node_id);
                 if let Some(animation_transform) = entity.animation_set.set.get(&mesh.node_id) {
-                    transform = transform * animation_transform.to_mat4();
+                    transform *= animation_transform.to_mat4();
                 }
 
                 gv.append(&mut GizmosRenderer::create_axis(&transform, 100.0));

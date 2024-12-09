@@ -232,13 +232,19 @@ impl Scene for WorldScene {
 
         // Update the `under_mouse`.
         match *event {
-            SceneEvent::MouseDown { position, button } if button == MouseButton::Left => {
+            SceneEvent::MouseDown {
+                position,
+                button: MouseButton::Left,
+            } => {
                 self.under_mouse = update_under_mouse!(position, window_size);
             }
             SceneEvent::MouseMove { position } => {
                 self.under_mouse = update_under_mouse!(position, window_size);
             }
-            SceneEvent::MouseUp { position, button } if button == MouseButton::Left => {
+            SceneEvent::MouseUp {
+                position,
+                button: MouseButton::Left,
+            } => {
                 match self.under_mouse {
                     UnderMouse::Entity {
                         entity_index,
