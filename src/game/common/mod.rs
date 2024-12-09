@@ -1,3 +1,4 @@
+pub mod animation;
 pub mod asset_loader;
 pub mod camera;
 pub mod mesh_renderer;

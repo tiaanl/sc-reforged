@@ -3,10 +3,11 @@ use winit::event::MouseButton;
 
 use super::{input::InputState, renderer::Frame};
 
+#[allow(unused)]
 pub enum SceneEvent {
     MouseDown { position: Vec2, button: MouseButton },
-    MouseMove { delta: Vec2 },
-    MouseUp { button: MouseButton },
+    MouseMove { position: Vec2 },
+    MouseUp { position: Vec2, button: MouseButton },
 }
 
 /// A trait that represents a scene in the engine. I splits each stage of the render pipeline into

@@ -87,15 +87,7 @@ impl MeshRenderer {
                         entry_point: "vertex_main",
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[
-                            wgpu::VertexBufferLayout {
-                                array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-                                step_mode: wgpu::VertexStepMode::Vertex,
-                                attributes: &vertex_attr_array![
-                                    0 => Float32x3,
-                                    1 => Float32x3,
-                                    2 => Float32x2,
-                                ],
-                            },
+                            Vertex::vertex_buffer_layout(),
                             wgpu::VertexBufferLayout {
                                 array_stride: std::mem::size_of::<glam::Mat4>()
                                     as wgpu::BufferAddress,
@@ -137,15 +129,6 @@ impl MeshRenderer {
             render_pipeline,
             transforms_bind_group_layout,
         }
-    }
-
-    pub fn add(&mut self, _renderer: &Renderer, _assets: &AssetLoader) -> Handle<TexturedMesh> {
-        // let model = self
-        //     .smf_to_model(renderer, assets, smf)
-        //     .expect("Could not load model! FIX THIS");
-
-        // self.models.add(model)
-        todo!()
     }
 
     pub fn mesh_list_from_model(model: &Model, transform: Transform) -> MeshList {

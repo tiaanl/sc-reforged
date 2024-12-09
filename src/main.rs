@@ -292,7 +292,7 @@ impl winit::application::ApplicationHandler for App {
                         let event = if state.is_pressed() {
                             SceneEvent::MouseDown { position, button }
                         } else {
-                            SceneEvent::MouseUp { button }
+                            SceneEvent::MouseUp { position, button }
                         };
 
                         scene.event(&event);
@@ -303,13 +303,8 @@ impl winit::application::ApplicationHandler for App {
                         ..
                     } => {
                         let position = Vec2::new(x as f32, y as f32);
-
-                        let delta = last_mouse_position
-                            .map(|p| position - p)
-                            .unwrap_or(Vec2::ZERO);
-
                         *last_mouse_position = Some(position);
-                        let event = SceneEvent::MouseMove { delta };
+                        let event = SceneEvent::MouseMove { position };
                         scene.event(&event);
                     }
 

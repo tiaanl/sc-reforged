@@ -1,6 +1,7 @@
 use crate::{
     engine::{gizmos::GizmosRenderer, prelude::*},
     game::{
+        animation::AnimationSet,
         camera::Ray,
         mesh_renderer::{MeshItem, MeshList, MeshRenderer},
         model::Model,
@@ -12,13 +13,20 @@ use super::bounding_boxes::{BoundingBox, BoundingBoxRenderer};
 /// Represents an object inside the game world.
 #[derive(Debug)]
 pub struct Entity {
-    pub transform: Transform,
+    pub translation: Vec3,
+    pub rotation: Vec3,
     pub model: Handle<Model>,
+    pub animation_set: AnimationSet,
 }
 
 impl Entity {
-    pub fn new(transform: Transform, model: Handle<Model>) -> Self {
-        Self { transform, model }
+    pub fn new(translation: Vec3, rotation: Vec3, model: Handle<Model>) -> Self {
+        Self {
+            translation,
+            rotation,
+            model,
+            animation_set: AnimationSet::default(),
+        }
     }
 }
 
@@ -32,7 +40,7 @@ pub struct Entities {
 
     pub entities: Vec<Entity>,
     /// The entity index that the mouse is currently over.
-    entity_hover: Option<usize>,
+    selected_entity: Option<usize>,
 }
 
 impl Entities {
@@ -57,12 +65,20 @@ impl Entities {
             render_bounding_boxes: false,
             bounding_box_renderer,
             entities: vec![],
-            entity_hover: None,
+            selected_entity: None,
         }
     }
 
     pub fn spawn(&mut self, entity: Entity) {
         self.entities.push(entity);
+    }
+
+    pub fn get(&self, entity_index: usize) -> Option<&Entity> {
+        self.entities.get(entity_index)
+    }
+
+    pub fn get_mut(&mut self, entity_index: usize) -> Option<&mut Entity> {
+        self.entities.get_mut(entity_index)
     }
 
     pub fn ray_intersection(&self, ray: &Ray) -> Option<usize> {
@@ -75,9 +91,18 @@ impl Entities {
                 continue;
             };
 
+            let entity_transform = Mat4::from_rotation_translation(
+                Quat::from_euler(
+                    glam::EulerRot::XYZ,
+                    entity.rotation.x,
+                    entity.rotation.y,
+                    entity.rotation.z,
+                ),
+                entity.translation,
+            );
+
             for bounding_box in model.bounding_boxes.iter() {
-                let transform =
-                    entity.transform.to_mat4() * model.global_transform(bounding_box.node_id);
+                let transform = entity_transform * model.global_transform(bounding_box.node_id);
                 let bbox = BoundingBox::new(transform, bounding_box.min, bounding_box.max, false);
                 if let Some(distance) = bbox.intersect_ray(ray) {
                     if distance < closest {
@@ -91,8 +116,8 @@ impl Entities {
         closest_entity
     }
 
-    pub fn update(&mut self, ray: &Ray) {
-        self.entity_hover = self.ray_intersection(&ray);
+    pub fn set_selected(&mut self, selected: Option<usize>) {
+        self.selected_entity = selected;
     }
 
     pub fn render_frame(
@@ -111,10 +136,21 @@ impl Entities {
                 continue;
             };
 
-            let entity_transform = entity.transform.to_mat4();
+            let entity_transform = Mat4::from_rotation_translation(
+                Quat::from_euler(
+                    glam::EulerRot::XYZ,
+                    entity.rotation.x,
+                    entity.rotation.y,
+                    entity.rotation.z,
+                ),
+                entity.translation,
+            );
 
             for mesh in model.meshes.iter() {
-                let transform = entity_transform * model.global_transform(mesh.node_id);
+                let mut transform = entity_transform * model.global_transform(mesh.node_id);
+                if let Some(animation_transform) = entity.animation_set.set.get(&mesh.node_id) {
+                    transform = transform * animation_transform.to_mat4();
+                }
 
                 gv.append(&mut GizmosRenderer::create_axis(&transform, 100.0));
 
@@ -127,7 +163,7 @@ impl Entities {
             if self.render_bounding_boxes {
                 for bounding_box in model.bounding_boxes.iter() {
                     let transform = entity_transform * model.global_transform(bounding_box.node_id);
-                    let highlight = if let Some(hover_index) = self.entity_hover {
+                    let highlight = if let Some(hover_index) = self.selected_entity {
                         hover_index == entity_index
                     } else {
                         false

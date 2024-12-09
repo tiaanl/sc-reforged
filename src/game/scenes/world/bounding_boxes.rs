@@ -182,15 +182,7 @@ impl BoundingBoxRenderer {
                             entry_point: "vertex_main",
                             compilation_options: wgpu::PipelineCompilationOptions::default(),
                             buffers: &[
-                                wgpu::VertexBufferLayout {
-                                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-                                    step_mode: wgpu::VertexStepMode::Vertex,
-                                    attributes: &vertex_attr_array![
-                                        0 => Float32x3,
-                                        1 => Float32x3,
-                                        2 => Float32x2,
-                                    ],
-                                },
+                                Vertex::vertex_buffer_layout(),
                                 wgpu::VertexBufferLayout {
                                     array_stride: std::mem::size_of::<BoundingBox>() as wgpu::BufferAddress,
                                     step_mode: wgpu::VertexStepMode::Instance,
