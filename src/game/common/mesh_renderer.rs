@@ -4,7 +4,7 @@ use wgpu::{util::DeviceExt, vertex_attr_array, ShaderStages};
 
 use crate::engine::prelude::*;
 
-use super::{asset_loader::AssetLoader, model::Model};
+use super::model::Model;
 
 /// A mesh containing gpu resources that we can render.
 #[derive(Debug)]

@@ -169,6 +169,30 @@ impl GpuCamera {
     }
 }
 
+pub struct FreeCameraControls {
+    mouse_button: MouseButton,
+    forward: KeyCode,
+    back: KeyCode,
+    right: KeyCode,
+    left: KeyCode,
+    up: KeyCode,
+    down: KeyCode,
+}
+
+impl Default for FreeCameraControls {
+    fn default() -> Self {
+        Self {
+            mouse_button: MouseButton::Right,
+            forward: KeyCode::KeyW,
+            back: KeyCode::KeyS,
+            right: KeyCode::KeyD,
+            left: KeyCode::KeyA,
+            up: KeyCode::KeyE,
+            down: KeyCode::KeyQ,
+        }
+    }
+}
+
 pub struct FreeCameraController {
     pub position: Vec3,
     pub yaw: f32,   // degrees
@@ -177,8 +201,11 @@ pub struct FreeCameraController {
     pub movement_speed: f32,
     pub mouse_sensitivity: f32,
 
-    // Track whether the values have changed since last update.
+    /// Track whether the values have changed since last update.
     dirty: Dirty,
+
+    /// The controls used to control the camera.
+    controls: FreeCameraControls,
 }
 
 impl FreeCameraController {
@@ -190,7 +217,14 @@ impl FreeCameraController {
             movement_speed,
             mouse_sensitivity,
             dirty: Dirty::smudged(),
+            controls: FreeCameraControls::default(),
         }
+    }
+
+    /// Create a new [FreeCameraController] with the given control scheme.
+    pub fn with_controls(mut self, controls: FreeCameraControls) -> Self {
+        self.controls = controls;
+        self
     }
 
     #[inline]
@@ -216,26 +250,26 @@ impl FreeCameraController {
 
     pub fn update(&mut self, input: &InputState, delta_time: f32) {
         let delta = delta_time * self.movement_speed;
-        if input.key_pressed(KeyCode::KeyW) {
+        if input.key_pressed(self.controls.forward) {
             self.move_forward(delta);
         }
-        if input.key_pressed(KeyCode::KeyS) {
+        if input.key_pressed(self.controls.back) {
             self.move_forward(-delta);
         }
-        if input.key_pressed(KeyCode::KeyA) {
+        if input.key_pressed(self.controls.right) {
             self.move_right(delta);
         }
-        if input.key_pressed(KeyCode::KeyD) {
+        if input.key_pressed(self.controls.left) {
             self.move_right(-delta);
         }
-        if input.key_pressed(KeyCode::KeyE) {
+        if input.key_pressed(self.controls.up) {
             self.move_up(delta);
         }
-        if input.key_pressed(KeyCode::KeyQ) {
+        if input.key_pressed(self.controls.down) {
             self.move_up(-delta);
         }
 
-        if input.mouse_pressed(MouseButton::Left) {
+        if input.mouse_pressed(self.controls.mouse_button) {
             if let Some(delta) = input.mouse_delta() {
                 let delta = delta * self.mouse_sensitivity;
                 if delta.x != 0.0 || delta.y != 0.0 {

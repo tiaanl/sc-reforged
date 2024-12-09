@@ -70,6 +70,7 @@ impl InputState {
         self.key_pressed.contains(&key)
     }
 
+    #[allow(unused)]
     pub fn mouse_position(&self) -> Option<Vec2> {
         self.last_mouse_position
     }
