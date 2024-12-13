@@ -110,6 +110,15 @@ impl Camera {
             direction: ray_direction,
         }
     }
+
+    pub fn look_at(&mut self, camera_to: Vec3) {
+        let forward = (camera_to - self.position).normalize();
+        let world_up = Self::UP;
+        let right = world_up.cross(forward).normalize();
+        let up = forward.cross(right);
+        let rotation_matrix = glam::Mat3::from_cols(right, up, forward);
+        self.rotation = Quat::from_mat3(&rotation_matrix);
+    }
 }
 
 pub struct GpuCamera {
@@ -221,10 +230,26 @@ impl FreeCameraController {
         }
     }
 
+    pub fn smudge(&self) {
+        self.dirty.smudge();
+    }
+
     /// Create a new [FreeCameraController] with the given control scheme.
     pub fn with_controls(mut self, controls: FreeCameraControls) -> Self {
         self.controls = controls;
         self
+    }
+
+    pub fn move_to(&mut self, position: Vec3) {
+        self.position = position;
+        self.dirty.smudge();
+    }
+
+    pub fn look_at(&mut self, target: Vec3) {
+        let direction = (target - self.position).normalize();
+        self.yaw = -direction.y.atan2(direction.x).to_degrees();
+        self.pitch = direction.z.asin().to_degrees();
+        self.dirty.smudge();
     }
 
     #[inline]

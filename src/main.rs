@@ -102,7 +102,7 @@ impl winit::application::ApplicationHandler for App {
                 } else if true {
                     // WorldScene
 
-                    let s = assets.load_config_file("config/campaign_defs.txt").unwrap();
+                    let s = assets.load_string("config/campaign_defs.txt").unwrap();
                     let campaign_defs = read_compaign_defs(&s);
                     let campaign_def = campaign_defs
                         .iter()

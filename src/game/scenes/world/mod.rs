@@ -9,7 +9,7 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera,
-        config::CampaignDef,
+        config::{self, CampaignDef},
     },
 };
 use egui::Widget;
@@ -67,12 +67,29 @@ impl WorldScene {
     ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
+        // Load the campaign specification.
+        let campaign = {
+            let data = assets.load_string(
+                PathBuf::from("campaign")
+                    .join(&campaign_def.base_name)
+                    .join(&campaign_def.base_name)
+                    .with_extension("txt"),
+            )?;
+            let mut config = config::ConfigFile::new(&data);
+            config::read_campaign(&mut config)?
+        };
+
         let mut shaders = Shaders::default();
         camera::register_camera_shader(&mut shaders);
 
-        let camera_controller = camera::FreeCameraController::new(50.0, 0.4);
+        let camera_from = campaign.view_initial.from.extend(2500.0);
+        let camera_to = campaign.view_initial.to.extend(0.0);
+
+        let mut camera_controller = camera::FreeCameraController::new(50.0, 0.4);
+        camera_controller.move_to(camera_from);
+        camera_controller.look_at(camera_to);
         let camera = camera::Camera::new(
-            Vec3::ZERO,
+            camera_from,
             Quat::IDENTITY,
             45.0_f32.to_radians(),
             1.0,
@@ -111,15 +128,15 @@ impl WorldScene {
             // Load the image defs.
             let data = assets.load_raw(r"config\image_defs.txt")?;
             let str = String::from_utf8(data).unwrap();
-            let _image_defs = crate::game::config::read_image_defs(&str);
+            let _image_defs = config::read_image_defs(&str);
         }
 
         if true {
             let path = PathBuf::from("maps")
                 .join(format!("{}_final", campaign_def.base_name))
                 .with_extension("mtf");
-            let data = assets.load_config_file(&path)?;
-            let mtf = crate::game::config::read_mtf(&data);
+            let data = assets.load_string(&path)?;
+            let mtf = config::read_mtf(&data);
 
             let mut to_spawn = mtf
                 .objects
@@ -318,9 +335,6 @@ impl Scene for WorldScene {
         } else {
             self.gpu_camera
                 .upload_matrices(queue, &self.camera.calculate_matrices());
-            // self.camera_matrices.if_changed(|m| {
-            //     self.gpu_camera.upload_matrices(queue, m);
-            // });
         }
     }
 
@@ -365,7 +379,36 @@ impl Scene for WorldScene {
                 ui.label(format!("{}", intersection));
             }
 
+            ui.heading("Camera");
             ui.toggle_value(&mut self.use_debug_camera, "Use debug camera");
+
+            let c = if self.use_debug_camera {
+                &mut self.debug_camera_controller
+            } else {
+                &mut self.camera_controller
+            };
+
+            egui::Grid::new("camera").show(ui, |ui| {
+                ui.label("position");
+
+                let mut pos = c.position;
+                let mut changed = false;
+                changed |= DragValue::new(&mut pos.x).ui(ui).changed();
+                changed |= DragValue::new(&mut pos.y).ui(ui).changed();
+                changed |= DragValue::new(&mut pos.z).ui(ui).changed();
+                if changed {
+                    c.move_to(pos);
+                }
+                ui.end_row();
+
+                ui.label("pitch/yaw");
+                if DragValue::new(&mut c.pitch).speed(0.1).ui(ui).changed() {
+                    c.smudge();
+                }
+                if DragValue::new(&mut c.yaw).speed(0.1).ui(ui).changed() {
+                    c.smudge();
+                }
+            });
 
             // egui::Grid::new("world_info").show(ui, |ui| {
             //     ui.label("position");

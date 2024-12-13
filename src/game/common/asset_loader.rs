@@ -94,7 +94,7 @@ impl AssetLoader {
         )
     }
 
-    pub fn load_config_file(&self, path: impl AsRef<Path>) -> Result<String, AssetError> {
+    pub fn load_string(&self, path: impl AsRef<Path>) -> Result<String, AssetError> {
         String::from_utf8(self.load_raw(path)?).map_err(|_| AssetError::DecodeError)
     }
 

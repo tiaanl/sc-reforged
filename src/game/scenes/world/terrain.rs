@@ -200,7 +200,7 @@ impl Terrain {
                 campaign_def.base_name
             );
             info!("Loading terrain mapping: {}", terrain_mapping_path);
-            let data = assets.load_config_file(terrain_mapping_path)?;
+            let data = assets.load_string(terrain_mapping_path)?;
             TerrainMapping::from(ConfigFile::new(&data))
         };
 
