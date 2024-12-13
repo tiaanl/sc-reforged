@@ -1,6 +1,4 @@
-use std::io::{Read, Seek, SeekFrom};
-
-use byteorder::{LittleEndian, ReadBytesExt};
+use byteorder::{LittleEndian as LE, ReadBytesExt};
 use glam::{Vec2, Vec3, Vec4};
 use tracing::info;
 
@@ -21,6 +19,11 @@ pub struct Terrain {
     map_dy: f32,
     nominal_edge_size: f32,
 
+    bounds_min: Vec2,
+    bounds_max: Vec2,
+
+    // Rendering
+    //
     vertex_buffer: wgpu::Buffer,
 
     index_buffer: wgpu::Buffer,
@@ -46,78 +49,128 @@ pub struct Terrain {
 struct HeightMap {
     width: u32,
     height: u32,
-    heights: Vec<u8>,
+    heights: Vec<u32>,
 }
 
-fn load_texture_map(data: &[u8]) -> Result<HeightMap, AssetError> {
-    /*
-    typedef struct _PcxHeader
-    {
-        BYTE	Identifier;        /* PCX Id Number (Always 0x0A) */
-        BYTE	Version;           /* Version Number */
-        BYTE	Encoding;          /* Encoding Format */
-        BYTE	BitsPerPixel;      /* Bits per Pixel */
-        WORD	XStart;            /* Left of image */
-        WORD	YStart;            /* Top of Image */
-        WORD	XEnd;              /* Right of Image */
-        WORD	YEnd;              /* Bottom of image */
-        WORD	HorzRes;           /* Horizontal Resolution */
-        WORD	VertRes;           /* Vertical Resolution */
-        BYTE	Palette[48];       /* 16-Color EGA Palette */
-        BYTE	Reserved1;         /* Reserved (Always 0) */
-        BYTE	NumBitPlanes;      /* Number of Bit Planes */
-        WORD	BytesPerLine;      /* Bytes per Scan-line */
-        WORD	PaletteType;       /* Palette Type */
-        WORD	HorzScreenSize;    /* Horizontal Screen Size */
-        WORD	VertScreenSize;    /* Vertical Screen Size */
-        BYTE	Reserved2[54];     /* Reserved (Always 0) */
-    } PCXHEAD;
-    */
+#[repr(C)]
+struct PcxHeader {
+    // always 0x0A
+    manufacturer: u8,
 
-    let mut data = std::io::Cursor::new(data);
+    // 0 = v2.5
+    // 2 = v2.8 with palette
+    // 3 = v2.8 without palette
+    // 4 = Paintbrush for Windows
+    // 5 = v3.0 or higher
+    version: u8,
 
-    let _header = data.read_u8().unwrap();
-    let _version = data.read_u8().unwrap();
-    let encoding_method = data.read_u8().unwrap();
-    let _bits = data.read_u8().unwrap();
-    let min_x = data.read_u16::<LittleEndian>().unwrap();
-    let min_y = data.read_u16::<LittleEndian>().unwrap();
-    let max_x = data.read_u16::<LittleEndian>().unwrap();
-    let max_y = data.read_u16::<LittleEndian>().unwrap();
-    let _dpi_x = data.read_u16::<LittleEndian>().unwrap();
-    let _dpi_y = data.read_u16::<LittleEndian>().unwrap();
-    data.seek(SeekFrom::Current(48)).unwrap(); // Skip the EGA palette.
-    let _ = data.read_u8().unwrap(); // Reserved.
-    let _color_planes = data.read_u8().unwrap();
-    let _color_plane_bytes = data.read_u16::<LittleEndian>().unwrap();
-    let _palette_mode = data.read_u16::<LittleEndian>().unwrap();
-    let _source_width = data.read_u16::<LittleEndian>().unwrap();
-    let _source_height = data.read_u16::<LittleEndian>().unwrap();
-    data.seek(SeekFrom::Current(54)).unwrap();
+    // 0 = uncompressed image (not officially allowed)
+    // 1 = PCX run length encoding
+    // should be 0x01
+    encoding: u8,
 
-    let width = max_x as u32 - min_x as u32 + 1;
-    let height = max_y as u32 - min_y as u32 + 1;
+    // number of bits per pixel in each entry of the color planes
+    bits_per_plane: u8,
 
-    let heights = if encoding_method == 0 {
-        let mut decoded = vec![0_u8; width as usize * height as usize];
-        data.read_exact(decoded.as_mut()).unwrap();
-        decoded
-    } else if encoding_method == 1 {
-        let mut decoded = Vec::with_capacity(width as usize * height as usize);
-        while let Ok(byte) = data.read_u8() {
-            if (byte & 0xC0) != 0xC0 {
-                decoded.push(byte);
-            } else {
-                let count = (byte & 0x3F) as usize;
-                let data_byte = data.read_u8().unwrap();
-                decoded.extend(std::iter::repeat(data_byte).take(count));
-            }
-        }
-        decoded
-    } else {
-        // panic!("Invalid PCX encoding");
-        return Err(AssetError::DecodeError);
+    x_min: u16,
+    y_min: u16,
+    x_max: u16,
+    y_max: u16,
+
+    horizontal_dpi: u16,
+    vertical_dpi: u16,
+
+    // palette for 16 colors or less, in three-byte RGB entries.
+    palette: [u8; 48],
+
+    // should be set to 0.
+    reserved: u8,
+
+    // Number of color planes. Multiply by bits_per_pixel to fet the actual color depth.
+    color_planes: u8,
+
+    // number of bytes to read for a single plane's scanline.
+    bytes_per_plane_line: u16,
+
+    // 1 = color/bw
+    // 2 = grayscale
+    palette_info: u16,
+
+    // deals with scrolling, best to just ignore.
+    horizontal_screen_size: u16,
+    vertical_screen_size: u16,
+
+    padding: [u8; 54],
+}
+
+fn read_pcx_header<R>(reader: &mut R) -> std::io::Result<PcxHeader>
+where
+    R: std::io::Read,
+{
+    let mut header: PcxHeader = unsafe {
+        // We will overwrite all the fields, so we can leave them as garbage.
+        std::mem::MaybeUninit::uninit().assume_init_read()
     };
+
+    header.manufacturer = reader.read_u8()?;
+    header.version = reader.read_u8()?;
+    header.encoding = reader.read_u8()?;
+    header.bits_per_plane = reader.read_u8()?;
+    header.x_min = reader.read_u16::<LE>()?;
+    header.y_min = reader.read_u16::<LE>()?;
+    header.x_max = reader.read_u16::<LE>()?;
+    header.y_max = reader.read_u16::<LE>()?;
+    header.horizontal_dpi = reader.read_u16::<LE>()?;
+    header.vertical_dpi = reader.read_u16::<LE>()?;
+    reader.read_exact(&mut header.palette)?;
+    header.reserved = reader.read_u8()?;
+    header.color_planes = reader.read_u8()?;
+    header.bytes_per_plane_line = reader.read_u16::<LE>()?;
+    header.palette_info = reader.read_u16::<LE>()?;
+    header.horizontal_screen_size = reader.read_u16::<LE>()?;
+    header.vertical_screen_size = reader.read_u16::<LE>()?;
+    reader.read_exact(&mut header.padding)?;
+
+    Ok(header)
+}
+
+fn load_texture_map(data: &[u8]) -> std::io::Result<HeightMap> {
+    let mut data = std::io::Cursor::new(data);
+    let header = read_pcx_header(&mut data)?;
+
+    if header.manufacturer != 0x0A || header.version != 0x05 {
+        panic!("Incorrect/invalid PCX header.");
+    }
+
+    let width = header.bytes_per_plane_line as u32;
+    let height = (header.y_max - header.y_min + 1) as u32;
+    let area = width * height;
+
+    tracing::info!("width: {}, height: {}", width as u32, height as u32);
+
+    let mut heights: Vec<u32> = Vec::with_capacity(area as usize);
+
+    macro_rules! b {
+        ($b:expr) => {{
+            0x1FF00_u32 | (0xFF - $b) as u32
+        }};
+    }
+
+    let mut i = 0_usize;
+    while i < area as usize {
+        let byte = data.read_u8()?;
+        if (byte & 0xC0) != 0xC0 {
+            heights.push(b!(byte));
+            i += 1;
+        } else {
+            let count = (byte & 0x3F) as usize;
+            let new_byte = data.read_u8()?;
+            heights.extend(std::iter::repeat(b!(new_byte)).take(count));
+            i += count;
+        }
+    }
+
+    assert_eq!(heights.len(), area as usize);
 
     Ok(HeightMap {
         width,
@@ -179,6 +232,28 @@ impl Terrain {
             load_texture_map(&data).map_err(|_| AssetError::DecodeError)?
         };
 
+        // Generate an array for each edge.
+        let x_sides = (0..height_map.width)
+            .map(|v| v as f32 * nominal_edge_size)
+            .collect::<Vec<_>>();
+        let y_sides = (0..height_map.height)
+            .map(|v| v as f32 * nominal_edge_size)
+            .collect::<Vec<_>>();
+
+        let bounds_min = Vec2::new(x_sides[0] - 2500.0, y_sides[0] - 2500.0);
+        let bounds_max = Vec2::new(
+            *x_sides.last().unwrap() + 2500.0,
+            *y_sides.last().unwrap() + 2500.0,
+        );
+
+        tracing::info!(
+            "Terrain bounds: ({}, {}) - ({}, {})",
+            bounds_min.x,
+            bounds_min.y,
+            bounds_max.x,
+            bounds_max.y
+        );
+
         #[cfg(feature = "load_normals")]
         {
             let normals_lookup = {
@@ -213,8 +288,9 @@ impl Terrain {
             map_dx, map_dy, height_map.width, height_map.height,
         );
 
-        let heights = (0..=255)
-            .map(|h| ((255 - h) as f32) * altitude_map_height_base)
+        // Build a lookup table for altitudes.
+        let heights = (0..0x100)
+            .map(|h| (h as f32) * altitude_map_height_base)
             .collect::<Vec<_>>();
 
         macro_rules! index {
@@ -241,7 +317,8 @@ impl Terrain {
 
             for y in 0..height_map.height {
                 for x in 0..height_map.width {
-                    let altitude = heights[height_map.heights[index!(x, y) as usize] as usize];
+                    let index = y as usize * height_map.width as usize + x as usize;
+                    let altitude = heights[height_map.heights[index] as usize & 0xFF];
                     #[cfg(feature = "load_normals")]
                     let normal = normals_table[normals_lookup[index!(x, y) as usize] as usize];
 
@@ -355,6 +432,9 @@ impl Terrain {
             map_dy,
             nominal_edge_size,
 
+            bounds_min,
+            bounds_max,
+
             vertex_buffer,
 
             index_buffer,
@@ -375,16 +455,6 @@ impl Terrain {
             #[cfg(feature = "load_normals")]
             normals_table,
         })
-    }
-
-    /// Return the max bounds of the terrain. The min value of the bound is
-    /// [`Vec3::ZERO`].
-    pub fn _bounds(&self) -> Vec3 {
-        Vec3::new(
-            self.map_dx * self.nominal_edge_size,
-            self.altitude_map_height_base * 255.0,
-            self.map_dy * self.nominal_edge_size,
-        )
     }
 
     pub fn render_normals(&self) -> Vec<GizmoVertex> {

@@ -240,7 +240,8 @@ impl FreeCameraController {
 
     pub fn move_right(&mut self, distance: f32) {
         self.dirty.smudge();
-        self.position += self.rotation() * Camera::RIGHT * distance;
+        // Because of our left-handed, z-up coord-system, right is negative.
+        self.position -= self.rotation() * Camera::RIGHT * distance;
     }
 
     pub fn move_up(&mut self, distance: f32) {
