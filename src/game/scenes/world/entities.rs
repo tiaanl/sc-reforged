@@ -8,7 +8,7 @@ use crate::{
     },
 };
 
-use super::bounding_boxes::{BoundingBox, BoundingBoxRenderer};
+use super::bounding_boxes::{BoundingBoxRenderer, RawBoundingBox};
 
 /// Represents an object inside the game world.
 #[derive(Debug)]
@@ -103,7 +103,8 @@ impl Entities {
 
             for bounding_box in model.bounding_boxes.iter() {
                 let transform = entity_transform * model.global_transform(bounding_box.node_id);
-                let bbox = BoundingBox::new(transform, bounding_box.min, bounding_box.max, false);
+                let bbox =
+                    RawBoundingBox::new(transform, bounding_box.min, bounding_box.max, false);
                 if let Some(distance) = bbox.intersect_ray(ray) {
                     if distance < closest {
                         closest = distance;
@@ -129,7 +130,7 @@ impl Entities {
         // Build a list of all the meshes that needs rendering.
         let mut meshes = MeshList::default();
         let mut boxes = vec![];
-        let mut gv = vec![];
+        let gv = vec![];
 
         for (entity_index, entity) in self.entities.iter().enumerate() {
             let Some(model) = self.asset_manager.get(entity.model) else {
@@ -168,7 +169,7 @@ impl Entities {
                     } else {
                         false
                     };
-                    boxes.push(BoundingBox::new(
+                    boxes.push(RawBoundingBox::new(
                         transform,
                         bounding_box.min,
                         bounding_box.max,

@@ -5,7 +5,7 @@ use crate::{engine::prelude::*, game::camera::Ray};
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
-pub struct BoundingBox {
+pub struct RawBoundingBox {
     transform: Mat4,
     min: Vec3,
     highlight: u32,
@@ -13,7 +13,7 @@ pub struct BoundingBox {
     _padding: u32,
 }
 
-impl BoundingBox {
+impl RawBoundingBox {
     pub fn new(transform: Mat4, min: Vec3, max: Vec3, highlight: bool) -> Self {
         Self {
             transform,
@@ -25,7 +25,7 @@ impl BoundingBox {
     }
 }
 
-impl BoundingBox {
+impl RawBoundingBox {
     pub fn intersect_ray(&self, ray: &Ray) -> Option<f32> {
         // Compute inverse transform
         let inverse_transform = self.transform.inverse();
@@ -184,7 +184,7 @@ impl BoundingBoxRenderer {
                             buffers: &[
                                 Vertex::vertex_buffer_layout(),
                                 wgpu::VertexBufferLayout {
-                                    array_stride: std::mem::size_of::<BoundingBox>() as wgpu::BufferAddress,
+                                    array_stride: std::mem::size_of::<RawBoundingBox>() as wgpu::BufferAddress,
                                     step_mode: wgpu::VertexStepMode::Instance,
                                     attributes: &vertex_attr_array![
                                         10 => Float32x4,  // model_mat_0
@@ -258,7 +258,7 @@ impl BoundingBoxRenderer {
         &self,
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
-        bounding_boxes: &[BoundingBox],
+        bounding_boxes: &[RawBoundingBox],
     ) {
         let device = frame.device.clone();
 

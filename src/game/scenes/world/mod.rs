@@ -353,10 +353,6 @@ impl Scene for WorldScene {
         self.terrain
             .render_frame(frame, &self.gpu_camera.bind_group);
 
-        let more_vertices = self.terrain.render_normals();
-        self.gizmos_renderer
-            .render_frame(frame, &self.gpu_camera.bind_group, &more_vertices);
-
         self.entities
             .render_frame(frame, &self.gpu_camera.bind_group, &self.gizmos_renderer);
 

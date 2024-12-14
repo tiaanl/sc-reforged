@@ -1,21 +1,22 @@
 use glam::{UVec2, Vec2, Vec3};
+use wgpu::util::DeviceExt;
 
-use super::{GpuIndexedMesh, IndexedMesh, Renderer, Vertex};
+use super::{Renderer, Vertex};
 
 pub struct HeightMap {
     pub edge_size: f32,
     pub elevation_base: f32,
 
-    pub size_x: u32,
-    pub size_y: u32,
+    pub size: UVec2,
     pub heights: Vec<u32>,
 }
 
-enum Resolution {
-    Zero = 0,
-    One = 1,
-    Two = 2,
-    Three = 3,
+#[derive(Clone, Copy, PartialEq)]
+pub enum Resolution {
+    Terrible = 0,
+    Low = 1,
+    Medium = 2,
+    High = 3,
 }
 
 impl HeightMap {
@@ -35,29 +36,24 @@ impl HeightMap {
         Ok(Self {
             edge_size,
             elevation_base,
-            size_x: data.width,
-            size_y: data.height,
+            size: UVec2 {
+                x: data.width,
+                y: data.height,
+            },
             heights: data.data,
         })
     }
 
     pub fn chunks(&self) -> UVec2 {
-        UVec2 {
-            x: self.size_x / Self::CHUNK_SIZE,
-            y: self.size_y / Self::CHUNK_SIZE,
-        }
+        self.size / Self::CHUNK_SIZE
     }
 
-    pub fn position(&self, x: u32, y: u32) -> Vec3 {
+    pub fn position(&self, pos: UVec2) -> Vec3 {
         // Clamp to the size of the height map.
-        let x = x.min(self.size_x - 1);
-        let y = y.min(self.size_y - 1);
+        let x = pos.x.min(self.size.x - 1);
+        let y = pos.y.min(self.size.y - 1);
 
-        let index = y as usize * self.size_x as usize + x as usize;
-
-        if index >= self.heights.len() {
-            println!("out of bounds: {x} {y}");
-        }
+        let index = y as usize * self.size.x as usize + x as usize;
 
         let elevation = (self.heights[index] as usize & 0xFF) as f32 * self.elevation_base;
         Vec3::new(
@@ -67,15 +63,31 @@ impl HeightMap {
         )
     }
 
+    pub fn bounds(&self) -> (Vec3, Vec3) {
+        let min = self.position(UVec2::ZERO);
+        let max = self.position(self.size - UVec2::ONE);
+        (min, max)
+    }
+
     pub fn new_chunk(&self, renderer: &Renderer, x: u32, y: u32) -> Chunk {
         let min = UVec2::new(x, y) * Self::CHUNK_SIZE;
+        let max = min + UVec2::new(Self::CHUNK_SIZE + 1, Self::CHUNK_SIZE + 1);
+
         Chunk {
-            mesh: self.generate_chunk(min, Resolution::Zero).to_gpu(renderer),
+            min: self.position(min),
+            max: self.position(max),
+            meshes: [
+                Resolution::Terrible,
+                Resolution::Low,
+                Resolution::Medium,
+                Resolution::High,
+            ]
+            .map(|res| self.generate_chunk(min, res).into_gpu(renderer)),
         }
     }
 
-    fn generate_chunk(&self, offset: UVec2, res: Resolution) -> IndexedMesh<Vertex> {
-        let step = 8 >> res as u32;
+    fn generate_chunk(&self, offset: UVec2, res: Resolution) -> ChunkMesh {
+        let step = Self::CHUNK_SIZE >> res as u32;
 
         let cells = Self::CHUNK_SIZE / step;
         let mut vertices = Vec::with_capacity(cells as usize * cells as usize);
@@ -83,43 +95,113 @@ impl HeightMap {
         for y in (offset.y..=offset.y + Self::CHUNK_SIZE).step_by(step as usize) {
             for x in (offset.x..=offset.x + Self::CHUNK_SIZE).step_by(step as usize) {
                 vertices.push(Vertex {
-                    position: self.position(x, y),
+                    position: self.position(UVec2 { x, y }),
                     normal: Vec3::Z,
                     tex_coord: Vec2::new(
-                        x as f32 / self.size_x as f32,
-                        y as f32 / self.size_y as f32,
+                        x as f32 / self.size.x as f32,
+                        y as f32 / self.size.y as f32,
                     ),
                 });
             }
         }
 
         let mut indices = Vec::with_capacity(cells as usize * cells as usize * 3);
+        let mut wireframe_indices = Vec::with_capacity(cells as usize * cells as usize * 8);
         for y in 0..cells {
             for x in 0..cells {
-                let index = y * (cells + 1) + x;
+                let f0 = y * (cells + 1) + x;
+                let f1 = f0 + 1;
+                let f3 = f1 + cells;
+                let f2 = f3 + 1;
 
-                let f0 = index;
-                let f1 = index + 1;
-                let f2 = index + (cells + 1);
-                let f3 = index + (cells + 1) + 1;
+                // 2 tringles for the face.
+                indices.extend_from_slice(&[
+                    f0, f1, f2, // 0
+                    f2, f3, f0, // 1
+                ]);
 
-                indices.push(f0);
-                indices.push(f1);
-                indices.push(f2);
-
-                indices.push(f1);
-                indices.push(f3);
-                indices.push(f2);
+                // 4 lines for the wireframe.
+                wireframe_indices.extend_from_slice(&[
+                    f0, f1, // 0
+                    f1, f2, // 1
+                    f2, f3, // 2
+                    f3, f0, // 3
+                ]);
             }
         }
 
-        IndexedMesh { vertices, indices }
+        ChunkMesh {
+            vertices,
+            indices,
+            wireframe_indices,
+        }
     }
 }
 
+// TODO: Change min and max to use a BoundingBox struct.
 pub struct Chunk {
-    pub mesh: GpuIndexedMesh,
-    // resolution: [GpuIndexedMesh; 4],
+    min: Vec3,
+    max: Vec3,
+    meshes: [GpuChunk; 4],
+}
+
+impl Chunk {
+    pub fn mesh_at(&self, resolution: Resolution) -> &GpuChunk {
+        &self.meshes[resolution as usize]
+    }
+}
+
+struct ChunkMesh {
+    vertices: Vec<Vertex>,
+    indices: Vec<u32>,
+    wireframe_indices: Vec<u32>,
+}
+
+impl ChunkMesh {
+    fn into_gpu(self, renderer: &Renderer) -> GpuChunk {
+        let vertex_buffer = renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("terrain_chunk_vertex_buffer"),
+                contents: bytemuck::cast_slice(&self.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+        let index_count = self.indices.len() as u32;
+        let index_buffer = renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("terrain_chunk_index_buffer"),
+                contents: bytemuck::cast_slice(&self.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+
+        let wireframe_index_count = self.wireframe_indices.len() as u32;
+        let wireframe_index_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("terrain_chunk_wireframe_index_buffer"),
+                    contents: bytemuck::cast_slice(&self.wireframe_indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+
+        GpuChunk {
+            vertex_buffer,
+            index_buffer,
+            index_count,
+            wireframe_index_buffer,
+            wireframe_index_count,
+        }
+    }
+}
+
+pub struct GpuChunk {
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub index_count: u32,
+    pub wireframe_index_buffer: wgpu::Buffer,
+    pub wireframe_index_count: u32,
 }
 
 mod pcx {

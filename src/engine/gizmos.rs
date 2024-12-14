@@ -95,7 +95,7 @@ impl GizmosRenderer {
         render_pass.draw(0..(vertices.len() as u32), 0..1);
     }
 
-    pub fn create_axis(transform: &Mat4, size: f32) -> Vec<GizmoVertex> {
+    pub fn _create_axis(transform: &Mat4, size: f32) -> Vec<GizmoVertex> {
         let zero = transform.project_point3(Vec3::ZERO);
         vec![
             GizmoVertex::new(zero, Vec4::new(1.0, 0.0, 0.0, 1.0)),
