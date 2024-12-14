@@ -1,18 +1,54 @@
-use glam::{UVec2, Vec3Swizzles};
+use glam::{UVec2, Vec3Swizzles, Vec4, Vec4Swizzles};
 use tracing::info;
 
 use crate::{
-    engine::prelude::*,
+    engine::{gizmos::GizmoVertex, prelude::*},
     game::{
         asset_loader::{AssetError, AssetLoader},
+        camera::Camera,
         config::{CampaignDef, ConfigFile, TerrainMapping},
     },
 };
 
-use super::height_map::{Chunk, HeightMap, Resolution};
+use super::{
+    bounding_boxes::BoundingBox,
+    height_map::{GpuChunkMesh, HeightMap},
+};
+
+pub struct Chunk {
+    distance_from_camera: f32,
+    resolution: u32,
+    bounding_box: BoundingBox,
+    meshes: [GpuChunkMesh; 4],
+}
+
+impl Chunk {
+    pub fn new(height_map: &HeightMap, chunk_offset: UVec2, renderer: &Renderer) -> Chunk {
+        let min = chunk_offset * HeightMap::CHUNK_SIZE;
+        let max = min + UVec2::new(HeightMap::CHUNK_SIZE + 1, HeightMap::CHUNK_SIZE + 1);
+
+        Self {
+            distance_from_camera: f32::MAX,
+            resolution: HeightMap::MAX_RESOLUTION,
+            bounding_box: BoundingBox {
+                min: height_map.position(min),
+                max: height_map.position(max),
+            },
+            meshes: [0, 1, 2, 3].map(|res| height_map.generate_chunk(min, res).into_gpu(renderer)),
+        }
+    }
+
+    pub fn mesh_at(&self, resolution: u32) -> &GpuChunkMesh {
+        assert!(resolution <= HeightMap::MAX_RESOLUTION);
+        &self.meshes[resolution as usize]
+    }
+}
 
 pub struct Terrain {
     height_map: HeightMap,
+
+    /// Dictates the terrain resolution.
+    max_view_distance: f32,
 
     pipeline: wgpu::RenderPipeline,
     wireframe_pipeline: wgpu::RenderPipeline,
@@ -23,7 +59,7 @@ pub struct Terrain {
     draw_normals: bool,
 
     chunks: Vec<Chunk>,
-    resolution: Resolution,
+    resolution: u32,
 }
 
 impl Terrain {
@@ -91,7 +127,7 @@ impl Terrain {
         let mut chunks = Vec::with_capacity(chunks_x as usize * chunks_y as usize);
         for y in 0..chunks_y {
             for x in 0..chunks_x {
-                chunks.push(height_map.new_chunk(renderer, x, y));
+                chunks.push(Chunk::new(&height_map, UVec2 { x, y }, renderer));
             }
         }
 
@@ -166,6 +202,8 @@ impl Terrain {
         Ok(Self {
             height_map,
 
+            max_view_distance: 10_000.0,
+
             pipeline,
             wireframe_pipeline,
 
@@ -175,32 +213,85 @@ impl Terrain {
             draw_normals: false,
 
             chunks,
-            resolution: Resolution::High,
+            resolution: HeightMap::MAX_RESOLUTION,
         })
     }
 
-    pub fn update(&mut self, _delta_time: f32) {}
+    pub fn update(&mut self, camera: &Camera, _delta_time: f32) {
+        // Go through each terrain chunk and calculate its distance from the camera.
+        for chunk in self.chunks.iter_mut() {
+            let distance = chunk.bounding_box.center().distance(camera.position);
+            chunk.distance_from_camera = distance;
 
-    pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
-        ui.checkbox(&mut self.draw_wireframe, "Draw wireframe");
+            let res = distance / (self.max_view_distance / HeightMap::MAX_RESOLUTION as f32);
+            let res = HeightMap::MAX_RESOLUTION - (res as u32).min(HeightMap::MAX_RESOLUTION);
 
-        ui.radio_value(&mut self.resolution, Resolution::High, "High");
-        ui.radio_value(&mut self.resolution, Resolution::Medium, "Medium");
-        ui.radio_value(&mut self.resolution, Resolution::Low, "Low");
-        ui.radio_value(&mut self.resolution, Resolution::Terrible, "Terrible");
+            chunk.resolution = res;
+        }
+    }
 
-        // egui::Grid::new("terrain_data").show(ui, |ui| {
-        //     ui.label("terrain mapping size");
-        //     ui.label(format!("{} x {}", self.map_dx, self.map_dy));
-        //     ui.end_row();
+    pub fn gizmos(&self, camera: &Camera, gizmo_vertices: &mut Vec<GizmoVertex>) {
+        let ndc_corners = [
+            Vec4::new(-1.0, -1.0, 0.0, 1.0), // Near-bottom-left
+            Vec4::new(-1.0, 1.0, 0.0, 1.0),  // Near-top-left
+            Vec4::new(1.0, 1.0, 0.0, 1.0),   // Near-top-right
+            Vec4::new(1.0, -1.0, 0.0, 1.0),  // Near-bottom-right
+            Vec4::new(-1.0, -1.0, 1.0, 1.0), // Far-bottom-left
+            Vec4::new(-1.0, 1.0, 1.0, 1.0),  // Far-top-left
+            Vec4::new(1.0, 1.0, 1.0, 1.0),   // Far-top-right
+            Vec4::new(1.0, -1.0, 1.0, 1.0),  // Far-bottom-right
+        ];
 
-        //     ui.label("nominal edge size");
-        //     ui.label(format!("{}", self.nominal_edge_size));
-        //     ui.end_row();
+        // Calculate the view-projection matrix
+        let matrices = camera.calculate_matrices();
+        let view_projection = matrices.projection * matrices.view;
 
-        //     ui.label("altitude map height base");
-        //     ui.label(format!("{}", self.altitude_map_height_base));
-        // });
+        // Invert the view-projection matrix
+        let inv_view_projection = view_projection.inverse();
+
+        let green = Vec4::new(0.0, 1.0, 0.0, 1.0);
+
+        // Transform NDC corners to world space
+        let vertices = ndc_corners.map(|corner| {
+            let world_space = inv_view_projection * corner;
+            GizmoVertex::new(world_space.xyz() / world_space.w, green)
+        });
+
+        let origin = GizmoVertex::new(Vec3::ZERO, green);
+
+        // Should we even render this rectangle?  Its extremely small.
+        gizmo_vertices.extend_from_slice(&[
+            vertices[0],
+            vertices[1],
+            vertices[1],
+            vertices[2],
+            vertices[2],
+            vertices[3],
+            vertices[3],
+            vertices[0],
+        ]);
+
+        gizmo_vertices.extend_from_slice(&[
+            vertices[0],
+            vertices[4],
+            vertices[1],
+            vertices[5],
+            vertices[2],
+            vertices[6],
+            vertices[3],
+            vertices[7],
+        ]);
+
+        gizmo_vertices.extend_from_slice(&[
+            vertices[4],
+            vertices[5],
+            vertices[5],
+            vertices[6],
+            vertices[6],
+            vertices[7],
+            vertices[7],
+            vertices[4],
+        ]);
     }
 
     pub fn render_frame(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
@@ -210,7 +301,7 @@ impl Terrain {
             render_pass.set_pipeline(&self.pipeline);
 
             for chunk in self.chunks.iter() {
-                let mesh = chunk.mesh_at(self.resolution);
+                let mesh = chunk.mesh_at(chunk.resolution);
 
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass
@@ -228,7 +319,7 @@ impl Terrain {
             render_pass.set_pipeline(&self.wireframe_pipeline);
 
             for chunk in self.chunks.iter() {
-                let mesh = chunk.mesh_at(self.resolution);
+                let mesh = chunk.mesh_at(chunk.resolution);
 
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(
@@ -239,5 +330,24 @@ impl Terrain {
                 render_pass.draw_indexed(0..mesh.wireframe_index_count, 0, 0..1);
             }
         }
+    }
+
+    pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
+        ui.checkbox(&mut self.draw_wireframe, "Draw wireframe");
+
+        ui.add(egui::widgets::DragValue::new(&mut self.max_view_distance));
+
+        // egui::Grid::new("terrain_data").show(ui, |ui| {
+        //     ui.label("terrain mapping size");
+        //     ui.label(format!("{} x {}", self.map_dx, self.map_dy));
+        //     ui.end_row();
+
+        //     ui.label("nominal edge size");
+        //     ui.label(format!("{}", self.nominal_edge_size));
+        //     ui.end_row();
+
+        //     ui.label("altitude map height base");
+        //     ui.label(format!("{}", self.altitude_map_height_base));
+        // });
     }
 }

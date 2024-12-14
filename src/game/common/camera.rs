@@ -275,7 +275,13 @@ impl FreeCameraController {
     }
 
     pub fn update(&mut self, input: &InputState, delta_time: f32) {
-        let delta = delta_time * self.movement_speed;
+        let delta =
+            if input.key_pressed(KeyCode::ShiftLeft) || input.key_pressed(KeyCode::ShiftRight) {
+                self.movement_speed * 2.0
+            } else {
+                self.movement_speed
+            } * delta_time;
+
         if input.key_pressed(self.controls.forward) {
             self.move_forward(delta);
         }

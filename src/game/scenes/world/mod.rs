@@ -26,7 +26,8 @@ pub struct WorldScene {
     asset_manager: AssetManager,
     _campaign_def: CampaignDef,
 
-    use_debug_camera: bool,
+    view_debug_camera: bool,
+    control_debug_camera: bool,
 
     camera_controller: camera::FreeCameraController,
     camera: camera::Camera,
@@ -95,10 +96,12 @@ impl WorldScene {
             45.0_f32.to_radians(),
             1.0,
             1.0,
-            100_000.0,
+            10_000.0,
         );
 
-        let debug_camera_controller = camera::FreeCameraController::new(50.0, 0.4);
+        let mut debug_camera_controller = camera::FreeCameraController::new(50.0, 0.4);
+        debug_camera_controller.move_to(Vec3::new(-5_000.0, -5_000.0, 10_000.0));
+        debug_camera_controller.look_at(Vec3::new(10_000.0, 10_000.0, 0.0));
         let debug_camera = camera::Camera::new(
             Vec3::ZERO,
             Quat::IDENTITY,
@@ -183,7 +186,8 @@ impl WorldScene {
 
             _campaign_def: campaign_def,
 
-            use_debug_camera: false,
+            view_debug_camera: false,
+            control_debug_camera: false,
 
             camera_controller,
             camera,
@@ -290,18 +294,19 @@ impl Scene for WorldScene {
         const GREEN: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
         const BLUE: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
 
-        if self.use_debug_camera {
+        if self.control_debug_camera {
             self.debug_camera_controller.update(input, delta_time);
-            self.debug_camera_controller
-                .update_camera_if_dirty(&mut self.debug_camera);
         } else {
             self.camera_controller.update(input, delta_time);
-            if self
-                .camera_controller
-                .update_camera_if_dirty(&mut self.camera)
-            {
-                *self.camera_matrices = self.camera.calculate_matrices();
-            }
+        }
+
+        self.debug_camera_controller
+            .update_camera_if_dirty(&mut self.debug_camera);
+        if self
+            .camera_controller
+            .update_camera_if_dirty(&mut self.camera)
+        {
+            *self.camera_matrices = self.camera.calculate_matrices();
         }
 
         // Highlight whatever we're hovering on.
@@ -312,25 +317,26 @@ impl Scene for WorldScene {
             }
         }
 
-        self.terrain.update(delta_time);
+        self.terrain.update(&self.camera, delta_time);
+        self.terrain.gizmos(&self.camera, &mut self.gizmos_vertices);
 
-        {
-            self.gizmos_vertices.append(&mut vec![
-                // X+
-                GizmoVertex::new(CENTER, RED),
-                GizmoVertex::new(Vec3::X * GIZMO_SCALE, RED),
-                // Y+
-                GizmoVertex::new(CENTER, GREEN),
-                GizmoVertex::new(Vec3::Y * GIZMO_SCALE, GREEN),
-                // Z+
-                GizmoVertex::new(CENTER, BLUE),
-                GizmoVertex::new(Vec3::Z * GIZMO_SCALE, BLUE),
-            ]);
-        }
+        // {
+        //     self.gizmos_vertices.append(&mut vec![
+        //         // X+
+        //         GizmoVertex::new(CENTER, RED),
+        //         GizmoVertex::new(Vec3::X * GIZMO_SCALE, RED),
+        //         // Y+
+        //         GizmoVertex::new(CENTER, GREEN),
+        //         GizmoVertex::new(Vec3::Y * GIZMO_SCALE, GREEN),
+        //         // Z+
+        //         GizmoVertex::new(CENTER, BLUE),
+        //         GizmoVertex::new(Vec3::Z * GIZMO_SCALE, BLUE),
+        //     ]);
+        // }
     }
 
     fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
-        if self.use_debug_camera {
+        if self.view_debug_camera {
             self.gpu_camera
                 .upload_matrices(queue, &self.debug_camera.calculate_matrices());
         } else {
@@ -377,9 +383,13 @@ impl Scene for WorldScene {
             }
 
             ui.heading("Camera");
-            ui.toggle_value(&mut self.use_debug_camera, "Use debug camera");
+            ui.horizontal(|ui| {
+                ui.label("Debug camera");
+                ui.toggle_value(&mut self.view_debug_camera, "View");
+                ui.toggle_value(&mut self.control_debug_camera, "Control");
+            });
 
-            let c = if self.use_debug_camera {
+            let c = if self.control_debug_camera {
                 &mut self.debug_camera_controller
             } else {
                 &mut self.camera_controller

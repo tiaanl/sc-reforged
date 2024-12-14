@@ -11,15 +11,9 @@ pub struct HeightMap {
     pub heights: Vec<u32>,
 }
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum Resolution {
-    Terrible = 0,
-    Low = 1,
-    Medium = 2,
-    High = 3,
-}
-
 impl HeightMap {
+    pub const MAX_RESOLUTION: u32 = 3;
+
     /// 8 cells per chunk (9x9 vertices).
     pub const CHUNK_SIZE: u32 = 8;
 
@@ -69,25 +63,8 @@ impl HeightMap {
         (min, max)
     }
 
-    pub fn new_chunk(&self, renderer: &Renderer, x: u32, y: u32) -> Chunk {
-        let min = UVec2::new(x, y) * Self::CHUNK_SIZE;
-        let max = min + UVec2::new(Self::CHUNK_SIZE + 1, Self::CHUNK_SIZE + 1);
-
-        Chunk {
-            min: self.position(min),
-            max: self.position(max),
-            meshes: [
-                Resolution::Terrible,
-                Resolution::Low,
-                Resolution::Medium,
-                Resolution::High,
-            ]
-            .map(|res| self.generate_chunk(min, res).into_gpu(renderer)),
-        }
-    }
-
-    fn generate_chunk(&self, offset: UVec2, res: Resolution) -> ChunkMesh {
-        let step = Self::CHUNK_SIZE >> res as u32;
+    pub fn generate_chunk(&self, offset: UVec2, resolution: u32) -> ChunkMesh {
+        let step = Self::CHUNK_SIZE >> resolution;
 
         let cells = Self::CHUNK_SIZE / step;
         let mut vertices = Vec::with_capacity(cells as usize * cells as usize);
@@ -138,27 +115,14 @@ impl HeightMap {
     }
 }
 
-// TODO: Change min and max to use a BoundingBox struct.
-pub struct Chunk {
-    min: Vec3,
-    max: Vec3,
-    meshes: [GpuChunk; 4],
-}
-
-impl Chunk {
-    pub fn mesh_at(&self, resolution: Resolution) -> &GpuChunk {
-        &self.meshes[resolution as usize]
-    }
-}
-
-struct ChunkMesh {
+pub struct ChunkMesh {
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
     wireframe_indices: Vec<u32>,
 }
 
 impl ChunkMesh {
-    fn into_gpu(self, renderer: &Renderer) -> GpuChunk {
+    pub fn into_gpu(self, renderer: &Renderer) -> GpuChunkMesh {
         let vertex_buffer = renderer
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -186,7 +150,7 @@ impl ChunkMesh {
                     usage: wgpu::BufferUsages::INDEX,
                 });
 
-        GpuChunk {
+        GpuChunkMesh {
             vertex_buffer,
             index_buffer,
             index_count,
@@ -196,7 +160,7 @@ impl ChunkMesh {
     }
 }
 
-pub struct GpuChunk {
+pub struct GpuChunkMesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub index_count: u32,
