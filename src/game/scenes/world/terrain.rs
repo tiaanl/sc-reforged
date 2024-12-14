@@ -1,4 +1,4 @@
-use glam::{UVec2, Vec3Swizzles};
+use glam::UVec2;
 use tracing::info;
 
 use crate::{
@@ -44,6 +44,7 @@ impl Chunk {
 }
 
 pub struct Terrain {
+    /// Height data for the terrain.
     height_map: HeightMap,
 
     /// Dictates the terrain resolution.
@@ -58,7 +59,6 @@ pub struct Terrain {
     draw_normals: bool,
 
     chunks: Vec<Chunk>,
-    resolution: u32,
 }
 
 impl Terrain {
@@ -130,40 +130,24 @@ impl Terrain {
             }
         }
 
-        // let chunks = vec![
-        //     height_map.new_chunk(renderer, 0, 0),
-        //     height_map.new_chunk(renderer, 1, 1),
-        //     height_map.new_chunk(renderer, 2, 2),
-        // ];
-
         info!(
             "terrain size: {} x {}, terrain heightmap size: {} x {}",
             map_dx, map_dy, height_map.size.x, height_map.size.y,
         );
 
-        /*
-        // Generate an array for each edge.
-        let x_sides = (0..height_map.size_x)
-            .map(|v| v as f32 * nominal_edge_size)
-            .collect::<Vec<_>>();
-        let y_sides = (0..height_map.size_y)
-            .map(|v| v as f32 * nominal_edge_size)
-            .collect::<Vec<_>>();
-        */
+        // let bounds_min = height_map.height(UVec2::ZERO).xy().map(|v| v - 2500.0);
+        // let bounds_max = height_map
+        //     .height(height_map.size - UVec2::ONE)
+        //     .xy()
+        //     .map(|v| v + 2500.0);
 
-        let bounds_min = height_map.position(UVec2::ZERO).xy().map(|v| v - 2500.0);
-        let bounds_max = height_map
-            .position(height_map.size - UVec2::ONE)
-            .xy()
-            .map(|v| v + 2500.0);
-
-        tracing::info!(
-            "Terrain bounds: ({}, {}) - ({}, {})",
-            bounds_min.x,
-            bounds_min.y,
-            bounds_max.x,
-            bounds_max.y
-        );
+        // tracing::info!(
+        //     "Terrain bounds: ({}, {}) - ({}, {})",
+        //     bounds_min.x,
+        //     bounds_min.y,
+        //     bounds_max.x,
+        //     bounds_max.y
+        // );
 
         let shader_module = shaders.create_shader(
             renderer,
@@ -212,11 +196,10 @@ impl Terrain {
             draw_normals: false,
 
             chunks,
-            resolution: HeightMap::MAX_RESOLUTION,
         })
     }
 
-    pub fn update(&mut self, camera: &Camera, _delta_time: f32) {
+    pub fn update(&mut self, camera: &Camera) {
         // Check if each terrain chunk is inside the cameras view frustum.
         let matrices = camera.calculate_matrices();
         let frustum = Frustum::from_matrices(&matrices);

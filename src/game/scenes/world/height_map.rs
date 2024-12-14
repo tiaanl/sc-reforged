@@ -15,7 +15,7 @@ impl HeightMap {
     pub const MAX_RESOLUTION: u32 = 3;
 
     /// 8 cells per chunk (9x9 vertices).
-    pub const CHUNK_SIZE: u32 = 8;
+    pub const CHUNK_SIZE: u32 = 1 << Self::MAX_RESOLUTION;
 
     pub fn from_reader<R>(
         edge_size: f32,

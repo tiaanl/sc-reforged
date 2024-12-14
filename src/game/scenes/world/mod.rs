@@ -52,6 +52,9 @@ pub struct WorldScene {
     selected_object: Option<usize>,
 
     new_id: String,
+
+    // test
+    terrain_height_sample: Vec2,
 }
 
 #[derive(Debug)]
@@ -121,7 +124,8 @@ impl WorldScene {
             &campaign_def,
             &gpu_camera.bind_group_layout,
         )?;
-        let mut entities = objects::Objects::new(
+
+        let mut objects = objects::Objects::new(
             asset_manager.clone(),
             renderer,
             &mut shaders,
@@ -175,7 +179,7 @@ impl WorldScene {
                 .collect::<Vec<_>>();
 
             for object in to_spawn.drain(..) {
-                entities.spawn(object);
+                objects.spawn(object);
             }
         }
 
@@ -202,7 +206,7 @@ impl WorldScene {
             intersection: None,
 
             terrain,
-            objects: entities,
+            objects,
 
             gizmos_renderer,
             gizmos_vertices: vec![],
@@ -214,6 +218,8 @@ impl WorldScene {
             selected_object: None,
 
             new_id: String::new(),
+
+            terrain_height_sample: Vec2::ZERO,
         })
     }
 }
@@ -321,7 +327,7 @@ impl Scene for WorldScene {
             } => self.objects.set_selected(Some(entity_index)),
         }
 
-        self.terrain.update(&self.camera, delta_time);
+        self.terrain.update(&self.camera);
 
         // Only render the camera frustum if we're looking through the debug camera.
         if self.view_debug_camera {
@@ -329,6 +335,13 @@ impl Scene for WorldScene {
         }
 
         self.objects.update(&self.camera);
+
+        // let height = self.terrain.height_at(self.terrain_height_sample);
+        // let pos = self.terrain_height_sample.extend(height);
+        // self.gizmos_vertices.extend(GizmosRenderer::_create_axis(
+        //     Mat4::from_translation(pos),
+        //     100.0,
+        // ));
     }
 
     fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -497,6 +510,15 @@ impl Scene for WorldScene {
             } else {
                 ui.label("Nothing");
             }
+
+            ui.heading("Height");
+            ui.add(DragValue::new(&mut self.terrain_height_sample.x));
+            ui.add(DragValue::new(&mut self.terrain_height_sample.y));
+
+            // ui.label(format!(
+            //     "height: {}",
+            //     self.terrain.height_at(self.terrain_height_sample)
+            // ));
         });
     }
 }
