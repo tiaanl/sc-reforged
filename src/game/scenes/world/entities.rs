@@ -152,7 +152,7 @@ impl Entities {
                     transform *= animation_transform.to_mat4();
                 }
 
-                gv.append(&mut GizmosRenderer::create_axis(&transform, 100.0));
+                // gv.append(&mut GizmosRenderer::create_axis(&transform, 100.0));
 
                 meshes.meshes.push(MeshItem {
                     transform,

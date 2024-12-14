@@ -18,6 +18,7 @@ use terrain::*;
 
 mod bounding_boxes;
 mod entities;
+mod height_map;
 mod terrain;
 
 /// The [Scene] that renders the ingame world view.

@@ -1,5 +1,4 @@
-use byteorder::{LittleEndian as LE, ReadBytesExt};
-use glam::{Vec2, Vec3, Vec4};
+use glam::{UVec2, Vec2, Vec3, Vec3Swizzles, Vec4};
 use tracing::info;
 
 use crate::{
@@ -9,6 +8,8 @@ use crate::{
         config::{CampaignDef, ConfigFile, TerrainMapping},
     },
 };
+
+use super::height_map::Chunk;
 
 pub struct Terrain {
     height_map_width: u32,
@@ -44,139 +45,8 @@ pub struct Terrain {
 
     #[cfg(feature = "load_normals")]
     normals_table: Vec<Vec3>,
-}
 
-struct HeightMap {
-    width: u32,
-    height: u32,
-    heights: Vec<u32>,
-}
-
-#[repr(C)]
-struct PcxHeader {
-    // always 0x0A
-    manufacturer: u8,
-
-    // 0 = v2.5
-    // 2 = v2.8 with palette
-    // 3 = v2.8 without palette
-    // 4 = Paintbrush for Windows
-    // 5 = v3.0 or higher
-    version: u8,
-
-    // 0 = uncompressed image (not officially allowed)
-    // 1 = PCX run length encoding
-    // should be 0x01
-    encoding: u8,
-
-    // number of bits per pixel in each entry of the color planes
-    bits_per_plane: u8,
-
-    x_min: u16,
-    y_min: u16,
-    x_max: u16,
-    y_max: u16,
-
-    horizontal_dpi: u16,
-    vertical_dpi: u16,
-
-    // palette for 16 colors or less, in three-byte RGB entries.
-    palette: [u8; 48],
-
-    // should be set to 0.
-    reserved: u8,
-
-    // Number of color planes. Multiply by bits_per_pixel to fet the actual color depth.
-    color_planes: u8,
-
-    // number of bytes to read for a single plane's scanline.
-    bytes_per_plane_line: u16,
-
-    // 1 = color/bw
-    // 2 = grayscale
-    palette_info: u16,
-
-    // deals with scrolling, best to just ignore.
-    horizontal_screen_size: u16,
-    vertical_screen_size: u16,
-
-    padding: [u8; 54],
-}
-
-fn read_pcx_header<R>(reader: &mut R) -> std::io::Result<PcxHeader>
-where
-    R: std::io::Read,
-{
-    let mut header: PcxHeader = unsafe {
-        // We will overwrite all the fields, so we can leave them as garbage.
-        std::mem::MaybeUninit::uninit().assume_init_read()
-    };
-
-    header.manufacturer = reader.read_u8()?;
-    header.version = reader.read_u8()?;
-    header.encoding = reader.read_u8()?;
-    header.bits_per_plane = reader.read_u8()?;
-    header.x_min = reader.read_u16::<LE>()?;
-    header.y_min = reader.read_u16::<LE>()?;
-    header.x_max = reader.read_u16::<LE>()?;
-    header.y_max = reader.read_u16::<LE>()?;
-    header.horizontal_dpi = reader.read_u16::<LE>()?;
-    header.vertical_dpi = reader.read_u16::<LE>()?;
-    reader.read_exact(&mut header.palette)?;
-    header.reserved = reader.read_u8()?;
-    header.color_planes = reader.read_u8()?;
-    header.bytes_per_plane_line = reader.read_u16::<LE>()?;
-    header.palette_info = reader.read_u16::<LE>()?;
-    header.horizontal_screen_size = reader.read_u16::<LE>()?;
-    header.vertical_screen_size = reader.read_u16::<LE>()?;
-    reader.read_exact(&mut header.padding)?;
-
-    Ok(header)
-}
-
-fn load_texture_map(data: &[u8]) -> std::io::Result<HeightMap> {
-    let mut data = std::io::Cursor::new(data);
-    let header = read_pcx_header(&mut data)?;
-
-    if header.manufacturer != 0x0A || header.version != 0x05 {
-        panic!("Incorrect/invalid PCX header.");
-    }
-
-    let width = header.bytes_per_plane_line as u32;
-    let height = (header.y_max - header.y_min + 1) as u32;
-    let area = width * height;
-
-    tracing::info!("width: {}, height: {}", width as u32, height as u32);
-
-    let mut heights: Vec<u32> = Vec::with_capacity(area as usize);
-
-    macro_rules! b {
-        ($b:expr) => {{
-            0x1FF00_u32 | (0xFF - $b) as u32
-        }};
-    }
-
-    let mut i = 0_usize;
-    while i < area as usize {
-        let byte = data.read_u8()?;
-        if (byte & 0xC0) != 0xC0 {
-            heights.push(b!(byte));
-            i += 1;
-        } else {
-            let count = (byte & 0x3F) as usize;
-            let new_byte = data.read_u8()?;
-            heights.extend(std::iter::repeat(b!(new_byte)).take(count));
-            i += count;
-        }
-    }
-
-    assert_eq!(heights.len(), area as usize);
-
-    Ok(HeightMap {
-        width,
-        height,
-        heights,
-    })
+    chunks: Vec<Chunk>,
 }
 
 impl Terrain {
@@ -226,25 +96,54 @@ impl Terrain {
         };
 
         let height_map = {
+            use super::height_map::HeightMap;
+
             let path = format!("maps/{}.pcx", campaign_def.base_name); // TODO: Get the name of the map from the [CampaignDef].
             info!("Loading terrain height map: {path}");
             let data = assets.load_raw(path)?;
-            load_texture_map(&data).map_err(|_| AssetError::DecodeError)?
+            let mut reader = std::io::Cursor::new(data);
+            HeightMap::from_reader(nominal_edge_size, altitude_map_height_base, &mut reader)
+                .map_err(|_| AssetError::Custom("Could not load height map data.".to_string()))?
         };
 
-        // Generate an array for each edge.
-        let x_sides = (0..height_map.width)
-            .map(|v| v as f32 * nominal_edge_size)
-            .collect::<Vec<_>>();
-        let y_sides = (0..height_map.height)
-            .map(|v| v as f32 * nominal_edge_size)
-            .collect::<Vec<_>>();
+        let UVec2 {
+            x: chunks_x,
+            y: chunks_y,
+        } = height_map.chunks();
 
-        let bounds_min = Vec2::new(x_sides[0] - 2500.0, y_sides[0] - 2500.0);
-        let bounds_max = Vec2::new(
-            *x_sides.last().unwrap() + 2500.0,
-            *y_sides.last().unwrap() + 2500.0,
+        let mut chunks = Vec::with_capacity(chunks_x as usize * chunks_y as usize);
+        for y in 0..chunks_y {
+            for x in 0..chunks_x {
+                chunks.push(height_map.new_chunk(renderer, x, y));
+            }
+        }
+
+        // let chunks = vec![
+        //     height_map.new_chunk(renderer, 0, 0),
+        //     height_map.new_chunk(renderer, 1, 1),
+        //     height_map.new_chunk(renderer, 2, 2),
+        // ];
+
+        info!(
+            "terrain size: {} x {}, terrain heightmap size: {} x {}",
+            map_dx, map_dy, height_map.size_x, height_map.size_y,
         );
+
+        /*
+        // Generate an array for each edge.
+        let x_sides = (0..height_map.size_x)
+            .map(|v| v as f32 * nominal_edge_size)
+            .collect::<Vec<_>>();
+        let y_sides = (0..height_map.size_y)
+            .map(|v| v as f32 * nominal_edge_size)
+            .collect::<Vec<_>>();
+        */
+
+        let bounds_min = height_map.position(0, 0).xy().map(|v| v - 2500.0);
+        let bounds_max = height_map
+            .position(height_map.size_x - 1, height_map.size_y - 1)
+            .xy()
+            .map(|v| v + 2500.0);
 
         tracing::info!(
             "Terrain bounds: ({}, {}) - ({}, {})",
@@ -263,7 +162,7 @@ impl Terrain {
                 );
                 info!("Loading normals lookup data from: {path}");
                 let mut r = std::io::Cursor::new(assets.load_raw(path)?);
-                (0..(height_map.width as usize * height_map.height as usize))
+                (0..(height_map.size_x as usize * height_map.size_y as usize))
                     .into_iter()
                     .map(|_| r.read_u16::<LittleEndian>().unwrap())
                     .collect::<Vec<_>>()
@@ -283,42 +182,30 @@ impl Terrain {
             };
         }
 
-        info!(
-            "terrain size: {} x {}, terrain heightmap size: {} x {}",
-            map_dx, map_dy, height_map.width, height_map.height,
-        );
-
-        // Build a lookup table for altitudes.
-        let heights = (0..0x100)
-            .map(|h| (h as f32) * altitude_map_height_base)
-            .collect::<Vec<_>>();
-
         macro_rules! index {
             ($x:expr,$y:expr) => {{
-                (($y as u32) * height_map.height + ($x as u32)) as u32
+                (($y as u32) * height_map.size_y + ($x as u32)) as u32
             }};
         }
 
         #[cfg(feature = "load_normals")]
         {
             let value =
-                normals_lookup[index!(height_map.width / 2, height_map.height / 2) as usize];
+                normals_lookup[index!(height_map.size_x / 2, height_map.size_y / 2) as usize];
             info!("value: {}", value);
         }
 
         let (mut vertices, indices, wireframe_indices) = {
             let mut vertices =
-                Vec::with_capacity(height_map.width as usize * height_map.height as usize);
+                Vec::with_capacity(height_map.size_x as usize * height_map.size_y as usize);
             let mut indices = Vec::with_capacity(
-                (height_map.width as usize - 1) * (height_map.height as usize - 1) * 6,
+                (height_map.size_x as usize - 1) * (height_map.size_y as usize - 1) * 6,
             );
             let mut wireframe_indices =
-                Vec::with_capacity((height_map.width as usize) * (height_map.height as usize) * 4);
+                Vec::with_capacity((height_map.size_x as usize) * (height_map.size_y as usize) * 4);
 
-            for y in 0..height_map.height {
-                for x in 0..height_map.width {
-                    let index = y as usize * height_map.width as usize + x as usize;
-                    let altitude = heights[height_map.heights[index] as usize & 0xFF];
+            for y in 0..height_map.size_y {
+                for x in 0..height_map.size_x {
                     #[cfg(feature = "load_normals")]
                     let normal = normals_table[normals_lookup[index!(x, y) as usize] as usize];
 
@@ -326,22 +213,18 @@ impl Terrain {
                     let normal = Vec3::Y;
 
                     vertices.push(Vertex {
-                        position: Vec3::new(
-                            (x as f32) * nominal_edge_size,
-                            (y as f32) * nominal_edge_size,
-                            altitude as f32,
-                        ),
+                        position: height_map.position(x, y),
                         normal,
                         tex_coord: Vec2::new(
-                            x as f32 / (height_map.width - 1) as f32,
-                            y as f32 / (height_map.height - 1) as f32,
+                            x as f32 / (height_map.size_x - 1) as f32,
+                            y as f32 / (height_map.size_y - 1) as f32,
                         ),
                     });
                 }
             }
 
-            for y in 0..(height_map.height - 1) {
-                for x in 0..(height_map.width - 1) {
+            for y in 0..(height_map.size_y - 1) {
+                for x in 0..(height_map.size_x - 1) {
                     indices.push(index!(x, y));
                     indices.push(index!(x + 1, y));
                     indices.push(index!(x, y + 1));
@@ -357,12 +240,12 @@ impl Terrain {
                     wireframe_indices.push(index!(x, y + 1));
                 }
 
-                wireframe_indices.push(index!(height_map.width - 1, y));
-                wireframe_indices.push(index!(height_map.width - 1, y + 1));
+                wireframe_indices.push(index!(height_map.size_x - 1, y));
+                wireframe_indices.push(index!(height_map.size_x - 1, y + 1));
             }
-            for x in 0..(height_map.width - 1) {
-                wireframe_indices.push(index!(x, height_map.height - 1));
-                wireframe_indices.push(index!(x + 1, height_map.height - 1));
+            for x in 0..(height_map.size_x - 1) {
+                wireframe_indices.push(index!(x, height_map.size_y - 1));
+                wireframe_indices.push(index!(x + 1, height_map.size_y - 1));
             }
 
             (vertices, indices, wireframe_indices)
@@ -370,7 +253,7 @@ impl Terrain {
 
         // Calculate the normals of each vertex of the terrain.
         {
-            let (width, height) = (height_map.width as usize, height_map.height as usize);
+            let (width, height) = (height_map.size_x as usize, height_map.size_y as usize);
             for y in 1..(height - 1) {
                 for x in 1..(width - 1) {
                     let center = y * width + x;
@@ -406,6 +289,13 @@ impl Terrain {
 
         let pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<Vertex>::new("terrain", &shader_module)
+                .primitive(wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    front_face: wgpu::FrontFace::Cw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    ..Default::default()
+                })
                 .bind_group_layout(camera_bind_group_layout)
                 .bind_group_layout(renderer.texture_bind_group_layout()),
         );
@@ -424,8 +314,8 @@ impl Terrain {
         );
 
         Ok(Self {
-            height_map_width: height_map.width,
-            height_map_height: height_map.height,
+            height_map_width: height_map.size_x,
+            height_map_height: height_map.size_y,
 
             altitude_map_height_base,
             map_dx,
@@ -454,6 +344,8 @@ impl Terrain {
             vertices,
             #[cfg(feature = "load_normals")]
             normals_table,
+
+            chunks,
         })
     }
 
@@ -542,12 +434,24 @@ impl Terrain {
         {
             let mut render_pass = frame.begin_basic_render_pass("terrain_render_pass", true);
 
+            /*
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_texture_bind_group, &[]);
             render_pass.draw_indexed(0..self.index_count, 0, 0..1);
+            */
+
+            for chunk in self.chunks.iter() {
+                render_pass.set_pipeline(&self.pipeline);
+                render_pass.set_vertex_buffer(0, chunk.mesh.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(chunk.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.set_bind_group(0, camera_bind_group, &[]);
+                render_pass.set_bind_group(1, &self.terrain_texture_bind_group, &[]);
+                render_pass.draw_indexed(0..chunk.mesh.index_count, 0, 0..1);
+            }
         }
 
         if self.draw_wireframe {
