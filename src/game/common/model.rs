@@ -40,6 +40,19 @@ impl Model {
         transform
     }
 
+    // // Calculate the global transform for the given node.
+    // pub fn global_transform(&self, node_index: NodeIndex) -> Transform {
+    //     let mut transform = Transform::default();
+    //     let mut current = node_index;
+    //     while current != NodeIndex::MAX {
+    //         let node = &self.nodes[current];
+    //         transform.translation += node.transform.translation;
+    //         transform.rotation *= node.transform.rotation;
+    //         current = node.parent;
+    //     }
+    //     transform
+    // }
+
     pub fn from_smf(smf: &smf::Model, renderer: &Renderer, asset_loader: &AssetLoader) -> Self {
         Self::smf_to_model(renderer, asset_loader, smf).unwrap()
     }
@@ -87,7 +100,7 @@ impl Model {
 
             for smf_bounding_box in smf_node.bounding_boxes.iter() {
                 bounding_boxes.push(ModelBoundingBox {
-                    node_id: node_index,
+                    node_index,
                     min: smf_bounding_box.min,
                     max: smf_bounding_box.max,
                 });
@@ -172,7 +185,7 @@ pub struct ModelMesh {
 #[derive(Debug)]
 pub struct ModelBoundingBox {
     /// An index to the [ModelNode] this mesh is attached to.
-    pub node_id: NodeIndex,
+    pub node_index: NodeIndex,
     /// Minimum values for the bounding box.
     pub min: Vec3,
     /// Maximum values for the bounding box.

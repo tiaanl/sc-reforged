@@ -1,6 +1,6 @@
-use crate::engine::prelude::*;
+use crate::engine::{gizmos::GizmoVertex, prelude::*};
 
-use glam::{Mat4, Quat, Vec2, Vec3};
+use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use wgpu::util::DeviceExt;
 
 pub fn register_camera_shader(shaders: &mut Shaders) {
@@ -50,7 +50,7 @@ impl Ray {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct BoundingBox {
     pub min: Vec3,
     pub max: Vec3,
@@ -480,4 +480,68 @@ impl ArcBallCameraController {
             camera.rotation = rotation;
         })
     }
+}
+
+pub fn render_camera_frustum(camera: &Camera, gizmo_vertices: &mut Vec<GizmoVertex>) {
+    use glam::Vec4Swizzles;
+
+    let ndc_corners = [
+        Vec4::new(-1.0, -1.0, 0.0, 1.0), // Near-bottom-left
+        Vec4::new(-1.0, 1.0, 0.0, 1.0),  // Near-top-left
+        Vec4::new(1.0, 1.0, 0.0, 1.0),   // Near-top-right
+        Vec4::new(1.0, -1.0, 0.0, 1.0),  // Near-bottom-right
+        Vec4::new(-1.0, -1.0, 1.0, 1.0), // Far-bottom-left
+        Vec4::new(-1.0, 1.0, 1.0, 1.0),  // Far-top-left
+        Vec4::new(1.0, 1.0, 1.0, 1.0),   // Far-top-right
+        Vec4::new(1.0, -1.0, 1.0, 1.0),  // Far-bottom-right
+    ];
+
+    // Calculate the view-projection matrix
+    let matrices = camera.calculate_matrices();
+    let view_projection = matrices.projection * matrices.view;
+
+    // Invert the view-projection matrix
+    let inv_view_projection = view_projection.inverse();
+
+    let green = Vec4::new(0.0, 1.0, 0.0, 1.0);
+
+    // Transform NDC corners to world space
+    let vertices = ndc_corners.map(|corner| {
+        let world_space = inv_view_projection * corner;
+        GizmoVertex::new(world_space.xyz() / world_space.w, green)
+    });
+
+    // Should we even render this rectangle?  Its extremely small.
+    gizmo_vertices.extend_from_slice(&[
+        vertices[0],
+        vertices[1],
+        vertices[1],
+        vertices[2],
+        vertices[2],
+        vertices[3],
+        vertices[3],
+        vertices[0],
+    ]);
+
+    gizmo_vertices.extend_from_slice(&[
+        vertices[0],
+        vertices[4],
+        vertices[1],
+        vertices[5],
+        vertices[2],
+        vertices[6],
+        vertices[3],
+        vertices[7],
+    ]);
+
+    gizmo_vertices.extend_from_slice(&[
+        vertices[4],
+        vertices[5],
+        vertices[5],
+        vertices[6],
+        vertices[6],
+        vertices[7],
+        vertices[7],
+        vertices[4],
+    ]);
 }

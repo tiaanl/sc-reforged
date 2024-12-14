@@ -8,7 +8,7 @@ use crate::{
     },
     game::{
         asset_loader::{AssetError, AssetLoader},
-        camera,
+        camera::{self, render_camera_frustum},
         config::{self, CampaignDef},
     },
 };
@@ -17,8 +17,8 @@ use glam::{Quat, Vec3, Vec4};
 use terrain::*;
 
 mod bounding_boxes;
-mod entities;
 mod height_map;
+mod objects;
 mod terrain;
 
 /// The [Scene] that renders the ingame world view.
@@ -42,14 +42,14 @@ pub struct WorldScene {
 
     terrain: Terrain,
 
-    entities: entities::Entities,
+    objects: objects::Objects,
 
     gizmos_renderer: GizmosRenderer,
     gizmos_vertices: Vec<GizmoVertex>,
 
     // Input handling.
     under_mouse: UnderMouse,
-    selected_entity: Option<usize>,
+    selected_object: Option<usize>,
 
     new_id: String,
 }
@@ -57,7 +57,7 @@ pub struct WorldScene {
 #[derive(Debug)]
 enum UnderMouse {
     Nothing { position: Vec2 },
-    Entity { entity_index: usize, position: Vec2 },
+    Object { object_index: usize, position: Vec2 },
 }
 
 impl WorldScene {
@@ -121,7 +121,7 @@ impl WorldScene {
             &campaign_def,
             &gpu_camera.bind_group_layout,
         )?;
-        let mut entities = entities::Entities::new(
+        let mut entities = objects::Objects::new(
             asset_manager.clone(),
             renderer,
             &mut shaders,
@@ -167,15 +167,15 @@ impl WorldScene {
                     //     _ => tracing::warn!("Invalid object type: {}", object.typ),
                     // };
 
-                    let entity =
-                        entities::Entity::new(object.position, object.rotation, model_handle);
+                    let object =
+                        objects::Object::new(object.position, object.rotation, model_handle);
 
-                    Ok::<_, AssetError>(entity)
+                    Ok::<_, AssetError>(object)
                 })
                 .collect::<Vec<_>>();
 
-            for entity in to_spawn.drain(..) {
-                entities.spawn(entity);
+            for object in to_spawn.drain(..) {
+                entities.spawn(object);
             }
         }
 
@@ -202,7 +202,7 @@ impl WorldScene {
             intersection: None,
 
             terrain,
-            entities,
+            objects: entities,
 
             gizmos_renderer,
             gizmos_vertices: vec![],
@@ -211,7 +211,7 @@ impl WorldScene {
             under_mouse: UnderMouse::Nothing {
                 position: Vec2::ZERO,
             },
-            selected_entity: None,
+            selected_object: None,
 
             new_id: String::new(),
         })
@@ -239,9 +239,9 @@ impl Scene for WorldScene {
             ($position:expr,$window_size:expr) => {{
                 let ndc = ndc!($position);
                 let ray = self.camera.generate_ray(ndc);
-                if let Some(entity_index) = self.entities.ray_intersection(&ray) {
-                    UnderMouse::Entity {
-                        entity_index,
+                if let Some(object_index) = self.objects.ray_intersection(&ray) {
+                    UnderMouse::Object {
+                        object_index,
                         position: $position,
                     }
                 } else {
@@ -268,17 +268,17 @@ impl Scene for WorldScene {
                 button: MouseButton::Left,
             } => {
                 match self.under_mouse {
-                    UnderMouse::Entity {
-                        entity_index,
+                    UnderMouse::Object {
+                        object_index: entity_index,
                         position: p,
                     } if (position - p).length_squared() < 100.0 => {
                         // Set the selected entity.
-                        self.selected_entity = Some(entity_index);
+                        self.selected_object = Some(entity_index);
                     }
                     UnderMouse::Nothing { position: p }
                         if (position - p).length_squared() < 100.0 =>
                     {
-                        self.selected_entity = None;
+                        self.selected_object = None;
                     }
                     _ => {}
                 }
@@ -293,6 +293,9 @@ impl Scene for WorldScene {
         const RED: Vec4 = Vec4::new(1.0, 0.0, 0.0, 1.0);
         const GREEN: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
         const BLUE: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
+
+        // Set the camera far plane to the `max_view_distance`.
+        self.camera.far = self.terrain.max_view_distance;
 
         if self.control_debug_camera {
             self.debug_camera_controller.update(input, delta_time);
@@ -311,28 +314,21 @@ impl Scene for WorldScene {
 
         // Highlight whatever we're hovering on.
         match self.under_mouse {
-            UnderMouse::Nothing { .. } => self.entities.set_selected(None),
-            UnderMouse::Entity { entity_index, .. } => {
-                self.entities.set_selected(Some(entity_index))
-            }
+            UnderMouse::Nothing { .. } => self.objects.set_selected(None),
+            UnderMouse::Object {
+                object_index: entity_index,
+                ..
+            } => self.objects.set_selected(Some(entity_index)),
         }
 
         self.terrain.update(&self.camera, delta_time);
-        self.terrain.gizmos(&self.camera, &mut self.gizmos_vertices);
 
-        // {
-        //     self.gizmos_vertices.append(&mut vec![
-        //         // X+
-        //         GizmoVertex::new(CENTER, RED),
-        //         GizmoVertex::new(Vec3::X * GIZMO_SCALE, RED),
-        //         // Y+
-        //         GizmoVertex::new(CENTER, GREEN),
-        //         GizmoVertex::new(Vec3::Y * GIZMO_SCALE, GREEN),
-        //         // Z+
-        //         GizmoVertex::new(CENTER, BLUE),
-        //         GizmoVertex::new(Vec3::Z * GIZMO_SCALE, BLUE),
-        //     ]);
-        // }
+        // Only render the camera frustum if we're looking through the debug camera.
+        if self.view_debug_camera {
+            render_camera_frustum(&self.camera, &mut self.gizmos_vertices);
+        }
+
+        self.objects.update(&self.camera);
     }
 
     fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -359,8 +355,8 @@ impl Scene for WorldScene {
         self.terrain
             .render_chunks(frame, &self.gpu_camera.bind_group);
 
-        self.entities
-            .render_frame(frame, &self.gpu_camera.bind_group, &self.gizmos_renderer);
+        self.objects
+            .render_objects(frame, &self.gpu_camera.bind_group, &self.gizmos_renderer);
 
         self.gizmos_renderer.render_frame(
             frame,
@@ -443,33 +439,33 @@ impl Scene for WorldScene {
             self.terrain.debug_panel(ui);
 
             ui.heading("Entities");
-            self.entities.debug_panel(ui);
+            self.objects.debug_panel(ui);
 
-            ui.heading("Entity");
-            if let Some(e) = self.selected_entity {
+            ui.heading("Object");
+            if let Some(e) = self.selected_object {
                 ui.label(format!("{}", e));
-                if let Some(entity) = self.entities.get_mut(e) {
+                if let Some(object) = self.objects.get_mut(e) {
                     ui.horizontal(|ui| {
                         ui.label("translation");
-                        DragValue::new(&mut entity.translation.x).ui(ui);
-                        DragValue::new(&mut entity.translation.y).ui(ui);
-                        DragValue::new(&mut entity.translation.z).ui(ui);
+                        DragValue::new(&mut object.translation.x).ui(ui);
+                        DragValue::new(&mut object.translation.y).ui(ui);
+                        DragValue::new(&mut object.translation.z).ui(ui);
                     });
                     ui.horizontal(|ui| {
                         ui.label("rotation");
-                        DragValue::new(&mut entity.rotation.x).speed(0.01).ui(ui);
-                        DragValue::new(&mut entity.rotation.y).speed(0.01).ui(ui);
-                        DragValue::new(&mut entity.rotation.z).speed(0.01).ui(ui);
+                        DragValue::new(&mut object.rotation.x).speed(0.01).ui(ui);
+                        DragValue::new(&mut object.rotation.y).speed(0.01).ui(ui);
+                        DragValue::new(&mut object.rotation.z).speed(0.01).ui(ui);
                     });
 
                     ui.label("Animation Set");
                     ui.text_edit_singleline(&mut self.new_id);
                     if ui.button("Add").clicked() {
                         let id: usize = self.new_id.parse().unwrap();
-                        entity.animation_set.set.insert(id, Transform::default());
+                        object.animation_set.set.insert(id, Transform::default());
                         self.new_id.clear();
                     }
-                    for (id, translation) in entity.animation_set.set.iter_mut() {
+                    for (id, translation) in object.animation_set.set.iter_mut() {
                         ui.label(format!("{}", id));
                         ui.horizontal(|ui| {
                             DragValue::new(&mut translation.translation.x)
@@ -497,29 +493,6 @@ impl Scene for WorldScene {
                                 .ui(ui);
                         });
                     }
-
-                    /*
-                    if let Some(model) = self.asset_manager.get(entity.model) {
-                        model.nodes.iter().enumerate().for_each(|(i, node)| {
-                            ui.horizontal(|ui| {
-                                ui.label(format!("{}", i));
-                                ui.label(format!(
-                                    "{} {} {}",
-                                    node.transform.translation.x,
-                                    node.transform.translation.y,
-                                    node.transform.translation.z
-                                ));
-                                ui.label(format!(
-                                    "{:.2} {:.2} {:.2} {:.2}",
-                                    node.transform.rotation.x,
-                                    node.transform.rotation.y,
-                                    node.transform.rotation.z,
-                                    node.transform.rotation.w,
-                                ));
-                            });
-                        });
-                    }
-                    */
                 }
             } else {
                 ui.label("Nothing");

@@ -1,8 +1,10 @@
+use glam::Vec4Swizzles;
+
 use crate::{
     engine::{gizmos::GizmosRenderer, prelude::*},
     game::{
         animation::AnimationSet,
-        camera::Ray,
+        camera::{BoundingBox, Camera, Frustum, Ray},
         mesh_renderer::{MeshItem, MeshList, MeshRenderer},
         model::Model,
     },
@@ -12,25 +14,27 @@ use super::bounding_boxes::{BoundingBoxRenderer, RawBoundingBox};
 
 /// Represents an object inside the game world.
 #[derive(Debug)]
-pub struct Entity {
+pub struct Object {
     pub translation: Vec3,
     pub rotation: Vec3,
     pub model: Handle<Model>,
+    pub visible: bool,
     pub animation_set: AnimationSet,
 }
 
-impl Entity {
+impl Object {
     pub fn new(translation: Vec3, rotation: Vec3, model: Handle<Model>) -> Self {
         Self {
             translation,
             rotation,
             model,
+            visible: true,
             animation_set: AnimationSet::default(),
         }
     }
 }
 
-pub struct Entities {
+pub struct Objects {
     asset_manager: AssetManager,
 
     pub model_renderer: MeshRenderer,
@@ -38,12 +42,12 @@ pub struct Entities {
     render_bounding_boxes: bool,
     pub bounding_box_renderer: BoundingBoxRenderer,
 
-    pub entities: Vec<Entity>,
+    pub objects: Vec<Object>,
     /// The entity index that the mouse is currently over.
-    selected_entity: Option<usize>,
+    selected_object: Option<usize>,
 }
 
-impl Entities {
+impl Objects {
     pub fn new(
         asset_manager: AssetManager,
         renderer: &Renderer,
@@ -64,21 +68,21 @@ impl Entities {
             model_renderer,
             render_bounding_boxes: false,
             bounding_box_renderer,
-            entities: vec![],
-            selected_entity: None,
+            objects: vec![],
+            selected_object: None,
         }
     }
 
-    pub fn spawn(&mut self, entity: Entity) {
-        self.entities.push(entity);
+    pub fn spawn(&mut self, object: Object) {
+        self.objects.push(object);
     }
 
-    pub fn get(&self, entity_index: usize) -> Option<&Entity> {
-        self.entities.get(entity_index)
+    pub fn get(&self, object_index: usize) -> Option<&Object> {
+        self.objects.get(object_index)
     }
 
-    pub fn get_mut(&mut self, entity_index: usize) -> Option<&mut Entity> {
-        self.entities.get_mut(entity_index)
+    pub fn get_mut(&mut self, object_index: usize) -> Option<&mut Object> {
+        self.objects.get_mut(object_index)
     }
 
     pub fn ray_intersection(&self, ray: &Ray) -> Option<usize> {
@@ -86,7 +90,7 @@ impl Entities {
         let mut closest_entity = None;
 
         // Gather up a list of bounding boxes for each entity/model.
-        for (entity_index, entity) in self.entities.iter().enumerate() {
+        for (object_index, entity) in self.objects.iter().enumerate() {
             let Some(model) = self.asset_manager.get(entity.model) else {
                 continue;
             };
@@ -102,13 +106,13 @@ impl Entities {
             );
 
             for bounding_box in model.bounding_boxes.iter() {
-                let transform = entity_transform * model.global_transform(bounding_box.node_id);
+                let transform = entity_transform * model.global_transform(bounding_box.node_index);
                 let bbox =
                     RawBoundingBox::new(transform, bounding_box.min, bounding_box.max, false);
                 if let Some(distance) = bbox.intersect_ray(ray) {
                     if distance < closest {
                         closest = distance;
-                        closest_entity = Some(entity_index);
+                        closest_entity = Some(object_index);
                     }
                 }
             }
@@ -118,10 +122,41 @@ impl Entities {
     }
 
     pub fn set_selected(&mut self, selected: Option<usize>) {
-        self.selected_entity = selected;
+        self.selected_object = selected;
     }
 
-    pub fn render_frame(
+    pub fn update(&mut self, camera: &Camera) {
+        let matrices = camera.calculate_matrices();
+        let frustum = Frustum::from_matrices(&matrices);
+
+        self.objects.iter_mut().for_each(|object| {
+            if let Some(model) = self.asset_manager.get(object.model) {
+                let object_transform = Mat4::from_rotation_translation(
+                    Quat::from_euler(
+                        glam::EulerRot::XYZ,
+                        object.rotation.x,
+                        object.rotation.y,
+                        object.rotation.z,
+                    ),
+                    object.translation,
+                );
+
+                object.visible = model.bounding_boxes.iter().any(|bounding_box| {
+                    //
+                    let transform =
+                        object_transform * model.global_transform(bounding_box.node_index);
+                    let bbox = BoundingBox {
+                        min: (transform * bounding_box.min.extend(1.0)).xyz(),
+                        max: (transform * bounding_box.max.extend(1.0)).xyz(),
+                    };
+
+                    frustum.contains_bounding_box(&bbox)
+                });
+            }
+        });
+    }
+
+    pub fn render_objects(
         &self,
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
@@ -132,24 +167,24 @@ impl Entities {
         let mut boxes = vec![];
         let gv = vec![];
 
-        for (entity_index, entity) in self.entities.iter().enumerate() {
-            let Some(model) = self.asset_manager.get(entity.model) else {
+        for object in self.objects.iter().filter(|obj| obj.visible) {
+            let Some(model) = self.asset_manager.get(object.model) else {
                 continue;
             };
 
             let entity_transform = Mat4::from_rotation_translation(
                 Quat::from_euler(
                     glam::EulerRot::XYZ,
-                    entity.rotation.x,
-                    entity.rotation.y,
-                    entity.rotation.z,
+                    object.rotation.x,
+                    object.rotation.y,
+                    object.rotation.z,
                 ),
-                entity.translation,
+                object.translation,
             );
 
             for mesh in model.meshes.iter() {
                 let mut transform = entity_transform * model.global_transform(mesh.node_id);
-                if let Some(animation_transform) = entity.animation_set.set.get(&mesh.node_id) {
+                if let Some(animation_transform) = object.animation_set.set.get(&mesh.node_id) {
                     transform *= animation_transform.to_mat4();
                 }
 
@@ -160,12 +195,32 @@ impl Entities {
                     mesh: mesh.mesh,
                 });
             }
+        }
 
-            if self.render_bounding_boxes {
+        self.model_renderer
+            .render_multiple(frame, camera_bind_group, meshes);
+
+        if self.render_bounding_boxes {
+            for (object_index, object) in self.objects.iter().enumerate() {
+                let Some(model) = self.asset_manager.get(object.model) else {
+                    continue;
+                };
+
+                let entity_transform = Mat4::from_rotation_translation(
+                    Quat::from_euler(
+                        glam::EulerRot::XYZ,
+                        object.rotation.x,
+                        object.rotation.y,
+                        object.rotation.z,
+                    ),
+                    object.translation,
+                );
+
                 for bounding_box in model.bounding_boxes.iter() {
-                    let transform = entity_transform * model.global_transform(bounding_box.node_id);
-                    let highlight = if let Some(hover_index) = self.selected_entity {
-                        hover_index == entity_index
+                    let transform =
+                        entity_transform * model.global_transform(bounding_box.node_index);
+                    let highlight = if let Some(hover_index) = self.selected_object {
+                        hover_index == object_index
                     } else {
                         false
                     };
@@ -177,12 +232,7 @@ impl Entities {
                     ));
                 }
             }
-        }
 
-        self.model_renderer
-            .render_multiple(frame, camera_bind_group, meshes);
-
-        if self.render_bounding_boxes {
             self.bounding_box_renderer
                 .render_all(frame, camera_bind_group, &boxes);
         }
