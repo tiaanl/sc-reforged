@@ -107,8 +107,15 @@ impl winit::application::ApplicationHandler for App {
                     let campaign_def = campaign_defs
                         .iter()
                         .find(|c| c.base_name == "training")
+                        // .find(|c| c.base_name == "angola_tutorial")
                         // .find(|c| c.base_name == "angola")
                         // .find(|c| c.base_name == "romania")
+                        // .find(|c| c.base_name == "kola")
+                        // .find(|c| c.base_name == "caribbean")
+                        // .find(|c| c.base_name == "kola_2")
+                        // .find(|c| c.base_name == "ecuador")
+                        // .find(|c| c.base_name == "peru")
+                        // .find(|c| c.base_name == "angola_2")
                         .cloned()
                         .unwrap();
 

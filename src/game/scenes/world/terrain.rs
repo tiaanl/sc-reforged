@@ -1,8 +1,8 @@
-use glam::{UVec2, Vec3Swizzles, Vec4, Vec4Swizzles};
+use glam::{UVec2, Vec3Swizzles};
 use tracing::info;
 
 use crate::{
-    engine::{gizmos::GizmoVertex, prelude::*},
+    engine::prelude::*,
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera::{BoundingBox, Camera, Frustum},
@@ -201,7 +201,7 @@ impl Terrain {
         Ok(Self {
             height_map,
 
-            max_view_distance: 10_000.0,
+            max_view_distance: 20_000.0,
 
             pipeline,
             wireframe_pipeline,

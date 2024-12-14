@@ -50,7 +50,7 @@ impl AssetLoader {
         renderer: &Renderer,
     ) -> Result<Handle<Model>, AssetError> {
         let smf = self.load_smf(path)?;
-        let model = Model::from_smf(&smf, renderer, self);
+        let model = Model::from_smf(&smf, renderer, self)?;
         Ok(self.asset_manager.add(model))
     }
 

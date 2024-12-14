@@ -29,7 +29,7 @@ impl Asset for Model {}
 
 impl Model {
     /// Calculate the global transform for the given node.
-    pub fn global_transform(&self, node_index: NodeIndex) -> Mat4 {
+    fn global_transform(&self, node_index: NodeIndex) -> Mat4 {
         let mut transform = Mat4::IDENTITY;
         let mut current = node_index;
         while current != NodeIndex::MAX {
@@ -53,8 +53,12 @@ impl Model {
     //     transform
     // }
 
-    pub fn from_smf(smf: &smf::Model, renderer: &Renderer, asset_loader: &AssetLoader) -> Self {
-        Self::smf_to_model(renderer, asset_loader, smf).unwrap()
+    pub fn from_smf(
+        smf: &smf::Model,
+        renderer: &Renderer,
+        asset_loader: &AssetLoader,
+    ) -> Result<Self, AssetError> {
+        Self::smf_to_model(renderer, asset_loader, smf)
     }
 
     fn smf_to_model(
@@ -70,31 +74,35 @@ impl Model {
         for (node_index, smf_node) in smf.nodes.iter().enumerate() {
             names.insert(smf_node.name.clone(), node_index);
 
-            nodes.push(ModelNode {
-                parent: if smf_node.parent_name == "<root>" {
-                    // Use a sentinel for root nodes.
-                    NodeIndex::MAX
-                } else {
-                    assert!(!smf_node.parent_name.eq("<root>"));
-                    match names.get(&smf_node.parent_name) {
-                        Some(id) => *id,
-                        None => {
-                            let n = names.keys().cloned().collect::<Vec<_>>().join(", ");
-                            return Err(AssetError::Custom(format!(
-                                "Parent name [{}] not found, existing names: {}",
-                                smf_node.parent_name, n
-                            )));
-                        }
+            let parent_node_index = if smf_node.parent_name == "<root>" {
+                // Use a sentinel for root nodes.
+                NodeIndex::MAX
+            } else {
+                assert!(!smf_node.parent_name.eq("<root>"));
+                match names.get(&smf_node.parent_name) {
+                    Some(id) => *id,
+                    None => {
+                        let n = names.keys().cloned().collect::<Vec<_>>().join(", ");
+                        return Err(AssetError::Custom(format!(
+                            "Parent name [{}] not found, existing names: {}",
+                            smf_node.parent_name, n
+                        )));
                     }
-                },
+                }
+            };
+
+            nodes.push(ModelNode {
+                parent: parent_node_index,
                 transform: Transform::new(smf_node.position, smf_node.rotation),
+                model_transform: Mat4::IDENTITY,
             });
 
             for smf_mesh in smf_node.meshes.iter() {
                 let mesh = Self::smf_mesh_to_mesh(renderer, asset_loader, smf_mesh)?;
                 meshes.push(ModelMesh {
-                    node_id: node_index,
+                    node_index,
                     mesh: asset_loader.asset_manager().add(mesh),
+                    model_transform: Mat4::IDENTITY,
                 });
             }
 
@@ -103,16 +111,34 @@ impl Model {
                     node_index,
                     min: smf_bounding_box.min,
                     max: smf_bounding_box.max,
+                    model_transform: Mat4::IDENTITY,
                 });
             }
         }
 
-        Ok(Model {
+        let mut model = Model {
             nodes,
             meshes,
             bounding_boxes,
             names,
-        })
+        };
+
+        // Precalculate the model transforms for each node.
+        for node_index in 0..model.nodes.len() {
+            let t = model.global_transform(node_index);
+            model.nodes[node_index].model_transform = t;
+        }
+
+        model
+            .meshes
+            .iter_mut()
+            .for_each(|mesh| mesh.model_transform = model.nodes[mesh.node_index].model_transform);
+
+        model.bounding_boxes.iter_mut().for_each(|bounding_box| {
+            bounding_box.model_transform = model.nodes[bounding_box.node_index].model_transform
+        });
+
+        Ok(model)
     }
 
     fn smf_mesh_to_mesh(
@@ -172,14 +198,18 @@ pub struct ModelNode {
     pub parent: NodeIndex,
     /// Local transform.
     pub transform: Transform,
+    /// Precalculated model transform for the node.
+    pub model_transform: Mat4,
 }
 
 #[derive(Debug)]
 pub struct ModelMesh {
     /// An index to the [ModelNode] this mesh is attached to.
-    pub node_id: NodeIndex,
+    pub node_index: NodeIndex,
     /// Local transform.
     pub mesh: Handle<TexturedMesh>,
+    /// A precomputed cache of the model local transform.
+    pub model_transform: Mat4,
 }
 
 #[derive(Debug)]
@@ -190,4 +220,6 @@ pub struct ModelBoundingBox {
     pub min: Vec3,
     /// Maximum values for the bounding box.
     pub max: Vec3,
+    // Precalculated model transform.
+    pub model_transform: Mat4,
 }

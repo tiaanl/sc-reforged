@@ -136,7 +136,7 @@ impl MeshRenderer {
 
         for mesh in model.meshes.iter() {
             list.meshes.push(MeshItem {
-                transform: transform.to_mat4() * model.global_transform(mesh.node_id),
+                transform: transform.to_mat4() * mesh.model_transform,
                 mesh: mesh.mesh,
             });
         }

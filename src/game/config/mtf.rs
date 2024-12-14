@@ -96,9 +96,9 @@ pub fn read_mtf(data: &str) -> Mtf {
             }
             "OBJECT_POSITION" => {
                 let position = Vec3::new(
-                    current[1].parse().unwrap(),
-                    current[2].parse().unwrap(),
-                    current[3].parse().unwrap(),
+                    current[1].parse().unwrap_or(0.0),
+                    current[2].parse().unwrap_or(0.0),
+                    current[3].parse().unwrap_or(0.0),
                 );
                 match state {
                     State::None => panic!("No object selected!"),
@@ -108,9 +108,9 @@ pub fn read_mtf(data: &str) -> Mtf {
             }
             "OBJECT_ROTATION" => {
                 let rotation = Vec3::new(
-                    current[1].parse().unwrap(),
-                    current[2].parse().unwrap(),
-                    current[3].parse().unwrap(),
+                    current[1].parse().unwrap_or(0.0),
+                    current[2].parse().unwrap_or(0.0),
+                    current[3].parse().unwrap_or(0.0),
                 );
                 match state {
                     State::None => panic!("No object selected!"),

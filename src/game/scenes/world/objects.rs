@@ -90,23 +90,23 @@ impl Objects {
         let mut closest_entity = None;
 
         // Gather up a list of bounding boxes for each entity/model.
-        for (object_index, entity) in self.objects.iter().enumerate() {
-            let Some(model) = self.asset_manager.get(entity.model) else {
+        for (object_index, object) in self.objects.iter().enumerate() {
+            let Some(model) = self.asset_manager.get(object.model) else {
                 continue;
             };
 
             let entity_transform = Mat4::from_rotation_translation(
                 Quat::from_euler(
                     glam::EulerRot::XYZ,
-                    entity.rotation.x,
-                    entity.rotation.y,
-                    entity.rotation.z,
+                    object.rotation.x,
+                    object.rotation.y,
+                    -object.rotation.z,
                 ),
-                entity.translation,
+                object.translation,
             );
 
             for bounding_box in model.bounding_boxes.iter() {
-                let transform = entity_transform * model.global_transform(bounding_box.node_index);
+                let transform = entity_transform * bounding_box.model_transform;
                 let bbox =
                     RawBoundingBox::new(transform, bounding_box.min, bounding_box.max, false);
                 if let Some(distance) = bbox.intersect_ray(ray) {
@@ -136,15 +136,14 @@ impl Objects {
                         glam::EulerRot::XYZ,
                         object.rotation.x,
                         object.rotation.y,
-                        object.rotation.z,
+                        -object.rotation.z,
                     ),
                     object.translation,
                 );
 
                 object.visible = model.bounding_boxes.iter().any(|bounding_box| {
                     //
-                    let transform =
-                        object_transform * model.global_transform(bounding_box.node_index);
+                    let transform = object_transform * bounding_box.model_transform;
                     let bbox = BoundingBox {
                         min: (transform * bounding_box.min.extend(1.0)).xyz(),
                         max: (transform * bounding_box.max.extend(1.0)).xyz(),
@@ -177,14 +176,14 @@ impl Objects {
                     glam::EulerRot::XYZ,
                     object.rotation.x,
                     object.rotation.y,
-                    object.rotation.z,
+                    -object.rotation.z,
                 ),
                 object.translation,
             );
 
             for mesh in model.meshes.iter() {
-                let mut transform = entity_transform * model.global_transform(mesh.node_id);
-                if let Some(animation_transform) = object.animation_set.set.get(&mesh.node_id) {
+                let mut transform = entity_transform * mesh.model_transform;
+                if let Some(animation_transform) = object.animation_set.set.get(&mesh.node_index) {
                     transform *= animation_transform.to_mat4();
                 }
 
@@ -211,14 +210,13 @@ impl Objects {
                         glam::EulerRot::XYZ,
                         object.rotation.x,
                         object.rotation.y,
-                        object.rotation.z,
+                        -object.rotation.z,
                     ),
                     object.translation,
                 );
 
                 for bounding_box in model.bounding_boxes.iter() {
-                    let transform =
-                        entity_transform * model.global_transform(bounding_box.node_index);
+                    let transform = entity_transform * bounding_box.model_transform;
                     let highlight = if let Some(hover_index) = self.selected_object {
                         hover_index == object_index
                     } else {
