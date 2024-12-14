@@ -357,7 +357,7 @@ impl Scene for WorldScene {
         );
 
         self.terrain
-            .render_frame(frame, &self.gpu_camera.bind_group);
+            .render_chunks(frame, &self.gpu_camera.bind_group);
 
         self.entities
             .render_frame(frame, &self.gpu_camera.bind_group, &self.gizmos_renderer);

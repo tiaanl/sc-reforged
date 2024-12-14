@@ -3,18 +3,6 @@ use wgpu::{util::DeviceExt, vertex_attr_array};
 
 use crate::{engine::prelude::*, game::camera::Ray};
 
-#[derive(Default)]
-pub struct BoundingBox {
-    pub min: Vec3,
-    pub max: Vec3,
-}
-
-impl BoundingBox {
-    pub fn center(&self) -> Vec3 {
-        self.min + (self.max - self.min)
-    }
-}
-
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct RawBoundingBox {

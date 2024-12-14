@@ -5,19 +5,17 @@ use crate::{
     engine::{gizmos::GizmoVertex, prelude::*},
     game::{
         asset_loader::{AssetError, AssetLoader},
-        camera::Camera,
+        camera::{BoundingBox, Camera, Frustum},
         config::{CampaignDef, ConfigFile, TerrainMapping},
     },
 };
 
-use super::{
-    bounding_boxes::BoundingBox,
-    height_map::{GpuChunkMesh, HeightMap},
-};
+use super::height_map::{GpuChunkMesh, HeightMap};
 
 pub struct Chunk {
     distance_from_camera: f32,
     resolution: u32,
+    visible: bool,
     bounding_box: BoundingBox,
     meshes: [GpuChunkMesh; 4],
 }
@@ -30,6 +28,7 @@ impl Chunk {
         Self {
             distance_from_camera: f32::MAX,
             resolution: HeightMap::MAX_RESOLUTION,
+            visible: true,
             bounding_box: BoundingBox {
                 min: height_map.position(min),
                 max: height_map.position(max),
@@ -218,8 +217,16 @@ impl Terrain {
     }
 
     pub fn update(&mut self, camera: &Camera, _delta_time: f32) {
+        // Check if each terrain chunk is inside the cameras view frustum.
+        let matrices = camera.calculate_matrices();
+        let frustum = Frustum::from_matrices(&matrices);
+
+        self.chunks.iter_mut().for_each(|chunk| {
+            chunk.visible = frustum.contains_bounding_box(&chunk.bounding_box);
+        });
+
         // Go through each terrain chunk and calculate its distance from the camera.
-        for chunk in self.chunks.iter_mut() {
+        for chunk in self.chunks.iter_mut().filter(|chunk| chunk.visible) {
             let distance = chunk.bounding_box.center().distance(camera.position);
             chunk.distance_from_camera = distance;
 
@@ -257,8 +264,6 @@ impl Terrain {
             GizmoVertex::new(world_space.xyz() / world_space.w, green)
         });
 
-        let origin = GizmoVertex::new(Vec3::ZERO, green);
-
         // Should we even render this rectangle?  Its extremely small.
         gizmo_vertices.extend_from_slice(&[
             vertices[0],
@@ -294,13 +299,13 @@ impl Terrain {
         ]);
     }
 
-    pub fn render_frame(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    pub fn render_chunks(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         {
             let mut render_pass = frame.begin_basic_render_pass("terrain_render_pass", true);
 
             render_pass.set_pipeline(&self.pipeline);
 
-            for chunk in self.chunks.iter() {
+            for chunk in self.chunks.iter().filter(|chunk| chunk.visible) {
                 let mesh = chunk.mesh_at(chunk.resolution);
 
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
@@ -318,7 +323,7 @@ impl Terrain {
 
             render_pass.set_pipeline(&self.wireframe_pipeline);
 
-            for chunk in self.chunks.iter() {
+            for chunk in self.chunks.iter().filter(|chunk| chunk.visible) {
                 let mesh = chunk.mesh_at(chunk.resolution);
 
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
@@ -335,7 +340,7 @@ impl Terrain {
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
         ui.checkbox(&mut self.draw_wireframe, "Draw wireframe");
 
-        ui.add(egui::widgets::DragValue::new(&mut self.max_view_distance));
+        ui.add(egui::widgets::DragValue::new(&mut self.max_view_distance).speed(10.0));
 
         // egui::Grid::new("terrain_data").show(ui, |ui| {
         //     ui.label("terrain mapping size");

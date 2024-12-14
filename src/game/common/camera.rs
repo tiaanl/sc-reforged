@@ -8,15 +8,25 @@ pub fn register_camera_shader(shaders: &mut Shaders) {
 }
 
 #[derive(Debug)]
-pub struct Ray {
-    pub origin: Vec3,
-    pub direction: Vec3,
+pub struct Plane {
+    pub normal: Vec3,
+    pub distance: f32,
+}
+
+impl Plane {
+    pub fn new(normal: Vec3, distance: f32) -> Self {
+        Self { normal, distance }
+    }
+
+    pub fn distance_to(&self, point: Vec3) -> f32 {
+        self.normal.dot(point) + self.distance
+    }
 }
 
 #[derive(Debug)]
-pub struct Plane {
-    pub point: Vec3,
-    pub normal: Vec3,
+pub struct Ray {
+    pub origin: Vec3,
+    pub direction: Vec3,
 }
 
 impl Ray {
@@ -28,7 +38,7 @@ impl Ray {
             return None;
         }
 
-        let t = (plane.point - self.origin).dot(plane.normal) / denom;
+        let t = ((plane.normal * plane.distance) - self.origin).dot(plane.normal) / denom;
 
         // Check if the intersection is behind the ray's origin
         if t < 0.0 {
@@ -37,6 +47,99 @@ impl Ray {
 
         // Compute the intersection point
         Some(self.origin + t * self.direction)
+    }
+}
+
+#[derive(Default)]
+pub struct BoundingBox {
+    pub min: Vec3,
+    pub max: Vec3,
+}
+
+impl BoundingBox {
+    pub fn center(&self) -> Vec3 {
+        self.min + (self.max - self.min)
+    }
+}
+
+pub struct Frustum {
+    pub planes: [Plane; 6],
+}
+
+impl Frustum {
+    pub fn from_matrices(matrices: &Matrices) -> Self {
+        let view_projection = matrices.projection * matrices.view;
+
+        // Extract rows from the matrix
+        let m = view_projection.to_cols_array_2d();
+
+        Self {
+            planes: [
+                // Left plane
+                Plane::new(
+                    Vec3::new(m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0]),
+                    m[3][3] + m[3][0],
+                ),
+                // Right plane
+                Plane::new(
+                    Vec3::new(m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0]),
+                    m[3][3] - m[3][0],
+                ),
+                // Bottom plane
+                Plane::new(
+                    Vec3::new(m[0][3] + m[0][1], m[1][3] + m[1][1], m[2][3] + m[2][1]),
+                    m[3][3] + m[3][1],
+                ),
+                // Top plane
+                Plane::new(
+                    Vec3::new(m[0][3] - m[0][1], m[1][3] - m[1][1], m[2][3] - m[2][1]),
+                    m[3][3] - m[3][1],
+                ),
+                // Near plane
+                Plane::new(
+                    Vec3::new(m[0][3] + m[0][2], m[1][3] + m[1][2], m[2][3] + m[2][2]),
+                    m[3][3] + m[3][2],
+                ),
+                // Far plane
+                Plane::new(
+                    Vec3::new(m[0][3] - m[0][2], m[1][3] - m[1][2], m[2][3] - m[2][2]),
+                    m[3][3] - m[3][2],
+                ),
+            ],
+        }
+    }
+
+    pub fn contains_bounding_box(&self, bounding_box: &BoundingBox) -> bool {
+        // Get all 8 corners of the bounding box
+        let corners = [
+            bounding_box.min,
+            Vec3::new(bounding_box.max.x, bounding_box.min.y, bounding_box.min.z),
+            Vec3::new(bounding_box.min.x, bounding_box.max.y, bounding_box.min.z),
+            Vec3::new(bounding_box.min.x, bounding_box.min.y, bounding_box.max.z),
+            Vec3::new(bounding_box.max.x, bounding_box.max.y, bounding_box.min.z),
+            Vec3::new(bounding_box.max.x, bounding_box.min.y, bounding_box.max.z),
+            Vec3::new(bounding_box.min.x, bounding_box.max.y, bounding_box.max.z),
+            bounding_box.max,
+        ];
+
+        // Check if the box is outside any plane
+        for plane in &self.planes {
+            let mut all_outside = true;
+
+            for corner in &corners {
+                if plane.distance_to(*corner) >= 0.0 {
+                    all_outside = false;
+                    break;
+                }
+            }
+
+            // If all corners are outside this plane, the box is outside the frustum
+            if all_outside {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
