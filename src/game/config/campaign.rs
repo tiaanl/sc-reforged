@@ -13,6 +13,7 @@ pub struct ViewInitial {
 #[derive(Default)]
 pub struct Campaign {
     pub view_initial: ViewInitial,
+    pub mtf_name: Option<String>,
 }
 
 pub fn read_campaign(config: &mut ConfigFile) -> Result<Campaign, AssetError> {
@@ -25,6 +26,9 @@ pub fn read_campaign(config: &mut ConfigFile) -> Result<Campaign, AssetError> {
                 campaign.view_initial.from.y = current[2].parse().unwrap();
                 campaign.view_initial.to.x = current[3].parse().unwrap();
                 campaign.view_initial.to.y = current[4].parse().unwrap();
+            }
+            "SPECIFY_MTF" => {
+                campaign.mtf_name = Some(current[1].into());
             }
             _ => {}
         }

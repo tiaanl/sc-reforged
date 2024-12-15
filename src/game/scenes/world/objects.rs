@@ -53,12 +53,14 @@ impl Objects {
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
+        fog_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let model_renderer = MeshRenderer::new(
             asset_manager.clone(),
             renderer,
             shaders,
             camera_bind_group_layout,
+            fog_bind_group_layout,
         );
 
         let bounding_box_renderer = BoundingBoxRenderer::new(renderer, camera_bind_group_layout);
@@ -159,6 +161,7 @@ impl Objects {
         &self,
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
+        fog_bind_group: &wgpu::BindGroup,
         gizmos: &GizmosRenderer,
     ) {
         // Build a list of all the meshes that needs rendering.
@@ -197,7 +200,7 @@ impl Objects {
         }
 
         self.model_renderer
-            .render_multiple(frame, camera_bind_group, meshes);
+            .render_multiple(frame, camera_bind_group, fog_bind_group, meshes);
 
         if self.render_bounding_boxes {
             for (object_index, object) in self.objects.iter().enumerate() {

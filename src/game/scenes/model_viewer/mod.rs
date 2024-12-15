@@ -138,6 +138,7 @@ impl ModelViewer {
             renderer,
             &mut shaders,
             &gpu_camera.bind_group_layout,
+            &gpu_camera.bind_group_layout,
         );
 
         let model = asset_loader.load_smf_model(path, renderer)?;
@@ -195,7 +196,8 @@ impl Scene for ModelViewer {
 
         if changed {
             let matrices = self.camera.calculate_matrices();
-            self.gpu_camera.upload_matrices(queue, &matrices);
+            self.gpu_camera
+                .upload_matrices(queue, &matrices, self.camera.position);
         }
     }
 
@@ -219,8 +221,12 @@ impl Scene for ModelViewer {
             .with_euler_rotation(self.model_rotation);
         let list = MeshRenderer::mesh_list_from_model(&model, transform);
 
-        self.mesh_renderer
-            .render_multiple(frame, &self.gpu_camera.bind_group, list);
+        self.mesh_renderer.render_multiple(
+            frame,
+            &self.gpu_camera.bind_group,
+            &self.gpu_camera.bind_group,
+            list,
+        );
 
         const AXIS_SIZE: f32 = 100.0;
         let mut vertices = vec![

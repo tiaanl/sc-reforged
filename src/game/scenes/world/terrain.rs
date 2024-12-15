@@ -68,6 +68,7 @@ impl Terrain {
         shaders: &mut Shaders,
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
+        fog_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
         let TerrainMapping {
             altitude_map_height_base,
@@ -135,20 +136,6 @@ impl Terrain {
             map_dx, map_dy, height_map.size.x, height_map.size.y,
         );
 
-        // let bounds_min = height_map.height(UVec2::ZERO).xy().map(|v| v - 2500.0);
-        // let bounds_max = height_map
-        //     .height(height_map.size - UVec2::ONE)
-        //     .xy()
-        //     .map(|v| v + 2500.0);
-
-        // tracing::info!(
-        //     "Terrain bounds: ({}, {}) - ({}, {})",
-        //     bounds_min.x,
-        //     bounds_min.y,
-        //     bounds_max.x,
-        //     bounds_max.y
-        // );
-
         let shader_module = shaders.create_shader(
             renderer,
             "terrain",
@@ -165,27 +152,29 @@ impl Terrain {
                     polygon_mode: wgpu::PolygonMode::Fill,
                     ..Default::default()
                 })
+                .bind_group_layout(renderer.texture_bind_group_layout())
                 .bind_group_layout(camera_bind_group_layout)
-                .bind_group_layout(renderer.texture_bind_group_layout()),
+                .bind_group_layout(fog_bind_group_layout),
         );
 
         let wireframe_pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<Vertex>::new("terrain_wireframe", &shader_module)
-                .vertex_entry("vertex_main_wireframe")
+                .vertex_entry("vertex_main")
                 .fragment_entry("fragment_main_wireframe")
-                .bind_group_layout(camera_bind_group_layout)
-                // .bind_group_layout(renderer.uniform_bind_group_layout())
                 .primitive(wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::LineList,
                     ..Default::default()
                 })
+                .bind_group_layout(renderer.texture_bind_group_layout())
+                .bind_group_layout(camera_bind_group_layout)
+                .bind_group_layout(fog_bind_group_layout)
                 .disable_depth_buffer(),
         );
 
         Ok(Self {
             height_map,
 
-            max_view_distance: 20_000.0,
+            max_view_distance: 13_300.0,
 
             pipeline,
             wireframe_pipeline,
@@ -220,7 +209,12 @@ impl Terrain {
         }
     }
 
-    pub fn render_chunks(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    pub fn render_chunks(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        fog_bind_group: &wgpu::BindGroup,
+    ) {
         {
             let mut render_pass = frame.begin_basic_render_pass("terrain_render_pass", true);
 
@@ -232,8 +226,9 @@ impl Terrain {
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass
                     .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.set_bind_group(0, camera_bind_group, &[]);
-                render_pass.set_bind_group(1, &self.terrain_texture_bind_group, &[]);
+                render_pass.set_bind_group(0, &self.terrain_texture_bind_group, &[]);
+                render_pass.set_bind_group(1, camera_bind_group, &[]);
+                render_pass.set_bind_group(2, fog_bind_group, &[]);
                 render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
             }
         }
@@ -252,7 +247,9 @@ impl Terrain {
                     mesh.wireframe_index_buffer.slice(..),
                     wgpu::IndexFormat::Uint32,
                 );
-                render_pass.set_bind_group(0, camera_bind_group, &[]);
+                render_pass.set_bind_group(0, &self.terrain_texture_bind_group, &[]);
+                render_pass.set_bind_group(1, camera_bind_group, &[]);
+                render_pass.set_bind_group(2, fog_bind_group, &[]);
                 render_pass.draw_indexed(0..mesh.wireframe_index_count, 0, 0..1);
             }
         }

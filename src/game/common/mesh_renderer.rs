@@ -37,6 +37,7 @@ impl MeshRenderer {
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
+        fog_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let shader_module = shaders.create_shader(
             renderer,
@@ -68,10 +69,12 @@ impl MeshRenderer {
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("mesh_renderer_pipeline_layout"),
                     bind_group_layouts: &[
-                        // u_camera
-                        camera_bind_group_layout,
                         // u_texture
                         renderer.texture_bind_group_layout(),
+                        // u_camera
+                        camera_bind_group_layout,
+                        // u_fog
+                        fog_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
                 });
@@ -148,6 +151,7 @@ impl MeshRenderer {
         &self,
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
+        fog_bind_group: &wgpu::BindGroup,
         meshes: MeshList,
     ) {
         if meshes.meshes.is_empty() {
@@ -187,8 +191,9 @@ impl MeshRenderer {
                 mesh.gpu_mesh.index_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &mesh.texture, &[]);
+            render_pass.set_bind_group(0, &mesh.texture, &[]);
+            render_pass.set_bind_group(1, camera_bind_group, &[]);
+            render_pass.set_bind_group(2, fog_bind_group, &[]);
             render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..matrices.len() as u32);
         }
     }

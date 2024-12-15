@@ -224,6 +224,14 @@ impl Camera {
     }
 }
 
+#[derive(Clone, Copy, Default, bytemuck::NoUninit)]
+#[repr(C)]
+struct RawCamera {
+    proj: Mat4,
+    view: Mat4,
+    position: Vec4,
+}
+
 pub struct GpuCamera {
     buffer: wgpu::Buffer,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -232,12 +240,13 @@ pub struct GpuCamera {
 
 impl GpuCamera {
     pub fn new(renderer: &Renderer) -> Self {
-        let matrices = Matrices::default();
+        let raw_camera = RawCamera::default();
+
         let buffer = renderer
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("camera_buffer"),
-                contents: bytemuck::cast_slice(&[matrices]),
+                contents: bytemuck::cast_slice(&[raw_camera]),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
@@ -248,7 +257,7 @@ impl GpuCamera {
                     label: Some("camera_bind_group_layout"),
                     entries: &[wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -276,8 +285,13 @@ impl GpuCamera {
         }
     }
 
-    pub fn upload_matrices(&self, queue: &wgpu::Queue, matrices: &Matrices) {
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[*matrices]));
+    pub fn upload_matrices(&self, queue: &wgpu::Queue, matrices: &Matrices, position: Vec3) {
+        let raw_camera = RawCamera {
+            proj: matrices.projection,
+            view: matrices.view,
+            position: position.extend(1.0),
+        };
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[raw_camera]));
     }
 }
 

@@ -93,7 +93,7 @@ impl Model {
 
             nodes.push(ModelNode {
                 parent: parent_node_index,
-                transform: Transform::new(smf_node.position, smf_node.rotation),
+                transform: Transform::new(smf_node.position, Quat::IDENTITY),
                 model_transform: Mat4::IDENTITY,
             });
 
@@ -172,7 +172,7 @@ impl Model {
         // TODO: Reuse samplers.
         let sampler = renderer.create_sampler(
             "texture_sampler",
-            wgpu::AddressMode::ClampToEdge,
+            wgpu::AddressMode::Repeat,
             wgpu::FilterMode::Linear,
             wgpu::FilterMode::Linear,
         );

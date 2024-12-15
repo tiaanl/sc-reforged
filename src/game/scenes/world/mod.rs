@@ -9,7 +9,7 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera::{self, render_camera_frustum},
-        config::{self, CampaignDef},
+        config::{self, CampaignDef, Fog},
     },
 };
 use egui::Widget;
@@ -20,6 +20,77 @@ mod bounding_boxes;
 mod height_map;
 mod objects;
 mod terrain;
+
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[repr(C)]
+struct RawFog {
+    color: Vec3, // 12
+    start: f32,  // 4
+    end: f32,    // 4
+
+    _padding: Vec3, // 12
+}
+
+struct GpuFog {
+    buffer: wgpu::Buffer,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
+}
+
+impl GpuFog {
+    fn new(renderer: &Renderer) -> Self {
+        let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("fog_buffer"),
+            size: std::mem::size_of::<RawFog>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("fog_bind_group_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
+        let bind_group = renderer
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("fog_bind_group"),
+                layout: &bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(buffer.as_entire_buffer_binding()),
+                }],
+            });
+
+        Self {
+            buffer,
+            bind_group_layout,
+            bind_group,
+        }
+    }
+
+    fn upload(&self, queue: &wgpu::Queue, fog: &Fog) {
+        let raw_fog = RawFog {
+            color: fog.color,
+            start: fog.start,
+            end: fog.end,
+            _padding: Default::default(),
+        };
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[raw_fog]));
+    }
+}
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
@@ -41,8 +112,9 @@ pub struct WorldScene {
     intersection: Option<Vec3>,
 
     terrain: Terrain,
-
     objects: objects::Objects,
+    fog: Option<Fog>,
+    gpu_fog: GpuFog,
 
     gizmos_renderer: GizmosRenderer,
     gizmos_vertices: Vec<GizmoVertex>,
@@ -86,11 +158,12 @@ impl WorldScene {
 
         let mut shaders = Shaders::default();
         camera::register_camera_shader(&mut shaders);
+        shaders.add_module(include_str!("fog.wgsl"), "fog.wgsl");
 
         let camera_from = campaign.view_initial.from.extend(2500.0);
         let camera_to = campaign.view_initial.to.extend(0.0);
 
-        let mut camera_controller = camera::FreeCameraController::new(50.0, 0.4);
+        let mut camera_controller = camera::FreeCameraController::new(50.0, 0.2);
         camera_controller.move_to(camera_from);
         camera_controller.look_at(camera_to);
         let camera = camera::Camera::new(
@@ -102,7 +175,7 @@ impl WorldScene {
             10_000.0,
         );
 
-        let mut debug_camera_controller = camera::FreeCameraController::new(50.0, 0.4);
+        let mut debug_camera_controller = camera::FreeCameraController::new(50.0, 0.2);
         debug_camera_controller.move_to(Vec3::new(-5_000.0, -5_000.0, 10_000.0));
         debug_camera_controller.look_at(Vec3::new(10_000.0, 10_000.0, 0.0));
         let debug_camera = camera::Camera::new(
@@ -117,12 +190,15 @@ impl WorldScene {
         let camera_matrices = camera.calculate_matrices().into();
         let gpu_camera = camera::GpuCamera::new(renderer);
 
+        let gpu_fog = GpuFog::new(renderer);
+
         let terrain = Terrain::new(
             assets,
             renderer,
             &mut shaders,
             &campaign_def,
             &gpu_camera.bind_group_layout,
+            &gpu_fog.bind_group_layout,
         )?;
 
         let mut objects = objects::Objects::new(
@@ -130,21 +206,18 @@ impl WorldScene {
             renderer,
             &mut shaders,
             &gpu_camera.bind_group_layout,
+            &gpu_fog.bind_group_layout,
         );
 
-        {
-            // Load the image defs.
-            let data = assets.load_raw(r"config\image_defs.txt")?;
-            let str = String::from_utf8(data).unwrap();
-            let _image_defs = config::read_image_defs(&str);
-        }
+        let mut fog = None;
 
-        if true {
-            let path = PathBuf::from("maps")
-                .join(format!("{}_final", campaign_def.base_name))
-                .with_extension("mtf");
-            let data = assets.load_string(&path)?;
-            let mtf = config::read_mtf(&data);
+        if let Some(mtf_name) = campaign.mtf_name {
+            let mtf = {
+                let data = assets.load_string(PathBuf::from("maps").join(mtf_name))?;
+                config::read_mtf(&data)
+            };
+
+            fog = Some(mtf.game_config_fog_enabled);
 
             let mut to_spawn = mtf
                 .objects
@@ -156,20 +229,6 @@ impl WorldScene {
                         .with_extension("smf");
 
                     let model_handle = assets.load_smf_model(&path, renderer)?;
-
-                    // let object_type = match object.typ.as_str() {
-                    //     "4x4" => entities::ObjectType::_4x4,
-                    //     "Scenery_Bush" => entities::ObjectType::SceneryBush,
-                    //     "Scenery_Lit" => entities::ObjectType::SceneryLit,
-                    //     "Scenery_Strip_Light" => entities::ObjectType::SceneryStripLight,
-                    //     "Scenery" => entities::ObjectType::Scenery,
-                    //     "Scenery_Alarm" => entities::ObjectType::Scenery,
-                    //     "Structure_Building" => entities::ObjectType::Scenery,
-                    //     "Structure_Fence" => entities::ObjectType::StructureFence,
-                    //     "Structure_Swing_Door" => entities::ObjectType::StructureSwingDoor,
-                    //     "Structure" => entities::ObjectType::Structure,
-                    //     _ => tracing::warn!("Invalid object type: {}", object.typ),
-                    // };
 
                     let object =
                         objects::Object::new(object.position, object.rotation, model_handle);
@@ -207,6 +266,8 @@ impl WorldScene {
 
             terrain,
             objects,
+            fog,
+            gpu_fog,
 
             gizmos_renderer,
             gizmos_vertices: vec![],
@@ -346,30 +407,56 @@ impl Scene for WorldScene {
 
     fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
         if self.view_debug_camera {
-            self.gpu_camera
-                .upload_matrices(queue, &self.debug_camera.calculate_matrices());
+            self.gpu_camera.upload_matrices(
+                queue,
+                &self.debug_camera.calculate_matrices(),
+                self.debug_camera.position,
+            );
         } else {
-            self.gpu_camera
-                .upload_matrices(queue, &self.camera.calculate_matrices());
+            self.gpu_camera.upload_matrices(
+                queue,
+                &self.camera.calculate_matrices(),
+                self.camera.position,
+            );
+        }
+
+        if let Some(fog) = &self.fog {
+            self.gpu_fog.upload(queue, fog);
         }
     }
 
     fn render_frame(&self, frame: &mut Frame) {
-        frame.clear_color_and_depth(
-            wgpu::Color {
-                r: 0.1,
-                g: 0.2,
-                b: 0.3,
-                a: 1.0,
-            },
-            1.0,
-        );
+        if let Some(fog) = &self.fog {
+            frame.clear_color_and_depth(
+                wgpu::Color {
+                    r: fog.color.x as f64,
+                    g: fog.color.y as f64,
+                    b: fog.color.z as f64,
+                    a: 1.0,
+                },
+                1.0,
+            );
+        } else {
+            frame.clear_color_and_depth(
+                wgpu::Color {
+                    r: 0.1,
+                    g: 0.2,
+                    b: 0.3,
+                    a: 1.0,
+                },
+                1.0,
+            );
+        }
 
         self.terrain
-            .render_chunks(frame, &self.gpu_camera.bind_group);
+            .render_chunks(frame, &self.gpu_camera.bind_group, &self.gpu_fog.bind_group);
 
-        self.objects
-            .render_objects(frame, &self.gpu_camera.bind_group, &self.gizmos_renderer);
+        self.objects.render_objects(
+            frame,
+            &self.gpu_camera.bind_group,
+            &self.gpu_fog.bind_group,
+            &self.gizmos_renderer,
+        );
 
         self.gizmos_renderer.render_frame(
             frame,
@@ -514,6 +601,20 @@ impl Scene for WorldScene {
             ui.heading("Height");
             ui.add(DragValue::new(&mut self.terrain_height_sample.x));
             ui.add(DragValue::new(&mut self.terrain_height_sample.y));
+
+            if let Some(fog) = &mut self.fog {
+                ui.horizontal(|ui| {
+                    ui.label("Fog");
+                    ui.add(DragValue::new(&mut fog.start));
+                    ui.add(DragValue::new(&mut fog.end));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Color");
+                    ui.add(DragValue::new(&mut fog.color.x).speed(0.01));
+                    ui.add(DragValue::new(&mut fog.color.y).speed(0.01));
+                    ui.add(DragValue::new(&mut fog.color.z).speed(0.01));
+                });
+            }
 
             // ui.label(format!(
             //     "height: {}",
