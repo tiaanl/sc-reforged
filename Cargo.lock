@@ -1365,6 +1365,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "pathdiff"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1564,11 +1570,13 @@ dependencies = [
  "glam",
  "image",
  "naga_oil",
+ "pathdiff",
  "pollster",
  "shadow_company_tools",
  "thiserror 2.0.6",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
  "wgpu",
  "winit",
 ]

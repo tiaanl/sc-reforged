@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use shadow_company_tools::smf;
 
@@ -103,5 +103,10 @@ impl AssetLoader {
         let mut cursor = std::io::Cursor::new(data);
         smf::Model::read(&mut cursor)
             .map_err(|err| AssetError::FileSystemError(FileSystemError::Io(err)))
+    }
+
+    #[inline]
+    pub fn enum_dir(&self, path: impl AsRef<Path>) -> Result<Vec<PathBuf>, std::io::Error> {
+        self.fs.enum_dir(path)
     }
 }

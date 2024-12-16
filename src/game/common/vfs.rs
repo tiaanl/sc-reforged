@@ -1,9 +1,12 @@
 use std::{
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
     io::{Read, SeekFrom},
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
-use byteorder::{LittleEndian, ReadBytesExt};
+use byteorder::{LittleEndian as LE, ReadBytesExt};
 
 use crate::engine::utils;
 
@@ -23,8 +26,15 @@ fn change_separator(path: impl AsRef<Path>, separator: char) -> PathBuf {
     )
 }
 
+#[derive(Debug)]
+pub enum VirtualPath {
+    External(PathBuf),
+    Internal(PathBuf, PathBuf),
+}
+
 pub struct VirtualFileSystem {
     root_path: PathBuf,
+    guts: RefCell<HashMap<PathBuf, Rc<GutFile>>>,
 }
 
 impl VirtualFileSystem {
@@ -36,32 +46,185 @@ impl VirtualFileSystem {
             return Err(std::io::ErrorKind::NotFound.into());
         }
 
-        Ok(Self { root_path })
+        Ok(Self {
+            root_path,
+            guts: RefCell::new(HashMap::default()),
+        })
+    }
+
+    pub fn path_for(&self, path: impl AsRef<Path>) -> Option<VirtualPath> {
+        debug_assert!(
+            !path.as_ref().is_absolute(),
+            "Can't use absolute paths in the virtual file system."
+        );
+
+        // Check if the external file exists.
+        let external_path = change_separator(
+            self.root_path.join(path.as_ref()),
+            std::path::MAIN_SEPARATOR,
+        );
+        if external_path.exists() {
+            return Some(VirtualPath::External(external_path));
+        }
+
+        let first = path.as_ref().components().next().unwrap();
+        let gut_path = self.root_path.join(first).with_extension("gut");
+        if gut_path.exists() {
+            Some(VirtualPath::Internal(gut_path, path.as_ref().to_path_buf()))
+        } else {
+            None
+        }
+    }
+
+    // This one is cool, but too complex and slow.
+    pub fn _path_for(&self, path: impl AsRef<Path>) -> Option<VirtualPath> {
+        debug_assert!(
+            !path.as_ref().is_absolute(),
+            "Can't use absolute paths in the virtual file system."
+        );
+
+        // Check if the external file exists.
+        let external_path = change_separator(
+            self.root_path.join(path.as_ref()),
+            std::path::MAIN_SEPARATOR,
+        );
+        if external_path.exists() {
+            return Some(VirtualPath::External(external_path));
+        }
+
+        let mut path_parts = VecDeque::default();
+
+        // Try to find a .gut file in the path.
+        let mut gut_parts = path
+            .as_ref()
+            .components()
+            .filter_map(|component| {
+                if let std::path::Component::Normal(part) = component {
+                    Some(PathBuf::from(part))
+                } else {
+                    // We just ignore the other component types for now.
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let has_extension = gut_parts
+            .last()
+            .and_then(|l| l.extension())
+            .map(|e| !e.is_empty())
+            .unwrap_or(false);
+
+        // If the last part has an extension, then we assume it's a file.
+        if has_extension {
+            path_parts.push_front(gut_parts.pop().unwrap());
+        }
+
+        while !gut_parts.is_empty() {
+            // Build a path to the .gut file.
+            let gut_path = gut_parts
+                .iter()
+                .fold(self.root_path.clone(), |i, p| i.join(p))
+                .with_extension("gut");
+
+            if gut_path.exists() {
+                // Because the internal paths start with the name of the .gut, we have to prepend
+                // it to our path parts.
+                path_parts.push_front(gut_parts.last().unwrap().clone());
+
+                // Assemble the internal path.
+                let path = path_parts
+                    .into_iter()
+                    .fold(PathBuf::new(), |i, p| i.join(p));
+
+                return Some(VirtualPath::Internal(
+                    gut_path,
+                    change_separator(path, '\\'),
+                ));
+            }
+
+            // We can unwrap, because we checked in the while loop if we're empty already.
+            path_parts.push_front(gut_parts.pop().unwrap());
+        }
+
+        None
     }
 
     pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
-        // We are going to check an external file, so make sure we're using the OS separator.
-        let external_path = self
+        let Some(path) = self.path_for(&path) else {
+            return Err(FileSystemError::Io(std::io::ErrorKind::NotFound.into()));
+        };
+
+        match path {
+            VirtualPath::External(path) => return Ok(std::fs::read(path)?),
+            VirtualPath::Internal(gut_path, path) => {
+                let Some(gut_file) = self.get_gut_file(&gut_path) else {
+                    return Err(FileSystemError::Io(std::io::ErrorKind::NotFound.into()));
+                };
+
+                gut_file.get_contents(path).map_err(FileSystemError::Io)
+            }
+        }
+    }
+
+    fn get_gut_file(&self, gut_path: &PathBuf) -> Option<Rc<GutFile>> {
+        if let Some(gut_file) = self.guts.borrow().get(gut_path) {
+            return Some(Rc::clone(gut_file));
+        }
+
+        // Try to load the .gut file.
+        let gut_file = Rc::new(match GutFile::from_file(gut_path) {
+            Ok(gut_file) => gut_file,
+            Err(err) => {
+                // TODO: Put some entry in the guts cache that tells us not to retry creating .gut
+                //       files that could not be loaded previously.
+                tracing::warn!(
+                    "Could not open .gut file - {} - {}",
+                    gut_path.display(),
+                    err
+                );
+                return None;
+            }
+        });
+
+        self.guts
+            .borrow_mut()
+            .insert(gut_path.clone(), Rc::clone(&gut_file));
+
+        Some(gut_file)
+    }
+
+    pub fn enum_dir(&self, path: impl AsRef<Path>) -> Result<Vec<PathBuf>, std::io::Error> {
+        let gut_path = self
             .root_path
-            .join(change_separator(path.as_ref(), std::path::MAIN_SEPARATOR));
+            .join(path.as_ref().components().next().unwrap())
+            .with_extension("gut");
 
-        if external_path.exists() {
-            let mut file = std::fs::File::open(external_path)?;
-            let file_size = file.metadata()?.len();
-            let mut buf = vec![0; file_size as usize];
-            file.read_exact(&mut buf)?;
-            return Ok(buf);
+        let mut entries = vec![];
+
+        if let Some(gut) = self.guts.borrow().get(&gut_path) {
+            gut.entries
+                .keys()
+                .filter(|e| e.starts_with(&path))
+                .for_each(|e| entries.push(e.clone()));
         }
 
-        if let Some(gut_file_path) = self.find_gut_file_path_for(path.as_ref()) {
-            let gut_file = GutFile::from_file(gut_file_path)?;
-            // Make sure to use the internal .gut separator for the path.
-            let buf = gut_file.get_contents(change_separator(path.as_ref(), '\\'))?;
-            return Ok(buf);
-        }
+        // Add external files.
+        let search_path = self
+            .root_path
+            .join(change_separator(path, std::path::MAIN_SEPARATOR));
 
-        let err: std::io::Error = std::io::ErrorKind::NotFound.into();
-        Err(err.into())
+        walkdir::WalkDir::new(search_path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .for_each(|e| {
+                // We unwrap here, because we got all the paths from the filesystem, so we're sure
+                // they exist and their paths should match.
+                let p = pathdiff::diff_paths(e.path(), &self.root_path).unwrap();
+                entries.push(p);
+            });
+
+        Ok(entries)
     }
 
     fn find_gut_file_path_for(&self, path: impl AsRef<Path>) -> Option<PathBuf> {
@@ -90,7 +253,7 @@ struct Entry {
 
 struct GutFile {
     path: PathBuf,
-    entries: Vec<Entry>,
+    entries: HashMap<PathBuf, Entry>,
 }
 
 impl GutFile {
@@ -101,10 +264,10 @@ impl GutFile {
 
         utils::skip_sinister_header(&mut r)?;
 
-        let _hash_1 = r.read_u32::<LittleEndian>()?;
-        let _hash_2 = r.read_u32::<LittleEndian>()?;
+        let _hash_1 = r.read_u32::<LE>()?;
+        let _hash_2 = r.read_u32::<LE>()?;
 
-        let entry_count = r.read_u32::<LittleEndian>()?;
+        let entry_count = r.read_u32::<LE>()?;
         let mut filename: [u8; 32] = [0; 32];
         r.read_exact(&mut filename)?;
 
@@ -120,14 +283,14 @@ impl GutFile {
         mut r: impl std::io::Read,
         entry_count: u32,
         header_size: u32,
-    ) -> Result<Vec<Entry>, std::io::Error> {
-        let mut entries = vec![];
+    ) -> Result<HashMap<PathBuf, Entry>, std::io::Error> {
+        let mut entries = HashMap::default();
         for _ in 0..entry_count {
-            let name_length = r.read_u32::<LittleEndian>()?;
-            let size = r.read_u32::<LittleEndian>()?;
-            let offset = r.read_u32::<LittleEndian>()?;
-            let is_plain_text = r.read_u32::<LittleEndian>()? != 0;
-            let name_hash = r.read_u32::<LittleEndian>()?;
+            let name_length = r.read_u32::<LE>()?;
+            let size = r.read_u32::<LE>()?;
+            let offset = r.read_u32::<LE>()?;
+            let is_plain_text = r.read_u32::<LE>()? != 0;
+            let name_hash = r.read_u32::<LE>()?;
 
             // Read variable length string.
             let mut name = vec![0; name_length as usize - 1];
@@ -140,13 +303,16 @@ impl GutFile {
             // Read the null terminator after the name.
             r.read_u8()?;
 
-            entries.push(Entry {
-                name,
-                offset: header_size + offset,
-                size,
-                is_plain_text,
-                _name_hash: name_hash,
-            })
+            entries.insert(
+                PathBuf::from(&name),
+                Entry {
+                    name,
+                    offset: header_size + offset,
+                    size,
+                    is_plain_text,
+                    _name_hash: name_hash,
+                },
+            );
         }
         Ok(entries)
     }
@@ -156,13 +322,9 @@ impl GutFile {
 
         // The entries in the .gut file uses "\".
         // Do a case-insensitive camparison.
-        let path = change_separator(path, '\\')
-            .to_string_lossy()
-            .to_ascii_lowercase();
+        let path = change_separator(path, '\\');
 
-        let entry = self.entries.iter().find(|e| e.name == path);
-
-        let Some(entry) = entry else {
+        let Some(entry) = self.entries.get(&path) else {
             return Err(std::io::ErrorKind::NotFound.into());
         };
 
@@ -179,5 +341,19 @@ impl GutFile {
         }
 
         Ok(buf)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn basic() {
+        let fs = VirtualFileSystem::new(r"C:\games\shadow_company\data-pristine").unwrap();
+
+        let p = fs.path_for(r"config\lod_model_profiles\palm1_lod_model.txt");
+
+        println!("{:?}", p);
     }
 }

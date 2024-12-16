@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
     engine::{
@@ -9,7 +9,9 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera::{self, render_camera_frustum},
-        config::{self, CampaignDef, Fog},
+        config::{
+            self, CampaignDef, ConfigFile, Fog, LodModelProfileDefinition, SubModelDefinition,
+        },
     },
 };
 use egui::Widget;
@@ -127,6 +129,8 @@ pub struct WorldScene {
 
     // test
     terrain_height_sample: Vec2,
+
+    lod_model_definitions: HashMap<String, Vec<SubModelDefinition>>,
 }
 
 #[derive(Debug)]
@@ -143,6 +147,25 @@ impl WorldScene {
         campaign_def: CampaignDef,
     ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
+
+        let lod_model_definitions = {
+            let mut lod_definitions = HashMap::default();
+
+            for lod_path in assets
+                .enum_dir(r"config\lod_model_profiles")
+                .map_err(|err| {
+                    AssetError::FileSystemError(crate::game::vfs::FileSystemError::Io(err))
+                })?
+                .into_iter()
+            {
+                let data = assets.load_string(lod_path)?;
+                let mut config_file = ConfigFile::new(&data);
+                let profile = LodModelProfileDefinition::from_config_file(&mut config_file);
+                lod_definitions.insert(profile.lod_model_name, profile.sub_model_definitions);
+            }
+
+            lod_definitions
+        };
 
         // Load the campaign specification.
         let campaign = {
@@ -223,12 +246,27 @@ impl WorldScene {
                 .objects
                 .iter()
                 .flat_map(|object| {
-                    let path = PathBuf::from("models")
-                        .join(&object.name)
-                        .join(&object.name)
-                        .with_extension("smf");
+                    let path = if let Some(defs) = lod_model_definitions.get(&object.name) {
+                        let model_name = &defs[0].sub_model_model;
 
-                    let model_handle = assets.load_smf_model(&path, renderer)?;
+                        PathBuf::from("models")
+                            .join(model_name)
+                            .join(model_name)
+                            .with_extension("smf")
+                    } else {
+                        PathBuf::from("models")
+                            .join(&object.name)
+                            .join(&object.name)
+                            .with_extension("smf")
+                    };
+
+                    let model_handle = match assets.load_smf_model(&path, renderer) {
+                        Ok(handle) => handle,
+                        Err(err) => {
+                            tracing::warn!("Could not load .smf model: {}", path.display());
+                            return Err(err);
+                        }
+                    };
 
                     let object =
                         objects::Object::new(object.position, object.rotation, model_handle);
@@ -281,6 +319,8 @@ impl WorldScene {
             new_id: String::new(),
 
             terrain_height_sample: Vec2::ZERO,
+
+            lod_model_definitions,
         })
     }
 }

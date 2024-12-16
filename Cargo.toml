@@ -47,6 +47,8 @@ image = { version = "0.25", default-features = false, features = [
     "jpeg",
 ] }
 naga_oil = { version = "0.15.0", default-features = false }
+walkdir = { version = "2.5.0", default-features = false }
+pathdiff = "0.2.3"
 
 [profile.dev.package.zune-jpeg]
 opt-level = 3
