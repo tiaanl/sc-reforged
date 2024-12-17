@@ -42,12 +42,17 @@ impl HeightMap {
         self.size / Self::CHUNK_SIZE
     }
 
+    /// Return the world position of the specified height map coordinate.
+    ///
+    /// NOTE: Coordinates outside the height map area will return the value of the nearest edge
+    ///       coordinate. This will cause all the far edges of the heightmap to have a single flat
+    ///       cell on the map edge. This is to replicate behavious on the original.
     pub fn position(&self, pos: UVec2) -> Vec3 {
         // Clamp to the size of the height map.
-        let x = pos.x.min(self.size.x - 1);
-        let y = pos.y.min(self.size.y - 1);
+        let UVec2 { x, y } = pos;
 
-        let index = y as usize * self.size.x as usize + x as usize;
+        let index = y.min(self.size.y - 1) as usize * self.size.x as usize
+            + x.min(self.size.x - 1) as usize;
 
         let elevation = (self.heights[index] as usize & 0xFF) as f32 * self.elevation_base;
         Vec3::new(
