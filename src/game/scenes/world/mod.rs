@@ -597,42 +597,6 @@ impl Scene for WorldScene {
                         DragValue::new(&mut object.rotation.y).speed(0.01).ui(ui);
                         DragValue::new(&mut object.rotation.z).speed(0.01).ui(ui);
                     });
-
-                    ui.label("Animation Set");
-                    ui.text_edit_singleline(&mut self.new_id);
-                    if ui.button("Add").clicked() {
-                        let id: usize = self.new_id.parse().unwrap();
-                        object.animation_set.set.insert(id, Transform::default());
-                        self.new_id.clear();
-                    }
-                    for (id, translation) in object.animation_set.set.iter_mut() {
-                        ui.label(format!("{}", id));
-                        ui.horizontal(|ui| {
-                            DragValue::new(&mut translation.translation.x)
-                                .speed(0.01)
-                                .ui(ui);
-                            DragValue::new(&mut translation.translation.y)
-                                .speed(0.01)
-                                .ui(ui);
-                            DragValue::new(&mut translation.translation.z)
-                                .speed(0.01)
-                                .ui(ui);
-                        });
-                        ui.horizontal(|ui| {
-                            DragValue::new(&mut translation.rotation.x)
-                                .speed(0.01)
-                                .ui(ui);
-                            DragValue::new(&mut translation.rotation.y)
-                                .speed(0.01)
-                                .ui(ui);
-                            DragValue::new(&mut translation.rotation.z)
-                                .speed(0.01)
-                                .ui(ui);
-                            DragValue::new(&mut translation.rotation.w)
-                                .speed(0.01)
-                                .ui(ui);
-                        });
-                    }
                 }
             } else {
                 ui.label("Nothing");

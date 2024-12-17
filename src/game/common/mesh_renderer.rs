@@ -1,4 +1,3 @@
-use ahash::HashMap;
 use glam::Mat4;
 use wgpu::{util::DeviceExt, vertex_attr_array, ShaderStages};
 
@@ -15,9 +14,12 @@ pub struct TexturedMesh {
 
 impl Asset for TexturedMesh {}
 
+#[derive(Debug)]
 pub struct MeshItem {
     pub transform: Mat4,
     pub mesh: Handle<TexturedMesh>,
+    /// Used to sort the objects to render from far to near to handle translucent textures.
+    pub distance_from_camera: f32,
 }
 
 #[derive(Default)]
@@ -141,6 +143,7 @@ impl MeshRenderer {
             list.meshes.push(MeshItem {
                 transform: transform.to_mat4() * mesh.model_transform,
                 mesh: mesh.mesh,
+                distance_from_camera: f32::MAX,
             });
         }
 
@@ -152,35 +155,26 @@ impl MeshRenderer {
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
         fog_bind_group: &wgpu::BindGroup,
-        meshes: MeshList,
+        meshes: &MeshList,
     ) {
         if meshes.meshes.is_empty() {
             return;
         }
 
-        // Create a list of matrices for each textures mesh.
-        let mut instances = HashMap::default();
-
-        for mesh in meshes.meshes.iter() {
-            let matrices = instances.entry(mesh.mesh).or_insert(Vec::default());
-            matrices.push(mesh.transform);
-        }
-
         let device = frame.device.clone();
-
         let mut render_pass = frame.begin_basic_render_pass("mesh_renderer_render_pass", true);
 
-        for (mesh, matrices) in instances.into_iter() {
-            let Some(mesh) = self.asset_manager.get(mesh) else {
+        for mesh_item in meshes.meshes.iter() {
+            let Some(mesh) = self.asset_manager.get(mesh_item.mesh) else {
                 // Ignore meshes we can't find.
-                tracing::warn!("Mesh not found: {:?}", mesh);
+                tracing::warn!("Mesh not found: {:?}", mesh_item.mesh);
                 continue;
             };
 
             // Create a buffer to render to.
             let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("mesh_indices_buffer"),
-                contents: bytemuck::cast_slice(&matrices),
+                contents: bytemuck::cast_slice(&[mesh_item.transform]),
                 usage: wgpu::BufferUsages::VERTEX,
             });
 
@@ -194,7 +188,7 @@ impl MeshRenderer {
             render_pass.set_bind_group(0, &mesh.texture, &[]);
             render_pass.set_bind_group(1, camera_bind_group, &[]);
             render_pass.set_bind_group(2, fog_bind_group, &[]);
-            render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..matrices.len() as u32);
+            render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..1);
         }
     }
 }

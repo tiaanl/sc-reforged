@@ -225,7 +225,7 @@ impl Scene for ModelViewer {
             frame,
             &self.gpu_camera.bind_group,
             &self.gpu_camera.bind_group,
-            list,
+            &list,
         );
 
         const AXIS_SIZE: f32 = 100.0;

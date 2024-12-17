@@ -1,9 +1,10 @@
+use std::cmp::Ordering;
+
 use glam::Vec4Swizzles;
 
 use crate::{
     engine::{gizmos::GizmosRenderer, prelude::*},
     game::{
-        animation::AnimationSet,
         camera::{BoundingBox, Camera, Frustum, Ray},
         mesh_renderer::{MeshItem, MeshList, MeshRenderer},
         model::Model,
@@ -19,7 +20,6 @@ pub struct Object {
     pub rotation: Vec3,
     pub model: Handle<Model>,
     pub visible: bool,
-    pub animation_set: AnimationSet,
 }
 
 impl Object {
@@ -29,7 +29,6 @@ impl Object {
             rotation,
             model,
             visible: true,
-            animation_set: AnimationSet::default(),
         }
     }
 }
@@ -38,11 +37,15 @@ pub struct Objects {
     asset_manager: AssetManager,
 
     pub model_renderer: MeshRenderer,
+    /// Keep a local list of meshes we render each frame. Mostly used to pass data from the `update`
+    /// stage to the `render` stage. Also avoids reallocating the list each frame.
+    mesh_list: MeshList,
 
     render_bounding_boxes: bool,
     pub bounding_box_renderer: BoundingBoxRenderer,
 
     pub objects: Vec<Object>,
+
     /// The entity index that the mouse is currently over.
     selected_object: Option<usize>,
 }
@@ -68,6 +71,7 @@ impl Objects {
         Self {
             asset_manager,
             model_renderer,
+            mesh_list: MeshList::default(),
             render_bounding_boxes: false,
             bounding_box_renderer,
             objects: vec![],
@@ -155,21 +159,11 @@ impl Objects {
                 });
             }
         });
-    }
 
-    pub fn render_objects(
-        &self,
-        frame: &mut Frame,
-        camera_bind_group: &wgpu::BindGroup,
-        fog_bind_group: &wgpu::BindGroup,
-        gizmos: &GizmosRenderer,
-    ) {
-        // Build a list of all the meshes that needs rendering.
-        let mut meshes = MeshList::default();
-        let mut boxes = vec![];
-        let gv = vec![];
+        self.mesh_list.meshes.clear();
 
-        for object in self.objects.iter().filter(|obj| obj.visible) {
+        // Update the local mesh list with visible objects only.
+        for object in self.objects.iter().filter(|o| o.visible) {
             let Some(model) = self.asset_manager.get(object.model) else {
                 continue;
             };
@@ -185,22 +179,48 @@ impl Objects {
             );
 
             for mesh in model.meshes.iter() {
-                let mut transform = entity_transform * mesh.model_transform;
-                if let Some(animation_transform) = object.animation_set.set.get(&mesh.node_index) {
-                    transform *= animation_transform.to_mat4();
-                }
-
+                let transform = entity_transform * mesh.model_transform;
                 // gv.append(&mut GizmosRenderer::create_axis(&transform, 100.0));
 
-                meshes.meshes.push(MeshItem {
+                // We can use the squared distance here, because we only use it for sorting.
+                let mesh_position = transform.col(3);
+                let distance_from_camera = camera.position.distance_squared(mesh_position.xyz());
+
+                self.mesh_list.meshes.push(MeshItem {
                     transform,
                     mesh: mesh.mesh,
+                    distance_from_camera,
                 });
             }
         }
 
-        self.model_renderer
-            .render_multiple(frame, camera_bind_group, fog_bind_group, meshes);
+        // Sort the meshes by distance, far to near.
+        self.mesh_list.meshes.sort_unstable_by(|a, b| {
+            if a.distance_from_camera > b.distance_from_camera {
+                Ordering::Less
+            } else {
+                Ordering::Greater
+            }
+        });
+    }
+
+    pub fn render_objects(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        fog_bind_group: &wgpu::BindGroup,
+        gizmos: &GizmosRenderer,
+    ) {
+        // Build a list of all the meshes that needs rendering.
+        let mut boxes = vec![];
+        let gv = vec![];
+
+        self.model_renderer.render_multiple(
+            frame,
+            camera_bind_group,
+            fog_bind_group,
+            &self.mesh_list,
+        );
 
         if self.render_bounding_boxes {
             for (object_index, object) in self.objects.iter().enumerate() {
