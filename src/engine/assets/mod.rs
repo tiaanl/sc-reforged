@@ -1,8 +1,7 @@
-use ahash::HashMap;
-
 use std::{
     any::{Any, TypeId},
-    sync::{Arc, RwLock},
+    collections::HashMap,
+    sync::{atomic::AtomicU64, Arc, RwLock},
 };
 
 pub mod texture;
@@ -42,7 +41,7 @@ impl<A: Asset> std::fmt::Debug for Handle<A> {
 
 #[derive(Clone, Default)]
 pub struct AssetStore {
-    next_id: Arc<RwLock<u64>>,
+    next_id: Arc<AtomicU64>,
     storages: Arc<RwLock<HashMap<TypeId, Box<dyn Any + Send + Sync>>>>,
 }
 
@@ -51,10 +50,12 @@ impl AssetStore {
     where
         A: Asset + Send + Sync + 'static,
     {
-        let mut next_id = self.next_id.write().unwrap();
-        let id = *next_id;
-        *next_id += 1;
-        Handle(id, std::marker::PhantomData)
+        use std::sync::atomic::Ordering;
+
+        Handle(
+            self.next_id.fetch_add(1, Ordering::Relaxed),
+            std::marker::PhantomData,
+        )
     }
 
     pub fn add<A>(&self, asset: A) -> Handle<A>
