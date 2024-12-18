@@ -95,7 +95,10 @@ impl AssetLoader {
     }
 
     pub fn load_string(&self, path: impl AsRef<Path>) -> Result<String, AssetError> {
-        String::from_utf8(self.load_raw(path)?).map_err(|_| AssetError::DecodeError)
+        String::from_utf8(self.load_raw(&path)?).map_err(|_| {
+            tracing::warn!("Could not load string: {}", path.as_ref().display());
+            AssetError::DecodeError
+        })
     }
 
     pub fn load_smf(&self, path: impl AsRef<Path>) -> Result<smf::Model, AssetError> {

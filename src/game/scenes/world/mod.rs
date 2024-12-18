@@ -149,7 +149,7 @@ impl WorldScene {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let lod_model_definitions = {
-            let mut lod_definitions = HashMap::default();
+            let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
             for lod_path in assets
                 .enum_dir(r"config\lod_model_profiles")
@@ -157,6 +157,7 @@ impl WorldScene {
                     AssetError::FileSystemError(crate::game::vfs::FileSystemError::Io(err))
                 })?
                 .into_iter()
+                .filter(|e| e.as_path().extension().unwrap() == "txt")
             {
                 let data = assets.load_string(lod_path)?;
                 let mut config_file = ConfigFile::new(&data);

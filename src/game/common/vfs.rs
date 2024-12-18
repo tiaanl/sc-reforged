@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     io::{Read, SeekFrom},
     path::{Path, PathBuf},
     rc::Rc,
@@ -12,6 +12,11 @@ use crate::engine::utils;
 
 #[derive(Debug, thiserror::Error)]
 pub enum FileSystemError {
+    /// This error is generated if the path we requested could not be found, either as an external
+    /// file or a file inside a .gut archive.
+    #[error("Path not found: {0}")]
+    NotFound(PathBuf),
+
     #[error("IO Error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -27,7 +32,7 @@ fn change_separator(path: impl AsRef<Path>, separator: char) -> PathBuf {
 }
 
 #[derive(Debug)]
-pub enum VirtualPath {
+enum PathPointer {
     External(PathBuf),
     Internal(PathBuf, PathBuf),
 }
@@ -52,111 +57,38 @@ impl VirtualFileSystem {
         })
     }
 
-    pub fn path_for(&self, path: impl AsRef<Path>) -> Option<VirtualPath> {
-        debug_assert!(
-            !path.as_ref().is_absolute(),
-            "Can't use absolute paths in the virtual file system."
-        );
-
+    /// Find a way to get to the specified `path`.
+    fn path_for(&self, path: impl AsRef<Path>) -> Option<PathPointer> {
         // Check if the external file exists.
-        let external_path = change_separator(
-            self.root_path.join(path.as_ref()),
-            std::path::MAIN_SEPARATOR,
-        );
+        let external_path = self.root_path.join(path.as_ref().to_path_buf());
         if external_path.exists() {
-            return Some(VirtualPath::External(external_path));
+            return Some(PathPointer::External(external_path));
         }
 
         let first = path.as_ref().components().next().unwrap();
         let gut_path = self.root_path.join(first).with_extension("gut");
-        if gut_path.exists() {
-            Some(VirtualPath::Internal(gut_path, path.as_ref().to_path_buf()))
+
+        if !gut_path.exists() {
+            return None;
+        }
+
+        // Load the .gut file and check if the path exists inside.
+        let gut_file = self.get_gut_file(&gut_path)?;
+        if gut_file.path_exists(&path) {
+            Some(PathPointer::Internal(gut_path, path.as_ref().to_path_buf()))
         } else {
             None
         }
     }
 
-    // This one is cool, but too complex and slow.
-    pub fn _path_for(&self, path: impl AsRef<Path>) -> Option<VirtualPath> {
-        debug_assert!(
-            !path.as_ref().is_absolute(),
-            "Can't use absolute paths in the virtual file system."
-        );
-
-        // Check if the external file exists.
-        let external_path = change_separator(
-            self.root_path.join(path.as_ref()),
-            std::path::MAIN_SEPARATOR,
-        );
-        if external_path.exists() {
-            return Some(VirtualPath::External(external_path));
-        }
-
-        let mut path_parts = VecDeque::default();
-
-        // Try to find a .gut file in the path.
-        let mut gut_parts = path
-            .as_ref()
-            .components()
-            .filter_map(|component| {
-                if let std::path::Component::Normal(part) = component {
-                    Some(PathBuf::from(part))
-                } else {
-                    // We just ignore the other component types for now.
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let has_extension = gut_parts
-            .last()
-            .and_then(|l| l.extension())
-            .map(|e| !e.is_empty())
-            .unwrap_or(false);
-
-        // If the last part has an extension, then we assume it's a file.
-        if has_extension {
-            path_parts.push_front(gut_parts.pop().unwrap());
-        }
-
-        while !gut_parts.is_empty() {
-            // Build a path to the .gut file.
-            let gut_path = gut_parts
-                .iter()
-                .fold(self.root_path.clone(), |i, p| i.join(p))
-                .with_extension("gut");
-
-            if gut_path.exists() {
-                // Because the internal paths start with the name of the .gut, we have to prepend
-                // it to our path parts.
-                path_parts.push_front(gut_parts.last().unwrap().clone());
-
-                // Assemble the internal path.
-                let path = path_parts
-                    .into_iter()
-                    .fold(PathBuf::new(), |i, p| i.join(p));
-
-                return Some(VirtualPath::Internal(
-                    gut_path,
-                    change_separator(path, '\\'),
-                ));
-            }
-
-            // We can unwrap, because we checked in the while loop if we're empty already.
-            path_parts.push_front(gut_parts.pop().unwrap());
-        }
-
-        None
-    }
-
     pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         let Some(path) = self.path_for(&path) else {
-            return Err(FileSystemError::Io(std::io::ErrorKind::NotFound.into()));
+            return Err(FileSystemError::NotFound(path.as_ref().to_path_buf()));
         };
 
         match path {
-            VirtualPath::External(path) => return Ok(std::fs::read(path)?),
-            VirtualPath::Internal(gut_path, path) => {
+            PathPointer::External(path) => return Ok(std::fs::read(path)?),
+            PathPointer::Internal(gut_path, path) => {
                 let Some(gut_file) = self.get_gut_file(&gut_path) else {
                     return Err(FileSystemError::Io(std::io::ErrorKind::NotFound.into()));
                 };
@@ -196,16 +128,16 @@ impl VirtualFileSystem {
     pub fn enum_dir(&self, path: impl AsRef<Path>) -> Result<Vec<PathBuf>, std::io::Error> {
         let gut_path = self
             .root_path
-            .join(path.as_ref().components().next().unwrap())
+            .join(path.as_ref().to_path_buf().components().next().unwrap())
             .with_extension("gut");
 
         let mut entries = vec![];
 
         if let Some(gut) = self.guts.borrow().get(&gut_path) {
             gut.entries
-                .keys()
-                .filter(|e| e.starts_with(&path))
-                .for_each(|e| entries.push(e.clone()));
+                .values()
+                .filter(|e| e.name.starts_with(&path))
+                .for_each(|e| entries.push(e.name.clone()));
         }
 
         // Add external files.
@@ -244,11 +176,11 @@ impl VirtualFileSystem {
 
 #[derive(Debug)]
 struct Entry {
-    name: String,
+    name: PathBuf,
     offset: u32,
     size: u32,
     is_plain_text: bool,
-    _name_hash: u32,
+    name_hash: u32,
 }
 
 struct GutFile {
@@ -260,48 +192,54 @@ impl GutFile {
     fn from_file(path: impl AsRef<Path>) -> std::io::Result<Self> {
         use std::io::{Read, Seek};
 
-        let mut r = std::fs::File::open(path.as_ref())?;
+        let mut reader = std::fs::File::open(path.as_ref())?;
 
-        utils::skip_sinister_header(&mut r)?;
+        utils::skip_sinister_header(&mut reader)?;
 
-        let _hash_1 = r.read_u32::<LE>()?;
-        let _hash_2 = r.read_u32::<LE>()?;
+        let _hash_1 = reader.read_u32::<LE>()?;
+        let _hash_2 = reader.read_u32::<LE>()?;
 
-        let entry_count = r.read_u32::<LE>()?;
+        let entry_count = reader.read_u32::<LE>()?;
         let mut filename: [u8; 32] = [0; 32];
-        r.read_exact(&mut filename)?;
+        reader.read_exact(&mut filename)?;
 
-        let header_size = r.stream_position()? as u32;
+        let header_size = reader.stream_position()? as u32;
 
         Ok(Self {
             path: path.as_ref().to_path_buf(),
-            entries: Self::read_entries(r, entry_count, header_size)?,
+            entries: Self::read_entries(&mut reader, entry_count, header_size)?,
         })
     }
 
-    fn read_entries(
-        mut r: impl std::io::Read,
+    pub fn path_exists(&self, path: impl AsRef<Path>) -> bool {
+        let path = PathBuf::from(path.as_ref().to_string_lossy().to_lowercase());
+        self.entries.contains_key(&path)
+    }
+
+    fn read_entries<R>(
+        reader: &mut R,
         entry_count: u32,
         header_size: u32,
-    ) -> Result<HashMap<PathBuf, Entry>, std::io::Error> {
+    ) -> Result<HashMap<PathBuf, Entry>, std::io::Error>
+    where
+        R: std::io::Read,
+    {
         let mut entries = HashMap::default();
         for _ in 0..entry_count {
-            let name_length = r.read_u32::<LE>()?;
-            let size = r.read_u32::<LE>()?;
-            let offset = r.read_u32::<LE>()?;
-            let is_plain_text = r.read_u32::<LE>()? != 0;
-            let name_hash = r.read_u32::<LE>()?;
+            let name_length = reader.read_u32::<LE>()?;
+            let size = reader.read_u32::<LE>()?;
+            let offset = reader.read_u32::<LE>()?;
+            let is_plain_text = reader.read_u32::<LE>()? != 0;
+            let name_hash = reader.read_u32::<LE>()?;
 
             // Read variable length string.
             let mut name = vec![0; name_length as usize - 1];
-            r.read_exact(&mut name)?;
+            reader.read_exact(&mut name)?;
             utils::crypt(&mut name);
-            // Store the names in all lowercase for comparisons.
-            let name = String::from_utf8_lossy(&name)
-                .to_ascii_lowercase()
-                .to_string();
+            let name = PathBuf::from(std::str::from_utf8(&name).unwrap());
+
             // Read the null terminator after the name.
-            r.read_u8()?;
+            let _ = reader.read_u8()?;
 
             entries.insert(
                 PathBuf::from(&name),
@@ -310,7 +248,7 @@ impl GutFile {
                     offset: header_size + offset,
                     size,
                     is_plain_text,
-                    _name_hash: name_hash,
+                    name_hash,
                 },
             );
         }
@@ -322,38 +260,27 @@ impl GutFile {
 
         // The entries in the .gut file uses "\".
         // Do a case-insensitive camparison.
-        let path = change_separator(path, '\\');
+        let path = PathBuf::from(
+            change_separator(path, '\\')
+                .to_string_lossy()
+                .to_ascii_lowercase(),
+        );
 
-        let Some(entry) = self.entries.get(&path) else {
-            return Err(std::io::ErrorKind::NotFound.into());
-        };
+        let entry = self
+            .entries
+            .get(&path)
+            .expect("The entry should exist, because we checked for it in path_for!");
 
-        let mut r = std::fs::File::open(&self.path)?;
-        if r.seek(SeekFrom::Start(entry.offset as u64))? != entry.offset as u64 {
-            return Err(std::io::ErrorKind::UnexpectedEof.into());
-        }
+        let mut reader = std::fs::File::open(&self.path)?;
+        reader.seek(SeekFrom::Start(entry.offset as u64))?;
 
         let mut buf = vec![0; entry.size as usize];
-        r.read_exact(&mut buf)?;
+        reader.read_exact(&mut buf)?;
 
         if entry.is_plain_text {
             utils::crypt(&mut buf);
         }
 
         Ok(buf)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn basic() {
-        let fs = VirtualFileSystem::new(r"C:\games\shadow_company\data-pristine").unwrap();
-
-        let p = fs.path_for(r"config\lod_model_profiles\palm1_lod_model.txt");
-
-        println!("{:?}", p);
     }
 }

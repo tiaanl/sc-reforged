@@ -48,9 +48,9 @@ impl HeightMap {
     ///       coordinate. This will cause all the far edges of the heightmap to have a single flat
     ///       cell on the map edge. This is to replicate behavious on the original.
     pub fn position(&self, pos: UVec2) -> Vec3 {
-        // Clamp to the size of the height map.
         let UVec2 { x, y } = pos;
 
+        // Clamp to the available data.
         let index = y.min(self.size.y - 1) as usize * self.size.x as usize
             + x.min(self.size.x - 1) as usize;
 
