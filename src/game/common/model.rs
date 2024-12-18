@@ -101,7 +101,7 @@ impl Model {
                 let mesh = Self::smf_mesh_to_mesh(renderer, asset_loader, smf_mesh)?;
                 meshes.push(ModelMesh {
                     node_index,
-                    mesh: asset_loader.asset_manager().add(mesh),
+                    mesh: asset_loader.asset_store().add(mesh),
                     model_transform: Mat4::IDENTITY,
                 });
             }

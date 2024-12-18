@@ -96,7 +96,7 @@ impl GpuFog {
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
-    asset_manager: AssetManager,
+    asset_store: AssetStore,
     _campaign_def: CampaignDef,
 
     view_debug_camera: bool,
@@ -142,7 +142,7 @@ enum UnderMouse {
 impl WorldScene {
     pub fn new(
         assets: &AssetLoader,
-        asset_manager: AssetManager,
+        asset_store: AssetStore,
         renderer: &Renderer,
         campaign_def: CampaignDef,
     ) -> Result<Self, AssetError> {
@@ -226,7 +226,7 @@ impl WorldScene {
         )?;
 
         let mut objects = objects::Objects::new(
-            asset_manager.clone(),
+            asset_store.clone(),
             renderer,
             &mut shaders,
             &gpu_camera.bind_group_layout,
@@ -284,7 +284,7 @@ impl WorldScene {
         let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
 
         Ok(Self {
-            asset_manager,
+            asset_store,
 
             _campaign_def: campaign_def,
 

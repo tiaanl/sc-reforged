@@ -28,14 +28,14 @@ pub struct MeshList {
 }
 
 pub struct MeshRenderer {
-    asset_manager: AssetManager,
+    asset_store: AssetStore,
     render_pipeline: wgpu::RenderPipeline,
     transforms_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl MeshRenderer {
     pub fn new(
-        asset_manager: AssetManager,
+        asset_store: AssetStore,
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
@@ -130,7 +130,7 @@ impl MeshRenderer {
                 });
 
         Self {
-            asset_manager,
+            asset_store,
             render_pipeline,
             transforms_bind_group_layout,
         }
@@ -165,7 +165,7 @@ impl MeshRenderer {
         let mut render_pass = frame.begin_basic_render_pass("mesh_renderer_render_pass", true);
 
         for mesh_item in meshes.meshes.iter() {
-            let Some(mesh) = self.asset_manager.get(mesh_item.mesh) else {
+            let Some(mesh) = self.asset_store.get(mesh_item.mesh) else {
                 // Ignore meshes we can't find.
                 tracing::warn!("Mesh not found: {:?}", mesh_item.mesh);
                 continue;

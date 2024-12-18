@@ -14,7 +14,7 @@ pub mod transform;
 
 pub mod prelude {
     #![allow(unused_imports)]
-    pub use super::assets::{Asset, AssetManager, Handle};
+    pub use super::assets::{Asset, AssetStore, Handle};
     pub use super::dirty::*;
     pub use super::input::*;
     pub use super::mesh::*;

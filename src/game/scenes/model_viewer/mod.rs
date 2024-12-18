@@ -18,7 +18,7 @@ use crate::{
 };
 
 pub struct ModelViewer {
-    asset_manager: AssetManager,
+    asset_store: AssetStore,
 
     mesh_renderer: MeshRenderer,
     model: Handle<Model>,
@@ -115,7 +115,7 @@ impl Asset for smf::Model {}
 impl ModelViewer {
     pub fn new(
         asset_loader: &AssetLoader,
-        asset_manager: AssetManager,
+        asset_store: AssetStore,
         renderer: &Renderer,
         path: impl AsRef<std::path::Path>,
     ) -> Result<Self, AssetError> {
@@ -134,7 +134,7 @@ impl ModelViewer {
         let gpu_camera = camera::GpuCamera::new(renderer);
 
         let mesh_renderer = MeshRenderer::new(
-            asset_manager.clone(),
+            asset_store.clone(),
             renderer,
             &mut shaders,
             &gpu_camera.bind_group_layout,
@@ -153,7 +153,7 @@ impl ModelViewer {
         camera_controller.distance = 1_500.0;
 
         Ok(Self {
-            asset_manager,
+            asset_store,
 
             mesh_renderer,
             model,
@@ -202,7 +202,7 @@ impl Scene for ModelViewer {
     }
 
     fn render_frame(&self, frame: &mut Frame) {
-        let Some(model) = self.asset_manager.get(self.model) else {
+        let Some(model) = self.asset_store.get(self.model) else {
             tracing::error!("Invalid model");
             return;
         };

@@ -38,7 +38,7 @@ enum App {
         egui_integration: engine::egui_integration::EguiIntegration,
         /// The main way of loading assets from the /data directory.
         _assets: AssetLoader,
-        _asset_manager: AssetManager,
+        _asset_store: AssetStore,
 
         input: InputState,
 
@@ -90,8 +90,8 @@ impl winit::application::ApplicationHandler for App {
 
                 let egui_integration = EguiIntegration::new(event_loop, &renderer);
 
-                let asset_manager = AssetManager::default();
-                let assets = AssetLoader::new(asset_manager.clone(), &opts.path)
+                let asset_store = AssetStore::default();
+                let assets = AssetLoader::new(asset_store.clone(), &opts.path)
                     .expect("Could not initialize assets.");
 
                 let scene: Box<dyn Scene> = if false {
@@ -120,12 +120,8 @@ impl winit::application::ApplicationHandler for App {
                         .unwrap();
 
                     Box::new(
-                        match WorldScene::new(
-                            &assets,
-                            asset_manager.clone(),
-                            &renderer,
-                            campaign_def,
-                        ) {
+                        match WorldScene::new(&assets, asset_store.clone(), &renderer, campaign_def)
+                        {
                             Ok(scene) => scene,
                             Err(err) => {
                                 error!("Could not create world scene! - {}", err);
@@ -139,7 +135,7 @@ impl winit::application::ApplicationHandler for App {
                     Box::new(
                         match ModelViewer::new(
                             &assets,
-                            asset_manager.clone(),
+                            asset_store.clone(),
                             &renderer,
                             // r"models\pusths-compound\pusths-compound.smf",
                             // r"models\alvhqd-hummer\alvhqd-hummer.smf",
@@ -163,7 +159,7 @@ impl winit::application::ApplicationHandler for App {
                     renderer,
                     egui_integration,
                     _assets: assets,
-                    _asset_manager: asset_manager,
+                    _asset_store: asset_store,
                     input: InputState::default(),
                     last_mouse_position: None,
                     last_frame_time: Instant::now(),

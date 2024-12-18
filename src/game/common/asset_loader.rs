@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use shadow_company_tools::smf;
 
 use crate::engine::{
-    assets::{AssetManager, Handle},
+    assets::{AssetStore, Handle},
     renderer::Renderer,
 };
 
@@ -28,20 +28,20 @@ pub enum AssetError {
 }
 
 pub struct AssetLoader {
-    asset_manager: AssetManager,
+    asset_store: AssetStore,
     fs: VirtualFileSystem,
 }
 
 impl AssetLoader {
-    pub fn new(asset_manager: AssetManager, data_dir: impl AsRef<Path>) -> std::io::Result<Self> {
+    pub fn new(asset_store: AssetStore, data_dir: impl AsRef<Path>) -> std::io::Result<Self> {
         Ok(Self {
-            asset_manager,
+            asset_store,
             fs: VirtualFileSystem::new(data_dir)?,
         })
     }
 
-    pub fn asset_manager(&self) -> &AssetManager {
-        &self.asset_manager
+    pub fn asset_store(&self) -> &AssetStore {
+        &self.asset_store
     }
 
     pub fn load_smf_model(
@@ -51,7 +51,7 @@ impl AssetLoader {
     ) -> Result<Handle<Model>, AssetError> {
         let smf = self.load_smf(path)?;
         let model = Model::from_smf(&smf, renderer, self)?;
-        Ok(self.asset_manager.add(model))
+        Ok(self.asset_store.add(model))
     }
 
     pub fn load_raw(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, AssetError> {

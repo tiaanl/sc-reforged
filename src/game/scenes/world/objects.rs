@@ -34,7 +34,7 @@ impl Object {
 }
 
 pub struct Objects {
-    asset_manager: AssetManager,
+    asset_store: AssetStore,
 
     pub model_renderer: MeshRenderer,
     /// Keep a local list of meshes we render each frame. Mostly used to pass data from the `update`
@@ -52,14 +52,14 @@ pub struct Objects {
 
 impl Objects {
     pub fn new(
-        asset_manager: AssetManager,
+        asset_store: AssetStore,
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         fog_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let model_renderer = MeshRenderer::new(
-            asset_manager.clone(),
+            asset_store.clone(),
             renderer,
             shaders,
             camera_bind_group_layout,
@@ -69,7 +69,7 @@ impl Objects {
         let bounding_box_renderer = BoundingBoxRenderer::new(renderer, camera_bind_group_layout);
 
         Self {
-            asset_manager,
+            asset_store,
             model_renderer,
             mesh_list: MeshList::default(),
             render_bounding_boxes: false,
@@ -97,7 +97,7 @@ impl Objects {
 
         // Gather up a list of bounding boxes for each entity/model.
         for (object_index, object) in self.objects.iter().enumerate() {
-            let Some(model) = self.asset_manager.get(object.model) else {
+            let Some(model) = self.asset_store.get(object.model) else {
                 continue;
             };
 
@@ -136,7 +136,7 @@ impl Objects {
         let frustum = Frustum::from_matrices(&matrices);
 
         self.objects.iter_mut().for_each(|object| {
-            if let Some(model) = self.asset_manager.get(object.model) {
+            if let Some(model) = self.asset_store.get(object.model) {
                 let object_transform = Mat4::from_rotation_translation(
                     Quat::from_euler(
                         glam::EulerRot::XYZ,
@@ -164,7 +164,7 @@ impl Objects {
 
         // Update the local mesh list with visible objects only.
         for object in self.objects.iter().filter(|o| o.visible) {
-            let Some(model) = self.asset_manager.get(object.model) else {
+            let Some(model) = self.asset_store.get(object.model) else {
                 continue;
             };
 
@@ -224,7 +224,7 @@ impl Objects {
 
         if self.render_bounding_boxes {
             for (object_index, object) in self.objects.iter().enumerate() {
-                let Some(model) = self.asset_manager.get(object.model) else {
+                let Some(model) = self.asset_store.get(object.model) else {
                     continue;
                 };
 

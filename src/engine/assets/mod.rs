@@ -40,14 +40,13 @@ impl<A: Asset> std::fmt::Debug for Handle<A> {
     }
 }
 
-// AssetManager with assets stored in Arc
 #[derive(Clone, Default)]
-pub struct AssetManager {
+pub struct AssetStore {
     next_id: Arc<RwLock<u64>>,
     storages: Arc<RwLock<HashMap<TypeId, Box<dyn Any + Send + Sync>>>>,
 }
 
-impl AssetManager {
+impl AssetStore {
     fn generate_handle<A>(&self) -> Handle<A>
     where
         A: Asset + Send + Sync + 'static,
@@ -108,9 +107,9 @@ mod tests {
 
     #[test]
     fn basic() {
-        let asset_manager = AssetManager::default();
-        let h = asset_manager.add(Number(10));
-        let maybe = asset_manager.get(h);
+        let store = AssetStore::default();
+        let h = store.add(Number(10));
+        let maybe = store.get(h);
         assert!(maybe.is_some());
         let value = maybe.unwrap();
         assert_eq!(value.0, 10);
