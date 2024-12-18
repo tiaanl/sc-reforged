@@ -10,6 +10,16 @@ pub trait Asset {}
 
 pub struct Handle<A: Asset>(u64, std::marker::PhantomData<A>);
 
+impl<A: Asset> Handle<A> {
+    pub fn from_raw(id: u64) -> Self {
+        Self(id, std::marker::PhantomData)
+    }
+
+    pub fn as_raw(&self) -> u64 {
+        self.0
+    }
+}
+
 impl<A: Asset> Copy for Handle<A> {}
 
 impl<A: Asset> std::hash::Hash for Handle<A> {

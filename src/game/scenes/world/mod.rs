@@ -9,9 +9,7 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera::{self, render_camera_frustum},
-        config::{
-            self, CampaignDef, ConfigFile, Fog, LodModelProfileDefinition, SubModelDefinition,
-        },
+        config::{self, CampaignDef, Fog, LodModelProfileDefinition, SubModelDefinition},
     },
 };
 use egui::Widget;
@@ -159,9 +157,7 @@ impl WorldScene {
                 .into_iter()
                 .filter(|e| e.as_path().extension().unwrap() == "txt")
             {
-                let data = assets.load_string(lod_path)?;
-                let mut config_file = ConfigFile::new(&data);
-                let profile = LodModelProfileDefinition::from_config_file(&mut config_file);
+                let profile = assets.load_config::<LodModelProfileDefinition>(lod_path)?;
                 lod_definitions.insert(profile.lod_model_name, profile.sub_model_definitions);
             }
 
@@ -169,16 +165,12 @@ impl WorldScene {
         };
 
         // Load the campaign specification.
-        let campaign = {
-            let data = assets.load_string(
-                PathBuf::from("campaign")
-                    .join(&campaign_def.base_name)
-                    .join(&campaign_def.base_name)
-                    .with_extension("txt"),
-            )?;
-            let mut config = config::ConfigFile::new(&data);
-            config::read_campaign(&mut config)?
-        };
+        let campaign = assets.load_config::<config::Campaign>(
+            PathBuf::from("campaign")
+                .join(&campaign_def.base_name)
+                .join(&campaign_def.base_name)
+                .with_extension("txt"),
+        )?;
 
         let mut shaders = Shaders::default();
         camera::register_camera_shader(&mut shaders);
@@ -236,10 +228,7 @@ impl WorldScene {
         let mut fog = None;
 
         if let Some(mtf_name) = campaign.mtf_name {
-            let mtf = {
-                let data = assets.load_string(PathBuf::from("maps").join(mtf_name))?;
-                config::read_mtf(&data)
-            };
+            let mtf = assets.load_config::<config::Mtf>(PathBuf::from("maps").join(mtf_name))?;
 
             fog = Some(mtf.game_config_fog_enabled);
 
@@ -261,7 +250,7 @@ impl WorldScene {
                             .with_extension("smf")
                     };
 
-                    let model_handle = match assets.load_smf_model(&path, renderer) {
+                    let model_handle = match assets.load_smf(&path, renderer) {
                         Ok(handle) => handle,
                         Err(err) => {
                             tracing::warn!("Could not load .smf model: {}", path.display());

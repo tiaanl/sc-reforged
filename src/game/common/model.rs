@@ -167,7 +167,12 @@ impl Model {
         // TODO: Avoid uploding duplicate textures to the GPU.
 
         let image = asset_loader.load_bmp(&texture_path)?;
-        let texture_view = renderer.create_texture_view(texture_path.to_str().unwrap(), image);
+        let image = asset_loader
+            .asset_store()
+            .get(image)
+            .expect("Just loaded it successfully");
+        let texture_view =
+            renderer.create_texture_view(texture_path.to_str().unwrap(), &image.data);
 
         // TODO: Reuse samplers.
         let sampler = renderer.create_sampler(

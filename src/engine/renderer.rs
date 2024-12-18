@@ -311,7 +311,7 @@ impl Renderer {
             })
     }
 
-    pub fn create_texture_view(&self, label: &str, image: image::RgbaImage) -> wgpu::TextureView {
+    pub fn create_texture_view(&self, label: &str, image: &image::RgbaImage) -> wgpu::TextureView {
         let (width, height) = (image.width(), image.height());
 
         let size = wgpu::Extent3d {

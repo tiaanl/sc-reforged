@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use glam::UVec2;
 use tracing::info;
 
@@ -6,7 +8,7 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera::{BoundingBox, Camera, Frustum},
-        config::{CampaignDef, ConfigFile, TerrainMapping},
+        config::{CampaignDef, TerrainMapping},
     },
 };
 
@@ -78,23 +80,24 @@ impl Terrain {
             texture_map_base_name,
             ..
         } = {
-            let terrain_mapping_path = format!(
-                "textures/terrain/{}/terrain_mapping.txt",
-                campaign_def.base_name
-            );
-            info!("Loading terrain mapping: {}", terrain_mapping_path);
-            let data = assets.load_string(terrain_mapping_path)?;
-            TerrainMapping::from(ConfigFile::new(&data))
+            let path = PathBuf::from("textures")
+                .join("terrain")
+                .join(&campaign_def.base_name)
+                .join("terrain_mapping.txt");
+            info!("Loading terrain mapping: {}", path.display());
+            assets.load_config::<TerrainMapping>(&path)?
         };
 
         let terrain_texture_bind_group = {
-            // use crate::engine::assets::Image;
-
             let path = format!("trnhigh/{}.jpg", texture_map_base_name);
             info!("Loading high detail terrain texture: {path}");
 
-            let texture_view =
-                renderer.create_texture_view("terrain_texture", assets.load_jpeg(path)?);
+            let handle = assets.load_jpeg(path)?;
+            let image = assets
+                .asset_store()
+                .get(handle)
+                .expect("Just loaded successfully.");
+            let texture_view = renderer.create_texture_view("terrain_texture", &image.data);
 
             renderer.create_texture_bind_group(
                 "terrain_texture_bind_group",

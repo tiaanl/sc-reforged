@@ -1,4 +1,4 @@
-use crate::game::config::ConfigFile;
+use crate::game::{asset_loader::AssetError, config::ConfigFile};
 
 #[derive(Clone, Debug, Default)]
 pub struct EmitterConfig {
@@ -287,4 +287,103 @@ pub fn read_compaign_defs(data: &str) -> Vec<CampaignDef> {
     }
 
     campaigns
+}
+
+pub struct CampaignDefs {
+    pub campaigns: Vec<CampaignDef>,
+}
+
+impl TryFrom<String> for CampaignDefs {
+    type Error = AssetError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let mut config = ConfigFile::new(&value);
+
+        let mut campaigns = vec![];
+
+        struct State(Option<CampaignDef>);
+        impl State {
+            fn with_campaign(&mut self) -> &mut CampaignDef {
+                let Some(campaign_def) = &mut self.0 else {
+                    panic!("No current campaign!");
+                };
+
+                campaign_def
+            }
+        }
+
+        let mut state = State(None);
+
+        while let Some(current) = config.current() {
+            match current[0] {
+                "CAMPAIGN_DEF" => match state.0 {
+                    None => state = State(Some(CampaignDef::default())),
+                    Some(ref mut campaign_def) => {
+                        campaigns.push(std::mem::take(campaign_def));
+                    }
+                },
+                "BASENAME" => state.with_campaign().base_name = current[1].to_string(),
+                "TITLE" => state.with_campaign().title = current[1].to_string(),
+                "MULTIPLAYER_ACTIVE" => state.with_campaign().multiplayer_active = true,
+                "EXCLUDE_FROM_CAMPAIGN_TREE" => {
+                    state.with_campaign().exclude_from_campaign_tree = true
+                }
+                "DISABLE_HELP_TIPS" => state.with_campaign().disable_help_tips = true,
+                "SKIP_TEAM_EQUIPMENT_VALIDATION" => {
+                    state.with_campaign().skip_team_equipment_validation = true
+                }
+                "PLAYTEST_FUNDS" => {
+                    state.with_campaign().playtest_funds = current[1].parse().unwrap();
+                }
+                "MULTIPLAYER_FUNDS" => {
+                    state.with_campaign().multiplayer_funds = [
+                        current[1].parse().unwrap(),
+                        current[2].parse().unwrap(),
+                        current[3].parse().unwrap(),
+                    ]
+                }
+                "CUTSCENE" => state.with_campaign().cutscene = current[1].to_string(),
+                "DISABLE_TEAM_AND_EQUIPPING" => {
+                    state.with_campaign().disable_team_and_equipping = current[1].to_string()
+                }
+                "LIGHTING_THRESHHOLDS" => {
+                    state.with_campaign().lighting_threshholds =
+                        [current[1].parse().unwrap(), current[2].parse().unwrap()]
+                }
+                "ENEMY_GRENADE_USE_CHANCE" => {
+                    state.with_campaign().enemy_grenade_use_chance = current[1].parse().unwrap()
+                }
+                "ALARM_AUDIO" => state.with_campaign().alarm_audio = current[1].to_string(),
+                "EMITTER_CONFIG" => {
+                    state.with_campaign().emitter_config = EmitterConfig::from_params(&current[1..])
+                }
+                "CLOTHING_INFILTRATION_MOD" => state
+                    .with_campaign()
+                    .clothing_infiltration_mod
+                    .push(ClothingInfiltrationMod::from_params(&current[1..])),
+                "PRE_ACTION" => state
+                    .with_campaign()
+                    .pre_actions
+                    .push(Action::from_params(&current[1..])),
+                "POST_ACTION" => state
+                    .with_campaign()
+                    .post_actions
+                    .push(Action::from_params(&current[1..])),
+                "PRECONDITION" => state
+                    .with_campaign()
+                    .precondition
+                    .push(Precondition::from_params(&current[1..])),
+
+                _ => panic!("Invalid config line. {:?}", current),
+            }
+
+            config.next();
+        }
+
+        if let Some(campaign_def) = state.0 {
+            campaigns.push(campaign_def);
+        }
+
+        Ok(Self { campaigns })
+    }
 }

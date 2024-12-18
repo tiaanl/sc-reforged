@@ -141,7 +141,7 @@ impl ModelViewer {
             &gpu_camera.bind_group_layout,
         );
 
-        let model = asset_loader.load_smf_model(path, renderer)?;
+        let model = asset_loader.load_smf(path, renderer)?;
 
         let gizmos = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
 

@@ -16,24 +16,30 @@ pub struct Campaign {
     pub mtf_name: Option<String>,
 }
 
-pub fn read_campaign(config: &mut ConfigFile) -> Result<Campaign, AssetError> {
-    let mut campaign = Campaign::default();
+impl TryFrom<String> for Campaign {
+    type Error = AssetError;
 
-    while let Some(current) = config.current() {
-        match current[0] {
-            "SPECIFY_VIEW_INITIAL" => {
-                campaign.view_initial.from.x = current[1].parse().unwrap();
-                campaign.view_initial.from.y = current[2].parse().unwrap();
-                campaign.view_initial.to.x = current[3].parse().unwrap();
-                campaign.view_initial.to.y = current[4].parse().unwrap();
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let mut campaign = Campaign::default();
+
+        let mut config = ConfigFile::new(&value);
+
+        while let Some(current) = config.current() {
+            match current[0] {
+                "SPECIFY_VIEW_INITIAL" => {
+                    campaign.view_initial.from.x = current[1].parse().unwrap();
+                    campaign.view_initial.from.y = current[2].parse().unwrap();
+                    campaign.view_initial.to.x = current[3].parse().unwrap();
+                    campaign.view_initial.to.y = current[4].parse().unwrap();
+                }
+                "SPECIFY_MTF" => {
+                    campaign.mtf_name = Some(current[1].into());
+                }
+                _ => {}
             }
-            "SPECIFY_MTF" => {
-                campaign.mtf_name = Some(current[1].into());
-            }
-            _ => {}
+            config.next();
         }
-        config.next();
-    }
 
-    Ok(campaign)
+        Ok(campaign)
+    }
 }

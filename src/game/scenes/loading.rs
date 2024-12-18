@@ -7,11 +7,12 @@ pub struct LoadingScene {
 
 impl LoadingScene {
     pub fn new(assets: &AssetLoader, renderer: &Renderer) -> Self {
-        let image = assets
+        let handle = assets
             .load_jpeg(r"textures/interface/loadscr2.jpg")
             .unwrap();
+        let image = assets.asset_store().get(handle).unwrap();
         let texture_view =
-            renderer.create_texture_view("texture: textures/interface/loadscr2.jpg", image);
+            renderer.create_texture_view("texture: textures/interface/loadscr2.jpg", &image.data);
 
         let sampler = renderer.create_sampler(
             "sampler: textures/interface/loadscr2.jpg",

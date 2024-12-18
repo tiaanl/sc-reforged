@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::game::asset_loader::AssetError;
+
 use super::ConfigFile;
 
 #[derive(Debug, Default)]
@@ -14,8 +16,12 @@ pub struct LodModelProfileDefinition {
     pub sub_model_definitions: Vec<SubModelDefinition>,
 }
 
-impl LodModelProfileDefinition {
-    pub fn from_config_file(config_file: &mut ConfigFile) -> Self {
+impl TryFrom<String> for LodModelProfileDefinition {
+    type Error = AssetError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let mut config = ConfigFile::new(&value);
+
         enum State {
             None,
             Def(LodModelProfileDefinition),
@@ -23,15 +29,15 @@ impl LodModelProfileDefinition {
         }
         let mut state = State::None;
 
-        while let Some(current) = config_file.current() {
+        while let Some(current) = config.current() {
             match current[0] {
                 "LOD_MODEL_PROFILE_DEFINITION" => match state {
                     State::None => state = State::Def(LodModelProfileDefinition::default()),
-                    State::Def(def) | State::SubDef(def, _) => {
+                    State::Def(..) | State::SubDef(..) => {
                         tracing::warn!(
                             "Can't do multiple LOD_MODEL_PROFILE_DEFINITION per config file."
                         );
-                        return def;
+                        break;
                     }
                 },
 
@@ -75,7 +81,7 @@ impl LodModelProfileDefinition {
 
                 _ => {}
             }
-            config_file.next();
+            config.next();
         }
 
         let mut def = match state {
@@ -95,6 +101,6 @@ impl LodModelProfileDefinition {
             }
         });
 
-        def
+        Ok(def)
     }
 }

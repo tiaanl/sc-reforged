@@ -1,3 +1,5 @@
+use crate::game::asset_loader::AssetError;
+
 use super::ConfigFile;
 
 /// `map_dx` and `map_dy` must be powers of two.
@@ -45,11 +47,15 @@ impl Default for TerrainMapping {
     }
 }
 
-impl From<ConfigFile<'_>> for TerrainMapping {
-    fn from(mut value: ConfigFile) -> Self {
+impl TryFrom<String> for TerrainMapping {
+    type Error = AssetError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let mut config = ConfigFile::new(&value);
+
         let mut result = TerrainMapping::default();
 
-        while let Some(params) = value.current() {
+        while let Some(params) = config.current() {
             if params[0] == "SET" {
                 match params[1] {
                     "map_dx" => result.map_dx = params[2].parse().unwrap(),
@@ -77,9 +83,9 @@ impl From<ConfigFile<'_>> for TerrainMapping {
                     _ => panic!("Invalid parameter {}", params[1]),
                 }
             }
-            value.next();
+            config.next();
         }
 
-        result
+        Ok(result)
     }
 }

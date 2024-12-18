@@ -5,7 +5,7 @@ use egui::Widget;
 use engine::{egui_integration::EguiIntegration, prelude::*};
 use game::{
     asset_loader::AssetLoader,
-    config::read_compaign_defs,
+    config,
     scenes::{model_viewer::ModelViewer, world::WorldScene},
 };
 use tracing::{error, info, warn};
@@ -102,15 +102,20 @@ impl winit::application::ApplicationHandler for App {
                 } else if true {
                     // WorldScene
 
-                    let s = assets.load_string("config/campaign_defs.txt").unwrap();
-                    let campaign_defs = read_compaign_defs(&s);
+                    let campaign_defs = assets
+                        .load_config::<config::CampaignDefs>(
+                            PathBuf::from("config").join("campaign_defs.txt"),
+                        )
+                        .unwrap();
+
                     let campaign_def = campaign_defs
+                        .campaigns
                         .iter()
-                        .find(|c| c.base_name == "training")
+                        // .find(|c| c.base_name == "training")
                         // .find(|c| c.base_name == "angola_tutorial")
                         // .find(|c| c.base_name == "angola")
                         // .find(|c| c.base_name == "romania")
-                        // .find(|c| c.base_name == "kola")
+                        .find(|c| c.base_name == "kola")
                         // .find(|c| c.base_name == "caribbean")
                         // .find(|c| c.base_name == "kola_2")
                         // .find(|c| c.base_name == "ecuador")

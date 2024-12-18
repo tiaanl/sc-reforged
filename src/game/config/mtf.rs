@@ -1,6 +1,6 @@
 use glam::{Vec3, Vec4};
 
-use crate::game::config::ConfigFile;
+use crate::game::{asset_loader::AssetError, config::ConfigFile};
 
 #[derive(Debug)]
 pub struct Object {
@@ -64,98 +64,100 @@ pub struct Mtf {
     pub objects: Vec<Object>,
 }
 
-impl Mtf {}
+impl TryFrom<String> for Mtf {
+    type Error = AssetError;
 
-pub fn read_mtf(data: &str) -> Mtf {
-    let mut config = ConfigFile::new(data);
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let mut config = ConfigFile::new(&value);
 
-    #[derive(Debug)]
-    enum State {
-        None,
-        ObjectInventory(Object),
-        Object(Object),
-    }
-
-    let mut mtf = Mtf::default();
-    let mut state = State::None;
-
-    while let Some(current) = config.current() {
-        match current[0] {
-            "GAME_STATE_TIME_OF_DAY" => {
-                mtf.time_of_day = [current[1].parse().unwrap(), current[2].parse().unwrap()];
-            }
-            "GAME_CONFIG_FOG_ENABLED" => {
-                mtf.game_config_fog_enabled = Fog::from_params(&current);
-            }
-            "OBJECT_INVENTORY" => {
-                match state {
-                    State::None => {}
-                    State::ObjectInventory(old) => {
-                        mtf.inventory.push(old);
-                    }
-                    State::Object(old) => {
-                        mtf.objects.push(old);
-                    }
-                }
-                state = State::ObjectInventory(Object::from_params(current));
-            }
-            "OBJECT" => {
-                match state {
-                    State::None => {}
-                    State::ObjectInventory(old) => {
-                        mtf.inventory.push(old);
-                    }
-                    State::Object(old) => {
-                        mtf.objects.push(old);
-                    }
-                }
-                state = State::Object(Object::from_params(current));
-            }
-            "OBJECT_POSITION" => {
-                let position = Vec3::new(
-                    current[1].parse().unwrap_or(0.0),
-                    current[2].parse().unwrap_or(0.0),
-                    current[3].parse().unwrap_or(0.0),
-                );
-                match state {
-                    State::None => panic!("No object selected!"),
-                    State::ObjectInventory(ref mut obj) => obj.position = position,
-                    State::Object(ref mut obj) => obj.position = position,
-                }
-            }
-            "OBJECT_ROTATION" => {
-                let rotation = Vec3::new(
-                    current[1].parse().unwrap_or(0.0),
-                    current[2].parse().unwrap_or(0.0),
-                    current[3].parse().unwrap_or(0.0),
-                );
-                match state {
-                    State::None => panic!("No object selected!"),
-                    State::ObjectInventory(ref mut obj) => obj.rotation = rotation,
-                    State::Object(ref mut obj) => obj.rotation = rotation,
-                }
-            }
-            "OBJECT_ID" => {
-                let id = [current[1].parse().unwrap(), current[2].parse().unwrap()];
-                match state {
-                    State::None => panic!("No object selected!"),
-                    State::ObjectInventory(ref mut obj) => obj.id = id,
-                    State::Object(ref mut obj) => obj.id = id,
-                }
-            }
-            "OBJECT_MTF_CONFIG" => {
-                // Just skip this for now.
-            }
-            _ => panic!("Invalid MTF entry: {:?}", config.current()),
+        #[derive(Debug)]
+        enum State {
+            None,
+            ObjectInventory(Object),
+            Object(Object),
         }
-        config.next();
-    }
 
-    match state {
-        State::None => {}
-        State::ObjectInventory(object) => mtf.inventory.push(object),
-        State::Object(object) => mtf.objects.push(object),
-    }
+        let mut mtf = Mtf::default();
+        let mut state = State::None;
 
-    mtf
+        while let Some(current) = config.current() {
+            match current[0] {
+                "GAME_STATE_TIME_OF_DAY" => {
+                    mtf.time_of_day = [current[1].parse().unwrap(), current[2].parse().unwrap()];
+                }
+                "GAME_CONFIG_FOG_ENABLED" => {
+                    mtf.game_config_fog_enabled = Fog::from_params(&current);
+                }
+                "OBJECT_INVENTORY" => {
+                    match state {
+                        State::None => {}
+                        State::ObjectInventory(old) => {
+                            mtf.inventory.push(old);
+                        }
+                        State::Object(old) => {
+                            mtf.objects.push(old);
+                        }
+                    }
+                    state = State::ObjectInventory(Object::from_params(current));
+                }
+                "OBJECT" => {
+                    match state {
+                        State::None => {}
+                        State::ObjectInventory(old) => {
+                            mtf.inventory.push(old);
+                        }
+                        State::Object(old) => {
+                            mtf.objects.push(old);
+                        }
+                    }
+                    state = State::Object(Object::from_params(current));
+                }
+                "OBJECT_POSITION" => {
+                    let position = Vec3::new(
+                        current[1].parse().unwrap_or(0.0),
+                        current[2].parse().unwrap_or(0.0),
+                        current[3].parse().unwrap_or(0.0),
+                    );
+                    match state {
+                        State::None => panic!("No object selected!"),
+                        State::ObjectInventory(ref mut obj) => obj.position = position,
+                        State::Object(ref mut obj) => obj.position = position,
+                    }
+                }
+                "OBJECT_ROTATION" => {
+                    let rotation = Vec3::new(
+                        current[1].parse().unwrap_or(0.0),
+                        current[2].parse().unwrap_or(0.0),
+                        current[3].parse().unwrap_or(0.0),
+                    );
+                    match state {
+                        State::None => panic!("No object selected!"),
+                        State::ObjectInventory(ref mut obj) => obj.rotation = rotation,
+                        State::Object(ref mut obj) => obj.rotation = rotation,
+                    }
+                }
+                "OBJECT_ID" => {
+                    let id = [current[1].parse().unwrap(), current[2].parse().unwrap()];
+                    match state {
+                        State::None => panic!("No object selected!"),
+                        State::ObjectInventory(ref mut obj) => obj.id = id,
+                        State::Object(ref mut obj) => obj.id = id,
+                    }
+                }
+                "OBJECT_MTF_CONFIG" => {
+                    // Just skip this for now.
+                }
+                _ => panic!("Invalid MTF entry: {:?}", config.current()),
+            }
+            config.next();
+        }
+
+        match state {
+            State::None => {}
+            State::ObjectInventory(object) => mtf.inventory.push(object),
+            State::Object(object) => mtf.objects.push(object),
+        }
+
+        Ok(mtf)
+    }
 }
