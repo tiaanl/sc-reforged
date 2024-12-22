@@ -111,11 +111,11 @@ impl winit::application::ApplicationHandler for App {
                     let campaign_def = campaign_defs
                         .campaigns
                         .iter()
-                        // .find(|c| c.base_name == "training")
+                        .find(|c| c.base_name == "training")
                         // .find(|c| c.base_name == "angola_tutorial")
                         // .find(|c| c.base_name == "angola")
                         // .find(|c| c.base_name == "romania")
-                        .find(|c| c.base_name == "kola")
+                        // .find(|c| c.base_name == "kola")
                         // .find(|c| c.base_name == "caribbean")
                         // .find(|c| c.base_name == "kola_2")
                         // .find(|c| c.base_name == "ecuador")
@@ -317,10 +317,7 @@ impl winit::application::ApplicationHandler for App {
                         position: PhysicalPosition { x, y },
                         ..
                     } => {
-                        let position = Vec2::new(x as f32, y as f32);
-                        *last_mouse_position = Some(position);
-                        let event = SceneEvent::MouseMove { position };
-                        scene.event(&event);
+                        *last_mouse_position = Some(Vec2::new(x as f32, y as f32));
                     }
 
                     WindowEvent::CursorLeft { .. } => {
@@ -344,6 +341,22 @@ impl winit::application::ApplicationHandler for App {
                 }
 
                 input.handle_window_event(event);
+            }
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        match self {
+            App::Uninitialzed(_) => {
+                warn!("Can't process events for uninitialized application.");
+            }
+            App::Initialized { input, .. } => {
+                input.handle_device_event(event);
             }
         }
     }

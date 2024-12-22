@@ -100,7 +100,7 @@ pub struct WorldScene {
     view_debug_camera: bool,
     control_debug_camera: bool,
 
-    camera_controller: camera::FreeCameraController,
+    camera_controller: camera::GameCameraController,
     camera: camera::Camera,
     debug_camera_controller: camera::FreeCameraController,
     debug_camera: camera::Camera,
@@ -179,9 +179,9 @@ impl WorldScene {
         let camera_from = campaign.view_initial.from.extend(2500.0);
         let camera_to = campaign.view_initial.to.extend(0.0);
 
-        let mut camera_controller = camera::FreeCameraController::new(50.0, 0.2);
-        camera_controller.move_to(camera_from);
-        camera_controller.look_at(camera_to);
+        let mut camera_controller = camera::GameCameraController::new(50.0, 0.2);
+        camera_controller.move_to_direct(camera_from);
+        camera_controller.look_at_direct(camera_to);
         let camera = camera::Camera::new(
             camera_from,
             Quat::IDENTITY,
@@ -515,33 +515,31 @@ impl Scene for WorldScene {
                 ui.toggle_value(&mut self.control_debug_camera, "Control");
             });
 
-            let c = if self.control_debug_camera {
-                &mut self.debug_camera_controller
-            } else {
-                &mut self.camera_controller
+            if self.control_debug_camera {
+                let c = &mut self.debug_camera_controller;
+
+                egui::Grid::new("camera").show(ui, |ui| {
+                    ui.label("position");
+
+                    let mut pos = c.position;
+                    let mut changed = false;
+                    changed |= DragValue::new(&mut pos.x).ui(ui).changed();
+                    changed |= DragValue::new(&mut pos.y).ui(ui).changed();
+                    changed |= DragValue::new(&mut pos.z).ui(ui).changed();
+                    if changed {
+                        c.move_to(pos);
+                    }
+                    ui.end_row();
+
+                    ui.label("pitch/yaw");
+                    if DragValue::new(&mut c.pitch).speed(0.1).ui(ui).changed() {
+                        c.smudge();
+                    }
+                    if DragValue::new(&mut c.yaw).speed(0.1).ui(ui).changed() {
+                        c.smudge();
+                    }
+                });
             };
-
-            egui::Grid::new("camera").show(ui, |ui| {
-                ui.label("position");
-
-                let mut pos = c.position;
-                let mut changed = false;
-                changed |= DragValue::new(&mut pos.x).ui(ui).changed();
-                changed |= DragValue::new(&mut pos.y).ui(ui).changed();
-                changed |= DragValue::new(&mut pos.z).ui(ui).changed();
-                if changed {
-                    c.move_to(pos);
-                }
-                ui.end_row();
-
-                ui.label("pitch/yaw");
-                if DragValue::new(&mut c.pitch).speed(0.1).ui(ui).changed() {
-                    c.smudge();
-                }
-                if DragValue::new(&mut c.yaw).speed(0.1).ui(ui).changed() {
-                    c.smudge();
-                }
-            });
 
             // egui::Grid::new("world_info").show(ui, |ui| {
             //     ui.label("position");

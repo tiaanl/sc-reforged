@@ -1,6 +1,6 @@
 use crate::engine::{gizmos::GizmoVertex, prelude::*};
 
-use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
+use glam::{FloatExt, Mat4, Quat, Vec2, Vec3, Vec4};
 use wgpu::util::DeviceExt;
 
 pub fn register_camera_shader(shaders: &mut Shaders) {
@@ -493,6 +493,196 @@ impl ArcBallCameraController {
             camera.position = position;
             camera.rotation = rotation;
         })
+    }
+}
+
+pub struct GameCameraControls {
+    pub forward: KeyCode,
+    pub backward: KeyCode,
+    pub right: KeyCode,
+    pub left: KeyCode,
+    pub up: KeyCode,
+    pub down: KeyCode,
+    pub look_up: KeyCode,
+    pub look_down: KeyCode,
+    pub rotate_mouse_button: MouseButton,
+}
+
+impl Default for GameCameraControls {
+    fn default() -> Self {
+        Self {
+            forward: KeyCode::KeyW,
+            backward: KeyCode::KeyS,
+            right: KeyCode::KeyD,
+            left: KeyCode::KeyA,
+            up: KeyCode::PageUp,
+            down: KeyCode::PageDown,
+            look_up: KeyCode::Home,
+            look_down: KeyCode::End,
+            rotate_mouse_button: MouseButton::Right,
+        }
+    }
+}
+
+#[derive(Default)]
+struct GameCameraData {
+    /// The position of the camera.
+    position: Vec3,
+    /// The direction the camera is looking horizontally.
+    yaw: f32,
+    /// The pitch of the camera in range level forward to straight down (with some buffer on each
+    /// angle).
+    pitch: f32,
+}
+
+impl GameCameraData {
+    fn lerp(&mut self, target: &GameCameraData, progress: f32) {
+        self.position = self.position.lerp(target.position, progress);
+        self.yaw = self.yaw.lerp(target.yaw, progress);
+        self.pitch = self.pitch.lerp(target.pitch, progress);
+    }
+
+    #[inline]
+    fn rotation(&self) -> Quat {
+        Quat::from_rotation_z(self.yaw.to_radians())
+            * Quat::from_rotation_x(self.pitch.to_radians())
+    }
+}
+
+#[derive(Default)]
+pub struct GameCameraController {
+    /// Movement speed.
+    speed: f32,
+    /// Rotation sensitivity.
+    sensitivity: f32,
+
+    /// Controls used for the camera.
+    controls: GameCameraControls,
+
+    /// The desired data for the camera which will be interpolated each frame.
+    desired: GameCameraData,
+
+    /// The current data for the camera this frame.
+    current: GameCameraData,
+
+    /// A flag to keep track of changed values inside the camera.
+    dirty: Dirty,
+}
+
+impl GameCameraController {
+    pub fn new(speed: f32, sensitivity: f32) -> Self {
+        Self {
+            speed,
+            sensitivity,
+            controls: GameCameraControls::default(),
+            desired: GameCameraData::default(),
+            current: GameCameraData::default(),
+            dirty: Dirty::smudged(),
+        }
+    }
+
+    pub fn with_controls(mut self, controls: GameCameraControls) -> Self {
+        self.controls = controls;
+        self
+    }
+
+    pub fn move_to_direct(&mut self, position: Vec3) {
+        self.current.position = position;
+        self.desired.position = self.current.position;
+        self.dirty.smudge();
+    }
+
+    pub fn look_at_direct(&mut self, target: Vec3) {
+        let direction = (target - self.current.position).normalize();
+        self.current.yaw = -direction.y.atan2(direction.x).to_degrees();
+        self.desired.yaw = self.current.yaw;
+        self.current.pitch = direction.z.asin().to_degrees();
+        self.desired.pitch = self.current.pitch;
+        self.dirty.smudge();
+    }
+
+    pub fn move_forward(&mut self, distance: f32) {
+        self.dirty.smudge();
+        self.desired.position +=
+            Quat::from_rotation_z(self.current.yaw.to_radians()) * Camera::FORWARD * distance;
+    }
+
+    pub fn move_right(&mut self, distance: f32) {
+        self.dirty.smudge();
+        // Because of our left-handed, z-up coord-system, right is negative.
+        self.desired.position -=
+            Quat::from_rotation_z(self.current.yaw.to_radians()) * Camera::RIGHT * distance;
+    }
+
+    pub fn move_up(&mut self, distance: f32) {
+        self.dirty.smudge();
+        self.desired.position += Camera::UP * distance;
+    }
+
+    pub fn update(&mut self, input: &InputState, delta_time: f32) {
+        let move_delta =
+            if input.key_pressed(KeyCode::ShiftLeft) || input.key_pressed(KeyCode::ShiftRight) {
+                self.speed * 2.0
+            } else {
+                self.speed
+            } * delta_time;
+
+        if input.key_pressed(self.controls.forward) {
+            self.move_forward(move_delta);
+        }
+        if input.key_pressed(self.controls.backward) {
+            self.move_forward(-move_delta);
+        }
+        if input.key_pressed(self.controls.right) {
+            self.move_right(move_delta);
+        }
+        if input.key_pressed(self.controls.left) {
+            self.move_right(-move_delta);
+        }
+        if input.key_pressed(self.controls.up) {
+            self.move_up(move_delta);
+        }
+        if input.key_pressed(self.controls.down) {
+            self.move_up(-move_delta);
+        }
+        if input.key_pressed(self.controls.look_up) {
+            self.desired.pitch += delta_time;
+            self.dirty.smudge();
+        }
+        if input.key_pressed(self.controls.look_down) {
+            self.desired.pitch -= delta_time;
+            self.dirty.smudge();
+        }
+
+        if input.mouse_pressed(MouseButton::Right) {
+            if let Some(delta) = input.mouse_delta() {
+                let delta = delta * self.sensitivity;
+                if delta.x != 0.0 {
+                    self.desired.yaw += delta.x;
+                    self.dirty.smudge();
+                }
+                if delta.y != 0.0 {
+                    self.desired.position.z -= delta.y * move_delta;
+                    self.dirty.smudge();
+                }
+            }
+        }
+
+        if input.wheel_delta() != 0.0 {
+            self.desired.position.z += input.wheel_delta() * self.speed;
+            self.dirty.smudge();
+        }
+
+        // Interpolate the desired closer to the target.
+        self.current.lerp(&self.desired, 0.1);
+    }
+
+    pub fn update_camera_if_dirty(&self, camera: &mut Camera) -> bool {
+        // self.dirty.if_dirty(|| {
+        camera.position = self.current.position;
+        camera.rotation = self.current.rotation();
+        // })
+        true
     }
 }
 

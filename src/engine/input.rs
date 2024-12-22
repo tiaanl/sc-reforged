@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use glam::Vec2;
 use winit::{
-    event::{ElementState, MouseScrollDelta, WindowEvent},
+    event::{DeviceEvent, ElementState, MouseScrollDelta, WindowEvent},
     keyboard::PhysicalKey,
 };
 
@@ -41,19 +41,23 @@ impl InputState {
                 }
             }
 
-            WindowEvent::CursorMoved { position, .. } => {
-                let current = Vec2::new(position.x as f32, position.y as f32);
-                self.mouse_delta = self.last_mouse_position.map(|p| current - p);
-                self.last_mouse_position = Some(current);
-            }
+            _ => {}
+        }
+    }
 
-            WindowEvent::MouseWheel { delta, .. } => {
-                self.wheel_delta = match delta {
-                    MouseScrollDelta::LineDelta(_, y) => y,
-                    MouseScrollDelta::PixelDelta(physical_position) => physical_position.y as f32,
-                };
+    pub(crate) fn handle_device_event(&mut self, event: DeviceEvent) {
+        match event {
+            DeviceEvent::MouseMotion { delta: (x, y) } => {
+                let delta = Vec2::new(x as f32, y as f32);
+                if let Some(ref mut mouse_delta) = self.mouse_delta {
+                    *mouse_delta += delta;
+                } else {
+                    self.mouse_delta = Some(delta)
+                }
             }
-
+            DeviceEvent::MouseWheel {
+                delta: MouseScrollDelta::LineDelta(_, y),
+            } => self.wheel_delta = y,
             _ => {}
         }
     }
