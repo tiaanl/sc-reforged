@@ -107,9 +107,15 @@ impl AssetLoader {
 
     pub fn load_bmp(&self, path: impl AsRef<Path>) -> Result<Handle<Image>, AssetError> {
         self.load_cached(path, |asset_loader, path| {
-            let bmp = shadow_company_tools::images::load_bmp_file(&mut std::io::Cursor::new(
-                asset_loader.fs.load(path)?,
-            ))?;
+            let color_keyd = path
+                .file_name()
+                .map(|n| n.to_string_lossy().contains("_ck"))
+                .unwrap_or(false);
+
+            let bmp = shadow_company_tools::images::load_bmp_file(
+                &mut std::io::Cursor::new(asset_loader.fs.load(path)?),
+                color_keyd,
+            )?;
             let raw = if let Ok(raw_data) = asset_loader.fs.load(path.with_extension("raw")) {
                 Some(shadow_company_tools::images::load_raw_file(
                     &mut std::io::Cursor::new(raw_data),
