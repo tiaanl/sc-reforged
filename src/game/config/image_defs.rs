@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 
-use crate::game::config::ConfigFile;
+use crate::game::{asset_loader::AssetError, config::ConfigFile};
 
 #[derive(Debug, Default)]
 pub struct Image {
-    name: String,
-    filename: String,
-    vid_mem: u32,
+    pub name: String,
+    pub filename: String,
+    pub vid_mem: u32,
 }
 
 impl Image {
@@ -256,10 +256,10 @@ impl FrameDescritor {
 
 #[derive(Debug, Default)]
 pub struct ImageDefs {
-    images: Vec<Image>,
-    sprite_3d: Vec<Sprite3d>,
-    anim_sprite: Vec<AnimSprite>,
-    anim_sprite_3d: Vec<AnimSprite3d>,
+    pub images: Vec<Image>,
+    pub sprite_3d: Vec<Sprite3d>,
+    pub anim_sprite: Vec<AnimSprite>,
+    pub anim_sprite_3d: Vec<AnimSprite3d>,
 }
 
 pub fn read_image_defs(data: &str) -> ImageDefs {
@@ -368,4 +368,12 @@ pub fn read_image_defs(data: &str) -> ImageDefs {
     }
 
     image_defs
+}
+
+impl TryFrom<String> for ImageDefs {
+    type Error = AssetError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Ok(read_image_defs(&value))
+    }
 }

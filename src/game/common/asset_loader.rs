@@ -12,6 +12,7 @@ use crate::{
         assets::{AssetStore, Handle},
         renderer::Renderer,
     },
+    game::config::ImageDefs,
     Asset,
 };
 
@@ -69,15 +70,25 @@ pub struct AssetLoader {
     fs: VirtualFileSystem,
     /// A cache of paths to handles we use to avoid loading duplicate data.
     paths: RefCell<PathCache>,
+    /// A cache of the image definitions used to load images.
+    image_defs: ImageDefs,
 }
 
 impl AssetLoader {
     pub fn new(asset_store: AssetStore, data_dir: impl AsRef<Path>) -> std::io::Result<Self> {
-        Ok(Self {
+        let mut s = Self {
             asset_store,
             fs: VirtualFileSystem::new(data_dir)?,
             paths: RefCell::new(PathCache::default()),
-        })
+            image_defs: ImageDefs::default(),
+        };
+
+        let image_defs = s
+            .load_config::<ImageDefs>(r"config\image_defs.txt")
+            .unwrap();
+        s.image_defs = image_defs;
+
+        Ok(s)
     }
 
     pub fn asset_store(&self) -> &AssetStore {
