@@ -2,6 +2,8 @@ use std::{ops::Deref, sync::Arc};
 
 use wgpu::util::DeviceExt;
 
+use super::mip_maps::MipMaps;
+
 #[derive(Clone)]
 pub struct RenderDevice(Arc<wgpu::Device>);
 
@@ -46,6 +48,8 @@ pub struct Renderer {
 
     /// A bind group layout used for all texture bind groups.
     texture_bind_group_layout: wgpu::BindGroupLayout,
+
+    mip_maps: MipMaps,
 }
 
 pub trait BufferLayout: Sized {
@@ -139,6 +143,7 @@ where
 }
 
 impl Renderer {
+    const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
     const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
     pub fn new(window: Arc<winit::window::Window>) -> Self {
@@ -203,6 +208,8 @@ impl Renderer {
                 ],
             });
 
+        let mip_maps = MipMaps::new(&device, &texture_bind_group_layout, Self::TEXTURE_FORMAT);
+
         Self {
             device: device.into(),
             queue: queue.into(),
@@ -210,6 +217,7 @@ impl Renderer {
             surface_config,
             depth_texture,
             texture_bind_group_layout,
+            mip_maps,
         }
     }
 
@@ -320,26 +328,41 @@ impl Renderer {
             depth_or_array_layers: 1,
         };
 
-        let texture = self.device.create_texture_with_data(
-            &self.queue,
-            &wgpu::TextureDescriptor {
-                label: Some(label),
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING, // | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
+        let mip_level_count = (width.max(height) as f32).log2().floor() as u32 + 1;
+
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size,
+            mip_level_count,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: Self::TEXTURE_FORMAT,
+            usage: wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        self.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::default(),
+                aspect: wgpu::TextureAspect::All,
             },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            image.as_ref(),
+            &image,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
+            },
+            size,
         );
 
-        texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some(label),
-            ..Default::default()
-        })
+        self.mip_maps
+            .generate_mip_maps(&self.device, &self.queue, &texture, mip_level_count);
+
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
     pub fn texture_bind_group_layout(&self) -> &wgpu::BindGroupLayout {
