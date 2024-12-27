@@ -7,7 +7,7 @@ mod config_file;
 mod image_defs;
 mod model_lods;
 mod mtf;
-mod terrain;
+mod terrain_mapping;
 mod windows;
 
 pub use campaign::*;
@@ -17,5 +17,5 @@ pub use image_defs::*;
 pub use image_defs::*;
 pub use model_lods::*;
 pub use mtf::*;
-pub use terrain::*;
+pub use terrain_mapping::*;
 pub use windows::*;
