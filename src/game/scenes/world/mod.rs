@@ -236,15 +236,23 @@ impl WorldScene {
                 .objects
                 .iter()
                 .flat_map(|object| {
+                    let prefix = {
+                        let mut prefix = PathBuf::from("models");
+                        if object.typ == "Bipedal" {
+                            prefix = prefix.join("people").join("bodies")
+                        }
+                        prefix
+                    };
+
                     let path = if let Some(defs) = lod_model_definitions.get(&object.name) {
                         let model_name = &defs[0].sub_model_model;
 
-                        PathBuf::from("models")
+                        prefix
                             .join(model_name)
                             .join(model_name)
                             .with_extension("smf")
                     } else {
-                        PathBuf::from("models")
+                        prefix
                             .join(&object.name)
                             .join(&object.name)
                             .with_extension("smf")
