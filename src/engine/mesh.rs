@@ -48,10 +48,18 @@ impl BufferLayout for Vertex {
     }
 }
 
-#[derive(Default)]
 pub struct IndexedMesh<V: BufferLayout> {
     pub vertices: Vec<V>,
     pub indices: Vec<u32>,
+}
+
+impl<V: BufferLayout> Default for IndexedMesh<V> {
+    fn default() -> Self {
+        Self {
+            vertices: Vec::default(),
+            indices: Vec::default(),
+        }
+    }
 }
 
 pub struct GpuIndexedMesh {

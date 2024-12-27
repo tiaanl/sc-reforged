@@ -1,4 +1,4 @@
-use glam::{UVec2, Vec2, Vec3};
+use glam::{IVec2, UVec2, Vec2, Vec3};
 use wgpu::util::DeviceExt;
 
 use super::{Renderer, Vertex};
@@ -47,12 +47,12 @@ impl HeightMap {
     /// NOTE: Coordinates outside the height map area will return the value of the nearest edge
     ///       coordinate. This will cause all the far edges of the heightmap to have a single flat
     ///       cell on the map edge. This is to replicate behavious on the original.
-    pub fn position(&self, pos: UVec2) -> Vec3 {
-        let UVec2 { x, y } = pos;
+    pub fn height_at_position(&self, pos: IVec2) -> Vec3 {
+        let IVec2 { x, y } = pos;
 
         // Clamp to the available data.
-        let index = y.min(self.size.y - 1) as usize * self.size.x as usize
-            + x.min(self.size.x - 1) as usize;
+        let index = y.max(0).min(self.size.y as i32 - 1) as usize * self.size.x as usize
+            + x.max(0).min(self.size.x as i32 - 1) as usize;
 
         let elevation = (self.heights[index] as usize & 0xFF) as f32 * self.elevation_base;
         Vec3::new(
@@ -60,12 +60,6 @@ impl HeightMap {
             y as f32 * self.edge_size,
             elevation,
         )
-    }
-
-    pub fn bounds(&self) -> (Vec3, Vec3) {
-        let min = self.position(UVec2::ZERO);
-        let max = self.position(self.size - UVec2::ONE);
-        (min, max)
     }
 
     pub fn generate_chunk(&self, offset: UVec2, resolution: u32) -> ChunkMesh {
@@ -77,7 +71,10 @@ impl HeightMap {
         for y in (offset.y..=offset.y + Self::CHUNK_SIZE).step_by(step as usize) {
             for x in (offset.x..=offset.x + Self::CHUNK_SIZE).step_by(step as usize) {
                 vertices.push(Vertex {
-                    position: self.position(UVec2 { x, y }),
+                    position: self.height_at_position(IVec2 {
+                        x: x as i32,
+                        y: y as i32,
+                    }),
                     normal: Vec3::Z,
                     tex_coord: Vec2::new(
                         x as f32 / self.size.x as f32,

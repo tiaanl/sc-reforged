@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use glam::UVec2;
+use glam::{IVec2, UVec2};
 use tracing::info;
 
 use crate::{
@@ -32,8 +32,14 @@ impl Chunk {
             resolution: HeightMap::MAX_RESOLUTION,
             visible: true,
             bounding_box: BoundingBox {
-                min: height_map.position(min),
-                max: height_map.position(max),
+                min: height_map.height_at_position(IVec2 {
+                    x: min.x as i32,
+                    y: min.y as i32,
+                }),
+                max: height_map.height_at_position(IVec2 {
+                    x: max.x as i32,
+                    y: max.y as i32,
+                }),
             },
             meshes: [0, 1, 2, 3].map(|res| height_map.generate_chunk(min, res).into_gpu(renderer)),
         }
@@ -43,6 +49,10 @@ impl Chunk {
         assert!(resolution <= HeightMap::MAX_RESOLUTION);
         &self.meshes[resolution as usize]
     }
+}
+
+struct StrataChunk {
+    gpu_mesh: GpuIndexedMesh,
 }
 
 pub struct Terrain {
@@ -61,6 +71,7 @@ pub struct Terrain {
     draw_normals: bool,
 
     chunks: Vec<Chunk>,
+    strata_chunks: Vec<StrataChunk>,
 }
 
 impl Terrain {
@@ -134,6 +145,44 @@ impl Terrain {
             }
         }
 
+        let strata_chunks = {
+            let mut strata_chunks = Vec::with_capacity(1);
+
+            const MIN_Z: f32 = -1_000.0;
+
+            let mut mesh = IndexedMesh::default();
+            let mut start_index = 0;
+            for x in -4..height_map.size.x as i32 + 4 {
+                let position = height_map.height_at_position(IVec2::new(x, 0));
+                mesh.vertices.push(Vertex {
+                    position: Vec3::new(position.x, position.y, MIN_Z),
+                    normal: Vec3::X,
+                    tex_coord: Vec2::ZERO,
+                });
+                mesh.vertices.push(Vertex {
+                    position,
+                    normal: Vec3::X,
+                    tex_coord: Vec2::ZERO,
+                });
+                mesh.indices.extend_from_slice(&[
+                    start_index + 1,
+                    start_index,
+                    start_index + 2,
+                    start_index + 1,
+                    start_index + 2,
+                    start_index + 3,
+                ]);
+
+                start_index = mesh.vertices.len() as u32;
+            }
+
+            strata_chunks.push(StrataChunk {
+                gpu_mesh: mesh.to_gpu(renderer),
+            });
+
+            strata_chunks
+        };
+
         info!(
             "terrain size: {} x {}, terrain heightmap size: {} x {}",
             map_dx, map_dy, height_map.size.x, height_map.size.y,
@@ -188,6 +237,7 @@ impl Terrain {
             draw_normals: false,
 
             chunks,
+            strata_chunks,
         })
     }
 
@@ -233,6 +283,18 @@ impl Terrain {
                 render_pass.set_bind_group(1, camera_bind_group, &[]);
                 render_pass.set_bind_group(2, fog_bind_group, &[]);
                 render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+            }
+
+            for chunk in self.strata_chunks.iter() {
+                render_pass.set_vertex_buffer(0, chunk.gpu_mesh.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(
+                    chunk.gpu_mesh.index_buffer.slice(..),
+                    wgpu::IndexFormat::Uint32,
+                );
+                render_pass.set_bind_group(0, &self.terrain_texture_bind_group, &[]);
+                render_pass.set_bind_group(1, camera_bind_group, &[]);
+                render_pass.set_bind_group(2, fog_bind_group, &[]);
+                render_pass.draw_indexed(0..chunk.gpu_mesh.index_count, 0, 0..1);
             }
         }
 

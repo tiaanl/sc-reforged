@@ -541,28 +541,6 @@ impl Scene for WorldScene {
                 });
             };
 
-            // egui::Grid::new("world_info").show(ui, |ui| {
-            //     ui.label("position");
-            //     ui.add(egui::Label::new(format!(
-            //         "{}, {}, {}",
-            //         self.world_camera.camera.position.x,
-            //         self.world_camera.camera.position.y,
-            //         self.world_camera.camera.position.z,
-            //     )));
-            //     ui.end_row();
-
-            //     ui.label("pitch");
-            //     ui.add(egui::Label::new(format!("{}", self.world_camera.pitch)));
-            //     ui.end_row();
-
-            //     ui.label("yaw");
-            //     ui.add(egui::Label::new(format!("{}", self.world_camera.yaw)));
-            //     ui.end_row();
-            // });
-
-            // ui.heading("Camera");
-            // self.camera.debug_panel(ui);
-
             ui.heading("Terrain");
             self.terrain.debug_panel(ui);
 
