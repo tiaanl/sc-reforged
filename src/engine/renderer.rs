@@ -158,9 +158,21 @@ impl Renderer {
             pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
                 .expect("request adapter");
 
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None))
-                .expect("request device");
+        let features = adapter.features();
+        if !features.contains(wgpu::Features::MULTI_DRAW_INDIRECT) {
+            tracing::warn!("wgpu::Features::MULTI_DRAW_INDIRECT not available!");
+        }
+
+        let required_features = wgpu::Features::MULTI_DRAW_INDIRECT;
+
+        let (device, queue) = pollster::block_on(adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                required_features,
+                ..Default::default()
+            },
+            None,
+        ))
+        .expect("request device");
 
         let surface = instance.create_surface(window).expect("create surface");
 

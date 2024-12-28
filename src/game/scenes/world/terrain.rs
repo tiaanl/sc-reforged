@@ -41,12 +41,36 @@ pub struct Terrain {
     /// The same indices as [chunk_indices_buffer], except for wireframes.
     chunk_wireframe_indices_buffer: wgpu::Buffer,
 
+    /// Holds data for each chunk.
+    chunk_data_buffer: wgpu::Buffer,
+
+    /// Buffer holding indirect draw data for each chunk that needs rendering per frame.
+    chunk_indirect_draw_calls_buffer: wgpu::Buffer,
+
     /// Total amount of chunks for the entire terrain.
     total_chunks: u32,
 
     draw_wireframe: bool,
     draw_normals: bool,
     lod_level: usize,
+}
+
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[repr(C)]
+struct ChunkData {
+    min: Vec3,
+    max: Vec3,
+}
+
+/// Fields copied from [wgpu::util::DrawIndexedIndirectArgs], but wgpu doesn't support bytemuck.
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::NoUninit)]
+struct ChunkDrawCall {
+    index_count: u32,
+    instance_count: u32,
+    first_index: u32,
+    base_vertex: i32,
+    first_instance: u32,
 }
 
 impl Terrain {
@@ -130,6 +154,7 @@ impl Terrain {
             x: chunks_x,
             y: chunks_y,
         } = height_map.size / Terrain::CELLS_PER_CHUNK;
+        let total_chunks = chunks_x * chunks_y;
 
         info!(
             "terrain size: {} x {}, terrain heightmap size: {} x {}",
@@ -171,30 +196,61 @@ impl Terrain {
                 .disable_depth_buffer(),
         );
 
+        // let mut chunks_data = Vec::default();
+
         // Generate vertices for each chunk in sequence. [chunk 0, chunk 1, chunk 2, ...]
         // 81 vertices per chunk.
-        let vertices_buffer = {
-            let mut vertices = vec![];
-            for y in 0..chunks_y {
-                for x in 0..chunks_x {
-                    vertices.extend(Self::generate_chunk_vertices(
-                        &height_map,
-                        IVec2::new(
-                            (Terrain::CELLS_PER_CHUNK * x) as i32,
-                            (Terrain::CELLS_PER_CHUNK * y) as i32,
-                        ),
-                    ));
-                }
-            }
 
+        // chunk sizes: 8 >> 4 >> 2 >> 1
+        // 9 * 9 + 5 * 5 + 3 * 3 + 2 * 2 == 81 + 25 + 9 + 4 == 119
+        let mut vertices = Vec::with_capacity(119 * total_chunks as usize);
+        let mut chunk_data = Vec::with_capacity(total_chunks as usize);
+
+        let size = Vec2::new(height_map.size.x as f32, height_map.size.y as f32);
+
+        for y in 0..chunks_y {
+            for x in 0..chunks_x {
+                let offset = IVec2::new(
+                    (Terrain::CELLS_PER_CHUNK * x) as i32,
+                    (Terrain::CELLS_PER_CHUNK * y) as i32,
+                );
+
+                let mut min = Vec3::MAX;
+                let mut max = Vec3::MIN;
+                for y in offset.y..=offset.y + Self::CELLS_PER_CHUNK as i32 {
+                    for x in offset.x..=offset.x + Self::CELLS_PER_CHUNK as i32 {
+                        let position = height_map.position_for_vertex(IVec2::new(x, y));
+                        vertices.push(Vertex {
+                            position,
+                            normal: Vec3::Z, // TODO: Get the normal from the height map.
+                            tex_coord: Vec2::new(x as f32 / size.x, y as f32 / size.y),
+                        });
+                        min = min.min(position);
+                        max = max.max(position);
+                    }
+                }
+
+                chunk_data.push(ChunkData { min, max });
+            }
+        }
+
+        let vertices_buffer =
             renderer
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("terrain_vertices"),
                     contents: bytemuck::cast_slice(&vertices),
                     usage: wgpu::BufferUsages::VERTEX,
-                })
-        };
+                });
+
+        let chunk_data_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("terrain_chunk_data"),
+                    contents: bytemuck::cast_slice(&chunk_data),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
 
         // Generate indices for each LOD level.
 
@@ -245,6 +301,26 @@ impl Terrain {
                     usage: wgpu::BufferUsages::INDEX,
                 });
 
+        // Generate a command for each chunk.
+        let chunk_indirect_commands = (0..total_chunks)
+            .map(|index| ChunkDrawCall {
+                first_index: 0,
+                index_count: 384,
+                base_vertex: index as i32 * 81,
+                first_instance: 0,
+                instance_count: 1,
+            })
+            .collect::<Vec<_>>();
+
+        let chunk_indirect_draw_calls_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("terrain_chunk_indirect"),
+                    contents: bytemuck::cast_slice(&chunk_indirect_commands),
+                    usage: wgpu::BufferUsages::INDIRECT,
+                });
+
         Ok(Self {
             height_map,
 
@@ -261,7 +337,9 @@ impl Terrain {
             vertices_buffer,
             chunk_indices_buffer,
             chunk_wireframe_indices_buffer,
-            total_chunks: chunks_x * chunks_y,
+            chunk_data_buffer,
+            chunk_indirect_draw_calls_buffer,
+            total_chunks,
 
             lod_level: 0,
         })
@@ -309,6 +387,13 @@ impl Terrain {
             render_pass.set_bind_group(1, camera_bind_group, &[]);
             render_pass.set_bind_group(2, fog_bind_group, &[]);
 
+            render_pass.multi_draw_indexed_indirect(
+                &self.chunk_indirect_draw_calls_buffer,
+                0,
+                self.total_chunks,
+            );
+
+            /*
             let levels = [0..384, 384..480, 480..504, 504..510];
             for chunk_index in 0..self.total_chunks as i32 {
                 render_pass.draw_indexed(
@@ -317,6 +402,7 @@ impl Terrain {
                     0..1,
                 );
             }
+            */
         }
 
         if self.draw_wireframe {
@@ -369,7 +455,6 @@ impl Terrain {
     fn generate_chunk_vertices(height_map: &HeightMap, offset: IVec2) -> Vec<Vertex> {
         // chunk sizes: 8 >> 4 >> 2 >> 1
         // 9 * 9 + 5 * 5 + 3 * 3 + 2 * 2 == 81 + 25 + 9 + 4 == 119
-
         let mut vertices = Vec::with_capacity((0..=Self::LOD_MAX).fold(0, |c, i| {
             let v = (1 << i) + 1;
             c + v * v
