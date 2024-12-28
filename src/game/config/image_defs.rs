@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(unused)]
 
 use crate::game::{asset_loader::AssetError, config::ConfigFile};
 
@@ -149,7 +149,7 @@ impl Sprite3d {
 }
 
 #[derive(Debug, Default)]
-struct AnimSprite {
+pub struct AnimSprite {
     name: String,
     image_name: String,
     color_key: Option<ColorKey>,
@@ -180,7 +180,7 @@ impl AnimSprite {
 }
 
 #[derive(Debug, Default)]
-struct AnimSprite3d {
+pub struct AnimSprite3d {
     name: String,
     texture_name: String,
     width: u32,

@@ -8,162 +8,12 @@ use crate::{
     engine::prelude::*,
     game::{
         asset_loader::{AssetError, AssetLoader},
-        camera::{BoundingBox, Camera},
+        camera::Camera,
         config::{CampaignDef, TerrainMapping},
     },
 };
 
 use super::height_map::HeightMap;
-
-pub struct Chunk {
-    distance_from_camera: f32,
-    resolution: u32,
-    visible: bool,
-    bounding_box: BoundingBox,
-    meshes: [GpuChunkMesh; 4],
-}
-
-fn generate_chunk(height_map: &HeightMap, offset: IVec2, resolution: u32) -> ChunkMesh {
-    let step = Terrain::CELLS_PER_CHUNK >> resolution;
-
-    let cells = Terrain::CELLS_PER_CHUNK / step;
-    let mut vertices = Vec::with_capacity(cells as usize * cells as usize);
-
-    for y in (offset.y..=offset.y + Terrain::CELLS_PER_CHUNK as i32).step_by(step as usize) {
-        for x in (offset.x..=offset.x + Terrain::CELLS_PER_CHUNK as i32).step_by(step as usize) {
-            vertices.push(Vertex {
-                position: height_map.position_for_vertex(IVec2 {
-                    x: x as i32,
-                    y: y as i32,
-                }),
-                normal: Vec3::Z,
-                tex_coord: Vec2::new(
-                    x as f32 / height_map.size.x as f32,
-                    y as f32 / height_map.size.y as f32,
-                ),
-            });
-        }
-    }
-
-    let mut indices = Vec::with_capacity(cells as usize * cells as usize * 3);
-    let mut wireframe_indices = Vec::with_capacity(cells as usize * cells as usize * 8);
-    for y in 0..cells {
-        for x in 0..cells {
-            let f0 = y * (cells + 1) + x;
-            let f1 = f0 + 1;
-            let f3 = f1 + cells;
-            let f2 = f3 + 1;
-
-            // 2 tringles for the face.
-            indices.extend_from_slice(&[
-                f0, f1, f2, // 0
-                f2, f3, f0, // 1
-            ]);
-
-            // 4 lines for the wireframe.
-            wireframe_indices.extend_from_slice(&[
-                f0, f1, // 0
-                f1, f2, // 1
-                f2, f3, // 2
-                f3, f0, // 3
-            ]);
-        }
-    }
-
-    ChunkMesh {
-        vertices,
-        indices,
-        wireframe_indices,
-    }
-}
-
-impl Chunk {
-    pub fn new(height_map: &HeightMap, chunk_offset: IVec2, renderer: &Renderer) -> Chunk {
-        let chunk_size = Terrain::CELLS_PER_CHUNK as i32;
-        let min = chunk_offset * chunk_size;
-        let max = min + IVec2::new(chunk_size + 1, chunk_size + 1);
-
-        Self {
-            distance_from_camera: f32::MAX,
-            resolution: Terrain::LOD_MAX,
-            visible: true,
-            bounding_box: BoundingBox {
-                min: height_map.position_for_vertex(IVec2 {
-                    x: min.x as i32,
-                    y: min.y as i32,
-                }),
-                max: height_map.position_for_vertex(IVec2 {
-                    x: max.x as i32,
-                    y: max.y as i32,
-                }),
-            },
-            meshes: [0, 1, 2, 3]
-                .map(|res| generate_chunk(&height_map, min, res).into_gpu(renderer)),
-        }
-    }
-
-    pub fn mesh_at(&self, resolution: u32) -> &GpuChunkMesh {
-        assert!(resolution <= Terrain::LOD_MAX);
-        &self.meshes[resolution as usize]
-    }
-}
-
-pub struct ChunkMesh {
-    vertices: Vec<Vertex>,
-    indices: Vec<u32>,
-    wireframe_indices: Vec<u32>,
-}
-
-impl ChunkMesh {
-    pub fn into_gpu(self, renderer: &Renderer) -> GpuChunkMesh {
-        let vertex_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("terrain_chunk_vertex_buffer"),
-                contents: bytemuck::cast_slice(&self.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-        let index_count = self.indices.len() as u32;
-        let index_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("terrain_chunk_index_buffer"),
-                contents: bytemuck::cast_slice(&self.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-
-        let wireframe_index_count = self.wireframe_indices.len() as u32;
-        let wireframe_index_buffer =
-            renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("terrain_chunk_wireframe_index_buffer"),
-                    contents: bytemuck::cast_slice(&self.wireframe_indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
-
-        GpuChunkMesh {
-            vertex_buffer,
-            index_buffer,
-            index_count,
-            wireframe_index_buffer,
-            wireframe_index_count,
-        }
-    }
-}
-
-pub struct GpuChunkMesh {
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
-    pub index_count: u32,
-    pub wireframe_index_buffer: wgpu::Buffer,
-    pub wireframe_index_count: u32,
-}
-
-struct StrataChunk {
-    gpu_mesh: GpuIndexedMesh,
-}
 
 pub struct Terrain {
     /// Height data for the terrain.
@@ -172,13 +22,14 @@ pub struct Terrain {
     /// Dictates the terrain resolution.
     pub max_view_distance: f32,
 
+    /// Pipeline to render the terrain.
     pipeline: wgpu::RenderPipeline,
+
+    /// Pipeline to render a wireframe over the terrain.
     wireframe_pipeline: wgpu::RenderPipeline,
 
+    /// The texture used to render over the entire terrain.
     terrain_texture_bind_group: wgpu::BindGroup,
-
-    draw_wireframe: bool,
-    draw_normals: bool,
 
     /// A single buffer holding all the vertices for the terrain at the highest LOD level. Vertices
     /// are grouped by chunk, so that index (n * chunk_index_count) == chunk n.
@@ -193,6 +44,8 @@ pub struct Terrain {
     /// Total amount of chunks for the entire terrain.
     total_chunks: u32,
 
+    draw_wireframe: bool,
+    draw_normals: bool,
     lod_level: usize,
 }
 
@@ -344,66 +197,53 @@ impl Terrain {
         };
 
         // Generate indices for each LOD level.
+
         // level 0 = 0..384
         // level 1 = 0..96
         // level 2 = 0..24
         // level 3 = 0..6
-        let chunk_indices_buffer = {
-            let mut indices = Vec::<u32>::default();
+        let mut indices = Vec::<u32>::default();
 
-            for level in 0..=Self::LOD_MAX {
-                let cell_count = Self::CELLS_PER_CHUNK >> level;
-                let scale = 1 << level;
+        // level 0 = 0..512
+        // level 1 = 0..128
+        // level 2 = 0..32
+        // level 3 = 0..8
+        let mut wireframe_indices = Vec::<u32>::default();
 
-                for y in 0..cell_count {
-                    for x in 0..cell_count {
-                        let i0 = (y * Self::VERTICES_PER_CHUNK + x) * scale;
-                        let i1 = (y * Self::VERTICES_PER_CHUNK + (x + 1)) * scale;
-                        let i2 = ((y + 1) * Self::VERTICES_PER_CHUNK + (x + 1)) * scale;
-                        let i3 = ((y + 1) * Self::VERTICES_PER_CHUNK + x) * scale;
+        for level in 0..=Self::LOD_MAX {
+            let cell_count = Self::CELLS_PER_CHUNK >> level;
+            let scale = 1 << level;
 
-                        indices.extend_from_slice(&[i0, i1, i2, i2, i3, i0]);
-                    }
+            for y in 0..cell_count {
+                for x in 0..cell_count {
+                    let i0 = (y * Self::VERTICES_PER_CHUNK + x) * scale;
+                    let i1 = (y * Self::VERTICES_PER_CHUNK + (x + 1)) * scale;
+                    let i2 = ((y + 1) * Self::VERTICES_PER_CHUNK + (x + 1)) * scale;
+                    let i3 = ((y + 1) * Self::VERTICES_PER_CHUNK + x) * scale;
+
+                    indices.extend_from_slice(&[i0, i1, i2, i2, i3, i0]);
+                    wireframe_indices.extend_from_slice(&[i0, i1, i1, i2, i2, i3, i3, i0]);
                 }
             }
+        }
 
+        let chunk_indices_buffer =
             renderer
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("terrain_chunk_indices"),
                     contents: bytemuck::cast_slice(&indices),
                     usage: wgpu::BufferUsages::INDEX,
-                })
-        };
+                });
 
-        let chunk_wireframe_indices_buffer = {
-            let mut indices = Vec::<u32>::default();
-
-            for level in 0..=Self::LOD_MAX {
-                let cell_count = Self::CELLS_PER_CHUNK >> level;
-                let scale = 1 << level;
-
-                for y in 0..cell_count {
-                    for x in 0..cell_count {
-                        let i0 = (y * Self::VERTICES_PER_CHUNK + x) * scale;
-                        let i1 = (y * Self::VERTICES_PER_CHUNK + (x + 1)) * scale;
-                        let i2 = ((y + 1) * Self::VERTICES_PER_CHUNK + (x + 1)) * scale;
-                        let i3 = ((y + 1) * Self::VERTICES_PER_CHUNK + x) * scale;
-
-                        indices.extend_from_slice(&[i0, i1, i1, i2, i2, i3, i3, i0]);
-                    }
-                }
-                println!("size: {}", indices.len());
-            }
-
+        let chunk_wireframe_indices_buffer =
             renderer
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("terrain_chunk_writeframe_indices"),
-                    contents: bytemuck::cast_slice(&indices),
+                    contents: bytemuck::cast_slice(&wireframe_indices),
                     usage: wgpu::BufferUsages::INDEX,
-                })
-        };
+                });
 
         Ok(Self {
             height_map,
@@ -425,31 +265,6 @@ impl Terrain {
 
             lod_level: 0,
         })
-    }
-
-    fn generate_chunk_vertices(height_map: &HeightMap, offset: IVec2) -> Vec<Vertex> {
-        // chunk sizes: 8 >> 4 >> 2 >> 1
-        // 9 * 9 + 5 * 5 + 3 * 3 + 2 * 2 == 81 + 25 + 9 + 4 == 119
-
-        let mut vertices = Vec::with_capacity((0..=Self::LOD_MAX).fold(0, |c, i| {
-            let v = (1 << i) + 1;
-            c + v * v
-        }));
-
-        let size = Vec2::new(height_map.size.x as f32, height_map.size.y as f32);
-
-        for y in offset.y..=offset.y + Self::CELLS_PER_CHUNK as i32 {
-            for x in offset.x..=offset.x + Self::CELLS_PER_CHUNK as i32 {
-                let position = height_map.position_for_vertex(IVec2::new(x, y));
-                vertices.push(Vertex {
-                    position,
-                    normal: Vec3::Z, // TODO: Get the normal from the height map.
-                    tex_coord: Vec2::new(x as f32 / size.x, y as f32 / size.y),
-                });
-            }
-        }
-
-        vertices
     }
 
     pub fn update(&mut self, _camera: &Camera) {
@@ -535,29 +350,44 @@ impl Terrain {
 
         ui.add(DragValue::new(&mut self.max_view_distance).speed(10.0));
 
-        for i in 0..4 {
+        for level in 0..=Self::LOD_MAX as usize {
             if ui
                 .add(egui::widgets::RadioButton::new(
-                    self.lod_level == i,
-                    format!("level {i}"),
+                    self.lod_level == level,
+                    format!("level {level}"),
                 ))
                 .clicked()
             {
-                self.lod_level = i;
+                self.lod_level = level;
+            }
+        }
+    }
+}
+
+impl Terrain {
+    /// Generate a list of vertices for a chunk at [offset].
+    fn generate_chunk_vertices(height_map: &HeightMap, offset: IVec2) -> Vec<Vertex> {
+        // chunk sizes: 8 >> 4 >> 2 >> 1
+        // 9 * 9 + 5 * 5 + 3 * 3 + 2 * 2 == 81 + 25 + 9 + 4 == 119
+
+        let mut vertices = Vec::with_capacity((0..=Self::LOD_MAX).fold(0, |c, i| {
+            let v = (1 << i) + 1;
+            c + v * v
+        }));
+
+        let size = Vec2::new(height_map.size.x as f32, height_map.size.y as f32);
+
+        for y in offset.y..=offset.y + Self::CELLS_PER_CHUNK as i32 {
+            for x in offset.x..=offset.x + Self::CELLS_PER_CHUNK as i32 {
+                let position = height_map.position_for_vertex(IVec2::new(x, y));
+                vertices.push(Vertex {
+                    position,
+                    normal: Vec3::Z, // TODO: Get the normal from the height map.
+                    tex_coord: Vec2::new(x as f32 / size.x, y as f32 / size.y),
+                });
             }
         }
 
-        // egui::Grid::new("terrain_data").show(ui, |ui| {
-        //     ui.label("terrain mapping size");
-        //     ui.label(format!("{} x {}", self.map_dx, self.map_dy));
-        //     ui.end_row();
-
-        //     ui.label("nominal edge size");
-        //     ui.label(format!("{}", self.nominal_edge_size));
-        //     ui.end_row();
-
-        //     ui.label("altitude map height base");
-        //     ui.label(format!("{}", self.altitude_map_height_base));
-        // });
+        vertices
     }
 }
