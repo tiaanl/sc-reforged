@@ -44,6 +44,7 @@ impl Fog {
     fn from_params(params: &[&str]) -> Self {
         // Defaults are from training_final.mtf
         // GAME_CONFIG_FOG_ENABLED 0.419306 0.418611 0.437222 0.000000 13300.000000
+        // TODO: There are defaults in the .exe.
         Self {
             start: params[4].parse().unwrap_or(0.0),
             end: params[5].parse().unwrap_or(13_300.0),
