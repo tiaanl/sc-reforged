@@ -148,7 +148,6 @@ impl Objects {
                 );
 
                 object.visible = model.bounding_boxes.iter().any(|bounding_box| {
-                    //
                     let transform = object_transform * bounding_box.model_transform;
                     let bbox = BoundingBox {
                         min: (transform * bounding_box.min.extend(1.0)).xyz(),
@@ -180,7 +179,6 @@ impl Objects {
 
             for mesh in model.meshes.iter() {
                 let transform = entity_transform * mesh.model_transform;
-                // gv.append(&mut GizmosRenderer::create_axis(&transform, 100.0));
 
                 // We can use the squared distance here, because we only use it for sorting.
                 let mesh_position = transform.col(3);

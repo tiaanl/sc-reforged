@@ -4,7 +4,7 @@ use crate::engine::prelude::*;
 
 use super::{
     asset_loader::{AssetError, AssetLoader},
-    mesh_renderer::TexturedMesh,
+    mesh_renderer::{Texture, TexturedMesh},
 };
 
 pub type NodeIndex = usize;
@@ -190,7 +190,10 @@ impl Model {
 
         let mesh = TexturedMesh {
             gpu_mesh,
-            texture: bind_group,
+            texture: Texture {
+                bind_group,
+                translucent: true, // TODO: Detect whether we want to use translucency.
+            },
         };
 
         Ok(mesh)

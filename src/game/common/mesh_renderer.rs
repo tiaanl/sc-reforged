@@ -5,11 +5,18 @@ use crate::engine::prelude::*;
 
 use super::model::Model;
 
+/// A texture bind group with meta data.
+#[derive(Debug)]
+pub struct Texture {
+    pub bind_group: wgpu::BindGroup,
+    pub translucent: bool,
+}
+
 /// A mesh containing gpu resources that we can render.
 #[derive(Debug)]
 pub struct TexturedMesh {
     pub gpu_mesh: GpuIndexedMesh,
-    pub texture: wgpu::BindGroup,
+    pub texture: Texture,
 }
 
 impl Asset for TexturedMesh {}
@@ -185,7 +192,7 @@ impl MeshRenderer {
                 mesh.gpu_mesh.index_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, &mesh.texture, &[]);
+            render_pass.set_bind_group(0, &mesh.texture.bind_group, &[]);
             render_pass.set_bind_group(1, camera_bind_group, &[]);
             render_pass.set_bind_group(2, fog_bind_group, &[]);
             render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..1);
