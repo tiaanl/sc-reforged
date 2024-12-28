@@ -583,8 +583,8 @@ impl Scene for WorldScene {
             if let Some(fog) = &mut self.fog {
                 ui.horizontal(|ui| {
                     ui.label("Fog");
-                    ui.add(DragValue::new(&mut fog.start));
-                    ui.add(DragValue::new(&mut fog.end));
+                    ui.add(DragValue::new(&mut fog.start).speed(10));
+                    ui.add(DragValue::new(&mut fog.end).speed(10));
                 });
                 ui.horizontal(|ui| {
                     ui.label("Color");

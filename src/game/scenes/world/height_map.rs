@@ -1,22 +1,14 @@
-use glam::{IVec2, UVec2, Vec2, Vec3};
-use wgpu::util::DeviceExt;
-
-use super::{Renderer, Vertex};
+use glam::{IVec2, UVec2, Vec3};
 
 pub struct HeightMap {
     pub edge_size: f32,
     pub elevation_base: f32,
 
     pub size: UVec2,
-    pub heights: Vec<u32>,
+    pub elevations: Vec<u32>,
 }
 
 impl HeightMap {
-    pub const MAX_RESOLUTION: u32 = 3;
-
-    /// 8 cells per chunk (9x9 vertices).
-    pub const CHUNK_SIZE: u32 = 1 << Self::MAX_RESOLUTION;
-
     pub fn from_reader<R>(
         edge_size: f32,
         elevation_base: f32,
@@ -34,12 +26,8 @@ impl HeightMap {
                 x: data.width,
                 y: data.height,
             },
-            heights: data.data,
+            elevations: data.data,
         })
-    }
-
-    pub fn chunks(&self) -> UVec2 {
-        self.size / Self::CHUNK_SIZE
     }
 
     /// Return the world position of the specified height map coordinate.
@@ -47,127 +35,20 @@ impl HeightMap {
     /// NOTE: Coordinates outside the height map area will return the value of the nearest edge
     ///       coordinate. This will cause all the far edges of the heightmap to have a single flat
     ///       cell on the map edge. This is to replicate behavious on the original.
-    pub fn height_at_position(&self, pos: IVec2) -> Vec3 {
+    pub fn position_for_vertex(&self, pos: IVec2) -> Vec3 {
         let IVec2 { x, y } = pos;
 
         // Clamp to the available data.
         let index = y.max(0).min(self.size.y as i32 - 1) as usize * self.size.x as usize
             + x.max(0).min(self.size.x as i32 - 1) as usize;
 
-        let elevation = (self.heights[index] as usize & 0xFF) as f32 * self.elevation_base;
+        let elevation = (self.elevations[index] as usize & 0xFF) as f32 * self.elevation_base;
         Vec3::new(
             x as f32 * self.edge_size,
             y as f32 * self.edge_size,
             elevation,
         )
     }
-
-    pub fn generate_chunk(&self, offset: UVec2, resolution: u32) -> ChunkMesh {
-        let step = Self::CHUNK_SIZE >> resolution;
-
-        let cells = Self::CHUNK_SIZE / step;
-        let mut vertices = Vec::with_capacity(cells as usize * cells as usize);
-
-        for y in (offset.y..=offset.y + Self::CHUNK_SIZE).step_by(step as usize) {
-            for x in (offset.x..=offset.x + Self::CHUNK_SIZE).step_by(step as usize) {
-                vertices.push(Vertex {
-                    position: self.height_at_position(IVec2 {
-                        x: x as i32,
-                        y: y as i32,
-                    }),
-                    normal: Vec3::Z,
-                    tex_coord: Vec2::new(
-                        x as f32 / self.size.x as f32,
-                        y as f32 / self.size.y as f32,
-                    ),
-                });
-            }
-        }
-
-        let mut indices = Vec::with_capacity(cells as usize * cells as usize * 3);
-        let mut wireframe_indices = Vec::with_capacity(cells as usize * cells as usize * 8);
-        for y in 0..cells {
-            for x in 0..cells {
-                let f0 = y * (cells + 1) + x;
-                let f1 = f0 + 1;
-                let f3 = f1 + cells;
-                let f2 = f3 + 1;
-
-                // 2 tringles for the face.
-                indices.extend_from_slice(&[
-                    f0, f1, f2, // 0
-                    f2, f3, f0, // 1
-                ]);
-
-                // 4 lines for the wireframe.
-                wireframe_indices.extend_from_slice(&[
-                    f0, f1, // 0
-                    f1, f2, // 1
-                    f2, f3, // 2
-                    f3, f0, // 3
-                ]);
-            }
-        }
-
-        ChunkMesh {
-            vertices,
-            indices,
-            wireframe_indices,
-        }
-    }
-}
-
-pub struct ChunkMesh {
-    vertices: Vec<Vertex>,
-    indices: Vec<u32>,
-    wireframe_indices: Vec<u32>,
-}
-
-impl ChunkMesh {
-    pub fn into_gpu(self, renderer: &Renderer) -> GpuChunkMesh {
-        let vertex_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("terrain_chunk_vertex_buffer"),
-                contents: bytemuck::cast_slice(&self.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-        let index_count = self.indices.len() as u32;
-        let index_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("terrain_chunk_index_buffer"),
-                contents: bytemuck::cast_slice(&self.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-
-        let wireframe_index_count = self.wireframe_indices.len() as u32;
-        let wireframe_index_buffer =
-            renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("terrain_chunk_wireframe_index_buffer"),
-                    contents: bytemuck::cast_slice(&self.wireframe_indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
-
-        GpuChunkMesh {
-            vertex_buffer,
-            index_buffer,
-            index_count,
-            wireframe_index_buffer,
-            wireframe_index_count,
-        }
-    }
-}
-
-pub struct GpuChunkMesh {
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
-    pub index_count: u32,
-    pub wireframe_index_buffer: wgpu::Buffer,
-    pub wireframe_index_count: u32,
 }
 
 mod pcx {
