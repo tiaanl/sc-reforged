@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-use super::height_map::HeightMap;
+use super::{height_map::HeightMap, water::Water};
 
 pub struct Terrain {
     /// Height data for the terrain.
@@ -59,6 +59,8 @@ pub struct Terrain {
     draw_wireframe: bool,
     draw_normals: bool,
     lod_level: usize,
+
+    water: Water,
 }
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -101,7 +103,7 @@ impl Terrain {
     pub const VERTICES_PER_CHUNK: u32 = Self::CELLS_PER_CHUNK + 1;
 
     pub fn new(
-        assets: &AssetLoader,
+        asset_loader: &AssetLoader,
         renderer: &Renderer,
         shaders: &mut Shaders,
         campaign_def: &CampaignDef,
@@ -114,6 +116,7 @@ impl Terrain {
             map_dy,
             nominal_edge_size,
             texture_map_base_name,
+            water_level,
             ..
         } = {
             let path = PathBuf::from("textures")
@@ -121,15 +124,17 @@ impl Terrain {
                 .join(&campaign_def.base_name)
                 .join("terrain_mapping.txt");
             info!("Loading terrain mapping: {}", path.display());
-            assets.load_config::<TerrainMapping>(&path)?
+            asset_loader.load_config::<TerrainMapping>(&path)?
         };
+
+        let water_level = water_level * altitude_map_height_base;
 
         let terrain_texture_bind_group = {
             let path = format!("trnhigh/{}.jpg", texture_map_base_name);
             info!("Loading high detail terrain texture: {path}");
 
-            let handle = assets.load_jpeg(path)?;
-            let image = assets
+            let handle = asset_loader.load_jpeg(path)?;
+            let image = asset_loader
                 .asset_store()
                 .get(handle)
                 .expect("Just loaded successfully.");
@@ -152,7 +157,7 @@ impl Terrain {
 
             let path = format!("maps/{}.pcx", campaign_def.base_name); // TODO: Get the name of the map from the [CampaignDef].
             info!("Loading terrain height map: {path}");
-            let data = assets.load_raw(path)?;
+            let data = asset_loader.load_raw(path)?;
             let mut reader = std::io::Cursor::new(data);
             HeightMap::from_reader(nominal_edge_size, altitude_map_height_base, &mut reader)
                 .map_err(|_| AssetError::Custom("Could not load height map data.".to_string()))?
@@ -394,6 +399,19 @@ impl Terrain {
                     cache: None,
                 });
 
+        let water = Water::new(
+            asset_loader,
+            renderer,
+            shaders,
+            camera_bind_group_layout,
+            fog_bind_group_layout,
+            Vec2::new(
+                height_map.size.x as f32 * height_map.edge_size,
+                height_map.size.y as f32 * height_map.edge_size,
+            ),
+            water_level,
+        )?;
+
         Ok(Self {
             height_map,
 
@@ -417,6 +435,8 @@ impl Terrain {
             total_chunks,
 
             lod_level: 0,
+
+            water,
         })
     }
 
@@ -466,6 +486,8 @@ impl Terrain {
         if self.draw_wireframe {
             self.render_wireframe(encoder, surface, camera_bind_group, fog_bind_group);
         }
+
+        self.water.render(frame, camera_bind_group, fog_bind_group);
     }
 
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {

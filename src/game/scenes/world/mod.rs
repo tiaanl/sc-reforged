@@ -20,6 +20,7 @@ mod bounding_boxes;
 mod height_map;
 mod objects;
 mod terrain;
+mod water;
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
@@ -113,6 +114,7 @@ pub struct WorldScene {
 
     terrain: Terrain,
     objects: objects::Objects,
+
     fog: Option<Fog>,
     gpu_fog: GpuFog,
 
