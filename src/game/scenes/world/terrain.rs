@@ -449,99 +449,22 @@ impl Terrain {
         camera_bind_group: &wgpu::BindGroup,
         fog_bind_group: &wgpu::BindGroup,
     ) {
-        // Run the process_chunks compute shader.
-        {
-            // Create the bind group
-            let process_chunks_bind_group =
-                frame.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("process_chunks"),
-                    layout: &self.process_chunks_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: self.chunk_data_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: self.chunk_draw_commands_buffer.as_entire_binding(),
-                        },
-                    ],
-                });
+        let device = &frame.device;
+        let queue = &frame.queue;
+        let encoder = &mut frame.encoder;
+        let surface = &frame.surface;
+        let depth_texture = &frame.depth_texture;
 
-            let mut encoder =
-                frame
-                    .device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("process_chunks_encoder"),
-                    });
-
-            {
-                let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("process_chunks"),
-                    timestamp_writes: None,
-                });
-                compute_pass.set_pipeline(&self.process_chunks_pipeline);
-                compute_pass.set_bind_group(0, camera_bind_group, &[]);
-                compute_pass.set_bind_group(1, &process_chunks_bind_group, &[]);
-                compute_pass.dispatch_workgroups((self.total_chunks as u32 + 63) / 64, 1, 1);
-            }
-
-            frame.queue.submit(std::iter::once(encoder.finish()));
-        }
-
-        {
-            let mut render_pass = frame.begin_basic_render_pass("terrain_render_pass", true);
-
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_vertex_buffer(0, self.vertices_buffer.slice(..));
-            render_pass.set_index_buffer(
-                self.chunk_indices_buffer.slice(..),
-                wgpu::IndexFormat::Uint32,
-            );
-            render_pass.set_bind_group(0, &self.terrain_texture_bind_group, &[]);
-            render_pass.set_bind_group(1, camera_bind_group, &[]);
-            render_pass.set_bind_group(2, fog_bind_group, &[]);
-
-            render_pass.multi_draw_indexed_indirect(
-                &self.chunk_draw_commands_buffer,
-                0,
-                self.total_chunks,
-            );
-
-            /*
-            let levels = [0..384, 384..480, 480..504, 504..510];
-            for chunk_index in 0..self.total_chunks as i32 {
-                render_pass.draw_indexed(
-                    levels[self.lod_level].clone(),
-                    chunk_index * (Self::VERTICES_PER_CHUNK * Self::VERTICES_PER_CHUNK) as i32,
-                    0..1,
-                );
-            }
-            */
-        }
-
+        self.process_chunks(device, queue, camera_bind_group);
+        self.render_chunks(
+            encoder,
+            surface,
+            depth_texture,
+            camera_bind_group,
+            fog_bind_group,
+        );
         if self.draw_wireframe {
-            let mut render_pass =
-                frame.begin_basic_render_pass("terrain_wireframe_render_pass", false);
-
-            render_pass.set_pipeline(&self.wireframe_pipeline);
-            render_pass.set_vertex_buffer(0, self.vertices_buffer.slice(..));
-            render_pass.set_index_buffer(
-                self.chunk_wireframe_indices_buffer.slice(..),
-                wgpu::IndexFormat::Uint32,
-            );
-            render_pass.set_bind_group(0, &self.terrain_texture_bind_group, &[]);
-            render_pass.set_bind_group(1, camera_bind_group, &[]);
-            render_pass.set_bind_group(2, fog_bind_group, &[]);
-
-            let levels = [0..512, 512..640, 640..672, 672..680];
-            for chunk_index in 0..self.total_chunks as i32 {
-                render_pass.draw_indexed(
-                    levels[self.lod_level].clone(),
-                    chunk_index * (Self::VERTICES_PER_CHUNK * Self::VERTICES_PER_CHUNK) as i32,
-                    0..1,
-                );
-            }
+            self.render_wireframe(encoder, surface, camera_bind_group, fog_bind_group);
         }
     }
 
@@ -589,5 +512,147 @@ impl Terrain {
         }
 
         vertices
+    }
+
+    /// Run the process_chunks compute shader to cull chunks not in the camera frustum and to set
+    /// the LOD level.
+    fn process_chunks(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        // Create the bind group
+        let process_chunks_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("process_chunks"),
+            layout: &self.process_chunks_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.chunk_data_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: self.chunk_draw_commands_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("process_chunks_encoder"),
+        });
+
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("process_chunks"),
+                timestamp_writes: None,
+            });
+            compute_pass.set_pipeline(&self.process_chunks_pipeline);
+            compute_pass.set_bind_group(0, camera_bind_group, &[]);
+            compute_pass.set_bind_group(1, &process_chunks_bind_group, &[]);
+            compute_pass.dispatch_workgroups((self.total_chunks as u32 + 63) / 64, 1, 1);
+        }
+
+        queue.submit(std::iter::once(encoder.finish()));
+    }
+
+    fn render_chunks(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        surface: &wgpu::TextureView,
+        depth_texture: &wgpu::TextureView,
+        camera_bind_group: &wgpu::BindGroup,
+        fog_bind_group: &wgpu::BindGroup,
+    ) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("terrain_chunks"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: surface,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: depth_texture,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_vertex_buffer(0, self.vertices_buffer.slice(..));
+        render_pass.set_index_buffer(
+            self.chunk_indices_buffer.slice(..),
+            wgpu::IndexFormat::Uint32,
+        );
+        render_pass.set_bind_group(0, &self.terrain_texture_bind_group, &[]);
+        render_pass.set_bind_group(1, camera_bind_group, &[]);
+        render_pass.set_bind_group(2, fog_bind_group, &[]);
+
+        render_pass.multi_draw_indexed_indirect(
+            &self.chunk_draw_commands_buffer,
+            0,
+            self.total_chunks,
+        );
+
+        /*
+        let levels = [0..384, 384..480, 480..504, 504..510];
+        for chunk_index in 0..self.total_chunks as i32 {
+            render_pass.draw_indexed(
+                levels[self.lod_level].clone(),
+                chunk_index * (Self::VERTICES_PER_CHUNK * Self::VERTICES_PER_CHUNK) as i32,
+                0..1,
+            );
+        }
+        */
+    }
+
+    fn render_wireframe(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        surface: &wgpu::TextureView,
+        camera_bind_group: &wgpu::BindGroup,
+        fog_bind_group: &wgpu::BindGroup,
+    ) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("terrain_chunks"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: surface,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        render_pass.set_pipeline(&self.wireframe_pipeline);
+        render_pass.set_vertex_buffer(0, self.vertices_buffer.slice(..));
+        render_pass.set_index_buffer(
+            self.chunk_wireframe_indices_buffer.slice(..),
+            wgpu::IndexFormat::Uint32,
+        );
+        render_pass.set_bind_group(0, &self.terrain_texture_bind_group, &[]);
+        render_pass.set_bind_group(1, camera_bind_group, &[]);
+        render_pass.set_bind_group(2, fog_bind_group, &[]);
+
+        let levels = [0..512, 512..640, 640..672, 672..680];
+        for chunk_index in 0..self.total_chunks as i32 {
+            render_pass.draw_indexed(
+                levels[self.lod_level].clone(),
+                chunk_index * (Self::VERTICES_PER_CHUNK * Self::VERTICES_PER_CHUNK) as i32,
+                0..1,
+            );
+        }
     }
 }
