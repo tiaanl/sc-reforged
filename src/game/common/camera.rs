@@ -230,6 +230,7 @@ struct RawCamera {
     proj: Mat4,
     view: Mat4,
     position: Vec4,
+    frustum: [Vec4; 6],
 }
 
 pub struct GpuCamera {
@@ -257,7 +258,7 @@ impl GpuCamera {
                     label: Some("camera_bind_group_layout"),
                     entries: &[wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        visibility: wgpu::ShaderStages::all(),
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -286,10 +287,15 @@ impl GpuCamera {
     }
 
     pub fn upload_matrices(&self, queue: &wgpu::Queue, matrices: &Matrices, position: Vec3) {
+        let frustum = Frustum::from_matrices(matrices);
+
         let raw_camera = RawCamera {
             proj: matrices.projection,
             view: matrices.view,
             position: position.extend(1.0),
+            frustum: frustum
+                .planes
+                .map(|p| Vec4::new(p.normal.x, p.normal.y, p.normal.z, p.distance)),
         };
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[raw_camera]));
     }

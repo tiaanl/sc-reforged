@@ -489,18 +489,18 @@ impl Scene for WorldScene {
         self.terrain
             .render(frame, &self.gpu_camera.bind_group, &self.gpu_fog.bind_group);
 
-        // self.objects.render_objects(
-        //     frame,
-        //     &self.gpu_camera.bind_group,
-        //     &self.gpu_fog.bind_group,
-        //     &self.gizmos_renderer,
-        // );
+        self.objects.render_objects(
+            frame,
+            &self.gpu_camera.bind_group,
+            &self.gpu_fog.bind_group,
+            &self.gizmos_renderer,
+        );
 
-        // self.gizmos_renderer.render_frame(
-        //     frame,
-        //     &self.gpu_camera.bind_group,
-        //     &self.gizmos_vertices,
-        // );
+        self.gizmos_renderer.render_frame(
+            frame,
+            &self.gpu_camera.bind_group,
+            &self.gizmos_vertices,
+        );
     }
 
     fn end_frame(&mut self) {

@@ -465,7 +465,7 @@ impl Renderer {
 
 pub struct Frame {
     pub device: RenderDevice,
-    pub _queue: RenderQueue,
+    pub queue: RenderQueue,
     pub depth_texture: Arc<wgpu::TextureView>,
 
     /// The encoder to use for creating render passes.

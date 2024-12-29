@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
 use glam::{IVec2, UVec2};
 use tracing::info;
@@ -28,6 +28,12 @@ pub struct Terrain {
     /// Pipeline to render a wireframe over the terrain.
     wireframe_pipeline: wgpu::RenderPipeline,
 
+    /// Pipeline that calculates LOD for each chunk and culls them in the camera frustum.
+    process_chunks_pipeline: wgpu::ComputePipeline,
+
+    /// Bind group layout with all the data required by the pipeline.
+    process_chunks_bind_group_layout: wgpu::BindGroupLayout,
+
     /// The texture used to render over the entire terrain.
     terrain_texture_bind_group: wgpu::BindGroup,
 
@@ -45,7 +51,7 @@ pub struct Terrain {
     chunk_data_buffer: wgpu::Buffer,
 
     /// Buffer holding indirect draw data for each chunk that needs rendering per frame.
-    chunk_indirect_draw_calls_buffer: wgpu::Buffer,
+    chunk_draw_commands_buffer: wgpu::Buffer,
 
     /// Total amount of chunks for the entire terrain.
     total_chunks: u32,
@@ -59,7 +65,9 @@ pub struct Terrain {
 #[repr(C)]
 struct ChunkData {
     min: Vec3,
+    _padding1: f32,
     max: Vec3,
+    _padding2: f32,
 }
 
 /// Fields copied from [wgpu::util::DrawIndexedIndirectArgs], but wgpu doesn't support bytemuck.
@@ -230,7 +238,12 @@ impl Terrain {
                     }
                 }
 
-                chunk_data.push(ChunkData { min, max });
+                chunk_data.push(ChunkData {
+                    min,
+                    _padding1: 0.0,
+                    max,
+                    _padding2: 0.0,
+                });
             }
         }
 
@@ -312,13 +325,73 @@ impl Terrain {
             })
             .collect::<Vec<_>>();
 
-        let chunk_indirect_draw_calls_buffer =
+        let chunk_draw_commands_buffer =
             renderer
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("terrain_chunk_indirect"),
                     contents: bytemuck::cast_slice(&chunk_indirect_commands),
-                    usage: wgpu::BufferUsages::INDIRECT,
+                    usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
+                });
+
+        let process_chunks_bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("process_chunks"),
+                    entries: &[
+                        // u_chunk_data
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        // u_draw_commands
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+
+        let module = renderer
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("process_chunks"),
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                    "process_chunks.wgsl"
+                ))),
+            });
+
+        let layout = renderer
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("terrain_process_chunks"),
+                bind_group_layouts: &[camera_bind_group_layout, &process_chunks_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
+        let process_chunks_pipeline =
+            renderer
+                .device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("process_chunks"),
+                    layout: Some(&layout),
+                    module: &module,
+                    entry_point: "main",
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    cache: None,
                 });
 
         Ok(Self {
@@ -328,6 +401,8 @@ impl Terrain {
 
             pipeline,
             wireframe_pipeline,
+            process_chunks_pipeline,
+            process_chunks_bind_group_layout,
 
             terrain_texture_bind_group,
 
@@ -338,7 +413,7 @@ impl Terrain {
             chunk_indices_buffer,
             chunk_wireframe_indices_buffer,
             chunk_data_buffer,
-            chunk_indirect_draw_calls_buffer,
+            chunk_draw_commands_buffer,
             total_chunks,
 
             lod_level: 0,
@@ -374,6 +449,46 @@ impl Terrain {
         camera_bind_group: &wgpu::BindGroup,
         fog_bind_group: &wgpu::BindGroup,
     ) {
+        // Run the process_chunks compute shader.
+        {
+            // Create the bind group
+            let process_chunks_bind_group =
+                frame.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("process_chunks"),
+                    layout: &self.process_chunks_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: self.chunk_data_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: self.chunk_draw_commands_buffer.as_entire_binding(),
+                        },
+                    ],
+                });
+
+            let mut encoder =
+                frame
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("process_chunks_encoder"),
+                    });
+
+            {
+                let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("process_chunks"),
+                    timestamp_writes: None,
+                });
+                compute_pass.set_pipeline(&self.process_chunks_pipeline);
+                compute_pass.set_bind_group(0, camera_bind_group, &[]);
+                compute_pass.set_bind_group(1, &process_chunks_bind_group, &[]);
+                compute_pass.dispatch_workgroups((self.total_chunks as u32 + 63) / 64, 1, 1);
+            }
+
+            frame.queue.submit(std::iter::once(encoder.finish()));
+        }
+
         {
             let mut render_pass = frame.begin_basic_render_pass("terrain_render_pass", true);
 
@@ -388,7 +503,7 @@ impl Terrain {
             render_pass.set_bind_group(2, fog_bind_group, &[]);
 
             render_pass.multi_draw_indexed_indirect(
-                &self.chunk_indirect_draw_calls_buffer,
+                &self.chunk_draw_commands_buffer,
                 0,
                 self.total_chunks,
             );
