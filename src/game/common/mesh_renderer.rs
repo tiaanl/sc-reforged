@@ -120,7 +120,11 @@ impl MeshRenderer {
                         polygon_mode: wgpu::PolygonMode::Fill,
                         ..Default::default()
                     },
-                    depth_stencil: renderer.depth_stencil_state(wgpu::CompareFunction::Less),
+                    depth_stencil: Some(
+                        renderer
+                            .depth_buffer
+                            .depth_stencil_state(wgpu::CompareFunction::Less),
+                    ),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &shader_module,

@@ -243,7 +243,7 @@ impl winit::application::ApplicationHandler for App {
                         let mut frame = Frame {
                             device: renderer.device.clone(),
                             queue: renderer.queue.clone(),
-                            depth_texture: renderer.depth_texture.clone(),
+                            depth_buffer: renderer.depth_buffer.clone(),
                             encoder,
                             surface,
                         };

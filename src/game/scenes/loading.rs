@@ -63,7 +63,7 @@ impl Scene for LoadingScene {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &frame.depth_texture,
+                    view: &frame.depth_buffer.texture_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
                         store: wgpu::StoreOp::Store,

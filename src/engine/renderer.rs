@@ -2,6 +2,8 @@ use std::{ops::Deref, sync::Arc};
 
 use wgpu::util::DeviceExt;
 
+use crate::DepthBuffer;
+
 use super::mip_maps::MipMaps;
 
 #[derive(Clone)]
@@ -44,7 +46,7 @@ pub struct Renderer {
     pub surface: wgpu::Surface<'static>,
     pub surface_config: wgpu::SurfaceConfiguration,
 
-    pub depth_texture: Arc<wgpu::TextureView>,
+    pub depth_buffer: Arc<DepthBuffer>,
 
     /// A bind group layout used for all texture bind groups.
     texture_bind_group_layout: wgpu::BindGroupLayout,
@@ -77,7 +79,7 @@ where
     vertex_entry: Option<&'a str>,
     fragment_entry: Option<&'a str>,
     primitive: Option<wgpu::PrimitiveState>,
-    depth_buffer: bool,
+    use_depth_buffer: bool,
     depth_compare_function: Option<wgpu::CompareFunction>,
     blend_state: Option<wgpu::BlendState>,
 
@@ -98,7 +100,7 @@ where
             vertex_entry: None,
             fragment_entry: None,
             primitive: None,
-            depth_buffer: true,
+            use_depth_buffer: true,
             depth_compare_function: None,
             blend_state: None,
 
@@ -127,7 +129,7 @@ where
     }
 
     pub fn disable_depth_buffer(mut self) -> Self {
-        self.depth_buffer = false;
+        self.use_depth_buffer = false;
         self
     }
 
@@ -144,7 +146,6 @@ where
 
 impl Renderer {
     const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
-    const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
     pub fn new(window: Arc<winit::window::Window>) -> Self {
         let winit::dpi::PhysicalSize { width, height } = window.inner_size();
@@ -195,7 +196,7 @@ impl Renderer {
 
         surface.configure(&device, &surface_config);
 
-        let depth_texture = Arc::new(Self::create_depth_texture(&device, &surface_config));
+        let depth_texture = Arc::new(DepthBuffer::new(&device, &surface_config));
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -227,7 +228,7 @@ impl Renderer {
             queue: queue.into(),
             surface,
             surface_config,
-            depth_texture,
+            depth_buffer: depth_texture,
             texture_bind_group_layout,
             mip_maps,
         }
@@ -236,10 +237,7 @@ impl Renderer {
     pub fn resize(&mut self, width: u32, height: u32) {
         self.surface_config.width = width;
         self.surface_config.height = height;
-        self.depth_texture = Arc::new(Self::create_depth_texture(
-            &self.device,
-            &self.surface_config,
-        ));
+        self.depth_buffer = Arc::new(DepthBuffer::new(&self.device, &self.surface_config));
         self.surface.configure(&self.device, &self.surface_config);
     }
 
@@ -306,11 +304,13 @@ impl Renderer {
                     buffers: B::vertex_buffers(),
                 },
                 primitive: config.primitive.unwrap_or_default(),
-                depth_stencil: if config.depth_buffer {
-                    self.depth_stencil_state(
-                        config
-                            .depth_compare_function
-                            .unwrap_or(wgpu::CompareFunction::LessEqual),
+                depth_stencil: if config.use_depth_buffer {
+                    Some(
+                        self.depth_buffer.depth_stencil_state(
+                            config
+                                .depth_compare_function
+                                .unwrap_or(wgpu::CompareFunction::LessEqual),
+                        ),
                     )
                 } else {
                     None
@@ -423,50 +423,10 @@ impl Renderer {
 }
 
 /// Depth texture.
-impl Renderer {
-    fn create_depth_texture(
-        device: &wgpu::Device,
-        surface_config: &wgpu::SurfaceConfiguration,
-    ) -> wgpu::TextureView {
-        let texture = device.create_texture(
-            &(wgpu::TextureDescriptor {
-                label: Some("depth_texture"),
-                size: wgpu::Extent3d {
-                    width: surface_config.width.max(1),
-                    height: surface_config.height.max(1),
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: Self::DEPTH_TEXTURE_FORMAT,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            }),
-        );
-
-        texture.create_view(&wgpu::TextureViewDescriptor::default())
-    }
-
-    pub fn depth_stencil_state(
-        &self,
-        depth_compare: wgpu::CompareFunction,
-    ) -> Option<wgpu::DepthStencilState> {
-        Some(wgpu::DepthStencilState {
-            format: Self::DEPTH_TEXTURE_FORMAT,
-            depth_write_enabled: true,
-            depth_compare,
-            stencil: wgpu::StencilState::default(),
-            bias: wgpu::DepthBiasState::default(),
-        })
-    }
-}
-
 pub struct Frame {
     pub device: RenderDevice,
     pub queue: RenderQueue,
-    pub depth_texture: Arc<wgpu::TextureView>,
+    pub depth_buffer: Arc<DepthBuffer>,
 
     /// The encoder to use for creating render passes.
     pub encoder: wgpu::CommandEncoder,
@@ -488,7 +448,7 @@ impl Frame {
                 },
             })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: self.depth_texture.as_ref(),
+                view: &self.depth_buffer.texture_view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(depth),
                     store: wgpu::StoreOp::Store,
@@ -513,7 +473,7 @@ impl Frame {
             })],
             depth_stencil_attachment: if depth_test {
                 Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture,
+                    view: &self.depth_buffer.texture_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,

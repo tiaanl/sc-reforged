@@ -473,7 +473,7 @@ impl Terrain {
         let queue = &frame.queue;
         let encoder = &mut frame.encoder;
         let surface = &frame.surface;
-        let depth_texture = &frame.depth_texture;
+        let depth_texture = &frame.depth_buffer;
 
         self.process_chunks(device, queue, camera_bind_group);
         self.render_chunks(
@@ -582,7 +582,7 @@ impl Terrain {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         surface: &wgpu::TextureView,
-        depth_texture: &wgpu::TextureView,
+        depth_buffer: &DepthBuffer,
         camera_bind_group: &wgpu::BindGroup,
         fog_bind_group: &wgpu::BindGroup,
     ) {
@@ -597,7 +597,7 @@ impl Terrain {
                 },
             })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: depth_texture,
+                view: &depth_buffer.texture_view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
