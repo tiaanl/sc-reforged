@@ -502,7 +502,7 @@ impl Scene for WorldScene {
         );
 
         self.gizmos_renderer
-            .render_frame(frame, camera_bind_group, &self.gizmos_vertices);
+            .render(frame, camera_bind_group, &self.gizmos_vertices);
     }
 
     fn end_frame(&mut self) {

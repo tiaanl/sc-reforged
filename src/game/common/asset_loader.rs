@@ -27,6 +27,9 @@ pub enum AssetError {
     #[error("File system error: {0}")]
     FileSystemError(#[from] FileSystemError),
 
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
     #[error("Decode error")]
     DecodeError,
 

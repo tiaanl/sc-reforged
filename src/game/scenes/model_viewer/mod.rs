@@ -252,7 +252,7 @@ impl Scene for ModelViewer {
         }
 
         self.gizmos
-            .render_frame(frame, &self.gpu_camera.bind_group, &vertices);
+            .render(frame, &self.gpu_camera.bind_group, &vertices);
     }
 
     fn debug_panel(&mut self, egui: &egui::Context) {

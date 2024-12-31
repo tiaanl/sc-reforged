@@ -5,7 +5,7 @@ use crate::Frame;
 
 use super::renderer::{BufferLayout, RenderPipelineConfig, Renderer};
 
-#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct GizmoVertex {
     position: Vec3,
@@ -59,7 +59,7 @@ impl GizmosRenderer {
         Self { pipeline }
     }
 
-    pub fn render_frame(
+    pub fn render(
         &self,
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,

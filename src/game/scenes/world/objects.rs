@@ -256,7 +256,7 @@ impl Objects {
                 .render_all(frame, camera_bind_group, &boxes);
         }
 
-        gizmos.render_frame(frame, camera_bind_group, &gv);
+        gizmos.render(frame, camera_bind_group, &gv);
     }
 
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
