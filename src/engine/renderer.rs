@@ -301,7 +301,7 @@ impl Renderer {
                 layout: Some(&layout),
                 vertex: wgpu::VertexState {
                     module: config.shader_module,
-                    entry_point: config.vertex_entry.unwrap_or("vertex_main"),
+                    entry_point: config.vertex_entry,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     buffers: B::vertex_buffers(),
                 },
@@ -318,7 +318,7 @@ impl Renderer {
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: config.shader_module,
-                    entry_point: config.fragment_entry.unwrap_or("fragment_main"),
+                    entry_point: config.fragment_entry,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: self.surface_config.format,

@@ -96,7 +96,7 @@ impl MeshRenderer {
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &shader_module,
-                        entry_point: "vertex_main",
+                        entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[
                             Vertex::vertex_buffer_layout(),
@@ -124,7 +124,7 @@ impl MeshRenderer {
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &shader_module,
-                        entry_point: "fragment_main",
+                        entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: &[Some(wgpu::ColorTargetState {
                             format: renderer.surface_config.format,

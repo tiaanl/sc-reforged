@@ -40,8 +40,3 @@ fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let final_color = mix(tex_color, vec4(u_fog.color, 1.0), fog_factor);
     return final_color;
 }
-
-@fragment
-fn fragment_main_wireframe(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4(1.0, 1.0, 0.0, 1.0);
-}

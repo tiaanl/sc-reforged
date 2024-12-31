@@ -65,6 +65,10 @@ impl GizmosRenderer {
         camera_bind_group: &wgpu::BindGroup,
         vertices: &[GizmoVertex],
     ) {
+        if vertices.is_empty() {
+            return;
+        }
+
         let vertex_buffer = frame
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {

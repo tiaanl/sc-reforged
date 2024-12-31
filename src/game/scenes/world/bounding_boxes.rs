@@ -171,7 +171,7 @@ impl BoundingBoxRenderer {
                 });
 
         macro_rules! create_render_pipeline {
-            ($renderer:expr, $primitive:expr) => {{
+            ($renderer:expr, $fragment_entry:literal, $primitive:expr) => {{
                 renderer
                     .device
                     .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -179,7 +179,7 @@ impl BoundingBoxRenderer {
                         layout: Some(&pipeline_layout),
                         vertex: wgpu::VertexState {
                             module: &shader,
-                            entry_point: "vertex_main",
+                            entry_point: None,
                             compilation_options: wgpu::PipelineCompilationOptions::default(),
                             buffers: &[
                                 Vertex::vertex_buffer_layout(),
@@ -204,7 +204,7 @@ impl BoundingBoxRenderer {
                         multisample: wgpu::MultisampleState::default(),
                         fragment: Some(wgpu::FragmentState {
                             module: &shader,
-                            entry_point: "fragment_main",
+                            entry_point: Some($fragment_entry),
                             compilation_options: wgpu::PipelineCompilationOptions::default(),
                             targets: &[Some(wgpu::ColorTargetState {
                                 format: renderer.surface_config.format,
@@ -220,6 +220,7 @@ impl BoundingBoxRenderer {
 
         let pipeline = create_render_pipeline!(
             renderer,
+            "fragment_main",
             wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Cw,
                 cull_mode: Some(wgpu::Face::Back),
@@ -231,6 +232,7 @@ impl BoundingBoxRenderer {
 
         let wireframe_pipeline = create_render_pipeline!(
             renderer,
+            "fragment_main_wireframe",
             wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::LineList,
                 front_face: wgpu::FrontFace::Cw,

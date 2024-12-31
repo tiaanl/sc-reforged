@@ -183,6 +183,7 @@ impl Terrain {
 
         let pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<Vertex>::new("terrain", &shader_module)
+                .fragment_entry("fragment_main")
                 .primitive(wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::TriangleList,
                     front_face: wgpu::FrontFace::Cw,
@@ -197,7 +198,6 @@ impl Terrain {
 
         let wireframe_pipeline = renderer.create_render_pipeline(
             RenderPipelineConfig::<Vertex>::new("terrain_wireframe", &shader_module)
-                .vertex_entry("vertex_main")
                 .fragment_entry("fragment_main_wireframe")
                 .primitive(wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::LineList,
@@ -394,7 +394,7 @@ impl Terrain {
                     label: Some("process_chunks"),
                     layout: Some(&layout),
                     module: &module,
-                    entry_point: "main",
+                    entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     cache: None,
                 });

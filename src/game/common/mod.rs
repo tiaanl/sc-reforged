@@ -1,4 +1,3 @@
-pub mod animation;
 pub mod asset_loader;
 pub mod assets;
 pub mod camera;

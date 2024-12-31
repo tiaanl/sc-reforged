@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use shadow_company_tools::smf;
 
 use crate::engine::prelude::*;
@@ -9,7 +11,7 @@ use super::{
 
 pub type NodeIndex = usize;
 
-type NameLookup = ahash::HashMap<String, NodeIndex>;
+type NameLookup = HashMap<String, NodeIndex>;
 
 /// Model instance data held by each enitty.
 #[derive(Debug)]
