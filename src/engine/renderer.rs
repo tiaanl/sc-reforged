@@ -169,6 +169,10 @@ impl Renderer {
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 required_features,
+                required_limits: wgpu::Limits {
+                    max_bind_groups: 5,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             None,

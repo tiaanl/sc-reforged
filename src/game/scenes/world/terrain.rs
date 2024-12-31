@@ -486,7 +486,14 @@ impl Terrain {
         if self.draw_wireframe {
             self.render_wireframe(encoder, surface, camera_bind_group, fog_bind_group);
         }
+    }
 
+    pub fn render_water(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        fog_bind_group: &wgpu::BindGroup,
+    ) {
         self.water.render(frame, camera_bind_group, fog_bind_group);
     }
 
@@ -507,6 +514,8 @@ impl Terrain {
                 self.lod_level = level;
             }
         }
+
+        self.water.debug_panel(ui);
     }
 }
 

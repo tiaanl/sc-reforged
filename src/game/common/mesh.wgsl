@@ -45,11 +45,7 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
 @fragment
 fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let tex_color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
-
     let fog_factor = fog::fog_factor(u_fog, vertex.world_position, u_camera.position.xyz);
-
-    // TODO: Why do I have to invert the fog_factor?
     let final_color = mix(tex_color, vec4(u_fog.color, 1.0), fog_factor);
-
     return final_color;
 }

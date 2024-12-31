@@ -1,4 +1,6 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
+
+use wgpu::util::DeviceExt;
 
 use crate::{
     engine::prelude::*,
@@ -10,6 +12,21 @@ pub struct Water {
     pipeline: wgpu::RenderPipeline,
     texture_bind_group: wgpu::BindGroup,
     mesh: GpuIndexedMesh,
+
+    water_uniform_buffer: wgpu::Buffer,
+    water_bind_group_layout: wgpu::BindGroupLayout,
+    water_bind_group: wgpu::BindGroup,
+
+    gpu_water: GpuWater,
+}
+
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[repr(C)]
+struct GpuWater {
+    fade_start: f32,
+    fade_end: f32,
+    alpha: f32,
+    _padding2: f32,
 }
 
 impl Water {
@@ -22,6 +39,50 @@ impl Water {
         terrain_size: Vec2,
         water_level: f32,
     ) -> Result<Self, AssetError> {
+        let gpu_water = GpuWater {
+            fade_start: 0.0,
+            fade_end: 1.0,
+            alpha: 0.8,
+            _padding2: 0.0,
+        };
+
+        let water_uniform_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("water"),
+                    contents: bytemuck::cast_slice(&[gpu_water]),
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
+
+        let water_bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("water"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
+        let water_bind_group = renderer
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("water"),
+                layout: &water_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: water_uniform_buffer.as_entire_binding(),
+                }],
+            });
+
         let module =
             shaders.create_shader(renderer, "water", include_str!("water.wgsl"), "water.wgsl");
 
@@ -34,9 +95,13 @@ impl Water {
                     polygon_mode: wgpu::PolygonMode::Fill,
                     ..Default::default()
                 })
+                .disable_depth_buffer()
+                .blend_state(wgpu::BlendState::ALPHA_BLENDING)
                 .bind_group_layout(renderer.texture_bind_group_layout())
                 .bind_group_layout(camera_bind_group_layout)
-                .bind_group_layout(fog_bind_group_layout),
+                .bind_group_layout(fog_bind_group_layout)
+                .bind_group_layout(&renderer.depth_buffer.bind_group_layout)
+                .bind_group_layout(&water_bind_group_layout),
         );
 
         let image = asset_loader.load_bmp(
@@ -91,6 +156,11 @@ impl Water {
             pipeline,
             texture_bind_group,
             mesh,
+            water_uniform_buffer,
+            water_bind_group_layout,
+            water_bind_group,
+
+            gpu_water,
         })
     }
 
@@ -100,13 +170,42 @@ impl Water {
         camera_bind_group: &wgpu::BindGroup,
         fog_bind_group: &wgpu::BindGroup,
     ) {
-        let mut render_pass = frame.begin_basic_render_pass("water", true);
+        frame.queue.write_buffer(
+            &self.water_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.gpu_water]),
+        );
+
+        let depth_buffer = Arc::clone(&frame.depth_buffer);
+        let mut render_pass = frame.begin_basic_render_pass("water", false);
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
         render_pass.set_bind_group(1, camera_bind_group, &[]);
         render_pass.set_bind_group(2, fog_bind_group, &[]);
+        render_pass.set_bind_group(3, &depth_buffer.bind_group, &[]);
+        render_pass.set_bind_group(4, &self.water_bind_group, &[]);
         render_pass.draw_indexed(0..self.mesh.index_count, 0, 0..1);
+    }
+
+    pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Water");
+        ui.horizontal(|ui| {
+            ui.label("Fade Start");
+            ui.add(egui::widgets::DragValue::new(&mut self.gpu_water.fade_start).speed(0.1));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Fade End");
+            ui.add(egui::widgets::DragValue::new(&mut self.gpu_water.fade_end).speed(0.1));
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Alpha");
+            ui.add(
+                egui::widgets::Slider::new(&mut self.gpu_water.alpha, 0.0..=1.0)
+                    .drag_value_speed(0.01),
+            );
+        });
     }
 }

@@ -25,11 +25,12 @@ mod water;
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
 struct RawFog {
-    color: Vec3, // 12
-    start: f32,  // 4
-    end: f32,    // 4
-
-    _padding: Vec3, // 12
+    color: Vec3,    // 12
+    _padding: f32,  // 4
+    start: f32,     // 4
+    end: f32,       // 4
+    density: f32,   // 4
+    _padding2: f32, // 4
 }
 
 struct GpuFog {
@@ -82,12 +83,14 @@ impl GpuFog {
         }
     }
 
-    fn upload(&self, queue: &wgpu::Queue, fog: &Fog) {
+    fn upload(&self, queue: &wgpu::Queue, fog: &Fog, density: f32) {
         let raw_fog = RawFog {
             color: fog.color,
+            _padding: 0.0,
             start: fog.start,
             end: fog.end,
-            _padding: Default::default(),
+            density,
+            _padding2: 0.0,
         };
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[raw_fog]));
     }
@@ -131,6 +134,8 @@ pub struct WorldScene {
     terrain_height_sample: Vec2,
 
     lod_model_definitions: HashMap<String, Vec<SubModelDefinition>>,
+
+    fog_density: f32,
 }
 
 #[derive(Debug)]
@@ -182,14 +187,14 @@ impl WorldScene {
         let camera_to = campaign.view_initial.to.extend(0.0);
 
         let mut camera_controller = camera::GameCameraController::new(50.0, 0.2);
-        camera_controller.move_to_direct(camera_from);
-        camera_controller.look_at_direct(camera_to);
+        // camera_controller.move_to_direct(camera_from);
+        // camera_controller.look_at_direct(camera_to);
         let camera = camera::Camera::new(
             camera_from,
             Quat::IDENTITY,
             45.0_f32.to_radians(),
             1.0,
-            1.0,
+            100.0,
             10_000.0,
         );
 
@@ -201,7 +206,7 @@ impl WorldScene {
             Quat::IDENTITY,
             45.0_f32.to_radians(),
             1.0,
-            1.0,
+            100.0,
             100_000.0,
         );
 
@@ -321,6 +326,8 @@ impl WorldScene {
             terrain_height_sample: Vec2::ZERO,
 
             lod_model_definitions,
+
+            fog_density: 1.0,
         })
     }
 }
@@ -461,7 +468,7 @@ impl Scene for WorldScene {
         }
 
         if let Some(fog) = &self.fog {
-            self.gpu_fog.upload(queue, fog);
+            self.gpu_fog.upload(queue, fog, self.fog_density);
         }
     }
 
@@ -503,6 +510,9 @@ impl Scene for WorldScene {
 
         self.gizmos_renderer
             .render(frame, camera_bind_group, &self.gizmos_vertices);
+
+        self.terrain
+            .render_water(frame, camera_bind_group, fog_bind_group);
     }
 
     fn end_frame(&mut self) {
@@ -578,13 +588,18 @@ impl Scene for WorldScene {
                 ui.label("Nothing");
             }
 
-            ui.heading("Height");
-            ui.add(DragValue::new(&mut self.terrain_height_sample.x));
-            ui.add(DragValue::new(&mut self.terrain_height_sample.y));
+            // ui.heading("Height");
+            // ui.add(DragValue::new(&mut self.terrain_height_sample.x));
+            // ui.add(DragValue::new(&mut self.terrain_height_sample.y));
 
             if let Some(fog) = &mut self.fog {
+                ui.heading("Fog");
                 ui.horizontal(|ui| {
-                    ui.label("Fog");
+                    ui.label("Density");
+                    ui.add(DragValue::new(&mut self.fog_density).speed(0.01));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Range");
                     ui.add(DragValue::new(&mut fog.start).speed(10));
                     ui.add(DragValue::new(&mut fog.end).speed(10));
                 });
@@ -594,12 +609,9 @@ impl Scene for WorldScene {
                     ui.add(DragValue::new(&mut fog.color.y).speed(0.01));
                     ui.add(DragValue::new(&mut fog.color.z).speed(0.01));
                 });
-            }
 
-            // ui.label(format!(
-            //     "height: {}",
-            //     self.terrain.height_at(self.terrain_height_sample)
-            // ));
+                self.fog_density = self.fog_density.clamp(0.0, 1.0);
+            }
         });
     }
 }

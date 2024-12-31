@@ -1,7 +1,7 @@
 pub struct DepthBuffer {
     pub texture_view: wgpu::TextureView,
-    pub _bind_group_layout: wgpu::BindGroupLayout,
-    pub _bind_group: wgpu::BindGroup,
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub bind_group: wgpu::BindGroup,
 }
 
 impl DepthBuffer {
@@ -15,8 +15,8 @@ impl DepthBuffer {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
 
@@ -59,8 +59,8 @@ impl DepthBuffer {
 
         Self {
             texture_view,
-            _bind_group_layout: bind_group_layout,
-            _bind_group: bind_group,
+            bind_group_layout,
+            bind_group,
         }
     }
 
