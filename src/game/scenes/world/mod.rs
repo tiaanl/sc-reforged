@@ -114,8 +114,8 @@ impl WorldScene {
         let camera_to = campaign.view_initial.to.extend(0.0);
 
         let mut camera_controller = camera::GameCameraController::new(50.0, 0.2);
-        // camera_controller.move_to_direct(camera_from);
-        // camera_controller.look_at_direct(camera_to);
+        camera_controller.move_to_direct(camera_from);
+        camera_controller.look_at_direct(camera_to);
         let camera = camera::Camera::new(
             camera_from,
             Quat::IDENTITY,
