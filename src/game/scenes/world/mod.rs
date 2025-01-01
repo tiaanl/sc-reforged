@@ -17,84 +17,11 @@ use glam::{Quat, Vec3, Vec4};
 use terrain::*;
 
 mod bounding_boxes;
+mod fog;
 mod height_map;
 mod objects;
 mod terrain;
 mod water;
-
-#[derive(Clone, Copy, bytemuck::NoUninit)]
-#[repr(C)]
-struct RawFog {
-    color: Vec3,    // 12
-    _padding: f32,  // 4
-    start: f32,     // 4
-    end: f32,       // 4
-    density: f32,   // 4
-    _padding2: f32, // 4
-}
-
-struct GpuFog {
-    buffer: wgpu::Buffer,
-    bind_group_layout: wgpu::BindGroupLayout,
-    bind_group: wgpu::BindGroup,
-}
-
-impl GpuFog {
-    fn new(renderer: &Renderer) -> Self {
-        let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("fog_buffer"),
-            size: std::mem::size_of::<RawFog>() as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let bind_group_layout =
-            renderer
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("fog_bind_group_layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
-
-        let bind_group = renderer
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("fog_bind_group"),
-                layout: &bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(buffer.as_entire_buffer_binding()),
-                }],
-            });
-
-        Self {
-            buffer,
-            bind_group_layout,
-            bind_group,
-        }
-    }
-
-    fn upload(&self, queue: &wgpu::Queue, fog: &Fog, density: f32) {
-        let raw_fog = RawFog {
-            color: fog.color,
-            _padding: 0.0,
-            start: fog.start,
-            end: fog.end,
-            density,
-            _padding2: 0.0,
-        };
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[raw_fog]));
-    }
-}
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
@@ -119,7 +46,7 @@ pub struct WorldScene {
     objects: objects::Objects,
 
     fog: Option<Fog>,
-    gpu_fog: GpuFog,
+    gpu_fog: fog::GpuFog,
 
     gizmos_renderer: GizmosRenderer,
     gizmos_vertices: Vec<GizmoVertex>,
@@ -213,7 +140,7 @@ impl WorldScene {
         let camera_matrices = camera.calculate_matrices().into();
         let gpu_camera = camera::GpuCamera::new(renderer);
 
-        let gpu_fog = GpuFog::new(renderer);
+        let gpu_fog = fog::GpuFog::new(renderer);
 
         let terrain = Terrain::new(
             assets,
