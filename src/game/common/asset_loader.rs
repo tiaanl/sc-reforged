@@ -159,7 +159,7 @@ impl AssetLoader {
         })
     }
 
-    pub fn load_config<'s, C>(&self, path: impl AsRef<Path>) -> Result<C, AssetError>
+    pub fn load_config<C>(&self, path: impl AsRef<Path>) -> Result<C, AssetError>
     where
         C: TryFrom<String, Error = AssetError>,
     {

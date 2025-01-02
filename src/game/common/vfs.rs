@@ -60,7 +60,7 @@ impl VirtualFileSystem {
     /// Find a way to get to the specified `path`.
     fn path_for(&self, path: impl AsRef<Path>) -> Option<PathPointer> {
         // Check if the external file exists.
-        let external_path = self.root_path.join(path.as_ref().to_path_buf());
+        let external_path = self.root_path.join(&path);
         if external_path.exists() {
             return Some(PathPointer::External(external_path));
         }
@@ -87,7 +87,7 @@ impl VirtualFileSystem {
         };
 
         match path {
-            PathPointer::External(path) => return Ok(std::fs::read(path)?),
+            PathPointer::External(path) => Ok(std::fs::read(path)?),
             PathPointer::Internal(gut_path, path) => {
                 let Some(gut_file) = self.get_gut_file(&gut_path) else {
                     return Err(FileSystemError::Io(std::io::ErrorKind::NotFound.into()));

@@ -87,7 +87,7 @@ impl TryFrom<String> for Mtf {
                     mtf.time_of_day = [current[1].parse().unwrap(), current[2].parse().unwrap()];
                 }
                 "GAME_CONFIG_FOG_ENABLED" => {
-                    mtf.game_config_fog_enabled = Fog::from_params(&current);
+                    mtf.game_config_fog_enabled = Fog::from_params(current);
                 }
                 "OBJECT_INVENTORY" => {
                     match state {
