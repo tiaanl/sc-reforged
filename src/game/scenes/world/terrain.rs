@@ -61,6 +61,8 @@ pub struct Terrain {
     lod_level: usize,
 
     water: Water,
+
+    normals_lookup: Vec<Vec3>,
 }
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -412,6 +414,8 @@ impl Terrain {
             water_level,
         )?;
 
+        let normals = Self::generate_normals_lookup_table();
+
         Ok(Self {
             height_map,
 
@@ -437,6 +441,8 @@ impl Terrain {
             lod_level: 0,
 
             water,
+
+            normals_lookup: normals,
         })
     }
 
@@ -685,5 +691,21 @@ impl Terrain {
                 0..1,
             );
         }
+    }
+
+    fn generate_normals_lookup_table() -> Vec<Vec3> {
+        let mut normals = Vec::with_capacity(1024);
+
+        for pitch in 0..16 {
+            let z = (pitch as f32).sin();
+            for yaw in 0..64 {
+                let x = (yaw as f32).cos();
+                let y = (yaw as f32).sin();
+
+                normals.push(Vec3::new(x, y, z));
+            }
+        }
+
+        normals
     }
 }
