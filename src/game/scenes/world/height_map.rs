@@ -1,51 +1,63 @@
 use glam::{IVec2, UVec2, Vec3};
 
+/// Represents a rectangular grid of evenly spaced vertices, each with a variable elevation.
+///
+/// Nodes are the vertices of the grid and cells are the rectangular areas between adjacent nodes.
 pub struct HeightMap {
-    pub edge_size: f32,
+    /// Distance between each node.
+    pub nominal_edge_size: f32,
+    /// height between elevation indices.
     pub elevation_base: f32,
-
+    /// X and Y sizes counted in amount of nodes (not cells!).
     pub size: UVec2,
-    pub elevations: Vec<u32>,
+    /// Elevation index of each node.
+    pub elevations: Vec<u8>,
 }
 
 impl HeightMap {
-    pub fn from_reader<R>(
-        edge_size: f32,
+    /// Create a height map from a PCX file.
+    pub fn from_pcx<R>(
+        nominal_edge_size: f32,
         elevation_base: f32,
         reader: &mut R,
     ) -> Result<Self, std::io::Error>
     where
         R: std::io::Read,
     {
-        let data = pcx::load_height_map(reader)?;
+        let pcx::PcxData {
+            width,
+            height,
+            data: elevations,
+        } = pcx::load_height_map(reader)?;
 
         Ok(Self {
-            edge_size,
+            nominal_edge_size,
             elevation_base,
             size: UVec2 {
-                x: data.width,
-                y: data.height,
+                x: width,
+                y: height,
             },
-            elevations: data.data,
+            elevations,
         })
     }
 
-    /// Return the world position of the specified height map coordinate.
+    /// Returns the world position of the specified node.
     ///
-    /// NOTE: Coordinates outside the height map area will return the value of the nearest edge
-    ///       coordinate. This will cause all the far edges of the heightmap to have a single flat
-    ///       cell on the map edge. This is to replicate behavious on the original.
+    /// NOTE: Coordinates outside the height map are clamped to the nearest edge, creating a flat
+    /// outer edge to replicate the original behavior.
     pub fn position_for_vertex(&self, pos: IVec2) -> Vec3 {
-        let IVec2 { x, y } = pos;
+        let elevation = {
+            let clamped_x = pos.x.clamp(0, self.size.x as i32 - 1);
+            let clamped_y = pos.y.clamp(0, self.size.y as i32 - 1);
 
-        // Clamp to the available data.
-        let index = y.max(0).min(self.size.y as i32 - 1) as usize * self.size.x as usize
-            + x.max(0).min(self.size.x as i32 - 1) as usize;
+            let index = clamped_y as usize * self.size.x as usize + clamped_x as usize;
 
-        let elevation = (self.elevations[index] as usize & 0xFF) as f32 * self.elevation_base;
+            self.elevations[index] as f32 * self.elevation_base
+        };
+
         Vec3::new(
-            x as f32 * self.edge_size,
-            y as f32 * self.edge_size,
+            pos.x as f32 * self.nominal_edge_size,
+            pos.y as f32 * self.nominal_edge_size,
             elevation,
         )
     }
@@ -54,10 +66,10 @@ impl HeightMap {
 mod pcx {
     use byteorder::{LittleEndian as LE, ReadBytesExt};
 
-    pub struct Data {
+    pub struct PcxData {
         pub width: u32,
         pub height: u32,
-        pub data: Vec<u32>,
+        pub data: Vec<u8>,
     }
 
     #[repr(C)]
@@ -142,47 +154,44 @@ mod pcx {
         Ok(header)
     }
 
-    pub fn load_height_map<R>(reader: &mut R) -> std::io::Result<Data>
+    pub fn load_height_map<R>(reader: &mut R) -> std::io::Result<PcxData>
     where
         R: std::io::Read,
     {
         let header = read_pcx_header(reader)?;
 
         if header.manufacturer != 0x0A || header.version != 0x05 {
-            panic!("Incorrect/invalid PCX header.");
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Incorrect or invalid PCX header.",
+            ))?
         }
 
         let width = header.bytes_per_plane_line as u32;
         let height = (header.y_max - header.y_min + 1) as u32;
-        let area = width * height;
+        let area = width as usize * height as usize;
 
-        tracing::info!("width: {}, height: {}", width as u32, height as u32);
+        let mut data = Vec::with_capacity(area);
 
-        let mut data: Vec<u32> = Vec::with_capacity(area as usize);
+        // NOTE: All indices are inverted.
 
-        macro_rules! b {
-            ($b:expr) => {{
-                0x1FF00_u32 | (0xFF - $b) as u32
-            }};
-        }
-
-        let mut i = 0_usize;
-        while i < area as usize {
+        let mut i: usize = 0;
+        while i < area {
             let byte = reader.read_u8()?;
-            if (byte & 0xC0) != 0xC0 {
-                data.push(b!(byte));
-                i += 1;
-            } else {
+            if byte & 0xC0 == 0xC0 {
                 let count = (byte & 0x3F) as usize;
-                let new_byte = reader.read_u8()?;
-                data.extend(std::iter::repeat(b!(new_byte)).take(count));
+                let byte = reader.read_u8()?;
+                data.extend(std::iter::repeat(0xFF - byte).take(count));
                 i += count;
+            } else {
+                data.push(0xFF - byte);
+                i += 1;
             }
         }
 
-        assert_eq!(data.len(), area as usize);
+        debug_assert_eq!(data.len(), area as usize);
 
-        Ok(Data {
+        Ok(PcxData {
             width,
             height,
             data,

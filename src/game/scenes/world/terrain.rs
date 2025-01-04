@@ -161,7 +161,7 @@ impl Terrain {
             info!("Loading terrain height map: {path}");
             let data = asset_loader.load_raw(path)?;
             let mut reader = std::io::Cursor::new(data);
-            HeightMap::from_reader(nominal_edge_size, altitude_map_height_base, &mut reader)
+            HeightMap::from_pcx(nominal_edge_size, altitude_map_height_base, &mut reader)
                 .map_err(|_| AssetError::Custom("Could not load height map data.".to_string()))?
         };
 
@@ -408,8 +408,8 @@ impl Terrain {
             camera_bind_group_layout,
             fog_bind_group_layout,
             Vec2::new(
-                height_map.size.x as f32 * height_map.edge_size,
-                height_map.size.y as f32 * height_map.edge_size,
+                height_map.size.x as f32 * height_map.nominal_edge_size,
+                height_map.size.y as f32 * height_map.nominal_edge_size,
             ),
             water_level,
         )?;
