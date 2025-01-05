@@ -9,6 +9,8 @@ use super::{compositor::Compositor, model::Model};
 pub enum BlendMode {
     /// No blending.
     None,
+    /// Color keyed (use black as the key).
+    ColorKeyed,
     /// Use the alpha channel of the texture.
     Alpha,
     /// Multiply the values from the texture with the background. Mostly used for light effects.
@@ -42,6 +44,7 @@ pub struct MeshItem {
 pub struct MeshRenderer {
     asset_store: AssetStore,
     opaque_render_pipeline: wgpu::RenderPipeline,
+    ck_render_pipeline: wgpu::RenderPipeline,
     alpha_render_pipeline: wgpu::RenderPipeline,
     transforms_bind_group_layout: wgpu::BindGroupLayout,
 }
@@ -52,7 +55,6 @@ impl MeshRenderer {
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
-        fog_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let module = shaders.create_shader(
             renderer,
@@ -88,20 +90,21 @@ impl MeshRenderer {
                         renderer.texture_bind_group_layout(),
                         // u_camera
                         camera_bind_group_layout,
-                        // u_fog
-                        fog_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
                 });
 
         let opaque_render_pipeline =
-            Self::create_pipeline(renderer, &pipeline_layout, &module, true);
+            Self::create_pipeline(renderer, &pipeline_layout, &module, BlendMode::None);
+        let ck_render_pipeline =
+            Self::create_pipeline(renderer, &pipeline_layout, &module, BlendMode::ColorKeyed);
         let alpha_render_pipeline =
-            Self::create_pipeline(renderer, &pipeline_layout, &module, false);
+            Self::create_pipeline(renderer, &pipeline_layout, &module, BlendMode::Alpha);
 
         Self {
             asset_store,
             opaque_render_pipeline,
+            ck_render_pipeline,
             alpha_render_pipeline,
             transforms_bind_group_layout,
         }
@@ -111,13 +114,13 @@ impl MeshRenderer {
         renderer: &Renderer,
         layout: &wgpu::PipelineLayout,
         module: &wgpu::ShaderModule,
-        depth_write_enable: bool,
+        blend_mode: BlendMode,
     ) -> wgpu::RenderPipeline {
         renderer
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("mesh_renderer_render_pipeline"),
-                layout: Some(&layout),
+                layout: Some(layout),
                 vertex: wgpu::VertexState {
                     module,
                     entry_point: None,
@@ -143,21 +146,41 @@ impl MeshRenderer {
                     polygon_mode: wgpu::PolygonMode::Fill,
                     ..Default::default()
                 },
-                depth_stencil: Some(
-                    renderer
-                        .depth_buffer
-                        .depth_stencil_state(wgpu::CompareFunction::Less, depth_write_enable),
-                ),
+                depth_stencil: Some(renderer.depth_buffer.depth_stencil_state(
+                    wgpu::CompareFunction::Less,
+                    match blend_mode {
+                        BlendMode::None | BlendMode::ColorKeyed | BlendMode::Multiply => true,
+                        // Don't write to the depth buffer if we use alpha blending.
+                        BlendMode::Alpha => false,
+                    },
+                )),
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module,
-                    entry_point: None,
+                    entry_point: match blend_mode {
+                        BlendMode::ColorKeyed => Some("ck_fragment_main"),
+                        BlendMode::None | BlendMode::Alpha | BlendMode::Multiply => {
+                            Some("fragment_main")
+                        }
+                    },
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: Compositor::ALBEDO_TEXTURE_FORMAT,
-                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
+                    targets: &[
+                        Some(wgpu::ColorTargetState {
+                            format: Compositor::ALBEDO_TEXTURE_FORMAT,
+                            blend: match blend_mode {
+                                BlendMode::None => None,
+                                BlendMode::ColorKeyed => None,
+                                BlendMode::Alpha => Some(wgpu::BlendState::ALPHA_BLENDING),
+                                BlendMode::Multiply => None,
+                            },
+                            write_mask: wgpu::ColorWrites::ALL,
+                        }),
+                        Some(wgpu::ColorTargetState {
+                            format: Compositor::POSITION_TEXTURE_FORMAT,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        }),
+                    ],
                 }),
                 multiview: None,
                 cache: None,
@@ -181,10 +204,10 @@ impl MeshRenderer {
         &self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
-        albedo_target: &wgpu::TextureView,
+        compositor: &Compositor,
         depth_target: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
-        fog_bind_group: &wgpu::BindGroup,
+        blend_mode: BlendMode,
         meshes: &[MeshItem],
     ) {
         if meshes.is_empty() {
@@ -193,14 +216,24 @@ impl MeshRenderer {
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("opaque_meshes"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: albedo_target,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
+            color_attachments: &[
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &compositor.albedo_texture,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &compositor.position_texture,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+            ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: depth_target,
                 depth_ops: Some(wgpu::Operations {
@@ -212,6 +245,16 @@ impl MeshRenderer {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+
+        let render_pipeline = match blend_mode {
+            BlendMode::None => &self.opaque_render_pipeline,
+            BlendMode::ColorKeyed => &self.ck_render_pipeline,
+            BlendMode::Alpha => &self.alpha_render_pipeline,
+            BlendMode::Multiply => todo!(),
+        };
+
+        render_pass.set_pipeline(render_pipeline);
+        render_pass.set_bind_group(1, camera_bind_group, &[]);
 
         for mesh_item in meshes.iter() {
             let Some(mesh) = self.asset_store.get(mesh_item.mesh) else {
@@ -227,7 +270,6 @@ impl MeshRenderer {
                 usage: wgpu::BufferUsages::VERTEX,
             });
 
-            render_pass.set_pipeline(&self.opaque_render_pipeline);
             render_pass.set_vertex_buffer(0, mesh.gpu_mesh.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, buffer.slice(..));
             render_pass.set_index_buffer(
@@ -235,75 +277,6 @@ impl MeshRenderer {
                 wgpu::IndexFormat::Uint32,
             );
             render_pass.set_bind_group(0, &mesh.texture.bind_group, &[]);
-            render_pass.set_bind_group(1, camera_bind_group, &[]);
-            render_pass.set_bind_group(2, fog_bind_group, &[]);
-            render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..1);
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn render_multiple_alpha(
-        &self,
-        device: &wgpu::Device,
-        encoder: &mut wgpu::CommandEncoder,
-        albedo_target: &wgpu::TextureView,
-        depth_target: &wgpu::TextureView,
-        camera_bind_group: &wgpu::BindGroup,
-        fog_bind_group: &wgpu::BindGroup,
-        meshes: &[MeshItem],
-    ) {
-        if meshes.is_empty() {
-            return;
-        }
-
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("alpha_meshes"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: albedo_target,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: depth_target,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    // For alpha textures, we don't write to the depth buffer, but we use it not
-                    // to render things out of order.
-                    store: wgpu::StoreOp::Discard,
-                }),
-                stencil_ops: None,
-            }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-
-        for mesh_item in meshes.iter() {
-            let Some(mesh) = self.asset_store.get(mesh_item.mesh) else {
-                // Ignore meshes we can't find.
-                tracing::warn!("Mesh not found: {:?}", mesh_item.mesh);
-                continue;
-            };
-
-            // Create a buffer to render to.
-            let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("mesh_indices_buffer"),
-                contents: bytemuck::cast_slice(&[mesh_item.transform]),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-            render_pass.set_pipeline(&self.alpha_render_pipeline);
-            render_pass.set_vertex_buffer(0, mesh.gpu_mesh.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, buffer.slice(..));
-            render_pass.set_index_buffer(
-                mesh.gpu_mesh.index_buffer.slice(..),
-                wgpu::IndexFormat::Uint32,
-            );
-            render_pass.set_bind_group(0, &mesh.texture.bind_group, &[]);
-            render_pass.set_bind_group(1, camera_bind_group, &[]);
-            render_pass.set_bind_group(2, fog_bind_group, &[]);
             render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..1);
         }
     }

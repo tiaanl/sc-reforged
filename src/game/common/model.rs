@@ -196,11 +196,7 @@ impl Model {
             gpu_mesh,
             texture: Texture {
                 bind_group,
-                blend_mode: if image.has_alpha {
-                    BlendMode::Alpha
-                } else {
-                    BlendMode::None
-                },
+                blend_mode: image.blend_mode,
             },
         };
 

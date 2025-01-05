@@ -3,11 +3,7 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 use clap::Parser;
 use egui::Widget;
 use engine::{egui_integration::EguiIntegration, prelude::*};
-use game::{
-    asset_loader::AssetLoader,
-    config,
-    scenes::{model_viewer::ModelViewer, world::WorldScene},
-};
+use game::{asset_loader::AssetLoader, config, scenes::world::WorldScene};
 use tracing::{error, info, warn};
 use winit::{
     dpi::PhysicalPosition,
@@ -94,12 +90,7 @@ impl winit::application::ApplicationHandler for App {
                 let assets = AssetLoader::new(asset_store.clone(), &opts.path)
                     .expect("Could not initialize assets.");
 
-                let scene: Box<dyn Scene> = if false {
-                    // LoadingScene
-
-                    use game::scenes::loading::LoadingScene;
-                    Box::new(LoadingScene::new(&assets, &renderer))
-                } else if true {
+                let scene: Box<dyn Scene> = {
                     // WorldScene
 
                     let campaign_defs = assets
@@ -130,27 +121,6 @@ impl winit::application::ApplicationHandler for App {
                             Ok(scene) => scene,
                             Err(err) => {
                                 error!("Could not create world scene! - {}", err);
-                                panic!();
-                            }
-                        },
-                    )
-                } else {
-                    // ModelViewer
-
-                    Box::new(
-                        match ModelViewer::new(
-                            &assets,
-                            asset_store.clone(),
-                            &renderer,
-                            // r"models\pusths-compound\pusths-compound.smf",
-                            // r"models\alvhqd-hummer\alvhqd-hummer.smf",
-                            // r"models\AlVhAp-Cessna\AlVhAp-Cessna.smf",
-                            // r"models\agsths-metalshack\agsths-metalshack.smf",
-                            r"models\agsths-shanty01\agsths-shanty01.smf",
-                        ) {
-                            Ok(scene) => scene,
-                            Err(err) => {
-                                error!("Could not create model viewer scene! - {}", err);
                                 panic!();
                             }
                         },

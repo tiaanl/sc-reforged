@@ -41,6 +41,7 @@ pub struct Objects {
 
     /// Keep a local list of meshes to render each frame.
     opaque_meshes: Vec<MeshItem>,
+    ck_meshes: Vec<MeshItem>,
     alpha_meshes: Vec<MeshItem>,
 
     render_bounding_boxes: bool,
@@ -58,14 +59,12 @@ impl Objects {
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
-        fog_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let model_renderer = MeshRenderer::new(
             asset_store.clone(),
             renderer,
             shaders,
             camera_bind_group_layout,
-            fog_bind_group_layout,
         );
 
         let bounding_box_renderer = BoundingBoxRenderer::new(renderer, camera_bind_group_layout);
@@ -74,6 +73,7 @@ impl Objects {
             asset_store,
             model_renderer,
             opaque_meshes: Vec::default(),
+            ck_meshes: Vec::default(),
             alpha_meshes: Vec::default(),
             render_bounding_boxes: false,
             bounding_box_renderer,
@@ -163,6 +163,7 @@ impl Objects {
         });
 
         self.opaque_meshes.clear();
+        self.ck_meshes.clear();
         self.alpha_meshes.clear();
 
         // Update the local mesh list with visible objects only.
@@ -194,6 +195,11 @@ impl Objects {
                         mesh: mesh.mesh,
                         distance_from_camera,
                     }),
+                    BlendMode::ColorKeyed => self.ck_meshes.push(MeshItem {
+                        transform,
+                        mesh: mesh.mesh,
+                        distance_from_camera,
+                    }),
                     BlendMode::Alpha => self.alpha_meshes.push(MeshItem {
                         transform,
                         mesh: mesh.mesh,
@@ -206,8 +212,15 @@ impl Objects {
 
         // Sort opaque meshes near to far to take advantage of the depth buffer to discard pixels.
         self.opaque_meshes.sort_unstable_by(|a, b| {
-            b.distance_from_camera
-                .partial_cmp(&a.distance_from_camera)
+            a.distance_from_camera
+                .partial_cmp(&b.distance_from_camera)
+                .unwrap_or(Ordering::Equal)
+        });
+
+        // Sort color keyed meshes as if they were opaque meshes.
+        self.ck_meshes.sort_unstable_by(|a, b| {
+            a.distance_from_camera
+                .partial_cmp(&b.distance_from_camera)
                 .unwrap_or(Ordering::Equal)
         });
 
@@ -224,7 +237,6 @@ impl Objects {
         frame: &mut Frame,
         compositor: &Compositor,
         camera_bind_group: &wgpu::BindGroup,
-        fog_bind_group: &wgpu::BindGroup,
     ) {
         // Build a list of all the meshes that needs rendering.
         let mut boxes = vec![];
@@ -232,20 +244,30 @@ impl Objects {
         self.model_renderer.render_multiple(
             &frame.device,
             &mut frame.encoder,
-            &compositor.albedo_texture,
+            compositor,
             &frame.depth_buffer.texture_view,
             camera_bind_group,
-            fog_bind_group,
+            BlendMode::None,
             &self.opaque_meshes,
         );
 
-        self.model_renderer.render_multiple_alpha(
+        self.model_renderer.render_multiple(
             &frame.device,
             &mut frame.encoder,
-            &compositor.albedo_texture,
+            compositor,
             &frame.depth_buffer.texture_view,
             camera_bind_group,
-            fog_bind_group,
+            BlendMode::ColorKeyed,
+            &self.ck_meshes,
+        );
+
+        self.model_renderer.render_multiple(
+            &frame.device,
+            &mut frame.encoder,
+            compositor,
+            &frame.depth_buffer.texture_view,
+            camera_bind_group,
+            BlendMode::Alpha,
             &self.alpha_meshes,
         );
 

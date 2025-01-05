@@ -1,14 +1,12 @@
 #import world::camera
-#import world::fog
 
 @group(0) @binding(0) var t_water: texture_2d<f32>;
 @group(0) @binding(1) var s_water: sampler;
 
 @group(1) @binding(0) var<uniform> u_camera: camera::Camera;
-@group(2) @binding(0) var<uniform> u_fog: fog::Fog;
 
-@group(3) @binding(0) var t_depth: texture_depth_2d;
-@group(3) @binding(1) var s_depth: sampler;
+@group(2) @binding(0) var t_depth: texture_depth_2d;
+@group(2) @binding(1) var s_depth: sampler;
 
 struct Water {
     start: f32,
@@ -16,7 +14,7 @@ struct Water {
     alpha: f32,
 }
 
-@group(4) @binding(0) var<uniform> u_water: Water;
+@group(3) @binding(0) var<uniform> u_water: Water;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -56,11 +54,11 @@ fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     let tex_color = textureSample(t_water, s_water, vertex.tex_coord);
 
-    let fog_factor = fog::fog_factor(u_fog, vertex.world_position, u_camera.position.xyz);
-    let final_color = mix(tex_color, vec4(u_fog.color, 1.0), fog_factor);
+    // let fog_factor = fog::fog_factor(u_fog, vertex.world_position, u_camera.position.xyz);
+    // let final_color = mix(tex_color, vec4(u_fog.color, 1.0), fog_factor);
 
     let diff = abs(water_depth - depth) / vertex.clip_position.w;
     let fade = smoothstep(u_water.start, u_water.end, diff) * u_water.alpha;
 
-    return vec4(final_color.xyz, fade);
+    return vec4(tex_color.xyz, fade);
 }

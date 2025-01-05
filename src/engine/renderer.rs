@@ -313,7 +313,7 @@ impl Renderer {
                         self.depth_buffer.depth_stencil_state(
                             config
                                 .depth_compare_function
-                                .unwrap_or(wgpu::CompareFunction::LessEqual),
+                                .unwrap_or(wgpu::CompareFunction::Less),
                             true,
                         ),
                     )

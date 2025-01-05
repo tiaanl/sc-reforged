@@ -23,8 +23,18 @@ fn get_frag(texture: texture_2d<f32>, uv: vec2<f32>) -> vec4<f32> {
 
 @fragment
 fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    // let fog_color = vec4<f32>(0.3, 0.3, 0.3, 1.0);
+    // let fog_density = 0.66;
+
     let albedo = get_frag(t_albedo, vertex.uv);
     let position = get_frag(t_position, vertex.uv);
+
+    // let distance_from_camera = position.w;
+    // let fog_start = 0.0;
+    // let fog_end = 13300.0;
+    // let fog_factor = clamp((distance_from_camera - fog_start) / (fog_end - fog_start), 0.0, 1.0);
+    // let final_color = mix(albedo, fog_color, fog_factor);
+    // return final_color;
 
     return albedo;
 }

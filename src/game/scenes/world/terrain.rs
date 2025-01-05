@@ -111,7 +111,6 @@ impl Terrain {
         shaders: &mut Shaders,
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
-        fog_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
         let TerrainMapping {
             altitude_map_height_base,
@@ -192,7 +191,6 @@ impl Terrain {
                     bind_group_layouts: &[
                         renderer.texture_bind_group_layout(),
                         camera_bind_group_layout,
-                        fog_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
                 });
@@ -218,18 +216,25 @@ impl Terrain {
                     depth_stencil: Some(
                         renderer
                             .depth_buffer
-                            .depth_stencil_state(wgpu::CompareFunction::LessEqual, true),
+                            .depth_stencil_state(wgpu::CompareFunction::Less, true),
                     ),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &module,
                         entry_point: Some("fragment_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: Compositor::ALBEDO_TEXTURE_FORMAT,
-                            blend: None,
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
+                        targets: &[
+                            Some(wgpu::ColorTargetState {
+                                format: Compositor::ALBEDO_TEXTURE_FORMAT,
+                                blend: None,
+                                write_mask: wgpu::ColorWrites::ALL,
+                            }),
+                            Some(wgpu::ColorTargetState {
+                                format: Compositor::POSITION_TEXTURE_FORMAT,
+                                blend: None,
+                                write_mask: wgpu::ColorWrites::ALL,
+                            }),
+                        ],
                     }),
                     multiview: None,
                     cache: None,
@@ -245,7 +250,6 @@ impl Terrain {
                 })
                 .bind_group_layout(renderer.texture_bind_group_layout())
                 .bind_group_layout(camera_bind_group_layout)
-                .bind_group_layout(fog_bind_group_layout)
                 .disable_depth_buffer(),
         );
 
@@ -444,7 +448,6 @@ impl Terrain {
             renderer,
             shaders,
             camera_bind_group_layout,
-            fog_bind_group_layout,
             Vec2::new(
                 height_map.size.x as f32 * height_map.nominal_edge_size,
                 height_map.size.y as f32 * height_map.nominal_edge_size,
@@ -510,9 +513,8 @@ impl Terrain {
     pub fn render(
         &self,
         frame: &mut Frame,
-        albedo_target: &wgpu::TextureView,
+        compositor: &Compositor,
         camera_bind_group: &wgpu::BindGroup,
-        fog_bind_group: &wgpu::BindGroup,
     ) {
         let device = &frame.device;
         let queue = &frame.queue;
@@ -522,26 +524,15 @@ impl Terrain {
 
         self.process_chunks(device, queue, camera_bind_group);
 
-        self.render_chunks(
-            encoder,
-            albedo_target,
-            depth_texture,
-            camera_bind_group,
-            fog_bind_group,
-        );
+        self.render_chunks(encoder, compositor, depth_texture, camera_bind_group);
 
         if self.draw_wireframe {
-            self.render_wireframe(encoder, surface, camera_bind_group, fog_bind_group);
+            self.render_wireframe(encoder, surface, camera_bind_group);
         }
     }
 
-    pub fn render_water(
-        &self,
-        frame: &mut Frame,
-        camera_bind_group: &wgpu::BindGroup,
-        fog_bind_group: &wgpu::BindGroup,
-    ) {
-        self.water.render(frame, camera_bind_group, fog_bind_group);
+    pub fn render_water(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+        self.water.render(frame, camera_bind_group);
     }
 
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
@@ -637,21 +628,30 @@ impl Terrain {
     fn render_chunks(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        albedo_target: &wgpu::TextureView,
+        compositor: &Compositor,
         depth_buffer: &DepthBuffer,
         camera_bind_group: &wgpu::BindGroup,
-        fog_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("terrain_chunks"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: albedo_target,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
+            color_attachments: &[
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &compositor.albedo_texture,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &compositor.position_texture,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+            ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &depth_buffer.texture_view,
                 depth_ops: Some(wgpu::Operations {
@@ -672,7 +672,6 @@ impl Terrain {
         );
         render_pass.set_bind_group(0, &self.terrain_texture_bind_group, &[]);
         render_pass.set_bind_group(1, camera_bind_group, &[]);
-        render_pass.set_bind_group(2, fog_bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(
             &self.chunk_draw_commands_buffer,
@@ -697,7 +696,6 @@ impl Terrain {
         encoder: &mut wgpu::CommandEncoder,
         surface: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
-        fog_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("terrain_chunks"),
@@ -722,7 +720,6 @@ impl Terrain {
         );
         render_pass.set_bind_group(0, &self.terrain_texture_bind_group, &[]);
         render_pass.set_bind_group(1, camera_bind_group, &[]);
-        render_pass.set_bind_group(2, fog_bind_group, &[]);
 
         let levels = [0..512, 512..640, 640..672, 672..680];
         for chunk_index in 0..self.total_chunks as i32 {

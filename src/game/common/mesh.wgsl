@@ -1,11 +1,9 @@
 #import world::camera
-#import world::fog
 
 @group(0) @binding(0) var t_terrain_texture: texture_2d<f32>;
 @group(0) @binding(1) var s_terrain_texture: sampler;
 
 @group(1) @binding(0) var<uniform> u_camera: camera::Camera;
-@group(2) @binding(0) var<uniform> u_fog: fog::Fog;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -42,10 +40,34 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     );
 }
 
+struct FragmentOutput {
+    @location(0) albedo: vec4<f32>,
+    @location(1) position: vec4<f32>,
+}
+
 @fragment
-fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment_main(vertex: VertexOutput) -> FragmentOutput {
     let tex_color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
-    let fog_factor = fog::fog_factor(u_fog, vertex.world_position, u_camera.position.xyz);
-    let final_color = mix(tex_color, vec4(u_fog.color, 1.0), fog_factor);
-    return final_color;
+
+    let distance_to_camera = length(u_camera.position - vertex.world_position);
+
+    return FragmentOutput(
+        tex_color,
+        vec4<f32>(vertex.world_position, distance_to_camera),
+    );
+}
+
+@fragment
+fn ck_fragment_main(vertex: VertexOutput) -> FragmentOutput {
+    let tex_color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
+    if tex_color.x == 0.0 && tex_color.y == 0.0 && tex_color.z == 0 {
+        discard;
+    }
+
+    let distance_to_camera = length(u_camera.position - vertex.world_position);
+
+    return FragmentOutput(
+        tex_color,
+        vec4<f32>(vertex.world_position, distance_to_camera),
+    );
 }

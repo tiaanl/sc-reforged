@@ -113,15 +113,6 @@ impl WorldScene {
         camera::register_camera_shader(&mut shaders);
         shaders.add_module(include_str!("fog.wgsl"), "fog.wgsl");
 
-        let compositor = Compositor::new(
-            renderer.device.clone(),
-            UVec2::new(
-                renderer.surface_config.width,
-                renderer.surface_config.height,
-            ),
-            renderer.surface_config.format,
-        );
-
         let camera_from = campaign.view_initial.from.extend(2500.0);
         let camera_to = campaign.view_initial.to.extend(0.0);
 
@@ -154,13 +145,22 @@ impl WorldScene {
 
         let gpu_fog = fog::GpuFog::new(renderer);
 
+        let compositor = Compositor::new(
+            renderer.device.clone(),
+            UVec2::new(
+                renderer.surface_config.width,
+                renderer.surface_config.height,
+            ),
+            renderer.surface_config.format,
+            &gpu_fog.bind_group_layout,
+        );
+
         let terrain = Terrain::new(
             assets,
             renderer,
             &mut shaders,
             &campaign_def,
             &gpu_camera.bind_group_layout,
-            &gpu_fog.bind_group_layout,
         )?;
 
         let mut objects = objects::Objects::new(
@@ -168,7 +168,6 @@ impl WorldScene {
             renderer,
             &mut shaders,
             &gpu_camera.bind_group_layout,
-            &gpu_fog.bind_group_layout,
         );
 
         let mut fog = None;
@@ -419,15 +418,49 @@ impl Scene for WorldScene {
 
     fn render_frame(&self, frame: &mut Frame) {
         if let Some(fog) = &self.fog {
-            frame.clear_color_and_depth(
-                wgpu::Color {
-                    r: fog.color.x as f64,
-                    g: fog.color.y as f64,
-                    b: fog.color.z as f64,
-                    a: 1.0,
-                },
-                1.0,
-            );
+            frame
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("clear_compositor_layers"),
+                    color_attachments: &[
+                        Some(wgpu::RenderPassColorAttachment {
+                            view: &self.compositor.albedo_texture,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: fog.color.x as f64,
+                                    g: fog.color.y as f64,
+                                    b: fog.color.z as f64,
+                                    a: 1.0,
+                                }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        }),
+                        Some(wgpu::RenderPassColorAttachment {
+                            view: &self.compositor.position_texture,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: 0.0,
+                                    g: 0.0,
+                                    b: 0.0,
+                                    a: 0.0,
+                                }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        }),
+                    ],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &frame.depth_buffer.texture_view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
         } else {
             frame.clear_color_and_depth(
                 wgpu::Color {
@@ -441,24 +474,20 @@ impl Scene for WorldScene {
         }
 
         let camera_bind_group = &self.gpu_camera.bind_group;
-        let fog_bind_group = &self.gpu_fog.bind_group;
-
-        let albedo_target = &self.compositor.albedo_texture;
 
         self.terrain
-            .render(frame, albedo_target, camera_bind_group, fog_bind_group);
+            .render(frame, &self.compositor, camera_bind_group);
 
         self.objects
-            .render_objects(frame, &self.compositor, camera_bind_group, fog_bind_group);
+            .render_objects(frame, &self.compositor, camera_bind_group);
 
         self.gizmos_renderer
             .render(frame, camera_bind_group, &self.gizmos_vertices);
 
-        self.terrain
-            .render_water(frame, camera_bind_group, fog_bind_group);
+        self.terrain.render_water(frame, camera_bind_group);
 
         self.compositor
-            .composite(&mut frame.encoder, &frame.surface);
+            .composite(&mut frame.encoder, &frame.surface, &self.gpu_fog.bind_group);
     }
 
     fn end_frame(&mut self) {

@@ -35,7 +35,6 @@ impl Water {
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
-        fog_bind_group_layout: &wgpu::BindGroupLayout,
         terrain_size: Vec2,
         water_level: f32,
     ) -> Result<Self, AssetError> {
@@ -99,7 +98,6 @@ impl Water {
                 .blend_state(wgpu::BlendState::ALPHA_BLENDING)
                 .bind_group_layout(renderer.texture_bind_group_layout())
                 .bind_group_layout(camera_bind_group_layout)
-                .bind_group_layout(fog_bind_group_layout)
                 .bind_group_layout(&renderer.depth_buffer.bind_group_layout)
                 .bind_group_layout(&water_bind_group_layout),
         );
@@ -164,12 +162,7 @@ impl Water {
         })
     }
 
-    pub fn render(
-        &self,
-        frame: &mut Frame,
-        camera_bind_group: &wgpu::BindGroup,
-        fog_bind_group: &wgpu::BindGroup,
-    ) {
+    pub fn render(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         frame.queue.write_buffer(
             &self.water_uniform_buffer,
             0,
@@ -183,9 +176,8 @@ impl Water {
         render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
         render_pass.set_bind_group(1, camera_bind_group, &[]);
-        render_pass.set_bind_group(2, fog_bind_group, &[]);
-        render_pass.set_bind_group(3, &depth_buffer.bind_group, &[]);
-        render_pass.set_bind_group(4, &self.water_bind_group, &[]);
+        render_pass.set_bind_group(2, &depth_buffer.bind_group, &[]);
+        render_pass.set_bind_group(3, &self.water_bind_group, &[]);
         render_pass.draw_indexed(0..self.mesh.index_count, 0, 0..1);
     }
 

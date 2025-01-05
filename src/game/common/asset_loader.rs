@@ -18,6 +18,7 @@ use crate::{
 
 use super::{
     assets::Image,
+    mesh_renderer::BlendMode,
     model::Model,
     vfs::{FileSystemError, VirtualFileSystem},
 };
@@ -143,13 +144,17 @@ impl AssetLoader {
             };
 
             Ok(if color_keyd {
-                Image::from_rgba(image::DynamicImage::from(bmp).into_rgba8())
+                Image::from_rgba(
+                    image::DynamicImage::from(bmp).into_rgba8(),
+                    BlendMode::ColorKeyed,
+                )
             } else if let Some(raw) = raw {
-                Image::from_rgba(shadow_company_tools::images::combine_bmp_and_raw(
-                    &bmp, &raw,
-                ))
+                Image::from_rgba(
+                    shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw),
+                    BlendMode::Alpha,
+                )
             } else {
-                Image::from_rgb(image::DynamicImage::from(bmp).into_rgba8())
+                Image::from_rgba(image::DynamicImage::from(bmp).into_rgba8(), BlendMode::None)
             })
         })
     }
@@ -159,7 +164,7 @@ impl AssetLoader {
             let data = asset_loader.load_raw(path)?;
             let image =
                 image::load_from_memory_with_format(data.as_ref(), image::ImageFormat::Jpeg)?;
-            Ok(Image::from_rgb(image.into_rgba8()))
+            Ok(Image::from_rgba(image.into_rgba8(), BlendMode::None))
         })
     }
 

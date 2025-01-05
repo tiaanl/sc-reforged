@@ -26,9 +26,14 @@ pub struct Compositor {
 
 impl Compositor {
     pub const ALBEDO_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
-    pub const POSITION_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+    pub const POSITION_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
-    pub fn new(device: RenderDevice, size: UVec2, target_format: wgpu::TextureFormat) -> Self {
+    pub fn new(
+        device: RenderDevice,
+        size: UVec2,
+        target_format: wgpu::TextureFormat,
+        fog_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
         let albedo_texture = Self::create_albedo_texture(&device, size);
         let position_texture = Self::create_position_texture(&device, size);
 
@@ -71,7 +76,7 @@ impl Compositor {
 
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compositor"),
-                bind_group_layouts: &[&layers_bind_group_layout],
+                bind_group_layouts: &[&layers_bind_group_layout, fog_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -140,14 +145,24 @@ impl Compositor {
         );
     }
 
-    pub fn composite(&self, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView) {
+    pub fn composite(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        fog_bind_group: &wgpu::BindGroup,
+    ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("compositor_layers"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: target,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.3,
+                        g: 0.3,
+                        b: 0.3,
+                        a: 1.0,
+                    }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -158,6 +173,7 @@ impl Compositor {
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.layers_bind_group, &[]);
+        render_pass.set_bind_group(1, fog_bind_group, &[]);
         render_pass.draw(0..3, 0..1);
     }
 
