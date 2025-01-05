@@ -218,7 +218,7 @@ impl Terrain {
                     depth_stencil: Some(
                         renderer
                             .depth_buffer
-                            .depth_stencil_state(wgpu::CompareFunction::LessEqual),
+                            .depth_stencil_state(wgpu::CompareFunction::LessEqual, true),
                     ),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {

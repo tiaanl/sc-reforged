@@ -67,10 +67,11 @@ impl DepthBuffer {
     pub fn depth_stencil_state(
         &self,
         depth_compare: wgpu::CompareFunction,
+        depth_write_enabled: bool,
     ) -> wgpu::DepthStencilState {
         wgpu::DepthStencilState {
             format: Self::FORMAT,
-            depth_write_enabled: true,
+            depth_write_enabled,
             depth_compare,
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),

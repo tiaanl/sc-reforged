@@ -144,8 +144,9 @@ impl Scene for ModelViewer {
         );
 
         let transform = Transform::from_translation(self.model_position)
-            .with_euler_rotation(self.model_rotation);
-        let list = MeshRenderer::mesh_list_from_model(&model, transform);
+            .with_euler_rotation(self.model_rotation)
+            .to_mat4();
+        let list = MeshRenderer::mesh_list_from_model(&model, &transform);
 
         self.mesh_renderer.render_multiple(
             &frame.device,

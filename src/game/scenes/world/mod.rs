@@ -448,13 +448,8 @@ impl Scene for WorldScene {
         self.terrain
             .render(frame, albedo_target, camera_bind_group, fog_bind_group);
 
-        self.objects.render_objects(
-            frame,
-            &self.compositor,
-            camera_bind_group,
-            fog_bind_group,
-            &self.gizmos_renderer,
-        );
+        self.objects
+            .render_objects(frame, &self.compositor, camera_bind_group, fog_bind_group);
 
         self.gizmos_renderer
             .render(frame, camera_bind_group, &self.gizmos_vertices);

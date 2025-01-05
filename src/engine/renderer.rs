@@ -314,6 +314,7 @@ impl Renderer {
                             config
                                 .depth_compare_function
                                 .unwrap_or(wgpu::CompareFunction::LessEqual),
+                            true,
                         ),
                     )
                 } else {

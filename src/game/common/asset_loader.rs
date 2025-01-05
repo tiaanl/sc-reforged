@@ -130,7 +130,9 @@ impl AssetLoader {
                 &mut std::io::Cursor::new(asset_loader.fs.load(path)?),
                 color_keyd,
             )?;
+
             let raw = if let Ok(raw_data) = asset_loader.fs.load(path.with_extension("raw")) {
+                debug_assert!(!color_keyd);
                 Some(shadow_company_tools::images::load_raw_file(
                     &mut std::io::Cursor::new(raw_data),
                     bmp.width(),
@@ -140,7 +142,9 @@ impl AssetLoader {
                 None
             };
 
-            Ok(if let Some(raw) = raw {
+            Ok(if color_keyd {
+                Image::from_rgba(image::DynamicImage::from(bmp).into_rgba8())
+            } else if let Some(raw) = raw {
                 Image::from_rgba(shadow_company_tools::images::combine_bmp_and_raw(
                     &bmp, &raw,
                 ))

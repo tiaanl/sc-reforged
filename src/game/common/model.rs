@@ -6,7 +6,7 @@ use crate::engine::prelude::*;
 
 use super::{
     asset_loader::{AssetError, AssetLoader},
-    mesh_renderer::{Texture, TexturedMesh},
+    mesh_renderer::{BlendMode, Texture, TexturedMesh},
 };
 
 pub type NodeIndex = usize;
@@ -101,9 +101,11 @@ impl Model {
 
             for smf_mesh in smf_node.meshes.iter() {
                 let mesh = Self::smf_mesh_to_mesh(renderer, asset_loader, smf_mesh)?;
+                let blend_mode = mesh.texture.blend_mode;
                 meshes.push(ModelMesh {
                     node_index,
                     mesh: asset_loader.asset_store().add(mesh),
+                    blend_mode,
                     model_transform: Mat4::IDENTITY,
                 });
             }
@@ -194,7 +196,11 @@ impl Model {
             gpu_mesh,
             texture: Texture {
                 bind_group,
-                translucent: true, // TODO: Detect whether we want to use translucency.
+                blend_mode: if image.has_alpha {
+                    BlendMode::Alpha
+                } else {
+                    BlendMode::None
+                },
             },
         };
 
@@ -216,8 +222,11 @@ pub struct ModelNode {
 pub struct ModelMesh {
     /// An index to the [ModelNode] this mesh is attached to.
     pub node_index: NodeIndex,
-    /// Local transform.
+    /// Handle to the mesh to render.
     pub mesh: Handle<TexturedMesh>,
+    /// The blend mode associated with the mesh. Kept here so we don't have to dig into the [Mesh]
+    /// to get the blend mode.
+    pub blend_mode: BlendMode,
     /// A precomputed cache of the model local transform.
     pub model_transform: Mat4,
 }

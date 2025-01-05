@@ -3,11 +3,11 @@ use std::cmp::Ordering;
 use glam::Vec4Swizzles;
 
 use crate::{
-    engine::{gizmos::GizmosRenderer, prelude::*},
+    engine::prelude::*,
     game::{
         camera::{BoundingBox, Camera, Frustum, Ray},
         compositor::Compositor,
-        mesh_renderer::{MeshItem, MeshList, MeshRenderer},
+        mesh_renderer::{BlendMode, MeshItem, MeshRenderer},
         model::Model,
     },
 };
@@ -38,9 +38,10 @@ pub struct Objects {
     asset_store: AssetStore,
 
     pub model_renderer: MeshRenderer,
-    /// Keep a local list of meshes we render each frame. Mostly used to pass data from the `update`
-    /// stage to the `render` stage. Also avoids reallocating the list each frame.
-    mesh_list: MeshList,
+
+    /// Keep a local list of meshes to render each frame.
+    opaque_meshes: Vec<MeshItem>,
+    alpha_meshes: Vec<MeshItem>,
 
     render_bounding_boxes: bool,
     pub bounding_box_renderer: BoundingBoxRenderer,
@@ -72,7 +73,8 @@ impl Objects {
         Self {
             asset_store,
             model_renderer,
-            mesh_list: MeshList::default(),
+            opaque_meshes: Vec::default(),
+            alpha_meshes: Vec::default(),
             render_bounding_boxes: false,
             bounding_box_renderer,
             objects: vec![],
@@ -160,7 +162,8 @@ impl Objects {
             }
         });
 
-        self.mesh_list.meshes.clear();
+        self.opaque_meshes.clear();
+        self.alpha_meshes.clear();
 
         // Update the local mesh list with visible objects only.
         for object in self.objects.iter().filter(|o| o.visible) {
@@ -185,21 +188,34 @@ impl Objects {
                 let mesh_position = transform.col(3);
                 let distance_from_camera = camera.position.distance_squared(mesh_position.xyz());
 
-                self.mesh_list.meshes.push(MeshItem {
-                    transform,
-                    mesh: mesh.mesh,
-                    distance_from_camera,
-                });
+                match mesh.blend_mode {
+                    BlendMode::None => self.opaque_meshes.push(MeshItem {
+                        transform,
+                        mesh: mesh.mesh,
+                        distance_from_camera,
+                    }),
+                    BlendMode::Alpha => self.alpha_meshes.push(MeshItem {
+                        transform,
+                        mesh: mesh.mesh,
+                        distance_from_camera,
+                    }),
+                    BlendMode::Multiply => todo!("not implemented yet"),
+                };
             }
         }
 
-        // Sort the meshes by distance, far to near.
-        self.mesh_list.meshes.sort_unstable_by(|a, b| {
-            if a.distance_from_camera > b.distance_from_camera {
-                Ordering::Less
-            } else {
-                Ordering::Greater
-            }
+        // Sort opaque meshes near to far to take advantage of the depth buffer to discard pixels.
+        self.opaque_meshes.sort_unstable_by(|a, b| {
+            b.distance_from_camera
+                .partial_cmp(&a.distance_from_camera)
+                .unwrap_or(Ordering::Equal)
+        });
+
+        // Sort alpha meshes far to near to avoid overlap in rendering.
+        self.alpha_meshes.sort_unstable_by(|a, b| {
+            b.distance_from_camera
+                .partial_cmp(&a.distance_from_camera)
+                .unwrap_or(Ordering::Equal)
         });
     }
 
@@ -209,11 +225,9 @@ impl Objects {
         compositor: &Compositor,
         camera_bind_group: &wgpu::BindGroup,
         fog_bind_group: &wgpu::BindGroup,
-        gizmos: &GizmosRenderer,
     ) {
         // Build a list of all the meshes that needs rendering.
         let mut boxes = vec![];
-        let gv = vec![];
 
         self.model_renderer.render_multiple(
             &frame.device,
@@ -222,7 +236,17 @@ impl Objects {
             &frame.depth_buffer.texture_view,
             camera_bind_group,
             fog_bind_group,
-            &self.mesh_list,
+            &self.opaque_meshes,
+        );
+
+        self.model_renderer.render_multiple_alpha(
+            &frame.device,
+            &mut frame.encoder,
+            &compositor.albedo_texture,
+            &frame.depth_buffer.texture_view,
+            camera_bind_group,
+            fog_bind_group,
+            &self.alpha_meshes,
         );
 
         if self.render_bounding_boxes {
@@ -260,8 +284,6 @@ impl Objects {
             self.bounding_box_renderer
                 .render_all(frame, camera_bind_group, &boxes);
         }
-
-        gizmos.render(frame, camera_bind_group, &gv);
     }
 
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
