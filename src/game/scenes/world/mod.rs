@@ -473,97 +473,99 @@ impl Scene for WorldScene {
     fn debug_panel(&mut self, egui: &egui::Context) {
         use egui::widgets::DragValue;
 
-        egui::Window::new("World").show(egui, |ui| {
-            if let Some(intersection) = self.intersection {
-                ui.label("Intersection");
-                ui.label(format!("{}", intersection));
-            }
-
-            ui.heading("Camera");
-            ui.horizontal(|ui| {
-                ui.label("Debug camera");
-                ui.toggle_value(&mut self.view_debug_camera, "View");
-                ui.toggle_value(&mut self.control_debug_camera, "Control");
-            });
-
-            if self.control_debug_camera {
-                let c = &mut self.debug_camera_controller;
-
-                egui::Grid::new("camera").show(ui, |ui| {
-                    ui.label("position");
-
-                    let mut pos = c.position;
-                    let mut changed = false;
-                    changed |= DragValue::new(&mut pos.x).ui(ui).changed();
-                    changed |= DragValue::new(&mut pos.y).ui(ui).changed();
-                    changed |= DragValue::new(&mut pos.z).ui(ui).changed();
-                    if changed {
-                        c.move_to(pos);
-                    }
-                    ui.end_row();
-
-                    ui.label("pitch/yaw");
-                    if DragValue::new(&mut c.pitch).speed(0.1).ui(ui).changed() {
-                        c.smudge();
-                    }
-                    if DragValue::new(&mut c.yaw).speed(0.1).ui(ui).changed() {
-                        c.smudge();
-                    }
-                });
-            };
-
-            ui.heading("Terrain");
-            self.terrain.debug_panel(ui);
-
-            ui.heading("Entities");
-            self.objects.debug_panel(ui);
-
-            ui.heading("Object");
-            if let Some(e) = self.selected_object {
-                ui.label(format!("{}", e));
-                if let Some(object) = self.objects.get_mut(e) {
-                    ui.horizontal(|ui| {
-                        ui.label("translation");
-                        DragValue::new(&mut object.translation.x).ui(ui);
-                        DragValue::new(&mut object.translation.y).ui(ui);
-                        DragValue::new(&mut object.translation.z).ui(ui);
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("rotation");
-                        DragValue::new(&mut object.rotation.x).speed(0.01).ui(ui);
-                        DragValue::new(&mut object.rotation.y).speed(0.01).ui(ui);
-                        DragValue::new(&mut object.rotation.z).speed(0.01).ui(ui);
-                    });
+        egui::Window::new("World")
+            .default_open(false)
+            .show(egui, |ui| {
+                if let Some(intersection) = self.intersection {
+                    ui.label("Intersection");
+                    ui.label(format!("{}", intersection));
                 }
-            } else {
-                ui.label("Nothing");
-            }
 
-            // ui.heading("Height");
-            // ui.add(DragValue::new(&mut self.terrain_height_sample.x));
-            // ui.add(DragValue::new(&mut self.terrain_height_sample.y));
-
-            if let Some(fog) = &mut self.fog {
-                ui.heading("Fog");
+                ui.heading("Camera");
                 ui.horizontal(|ui| {
-                    ui.label("Density");
-                    ui.add(DragValue::new(&mut self.fog_density).speed(0.01));
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Range");
-                    ui.add(DragValue::new(&mut fog.start).speed(10));
-                    ui.add(DragValue::new(&mut fog.end).speed(10));
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Color");
-                    ui.add(DragValue::new(&mut fog.color.x).speed(0.01));
-                    ui.add(DragValue::new(&mut fog.color.y).speed(0.01));
-                    ui.add(DragValue::new(&mut fog.color.z).speed(0.01));
+                    ui.label("Debug camera");
+                    ui.toggle_value(&mut self.view_debug_camera, "View");
+                    ui.toggle_value(&mut self.control_debug_camera, "Control");
                 });
 
-                self.fog_density = self.fog_density.clamp(0.0, 1.0);
-            }
-        });
+                if self.control_debug_camera {
+                    let c = &mut self.debug_camera_controller;
+
+                    egui::Grid::new("camera").show(ui, |ui| {
+                        ui.label("position");
+
+                        let mut pos = c.position;
+                        let mut changed = false;
+                        changed |= DragValue::new(&mut pos.x).ui(ui).changed();
+                        changed |= DragValue::new(&mut pos.y).ui(ui).changed();
+                        changed |= DragValue::new(&mut pos.z).ui(ui).changed();
+                        if changed {
+                            c.move_to(pos);
+                        }
+                        ui.end_row();
+
+                        ui.label("pitch/yaw");
+                        if DragValue::new(&mut c.pitch).speed(0.1).ui(ui).changed() {
+                            c.smudge();
+                        }
+                        if DragValue::new(&mut c.yaw).speed(0.1).ui(ui).changed() {
+                            c.smudge();
+                        }
+                    });
+                };
+
+                ui.heading("Terrain");
+                self.terrain.debug_panel(ui);
+
+                ui.heading("Entities");
+                self.objects.debug_panel(ui);
+
+                ui.heading("Object");
+                if let Some(e) = self.selected_object {
+                    ui.label(format!("{}", e));
+                    if let Some(object) = self.objects.get_mut(e) {
+                        ui.horizontal(|ui| {
+                            ui.label("translation");
+                            DragValue::new(&mut object.translation.x).ui(ui);
+                            DragValue::new(&mut object.translation.y).ui(ui);
+                            DragValue::new(&mut object.translation.z).ui(ui);
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("rotation");
+                            DragValue::new(&mut object.rotation.x).speed(0.01).ui(ui);
+                            DragValue::new(&mut object.rotation.y).speed(0.01).ui(ui);
+                            DragValue::new(&mut object.rotation.z).speed(0.01).ui(ui);
+                        });
+                    }
+                } else {
+                    ui.label("Nothing");
+                }
+
+                // ui.heading("Height");
+                // ui.add(DragValue::new(&mut self.terrain_height_sample.x));
+                // ui.add(DragValue::new(&mut self.terrain_height_sample.y));
+
+                if let Some(fog) = &mut self.fog {
+                    ui.heading("Fog");
+                    ui.horizontal(|ui| {
+                        ui.label("Density");
+                        ui.add(DragValue::new(&mut self.fog_density).speed(0.01));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Range");
+                        ui.add(DragValue::new(&mut fog.start).speed(10));
+                        ui.add(DragValue::new(&mut fog.end).speed(10));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Color");
+                        ui.add(DragValue::new(&mut fog.color.x).speed(0.01));
+                        ui.add(DragValue::new(&mut fog.color.y).speed(0.01));
+                        ui.add(DragValue::new(&mut fog.color.z).speed(0.01));
+                    });
+
+                    self.fog_density = self.fog_density.clamp(0.0, 1.0);
+                }
+            });
 
         self.compositor.debug_panel(egui);
     }

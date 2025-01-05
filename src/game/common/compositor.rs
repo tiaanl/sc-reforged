@@ -164,7 +164,7 @@ impl Compositor {
     pub fn debug_panel(&mut self, egui: &egui::Context) {
         egui::Window::new("Compoositor")
             .default_open(false)
-            .show(egui, |ui| {});
+            .show(egui, |_ui| {});
     }
 
     #[inline]
