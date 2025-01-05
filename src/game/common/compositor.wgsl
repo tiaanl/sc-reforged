@@ -12,13 +12,19 @@ fn vertex_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 }
 
 @group(0) @binding(0) var t_albedo: texture_2d<f32>;
+@group(0) @binding(1) var t_position: texture_2d<f32>;
+
+fn get_frag(texture: texture_2d<f32>, uv: vec2<f32>) -> vec4<f32> {
+    let texture_size = vec2<f32>(textureDimensions(texture));
+    let frag_coords = vec2<i32>(uv * texture_size);
+
+    return textureLoad(texture, frag_coords, 0);
+}
 
 @fragment
 fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let texture_size = vec2<f32>(textureDimensions(t_albedo));
-    let frag_coords = vec2<i32>(vertex.uv * texture_size);
+    let albedo = get_frag(t_albedo, vertex.uv);
+    let position = get_frag(t_position, vertex.uv);
 
-    let base_color = textureLoad(t_albedo, frag_coords, 0);
-
-    return base_color;
+    return albedo;
 }

@@ -564,5 +564,7 @@ impl Scene for WorldScene {
                 self.fog_density = self.fog_density.clamp(0.0, 1.0);
             }
         });
+
+        self.compositor.debug_panel(egui);
     }
 }

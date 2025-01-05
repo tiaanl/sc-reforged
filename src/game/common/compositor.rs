@@ -161,6 +161,12 @@ impl Compositor {
         render_pass.draw(0..3, 0..1);
     }
 
+    pub fn debug_panel(&mut self, egui: &egui::Context) {
+        egui::Window::new("Compoositor")
+            .default_open(false)
+            .show(egui, |ui| {});
+    }
+
     #[inline]
     fn create_albedo_texture(device: &RenderDevice, size: UVec2) -> wgpu::TextureView {
         Self::create_texture(device, "albedo", size, Self::ALBEDO_TEXTURE_FORMAT)
