@@ -9,11 +9,12 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera::{self, render_camera_frustum},
+        compositor::Compositor,
         config::{self, CampaignDef, Fog, LodModelProfileDefinition, SubModelDefinition},
     },
 };
 use egui::Widget;
-use glam::{Quat, Vec3, Vec4};
+use glam::{Quat, UVec2, Vec3, Vec4};
 use terrain::*;
 
 mod bounding_boxes;
@@ -27,6 +28,8 @@ mod water;
 pub struct WorldScene {
     asset_store: AssetStore,
     _campaign_def: CampaignDef,
+
+    compositor: Compositor,
 
     view_debug_camera: bool,
     control_debug_camera: bool,
@@ -109,6 +112,15 @@ impl WorldScene {
         let mut shaders = Shaders::default();
         camera::register_camera_shader(&mut shaders);
         shaders.add_module(include_str!("fog.wgsl"), "fog.wgsl");
+
+        let compositor = Compositor::new(
+            renderer.device.clone(),
+            UVec2::new(
+                renderer.surface_config.width,
+                renderer.surface_config.height,
+            ),
+            renderer.surface_config.format,
+        );
 
         let camera_from = campaign.view_initial.from.extend(2500.0);
         let camera_to = campaign.view_initial.to.extend(0.0);
@@ -216,8 +228,9 @@ impl WorldScene {
 
         Ok(Self {
             asset_store,
-
             _campaign_def: campaign_def,
+
+            compositor,
 
             view_debug_camera: false,
             control_debug_camera: false,
@@ -260,7 +273,12 @@ impl WorldScene {
 }
 
 impl Scene for WorldScene {
-    fn resize(&mut self, width: u32, height: u32) {
+    fn resize(&mut self, renderer: &Renderer) {
+        let width = renderer.surface_config.width;
+        let height = renderer.surface_config.height;
+
+        self.compositor.resize(width, height);
+
         self.window_size = Vec2::new(width as f32, height as f32);
         self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
         self.debug_camera.aspect_ratio = width as f32 / height.max(1) as f32;
@@ -425,11 +443,14 @@ impl Scene for WorldScene {
         let camera_bind_group = &self.gpu_camera.bind_group;
         let fog_bind_group = &self.gpu_fog.bind_group;
 
+        let albedo_target = &self.compositor.albedo_texture;
+
         self.terrain
-            .render(frame, camera_bind_group, fog_bind_group);
+            .render(frame, albedo_target, camera_bind_group, fog_bind_group);
 
         self.objects.render_objects(
             frame,
+            &self.compositor,
             camera_bind_group,
             fog_bind_group,
             &self.gizmos_renderer,
@@ -440,6 +461,9 @@ impl Scene for WorldScene {
 
         self.terrain
             .render_water(frame, camera_bind_group, fog_bind_group);
+
+        self.compositor
+            .composite(&mut frame.encoder, &frame.surface);
     }
 
     fn end_frame(&mut self) {

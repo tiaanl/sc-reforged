@@ -3,7 +3,7 @@ use wgpu::{util::DeviceExt, vertex_attr_array, ShaderStages};
 
 use crate::engine::prelude::*;
 
-use super::model::Model;
+use super::{compositor::Compositor, model::Model};
 
 /// A texture bind group with meta data.
 #[derive(Debug)]
@@ -131,7 +131,7 @@ impl MeshRenderer {
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: &[Some(wgpu::ColorTargetState {
-                            format: renderer.surface_config.format,
+                            format: Compositor::ALBEDO_TEXTURE_FORMAT,
                             blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                             write_mask: wgpu::ColorWrites::ALL,
                         })],
@@ -161,9 +161,13 @@ impl MeshRenderer {
         list
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn render_multiple(
         &self,
-        frame: &mut Frame,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        albedo_target: &wgpu::TextureView,
+        depth_target: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
         fog_bind_group: &wgpu::BindGroup,
         meshes: &MeshList,
@@ -172,8 +176,27 @@ impl MeshRenderer {
             return;
         }
 
-        let device = frame.device.clone();
-        let mut render_pass = frame.begin_basic_render_pass("mesh_renderer_render_pass", true);
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("mesh"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: albedo_target,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: depth_target,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
 
         for mesh_item in meshes.meshes.iter() {
             let Some(mesh) = self.asset_store.get(mesh_item.mesh) else {

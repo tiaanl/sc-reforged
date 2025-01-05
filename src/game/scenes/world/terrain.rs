@@ -9,6 +9,7 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera::Camera,
+        compositor::Compositor,
         config::{CampaignDef, TerrainMapping},
     },
 };
@@ -176,30 +177,67 @@ impl Terrain {
             map_dx, map_dy, height_map.size.x, height_map.size.y,
         );
 
-        let shader_module = shaders.create_shader(
+        let module = shaders.create_shader(
             renderer,
             "terrain",
             include_str!("terrain.wgsl"),
             "terrain.wgsl",
         );
 
-        let pipeline = renderer.create_render_pipeline(
-            RenderPipelineConfig::<Vertex>::new("terrain", &shader_module)
-                .fragment_entry("fragment_main")
-                .primitive(wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    front_face: wgpu::FrontFace::Cw,
-                    cull_mode: Some(wgpu::Face::Back),
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    ..Default::default()
+        let pipeline = {
+            let layout = renderer
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("terrain"),
+                    bind_group_layouts: &[
+                        renderer.texture_bind_group_layout(),
+                        camera_bind_group_layout,
+                        fog_bind_group_layout,
+                    ],
+                    push_constant_ranges: &[],
+                });
+
+            renderer
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("terrain"),
+                    layout: Some(&layout),
+                    vertex: wgpu::VertexState {
+                        module: &module,
+                        entry_point: Some("vertex_main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers: &[Vertex::vertex_buffer_layout()],
+                    },
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        front_face: wgpu::FrontFace::Cw,
+                        cull_mode: Some(wgpu::Face::Back),
+                        polygon_mode: wgpu::PolygonMode::Fill,
+                        ..Default::default()
+                    },
+                    depth_stencil: Some(
+                        renderer
+                            .depth_buffer
+                            .depth_stencil_state(wgpu::CompareFunction::LessEqual),
+                    ),
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module: &module,
+                        entry_point: Some("fragment_main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: Compositor::ALBEDO_TEXTURE_FORMAT,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    multiview: None,
+                    cache: None,
                 })
-                .bind_group_layout(renderer.texture_bind_group_layout())
-                .bind_group_layout(camera_bind_group_layout)
-                .bind_group_layout(fog_bind_group_layout),
-        );
+        };
 
         let wireframe_pipeline = renderer.create_render_pipeline(
-            RenderPipelineConfig::<Vertex>::new("terrain_wireframe", &shader_module)
+            RenderPipelineConfig::<Vertex>::new("terrain_wireframe", &module)
                 .fragment_entry("fragment_main_wireframe")
                 .primitive(wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::LineList,
@@ -472,6 +510,7 @@ impl Terrain {
     pub fn render(
         &self,
         frame: &mut Frame,
+        albedo_target: &wgpu::TextureView,
         camera_bind_group: &wgpu::BindGroup,
         fog_bind_group: &wgpu::BindGroup,
     ) {
@@ -482,13 +521,15 @@ impl Terrain {
         let depth_texture = &frame.depth_buffer;
 
         self.process_chunks(device, queue, camera_bind_group);
+
         self.render_chunks(
             encoder,
-            surface,
+            albedo_target,
             depth_texture,
             camera_bind_group,
             fog_bind_group,
         );
+
         if self.draw_wireframe {
             self.render_wireframe(encoder, surface, camera_bind_group, fog_bind_group);
         }
@@ -596,7 +637,7 @@ impl Terrain {
     fn render_chunks(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        surface: &wgpu::TextureView,
+        albedo_target: &wgpu::TextureView,
         depth_buffer: &DepthBuffer,
         camera_bind_group: &wgpu::BindGroup,
         fog_bind_group: &wgpu::BindGroup,
@@ -604,7 +645,7 @@ impl Terrain {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("terrain_chunks"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: surface,
+                view: albedo_target,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,

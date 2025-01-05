@@ -97,7 +97,9 @@ impl ModelViewer {
 }
 
 impl Scene for ModelViewer {
-    fn resize(&mut self, width: u32, height: u32) {
+    fn resize(&mut self, renderer: &Renderer) {
+        let width = renderer.surface_config.width;
+        let height = renderer.surface_config.height;
         self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
@@ -146,7 +148,10 @@ impl Scene for ModelViewer {
         let list = MeshRenderer::mesh_list_from_model(&model, transform);
 
         self.mesh_renderer.render_multiple(
-            frame,
+            &frame.device,
+            &mut frame.encoder,
+            &frame.surface,
+            &frame.depth_buffer.texture_view,
             &self.gpu_camera.bind_group,
             &self.gpu_camera.bind_group,
             &list,

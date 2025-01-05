@@ -1,6 +1,8 @@
 use glam::Vec2;
 use winit::{event::MouseButton, keyboard::KeyCode};
 
+use crate::Renderer;
+
 use super::{input::InputState, renderer::Frame};
 
 #[allow(unused)]
@@ -17,7 +19,7 @@ pub enum SceneEvent {
 #[allow(unused)]
 pub trait Scene {
     /// Called when the size of the window surface is changed.
-    fn resize(&mut self, width: u32, height: u32);
+    fn resize(&mut self, renderer: &Renderer);
 
     /// Called when an engine event occurs. This includes input events.
     fn event(&mut self, event: &SceneEvent) {}

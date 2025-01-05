@@ -6,6 +6,7 @@ use crate::{
     engine::{gizmos::GizmosRenderer, prelude::*},
     game::{
         camera::{BoundingBox, Camera, Frustum, Ray},
+        compositor::Compositor,
         mesh_renderer::{MeshItem, MeshList, MeshRenderer},
         model::Model,
     },
@@ -205,6 +206,7 @@ impl Objects {
     pub fn render_objects(
         &self,
         frame: &mut Frame,
+        compositor: &Compositor,
         camera_bind_group: &wgpu::BindGroup,
         fog_bind_group: &wgpu::BindGroup,
         gizmos: &GizmosRenderer,
@@ -214,7 +216,10 @@ impl Objects {
         let gv = vec![];
 
         self.model_renderer.render_multiple(
-            frame,
+            &frame.device,
+            &mut frame.encoder,
+            &compositor.albedo_texture,
+            &frame.depth_buffer.texture_view,
             camera_bind_group,
             fog_bind_group,
             &self.mesh_list,
