@@ -1,79 +1,79 @@
 use glam::Vec3;
 
-use crate::game::config::Fog;
+use super::UniformBuffer;
 
-use super::Renderer;
-
-#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[derive(Clone, Copy, Default, bytemuck::NoUninit)]
 #[repr(C)]
-struct RawFog {
-    color: Vec3,    // 12
-    _padding: f32,  // 4
-    start: f32,     // 4
-    end: f32,       // 4
-    density: f32,   // 4
-    _padding2: f32, // 4
+pub struct RawFog {
+    pub color: Vec3,  // 12
+    _padding: f32,    // 4
+    pub start: f32,   // 4
+    pub end: f32,     // 4
+    pub density: f32, // 4
+    _padding2: f32,   // 4
 }
 
-pub struct GpuFog {
-    buffer: wgpu::Buffer,
-    pub bind_group_layout: wgpu::BindGroupLayout,
-    pub bind_group: wgpu::BindGroup,
-}
+pub type GpuFog = UniformBuffer<RawFog>;
 
-impl GpuFog {
-    pub fn new(renderer: &Renderer) -> Self {
-        let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("fog_buffer"),
-            size: std::mem::size_of::<RawFog>() as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+// pub struct GpuFog {
+//     buffer: wgpu::Buffer,
+//     pub bind_group_layout: wgpu::BindGroupLayout,
+//     pub bind_group: wgpu::BindGroup,
+// }
 
-        let bind_group_layout =
-            renderer
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("fog_bind_group_layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
+// impl GpuFog {
+//     pub fn new(renderer: &Renderer) -> Self {
+//         let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
+//             label: Some("fog_buffer"),
+//             size: std::mem::size_of::<RawFog>() as wgpu::BufferAddress,
+//             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+//             mapped_at_creation: false,
+//         });
 
-        let bind_group = renderer
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("fog_bind_group"),
-                layout: &bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(buffer.as_entire_buffer_binding()),
-                }],
-            });
+//         let bind_group_layout =
+//             renderer
+//                 .device
+//                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+//                     label: Some("fog_bind_group_layout"),
+//                     entries: &[wgpu::BindGroupLayoutEntry {
+//                         binding: 0,
+//                         visibility: wgpu::ShaderStages::FRAGMENT,
+//                         ty: wgpu::BindingType::Buffer {
+//                             ty: wgpu::BufferBindingType::Uniform,
+//                             has_dynamic_offset: false,
+//                             min_binding_size: None,
+//                         },
+//                         count: None,
+//                     }],
+//                 });
 
-        Self {
-            buffer,
-            bind_group_layout,
-            bind_group,
-        }
-    }
+//         let bind_group = renderer
+//             .device
+//             .create_bind_group(&wgpu::BindGroupDescriptor {
+//                 label: Some("fog_bind_group"),
+//                 layout: &bind_group_layout,
+//                 entries: &[wgpu::BindGroupEntry {
+//                     binding: 0,
+//                     resource: wgpu::BindingResource::Buffer(buffer.as_entire_buffer_binding()),
+//                 }],
+//             });
 
-    pub fn upload(&self, queue: &wgpu::Queue, fog: &Fog, density: f32) {
-        let raw_fog = RawFog {
-            color: fog.color,
-            _padding: 0.0,
-            start: fog.start,
-            end: fog.end,
-            density,
-            _padding2: 0.0,
-        };
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[raw_fog]));
-    }
-}
+//         Self {
+//             buffer,
+//             bind_group_layout,
+//             bind_group,
+//         }
+//     }
+
+//     pub fn upload(&self, queue: &wgpu::Queue, fog: &Fog, density: f32) {
+//         let raw_fog = RawFog {
+//             color: fog.color,
+//             _padding: 0.0,
+//             start: fog.start,
+//             end: fog.end,
+//             density,
+//             _padding2: 0.0,
+//         };
+//         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[raw_fog]));
+//     }
+// }

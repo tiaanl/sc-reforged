@@ -1,7 +1,6 @@
 use crate::engine::{gizmos::GizmoVertex, prelude::*};
 
 use glam::{FloatExt, Mat4, Quat, Vec2, Vec3, Vec4};
-use wgpu::util::DeviceExt;
 
 pub fn register_camera_shader(shaders: &mut Shaders) {
     shaders.add_module(include_str!("camera.wgsl"), "camera.wgsl");
@@ -226,13 +225,16 @@ impl Camera {
 
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
 #[repr(C)]
-struct RawCamera {
-    proj: Mat4,
-    view: Mat4,
-    position: Vec4,
-    frustum: [Vec4; 6],
+pub struct RawCamera {
+    pub proj: Mat4,
+    pub view: Mat4,
+    pub position: Vec4,
+    pub frustum: [Vec4; 6],
 }
 
+pub type GpuCamera = UniformBuffer<RawCamera>;
+
+/*
 pub struct GpuCamera {
     buffer: wgpu::Buffer,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -300,6 +302,7 @@ impl GpuCamera {
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[raw_camera]));
     }
 }
+*/
 
 pub struct FreeCameraControls {
     mouse_button: MouseButton,

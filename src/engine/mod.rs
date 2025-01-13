@@ -12,6 +12,7 @@ pub mod utils;
 pub mod dirty;
 pub mod tracked;
 pub mod transform;
+pub mod uniform_buffer;
 
 pub mod prelude {
     #![allow(unused_imports)]
@@ -25,6 +26,7 @@ pub mod prelude {
     pub use super::shaders::*;
     pub use super::tracked::*;
     pub use super::transform::*;
+    pub use super::uniform_buffer::*;
     pub use glam::{Mat4, Quat, Vec2, Vec3};
 }
 

@@ -8,7 +8,7 @@ use crate::{
     },
     game::{
         asset_loader::{AssetError, AssetLoader},
-        camera::{self, render_camera_frustum},
+        camera::{self, render_camera_frustum, Frustum},
         config::{self, CampaignDef, Fog, LodModelProfileDefinition, SubModelDefinition},
     },
 };
@@ -138,9 +138,9 @@ impl WorldScene {
         );
 
         let camera_matrices = camera.calculate_matrices().into();
-        let gpu_camera = camera::GpuCamera::new(renderer);
+        let gpu_camera = camera::GpuCamera::new(renderer, "camera", wgpu::ShaderStages::all());
 
-        let gpu_fog = fog::GpuFog::new(renderer);
+        let gpu_fog = fog::GpuFog::new(renderer, "fog", wgpu::ShaderStages::FRAGMENT);
 
         let terrain = Terrain::new(
             assets,
@@ -380,22 +380,30 @@ impl Scene for WorldScene {
     }
 
     fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
-        if self.view_debug_camera {
-            self.gpu_camera.upload_matrices(
-                queue,
-                &self.debug_camera.calculate_matrices(),
-                self.debug_camera.position,
-            );
+        let camera = if self.view_debug_camera {
+            &self.debug_camera
         } else {
-            self.gpu_camera.upload_matrices(
-                queue,
-                &self.camera.calculate_matrices(),
-                self.camera.position,
-            );
-        }
+            &self.camera
+        };
+
+        let matrices = camera.calculate_matrices();
+        let frustum = Frustum::from_matrices(&matrices);
+        self.gpu_camera.upload(queue, |c| {
+            c.proj = matrices.projection;
+            c.view = matrices.view;
+            c.position = camera.position.extend(1.0);
+            for i in 0..c.frustum.len() {
+                c.frustum[i] = frustum.planes[i].normal.extend(frustum.planes[i].distance)
+            }
+        });
 
         if let Some(fog) = &self.fog {
-            self.gpu_fog.upload(queue, fog, self.fog_density);
+            self.gpu_fog.upload(queue, |f| {
+                f.color = fog.color;
+                f.start = fog.start;
+                f.end = fog.end;
+                f.density = self.fog_density;
+            });
         }
     }
 
