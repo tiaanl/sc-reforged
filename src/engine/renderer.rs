@@ -427,14 +427,16 @@ impl Renderer {
     }
 }
 
-/// Depth texture.
+/// A single object passed around during the rendering of a single frame.
 pub struct Frame {
     pub device: RenderDevice,
     pub queue: RenderQueue,
+
     pub depth_buffer: Arc<DepthBuffer>,
 
     /// The encoder to use for creating render passes.
     pub encoder: wgpu::CommandEncoder,
+
     /// The window surface.
     pub surface: wgpu::TextureView,
 }

@@ -6,7 +6,6 @@ use crate::{
     engine::prelude::*,
     game::{
         camera::{BoundingBox, Camera, Frustum, Ray},
-        compositor::Compositor,
         mesh_renderer::{BlendMode, MeshItem, MeshRenderer},
         model::Model,
     },
@@ -232,40 +231,26 @@ impl Objects {
         });
     }
 
-    pub fn render_objects(
-        &self,
-        frame: &mut Frame,
-        compositor: &Compositor,
-        camera_bind_group: &wgpu::BindGroup,
-    ) {
+    pub fn render_objects(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         // Build a list of all the meshes that needs rendering.
         let mut boxes = vec![];
 
         self.model_renderer.render_multiple(
-            &frame.device,
-            &mut frame.encoder,
-            compositor,
-            &frame.depth_buffer.texture_view,
+            frame,
             camera_bind_group,
             BlendMode::None,
             &self.opaque_meshes,
         );
 
         self.model_renderer.render_multiple(
-            &frame.device,
-            &mut frame.encoder,
-            compositor,
-            &frame.depth_buffer.texture_view,
+            frame,
             camera_bind_group,
             BlendMode::ColorKeyed,
             &self.ck_meshes,
         );
 
         self.model_renderer.render_multiple(
-            &frame.device,
-            &mut frame.encoder,
-            compositor,
-            &frame.depth_buffer.texture_view,
+            frame,
             camera_bind_group,
             BlendMode::Alpha,
             &self.alpha_meshes,

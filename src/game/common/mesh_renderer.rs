@@ -3,7 +3,7 @@ use wgpu::{util::DeviceExt, vertex_attr_array, ShaderStages};
 
 use crate::engine::prelude::*;
 
-use super::{compositor::Compositor, model::Model};
+use super::model::Model;
 
 #[derive(Clone, Copy, Debug)]
 pub enum BlendMode {
@@ -164,23 +164,16 @@ impl MeshRenderer {
                         }
                     },
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[
-                        Some(wgpu::ColorTargetState {
-                            format: Compositor::ALBEDO_TEXTURE_FORMAT,
-                            blend: match blend_mode {
-                                BlendMode::None => None,
-                                BlendMode::ColorKeyed => None,
-                                BlendMode::Alpha => Some(wgpu::BlendState::ALPHA_BLENDING),
-                                BlendMode::Multiply => None,
-                            },
-                            write_mask: wgpu::ColorWrites::ALL,
-                        }),
-                        Some(wgpu::ColorTargetState {
-                            format: Compositor::POSITION_TEXTURE_FORMAT,
-                            blend: None,
-                            write_mask: wgpu::ColorWrites::ALL,
-                        }),
-                    ],
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: renderer.surface_config.format,
+                        blend: match blend_mode {
+                            BlendMode::None => None,
+                            BlendMode::ColorKeyed => None,
+                            BlendMode::Alpha => Some(wgpu::BlendState::ALPHA_BLENDING),
+                            BlendMode::Multiply => None,
+                        },
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
                 }),
                 multiview: None,
                 cache: None,
@@ -202,10 +195,7 @@ impl MeshRenderer {
     #[allow(clippy::too_many_arguments)]
     pub fn render_multiple(
         &self,
-        device: &wgpu::Device,
-        encoder: &mut wgpu::CommandEncoder,
-        compositor: &Compositor,
-        depth_target: &wgpu::TextureView,
+        frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
         blend_mode: BlendMode,
         meshes: &[MeshItem],
@@ -214,37 +204,29 @@ impl MeshRenderer {
             return;
         }
 
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("opaque_meshes"),
-            color_attachments: &[
-                Some(wgpu::RenderPassColorAttachment {
-                    view: &compositor.albedo_texture,
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("opaque_meshes"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
                     },
-                }),
-                Some(wgpu::RenderPassColorAttachment {
-                    view: &compositor.position_texture,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &frame.depth_buffer.texture_view,
+                    depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
-                    },
+                    }),
+                    stencil_ops: None,
                 }),
-            ],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: depth_target,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
         let render_pipeline = match blend_mode {
             BlendMode::None => &self.opaque_render_pipeline,
@@ -264,11 +246,13 @@ impl MeshRenderer {
             };
 
             // Create a buffer to render to.
-            let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("mesh_indices_buffer"),
-                contents: bytemuck::cast_slice(&[mesh_item.transform]),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+            let buffer = frame
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("mesh_indices_buffer"),
+                    contents: bytemuck::cast_slice(&[mesh_item.transform]),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
 
             render_pass.set_vertex_buffer(0, mesh.gpu_mesh.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, buffer.slice(..));

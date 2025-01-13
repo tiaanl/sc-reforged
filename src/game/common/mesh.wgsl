@@ -40,34 +40,19 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     );
 }
 
-struct FragmentOutput {
-    @location(0) albedo: vec4<f32>,
-    @location(1) position: vec4<f32>,
+@fragment
+fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    let color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
+
+    return color;
 }
 
 @fragment
-fn fragment_main(vertex: VertexOutput) -> FragmentOutput {
-    let tex_color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
-
-    let distance_to_camera = length(u_camera.position - vertex.world_position);
-
-    return FragmentOutput(
-        tex_color,
-        vec4<f32>(vertex.world_position, distance_to_camera),
-    );
-}
-
-@fragment
-fn ck_fragment_main(vertex: VertexOutput) -> FragmentOutput {
-    let tex_color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
-    if tex_color.x == 0.0 && tex_color.y == 0.0 && tex_color.z == 0 {
+fn ck_fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    let color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
+    if color.x == 0.0 && color.y == 0.0 && color.z == 0 {
         discard;
     }
 
-    let distance_to_camera = length(u_camera.position - vertex.world_position);
-
-    return FragmentOutput(
-        tex_color,
-        vec4<f32>(vertex.world_position, distance_to_camera),
-    );
+    return color;
 }

@@ -9,7 +9,6 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera::{self, render_camera_frustum},
-        compositor::Compositor,
         config::{self, CampaignDef, Fog, LodModelProfileDefinition, SubModelDefinition},
     },
 };
@@ -28,8 +27,6 @@ mod water;
 pub struct WorldScene {
     asset_store: AssetStore,
     _campaign_def: CampaignDef,
-
-    compositor: Compositor,
 
     view_debug_camera: bool,
     control_debug_camera: bool,
@@ -145,16 +142,6 @@ impl WorldScene {
 
         let gpu_fog = fog::GpuFog::new(renderer);
 
-        let compositor = Compositor::new(
-            renderer.device.clone(),
-            UVec2::new(
-                renderer.surface_config.width,
-                renderer.surface_config.height,
-            ),
-            renderer.surface_config.format,
-            &gpu_fog.bind_group_layout,
-        );
-
         let terrain = Terrain::new(
             assets,
             renderer,
@@ -229,8 +216,6 @@ impl WorldScene {
             asset_store,
             _campaign_def: campaign_def,
 
-            compositor,
-
             view_debug_camera: false,
             control_debug_camera: false,
 
@@ -275,8 +260,6 @@ impl Scene for WorldScene {
     fn resize(&mut self, renderer: &Renderer) {
         let width = renderer.surface_config.width;
         let height = renderer.surface_config.height;
-
-        self.compositor.resize(width, height);
 
         self.window_size = Vec2::new(width as f32, height as f32);
         self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
@@ -418,49 +401,15 @@ impl Scene for WorldScene {
 
     fn render_frame(&self, frame: &mut Frame) {
         if let Some(fog) = &self.fog {
-            frame
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("clear_compositor_layers"),
-                    color_attachments: &[
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.compositor.albedo_texture,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: fog.color.x as f64,
-                                    g: fog.color.y as f64,
-                                    b: fog.color.z as f64,
-                                    a: 1.0,
-                                }),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        }),
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.compositor.position_texture,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: 0.0,
-                                    g: 0.0,
-                                    b: 0.0,
-                                    a: 0.0,
-                                }),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        }),
-                    ],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &frame.depth_buffer.texture_view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
-                            store: wgpu::StoreOp::Store,
-                        }),
-                        stencil_ops: None,
-                    }),
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
+            frame.clear_color_and_depth(
+                wgpu::Color {
+                    r: fog.color.x as f64,
+                    g: fog.color.y as f64,
+                    b: fog.color.z as f64,
+                    a: 1.0,
+                },
+                1.0,
+            );
         } else {
             frame.clear_color_and_depth(
                 wgpu::Color {
@@ -475,19 +424,14 @@ impl Scene for WorldScene {
 
         let camera_bind_group = &self.gpu_camera.bind_group;
 
-        self.terrain
-            .render(frame, &self.compositor, camera_bind_group);
+        self.terrain.render(frame, camera_bind_group);
 
-        self.objects
-            .render_objects(frame, &self.compositor, camera_bind_group);
+        self.objects.render_objects(frame, camera_bind_group);
 
         self.gizmos_renderer
             .render(frame, camera_bind_group, &self.gizmos_vertices);
 
         self.terrain.render_water(frame, camera_bind_group);
-
-        self.compositor
-            .composite(&mut frame.encoder, &frame.surface, &self.gpu_fog.bind_group);
     }
 
     fn end_frame(&mut self) {
@@ -590,7 +534,5 @@ impl Scene for WorldScene {
                     self.fog_density = self.fog_density.clamp(0.0, 1.0);
                 }
             });
-
-        self.compositor.debug_panel(egui);
     }
 }

@@ -31,21 +31,11 @@ fn vertex_main(vertex: VertexInput) -> VertexOutput {
     );
 }
 
-struct FragmentOutput {
-    @location(0) albedo: vec4<f32>,
-    @location(1) position: vec4<f32>,
-}
-
 @fragment
-fn fragment_main(vertex: VertexOutput) -> FragmentOutput {
-    let tex_color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
+fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    let color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
 
-    let distance_to_camera = length(u_camera.position - vertex.world_position);
-
-    return FragmentOutput(
-        tex_color,
-        vec4<f32>(vertex.world_position, distance_to_camera),
-    );
+    return color;
 }
 
 @fragment

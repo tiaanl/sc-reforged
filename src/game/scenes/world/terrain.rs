@@ -9,7 +9,6 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         camera::Camera,
-        compositor::Compositor,
         config::{CampaignDef, TerrainMapping},
     },
 };
@@ -223,18 +222,11 @@ impl Terrain {
                         module: &module,
                         entry_point: Some("fragment_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[
-                            Some(wgpu::ColorTargetState {
-                                format: Compositor::ALBEDO_TEXTURE_FORMAT,
-                                blend: None,
-                                write_mask: wgpu::ColorWrites::ALL,
-                            }),
-                            Some(wgpu::ColorTargetState {
-                                format: Compositor::POSITION_TEXTURE_FORMAT,
-                                blend: None,
-                                write_mask: wgpu::ColorWrites::ALL,
-                            }),
-                        ],
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: renderer.surface_config.format,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
                     }),
                     multiview: None,
                     cache: None,
@@ -510,24 +502,11 @@ impl Terrain {
         */
     }
 
-    pub fn render(
-        &self,
-        frame: &mut Frame,
-        compositor: &Compositor,
-        camera_bind_group: &wgpu::BindGroup,
-    ) {
-        let device = &frame.device;
-        let queue = &frame.queue;
-        let encoder = &mut frame.encoder;
-        let surface = &frame.surface;
-        let depth_texture = &frame.depth_buffer;
-
-        self.process_chunks(device, queue, camera_bind_group);
-
-        self.render_chunks(encoder, compositor, depth_texture, camera_bind_group);
-
+    pub fn render(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+        self.process_chunks(&frame.device, &frame.queue, camera_bind_group);
+        self.render_chunks(frame, camera_bind_group);
         if self.draw_wireframe {
-            self.render_wireframe(encoder, surface, camera_bind_group);
+            self.render_wireframe(frame, camera_bind_group);
         }
     }
 
@@ -587,8 +566,8 @@ impl Terrain {
     /// the LOD level.
     fn process_chunks(
         &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        device: &RenderDevice,
+        queue: &RenderQueue,
         camera_bind_group: &wgpu::BindGroup,
     ) {
         // Create the bind group
@@ -625,44 +604,30 @@ impl Terrain {
         queue.submit(std::iter::once(encoder.finish()));
     }
 
-    fn render_chunks(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        compositor: &Compositor,
-        depth_buffer: &DepthBuffer,
-        camera_bind_group: &wgpu::BindGroup,
-    ) {
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("terrain_chunks"),
-            color_attachments: &[
-                Some(wgpu::RenderPassColorAttachment {
-                    view: &compositor.albedo_texture,
+    fn render_chunks(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("terrain_chunks"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
                     },
-                }),
-                Some(wgpu::RenderPassColorAttachment {
-                    view: &compositor.position_texture,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &frame.depth_buffer.texture_view,
+                    depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
-                    },
+                    }),
+                    stencil_ops: None,
                 }),
-            ],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &depth_buffer.texture_view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, self.vertices_buffer.slice(..));
@@ -691,26 +656,23 @@ impl Terrain {
         */
     }
 
-    fn render_wireframe(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        surface: &wgpu::TextureView,
-        camera_bind_group: &wgpu::BindGroup,
-    ) {
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("terrain_chunks"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: surface,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+    fn render_wireframe(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("terrain_chunks"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
         render_pass.set_pipeline(&self.wireframe_pipeline);
         render_pass.set_vertex_buffer(0, self.vertices_buffer.slice(..));
