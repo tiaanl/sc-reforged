@@ -68,82 +68,6 @@ impl BufferLayout for () {
     }
 }
 
-pub struct RenderPipelineConfig<'a, B>
-where
-    B: BufferLayout,
-{
-    label: &'a str,
-    shader_module: &'a wgpu::ShaderModule,
-    bind_group_layouts: Vec<&'a wgpu::BindGroupLayout>,
-
-    vertex_entry: Option<&'a str>,
-    fragment_entry: Option<&'a str>,
-    primitive: Option<wgpu::PrimitiveState>,
-    use_depth_buffer: bool,
-    depth_compare_function: Option<wgpu::CompareFunction>,
-    blend_state: Option<wgpu::BlendState>,
-
-    _phantom: std::marker::PhantomData<B>,
-}
-
-#[allow(unused)]
-impl<'a, B> RenderPipelineConfig<'a, B>
-where
-    B: BufferLayout,
-{
-    pub fn new(label: &'a str, shader_module: &'a wgpu::ShaderModule) -> Self {
-        Self {
-            label,
-            shader_module,
-            bind_group_layouts: vec![],
-
-            vertex_entry: None,
-            fragment_entry: None,
-            primitive: None,
-            use_depth_buffer: true,
-            depth_compare_function: None,
-            blend_state: None,
-
-            _phantom: std::marker::PhantomData::<B>,
-        }
-    }
-
-    pub fn bind_group_layout(mut self, bind_group_layout: &'a wgpu::BindGroupLayout) -> Self {
-        self.bind_group_layouts.push(bind_group_layout);
-        self
-    }
-
-    pub fn vertex_entry(mut self, entry: &'a str) -> Self {
-        self.vertex_entry = Some(entry);
-        self
-    }
-
-    pub fn fragment_entry(mut self, entry: &'a str) -> Self {
-        self.fragment_entry = Some(entry);
-        self
-    }
-
-    pub fn primitive(mut self, primitive: wgpu::PrimitiveState) -> Self {
-        self.primitive = Some(primitive);
-        self
-    }
-
-    pub fn disable_depth_buffer(mut self) -> Self {
-        self.use_depth_buffer = false;
-        self
-    }
-
-    pub fn blend_state(mut self, blend_state: wgpu::BlendState) -> Self {
-        self.blend_state = Some(blend_state);
-        self
-    }
-
-    // pub fn depth_compare_function(mut self, depth_compare_function: wgpu::CompareFunction) -> Self {
-    //     self.depth_compare_function = Some(depth_compare_function);
-    //     self
-    // }
-}
-
 impl Renderer {
     const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
@@ -283,57 +207,27 @@ impl Renderer {
             })
     }
 
-    pub fn create_render_pipeline<B>(&self, config: RenderPipelineConfig<B>) -> wgpu::RenderPipeline
+    #[must_use]
+    pub fn build_render_pipeline<'a, B>(
+        &'a self,
+        label: &'a str,
+        module: &'a wgpu::ShaderModule,
+    ) -> RenderPipelineBuilder<'a, B>
     where
         B: BufferLayout,
     {
-        let layout_label = format!("{}_pipeline_layout", config.label);
-        let layout = self
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some(&layout_label),
-                bind_group_layouts: &config.bind_group_layouts,
-                push_constant_ranges: &[],
-            });
-
-        let pipeline_label = format!("{}_render_pipeline", config.label);
-        self.device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(&pipeline_label),
-                layout: Some(&layout),
-                vertex: wgpu::VertexState {
-                    module: config.shader_module,
-                    entry_point: config.vertex_entry,
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: B::vertex_buffers(),
-                },
-                primitive: config.primitive.unwrap_or_default(),
-                depth_stencil: if config.use_depth_buffer {
-                    Some(
-                        self.depth_buffer.depth_stencil_state(
-                            config
-                                .depth_compare_function
-                                .unwrap_or(wgpu::CompareFunction::Less),
-                            true,
-                        ),
-                    )
-                } else {
-                    None
-                },
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: config.shader_module,
-                    entry_point: config.fragment_entry,
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: self.surface_config.format,
-                        blend: config.blend_state,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                multiview: None,
-                cache: None,
-            })
+        RenderPipelineBuilder {
+            renderer: self,
+            label,
+            bindings: vec![],
+            module,
+            color_target_format: None,
+            primitive_state: None,
+            depth: None,
+            vertex_entry: None,
+            fragment_entry: None,
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     pub fn create_texture_view(&self, label: &str, image: &image::RgbaImage) -> wgpu::TextureView {
@@ -493,5 +387,107 @@ impl Frame {
             timestamp_writes: None,
             occlusion_query_set: None,
         })
+    }
+}
+
+pub struct RenderPipelineBuilder<'a, V>
+where
+    V: BufferLayout,
+{
+    renderer: &'a Renderer,
+
+    label: &'a str,
+    bindings: Vec<&'a wgpu::BindGroupLayout>,
+
+    module: &'a wgpu::ShaderModule,
+    color_target_format: Option<wgpu::TextureFormat>,
+
+    /// A specific primitive state, otherwise use the default.
+    primitive_state: Option<wgpu::PrimitiveState>,
+
+    /// Use depth testing in the pipeline.
+    depth: Option<wgpu::CompareFunction>,
+
+    /// Fragment shader entry point.
+    fragment_entry: Option<&'a str>,
+
+    /// Vertex shader entry point.
+    vertex_entry: Option<&'a str>,
+
+    _phantom: std::marker::PhantomData<V>,
+}
+
+impl<'a, V> RenderPipelineBuilder<'a, V>
+where
+    V: BufferLayout,
+{
+    pub fn with_primitive(mut self, primitive_state: wgpu::PrimitiveState) -> Self {
+        self.primitive_state = Some(primitive_state);
+        self
+    }
+
+    pub fn with_depth_compare(mut self, compare: wgpu::CompareFunction) -> Self {
+        self.depth = Some(compare);
+        self
+    }
+
+    pub fn binding(mut self, layout: &'a wgpu::BindGroupLayout) -> Self {
+        self.bindings.push(layout);
+        self
+    }
+
+    pub fn with_vertex_entry(mut self, entry: &'a str) -> Self {
+        self.vertex_entry = Some(entry);
+        self
+    }
+
+    pub fn with_fragment_entry(mut self, entry: &'a str) -> Self {
+        self.fragment_entry = Some(entry);
+        self
+    }
+
+    pub fn build(self) -> wgpu::RenderPipeline {
+        let layout = self
+            .renderer
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some(self.label),
+                bind_group_layouts: &self.bindings,
+                push_constant_ranges: &[],
+            });
+
+        self.renderer
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(self.label),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: self.module,
+                    entry_point: self.vertex_entry,
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    buffers: V::vertex_buffers(),
+                },
+                primitive: self.primitive_state.unwrap_or_default(),
+                depth_stencil: self
+                    .depth
+                    .map(|comp| self.renderer.depth_buffer.depth_stencil_state(comp, true)),
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: self.module,
+                    entry_point: self.fragment_entry,
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        // Use the color target format specified, otherwise use the format of the
+                        // window surface.
+                        format: self
+                            .color_target_format
+                            .unwrap_or(self.renderer.surface_config.format),
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview: None,
+                cache: None,
+            })
     }
 }

@@ -27,10 +27,10 @@ impl LoadingScene {
         let shader_module =
             renderer.create_shader_module("loading_scene", include_str!("loading.wgsl"));
 
-        let pipeline = renderer.create_render_pipeline(
-            RenderPipelineConfig::<()>::new("loading_scene", &shader_module)
-                .bind_group_layout(renderer.texture_bind_group_layout()),
-        );
+        let pipeline = renderer
+            .build_render_pipeline::<()>("loading", &shader_module)
+            .binding(renderer.texture_bind_group_layout())
+            .build();
 
         Self {
             pipeline,

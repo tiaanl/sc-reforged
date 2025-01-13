@@ -1,3 +1,4 @@
+#[allow(unused)]
 pub struct DepthBuffer {
     pub texture_view: wgpu::TextureView,
     pub bind_group_layout: wgpu::BindGroupLayout,

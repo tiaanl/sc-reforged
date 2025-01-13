@@ -13,7 +13,7 @@ use crate::{
     },
 };
 use egui::Widget;
-use glam::{Quat, UVec2, Vec3, Vec4};
+use glam::{Quat, Vec3, Vec4};
 use terrain::*;
 
 mod bounding_boxes;

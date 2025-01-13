@@ -233,17 +233,16 @@ impl Terrain {
                 })
         };
 
-        let wireframe_pipeline = renderer.create_render_pipeline(
-            RenderPipelineConfig::<Vertex>::new("terrain_wireframe", &module)
-                .fragment_entry("fragment_main_wireframe")
-                .primitive(wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::LineList,
-                    ..Default::default()
-                })
-                .bind_group_layout(renderer.texture_bind_group_layout())
-                .bind_group_layout(camera_bind_group_layout)
-                .disable_depth_buffer(),
-        );
+        let wireframe_pipeline = renderer
+            .build_render_pipeline::<Vertex>("terrain_wireframe", &module)
+            .with_primitive(wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList,
+                ..Default::default()
+            })
+            .with_fragment_entry("fragment_main_wireframe")
+            .binding(renderer.texture_bind_group_layout())
+            .binding(camera_bind_group_layout)
+            .build();
 
         // let mut chunks_data = Vec::default();
 
@@ -440,10 +439,7 @@ impl Terrain {
             renderer,
             shaders,
             camera_bind_group_layout,
-            Vec2::new(
-                height_map.size.x as f32 * height_map.nominal_edge_size,
-                height_map.size.y as f32 * height_map.nominal_edge_size,
-            ),
+            &height_map,
             water_level,
         )?;
 

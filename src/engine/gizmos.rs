@@ -3,7 +3,7 @@ use wgpu::{util::DeviceExt, vertex_attr_array};
 
 use crate::Frame;
 
-use super::renderer::{BufferLayout, RenderPipelineConfig, Renderer};
+use super::renderer::{BufferLayout, Renderer};
 
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]
@@ -44,17 +44,16 @@ pub struct GizmosRenderer {
 
 impl GizmosRenderer {
     pub fn new(renderer: &Renderer, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
-        let shader = renderer.create_shader_module("gizmos", include_str!("gizmos.wgsl"));
+        let module = renderer.create_shader_module("gizmos", include_str!("gizmos.wgsl"));
 
-        let pipeline = renderer.create_render_pipeline(
-            RenderPipelineConfig::<GizmoVertex>::new("gizmos", &shader)
-                .bind_group_layout(camera_bind_group_layout)
-                .primitive(wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::LineList,
-                    ..Default::default()
-                })
-                .disable_depth_buffer(),
-        );
+        let pipeline = renderer
+            .build_render_pipeline::<GizmoVertex>("gizmos", &module)
+            .with_primitive(wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList,
+                ..Default::default()
+            })
+            .binding(camera_bind_group_layout)
+            .build();
 
         Self { pipeline }
     }

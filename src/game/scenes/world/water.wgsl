@@ -5,17 +5,6 @@
 
 @group(1) @binding(0) var<uniform> u_camera: camera::Camera;
 
-@group(2) @binding(0) var t_depth: texture_depth_2d;
-@group(2) @binding(1) var s_depth: sampler;
-
-struct Water {
-    start: f32,
-    end: f32,
-    alpha: f32,
-}
-
-@group(3) @binding(0) var<uniform> u_water: Water;
-
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -45,20 +34,7 @@ fn vertex_main(vertex: VertexInput) -> VertexOutput {
 
 @fragment
 fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let depth = textureLoad(t_depth, vec2<i32>(vertex.clip_position.xy), 0);
-    let water_depth = vertex.clip_position.z;
+    let color = textureSample(t_water, s_water, vertex.tex_coord);
 
-    if water_depth > depth {
-        discard;
-    }
-
-    let tex_color = textureSample(t_water, s_water, vertex.tex_coord);
-
-    // let fog_factor = fog::fog_factor(u_fog, vertex.world_position, u_camera.position.xyz);
-    // let final_color = mix(tex_color, vec4(u_fog.color, 1.0), fog_factor);
-
-    let diff = abs(water_depth - depth) / vertex.clip_position.w;
-    let fade = smoothstep(u_water.start, u_water.end, diff) * u_water.alpha;
-
-    return vec4(tex_color.xyz, fade);
+    return color;
 }

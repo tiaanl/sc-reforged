@@ -1,23 +1,17 @@
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
-use wgpu::util::DeviceExt;
+use glam::IVec2;
 
 use crate::{
     engine::prelude::*,
     game::asset_loader::{AssetError, AssetLoader},
 };
 
-use super::{GpuIndexedMesh, IndexedMesh, RenderPipelineConfig, Renderer, Vertex};
+use super::{height_map::HeightMap, GpuIndexedMesh, IndexedMesh, Renderer, Vertex};
 pub struct Water {
     pipeline: wgpu::RenderPipeline,
     texture_bind_group: wgpu::BindGroup,
     mesh: GpuIndexedMesh,
-
-    water_uniform_buffer: wgpu::Buffer,
-    water_bind_group_layout: wgpu::BindGroupLayout,
-    water_bind_group: wgpu::BindGroup,
-
-    gpu_water: GpuWater,
 }
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -35,72 +29,23 @@ impl Water {
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
-        terrain_size: Vec2,
+        height_map: &HeightMap,
         water_level: f32,
     ) -> Result<Self, AssetError> {
-        let gpu_water = GpuWater {
-            fade_start: 0.0,
-            fade_end: 1.0,
-            alpha: 0.8,
-            _padding2: 0.0,
-        };
-
-        let water_uniform_buffer =
-            renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("water"),
-                    contents: bytemuck::cast_slice(&[gpu_water]),
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                });
-
-        let water_bind_group_layout =
-            renderer
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("water"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
-
-        let water_bind_group = renderer
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("water"),
-                layout: &water_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: water_uniform_buffer.as_entire_binding(),
-                }],
-            });
-
         let module =
             shaders.create_shader(renderer, "water", include_str!("water.wgsl"), "water.wgsl");
 
-        let pipeline = renderer.create_render_pipeline(
-            RenderPipelineConfig::<Vertex>::new("water", &module)
-                .primitive(wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    front_face: wgpu::FrontFace::Cw,
-                    cull_mode: Some(wgpu::Face::Back),
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    ..Default::default()
-                })
-                .disable_depth_buffer()
-                .blend_state(wgpu::BlendState::ALPHA_BLENDING)
-                .bind_group_layout(renderer.texture_bind_group_layout())
-                .bind_group_layout(camera_bind_group_layout)
-                .bind_group_layout(&renderer.depth_buffer.bind_group_layout)
-                .bind_group_layout(&water_bind_group_layout),
-        );
+        let pipeline = renderer
+            .build_render_pipeline::<Vertex>("water", &module)
+            .with_primitive(wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Ccw,
+                ..Default::default()
+            })
+            .with_depth_compare(wgpu::CompareFunction::Less)
+            .binding(renderer.texture_bind_group_layout())
+            .binding(camera_bind_group_layout)
+            .build();
 
         let image = asset_loader.load_bmp(
             PathBuf::from("textures")
@@ -122,6 +67,11 @@ impl Water {
 
         let texture_bind_group =
             renderer.create_texture_bind_group("water", &water_texture, &sampler);
+
+        let terrain_size = height_map.position_for_vertex(IVec2::new(
+            height_map.size.x as i32,
+            height_map.size.y as i32,
+        ));
 
         let mut mesh = IndexedMesh::default();
         const TEXTURE_SCALE: f32 = 8.0;
@@ -154,50 +104,20 @@ impl Water {
             pipeline,
             texture_bind_group,
             mesh,
-            water_uniform_buffer,
-            water_bind_group_layout,
-            water_bind_group,
-
-            gpu_water,
         })
     }
 
     pub fn render(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
-        frame.queue.write_buffer(
-            &self.water_uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[self.gpu_water]),
-        );
-
-        let depth_buffer = Arc::clone(&frame.depth_buffer);
-        let mut render_pass = frame.begin_basic_render_pass("water", false);
+        let mut render_pass = frame.begin_basic_render_pass("water", true);
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
         render_pass.set_bind_group(1, camera_bind_group, &[]);
-        render_pass.set_bind_group(2, &depth_buffer.bind_group, &[]);
-        render_pass.set_bind_group(3, &self.water_bind_group, &[]);
         render_pass.draw_indexed(0..self.mesh.index_count, 0, 0..1);
     }
 
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
         ui.heading("Water");
-        ui.horizontal(|ui| {
-            ui.label("Fade Start");
-            ui.add(egui::widgets::DragValue::new(&mut self.gpu_water.fade_start).speed(0.1));
-        });
-        ui.horizontal(|ui| {
-            ui.label("Fade End");
-            ui.add(egui::widgets::DragValue::new(&mut self.gpu_water.fade_end).speed(0.1));
-        });
-
-        ui.horizontal(|ui| {
-            ui.label("Alpha");
-            ui.add(
-                egui::widgets::Slider::new(&mut self.gpu_water.alpha, 0.0..=1.0)
-                    .drag_value_speed(0.01),
-            );
-        });
     }
 }
