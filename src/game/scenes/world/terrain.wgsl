@@ -1,19 +1,8 @@
-struct Camera {
-    mat_projection: mat4x4<f32>,
-    mat_view: mat4x4<f32>,
-    position: vec3<f32>,
-    _padding: f32,
-    frustum: array<vec4<f32>, 6>,
-}
+#import world::camera
 
-@group(0) @binding(0) var t_terrain_texture: texture_2d<f32>;
-@group(0) @binding(1) var s_terrain_texture: sampler;
+@group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
-@group(1) @binding(0) var<uniform> u_camera: Camera;
-
-@group(2) @binding(0) var<storage> u_height_map: array<f32>;
-
-var<push_constant> u_chunk_index: vec2<u32>;
+@group(1) @binding(0) var<storage> u_height_map: array<f32>;
 
 struct TerrainData {
     size: vec2<u32>,
@@ -23,7 +12,14 @@ struct TerrainData {
     water_trans_low: f32,
     water_trans_high: f32,
 }
-@group(3) @binding(0) var<uniform> u_terrain_data: TerrainData;
+@group(2) @binding(0) var<uniform> u_terrain_data: TerrainData;
+
+#ifndef WIREFRAME
+@group(3) @binding(0) var t_terrain_texture: texture_2d<f32>;
+@group(3) @binding(1) var s_terrain_texture: sampler;
+#endif
+
+var<push_constant> u_chunk_index: vec2<u32>;
 
 struct VertexInput {
     @location(0) index: vec2<u32>,
@@ -57,6 +53,7 @@ fn get_node_world_position(node: Node) -> vec3<f32> {
     );
 }
 
+#ifndef WIREFRAME
 @vertex
 fn vertex_main(vertex: VertexInput) -> VertexOutput {
     let node = get_node_index(u_chunk_index, vertex.index);
@@ -74,16 +71,6 @@ fn vertex_main(vertex: VertexInput) -> VertexOutput {
         world_position,
         tex_coord,
     );
-}
-
-@vertex
-fn wireframe_vertex_main(vertex: VertexInput) ->  @builtin(position) vec4<f32> {
-    let node = get_node_index(u_chunk_index, vertex.index);
-    let world_position = get_node_world_position(node);
-
-    let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
-
-    return clip_position;
 }
 
 @vertex
@@ -129,6 +116,17 @@ fn water_fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     // return vec4<f32>(color.rgb, alpha * u_terrain_data.water_trans_high);
     return vec4<f32>(color.rgb, n * 0.95);
+}
+#endif
+
+@vertex
+fn wireframe_vertex_main(vertex: VertexInput) ->  @builtin(position) vec4<f32> {
+    let node = get_node_index(u_chunk_index, vertex.index);
+    let world_position = get_node_world_position(node);
+
+    let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
+
+    return clip_position;
 }
 
 @fragment

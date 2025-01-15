@@ -21,7 +21,6 @@ mod fog;
 mod height_map;
 mod objects;
 mod terrain;
-mod water;
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
@@ -106,7 +105,7 @@ impl WorldScene {
                 .with_extension("txt"),
         )?;
 
-        let mut shaders = Shaders::default();
+        let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
         shaders.add_module(include_str!("fog.wgsl"), "fog.wgsl");
 

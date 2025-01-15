@@ -1,6 +1,7 @@
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, collections::HashMap, path::PathBuf};
 
 use glam::{IVec2, UVec2};
+use naga_oil::compose::ShaderDefValue;
 use tracing::info;
 
 use crate::{
@@ -307,28 +308,22 @@ impl Terrain {
             },
         );
 
-        // let module = shaders.create_shader(
-        //     renderer,
-        //     "terrain",
-        //     include_str!("terrain.wgsl"),
-        //     "terrain.wgsl",
-        // );
-
-        let module = renderer
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("terrain"),
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("terrain.wgsl"))),
-            });
+        let module = shaders.create_shader(
+            renderer,
+            "terrain",
+            include_str!("terrain.wgsl"),
+            "terrain.wgsl",
+            HashMap::default(),
+        );
 
         let terrain_pipeline = renderer
             .build_render_pipeline::<TerrainVertex>("terrain", &module)
             .with_vertex_entry("vertex_main")
             .with_fragment_entry("fragment_main")
-            .binding(renderer.texture_bind_group_layout())
             .binding(camera_bind_group_layout)
             .binding(&height_map_buffer.bind_group_layout)
             .binding(&terrain_data_uniform.bind_group_layout)
+            .binding(renderer.texture_bind_group_layout())
             .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .with_depth_compare(wgpu::CompareFunction::LessEqual)
             .build();
@@ -337,10 +332,10 @@ impl Terrain {
             .build_render_pipeline::<TerrainVertex>("water", &module)
             .with_vertex_entry("water_vertex_main")
             .with_fragment_entry("water_fragment_main")
-            .binding(renderer.texture_bind_group_layout())
             .binding(camera_bind_group_layout)
             .binding(&height_map_buffer.bind_group_layout)
             .binding(&terrain_data_uniform.bind_group_layout)
+            .binding(renderer.texture_bind_group_layout())
             .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .with_depth_compare(wgpu::CompareFunction::LessEqual)
             // .with_depth_writes(false)
@@ -358,6 +353,14 @@ impl Terrain {
             })
             .build();
 
+        let module = shaders.create_shader(
+            renderer,
+            "terrain",
+            include_str!("terrain.wgsl"),
+            "terrain.wgsl",
+            HashMap::from([("WIREFRAME".to_string(), ShaderDefValue::Bool(true))]),
+        );
+
         let wireframe_pipeline = renderer
             .build_render_pipeline::<TerrainVertex>("terrain_wireframe", &module)
             .with_primitive(wgpu::PrimitiveState {
@@ -366,150 +369,11 @@ impl Terrain {
             })
             .with_vertex_entry("wireframe_vertex_main")
             .with_fragment_entry("wireframe_fragment_main")
-            .binding(renderer.texture_bind_group_layout())
             .binding(camera_bind_group_layout)
             .binding(&height_map_buffer.bind_group_layout)
             .binding(&terrain_data_uniform.bind_group_layout)
             .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .build();
-
-        /*
-                // let mut chunks_data = Vec::default();
-
-                // Generate vertices for each chunk in sequence. [chunk 0, chunk 1, chunk 2, ...]
-                // 81 vertices per chunk.
-
-                // chunk sizes: 8 >> 4 >> 2 >> 1
-                // 9 * 9 + 5 * 5 + 3 * 3 + 2 * 2 == 81 + 25 + 9 + 4 == 119
-                let mut vertices = Vec::with_capacity(119 * total_chunks as usize);
-                let mut chunk_data = Vec::with_capacity(total_chunks as usize);
-
-                let size = Vec2::new(height_map.size.x as f32, height_map.size.y as f32);
-
-                for y in 0..chunks_y {
-                    for x in 0..chunks_x {
-                        let offset = IVec2::new(
-                            (Terrain::CELLS_PER_CHUNK * x) as i32,
-                            (Terrain::CELLS_PER_CHUNK * y) as i32,
-                        );
-
-                        let mut min = Vec3::MAX;
-                        let mut max = Vec3::MIN;
-                        for y in offset.y..=offset.y + Self::CELLS_PER_CHUNK as i32 {
-                            for x in offset.x..=offset.x + Self::CELLS_PER_CHUNK as i32 {
-                                // let position = height_map.position_for_vertex(IVec2::new(x, y));
-                                let position = Vec3::new(
-                                    x as f32 * nominal_edge_size,
-                                    y as f32 * nominal_edge_size,
-                                    0.0,
-                                );
-                                vertices.push(TerrainVertex {
-                                    position,
-                                    normal: Vec3::Z, // TODO: Get the normal from the height map.
-                                    tex_coord: Vec2::new(x as f32 / size.x, y as f32 / size.y),
-                                    node_index: y as u32 * (height_map.size.x + 1) + x as u32,
-                                });
-                                min = min.min(position);
-                                max = max.max(position);
-                            }
-                        }
-
-                        chunk_data.push(ChunkData {
-                            min,
-                            _padding1: 0.0,
-                            max,
-                            _padding2: 0.0,
-                        });
-                    }
-                }
-
-                let vertices_buffer =
-                    renderer
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("terrain_vertices"),
-                            contents: bytemuck::cast_slice(&vertices),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
-
-                let chunk_data_buffer =
-                    renderer
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("terrain_chunk_data"),
-                            contents: bytemuck::cast_slice(&chunk_data),
-                            usage: wgpu::BufferUsages::STORAGE,
-                        });
-
-                // Generate indices for each LOD level.
-
-                // level 0 = 0..384
-                // level 1 = 0..96
-                // level 2 = 0..24
-                // level 3 = 0..6
-                let mut indices = Vec::<u32>::default();
-
-                // level 0 = 0..512
-                // level 1 = 0..128
-                // level 2 = 0..32
-                // level 3 = 0..8
-                let mut wireframe_indices = Vec::<u32>::default();
-
-                for level in 0..=Self::LOD_MAX {
-                    let cell_count = Self::CELLS_PER_CHUNK >> level;
-                    let scale = 1 << level;
-
-                    for y in 0..cell_count {
-                        for x in 0..cell_count {
-                            let i0 = (y * Self::VERTICES_PER_CHUNK + x) * scale;
-                            let i1 = (y * Self::VERTICES_PER_CHUNK + (x + 1)) * scale;
-                            let i2 = ((y + 1) * Self::VERTICES_PER_CHUNK + (x + 1)) * scale;
-                            let i3 = ((y + 1) * Self::VERTICES_PER_CHUNK + x) * scale;
-
-                            indices.extend_from_slice(&[i0, i1, i2, i2, i3, i0]);
-                            wireframe_indices.extend_from_slice(&[i0, i1, i1, i2, i2, i3, i3, i0]);
-                        }
-                    }
-                }
-
-                let chunk_indices_buffer =
-                    renderer
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("terrain_chunk_indices"),
-                            contents: bytemuck::cast_slice(&indices),
-                            usage: wgpu::BufferUsages::INDEX,
-                        });
-
-                let chunk_wireframe_indices_buffer =
-                    renderer
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("terrain_chunk_writeframe_indices"),
-                            contents: bytemuck::cast_slice(&wireframe_indices),
-                            usage: wgpu::BufferUsages::INDEX,
-                        });
-
-                // Generate a command for each chunk.
-                let chunk_indirect_commands = (0..total_chunks)
-                    .map(|index| ChunkDrawCall {
-                        first_index: 0,
-                        index_count: 384,
-                        base_vertex: index as i32 * 81,
-                        first_instance: 0,
-                        instance_count: 1,
-                    })
-                    .collect::<Vec<_>>();
-
-                let chunk_draw_commands_buffer =
-                    renderer
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("terrain_chunk_indirect"),
-                            contents: bytemuck::cast_slice(&chunk_indirect_commands),
-                            usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
-                        });
-        */
 
         let process_chunks_bind_group_layout =
             renderer
@@ -599,35 +463,21 @@ impl Terrain {
 
         Ok(Self {
             height_map,
-
             max_view_distance: 13_300.0,
-
             terrain_pipeline,
             water_pipeline,
             wireframe_pipeline,
             process_chunks_pipeline,
             process_chunks_bind_group_layout,
-
-            terrain_data_uniform,
-            chunk_mesh,
-
             terrain_texture_bind_group,
             water_texture_bind_group,
-
-            draw_wireframe: true,
-            draw_normals: false,
-
-            // vertices_buffer,
-            // chunk_indices_buffer,
-            // chunk_wireframe_indices_buffer,
-            // chunk_data_buffer,
-            // chunk_draw_commands_buffer,
-            // total_chunks,
-            lod_level: 0,
-
-            normals_lookup,
-
+            chunk_mesh,
+            terrain_data_uniform,
             height_map_buffer,
+            draw_wireframe: false,
+            draw_normals: false,
+            lod_level: 0,
+            normals_lookup,
         })
     }
 
@@ -711,7 +561,7 @@ impl Terrain {
 
     fn render_terrain(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         // LOD ranges.
-        let range: [std::ops::Range<u32>; 4] = [0..384, 384..480, 480..504, 504..510];
+        let range = [0..384, 384..480, 480..504, 504..510];
 
         {
             let mut render_pass = frame
@@ -744,22 +594,25 @@ impl Terrain {
                 self.chunk_mesh.indices_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, &self.terrain_texture_bind_group, &[]);
-            render_pass.set_bind_group(1, camera_bind_group, &[]);
-            render_pass.set_bind_group(2, &self.height_map_buffer.bind_group, &[]);
-            render_pass.set_bind_group(3, &self.terrain_data_uniform.bind_group, &[]);
+            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.height_map_buffer.bind_group, &[]);
+            render_pass.set_bind_group(2, &self.terrain_data_uniform.bind_group, &[]);
+            render_pass.set_bind_group(3, &self.terrain_texture_bind_group, &[]);
 
             for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
                 for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
                     render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, &x.to_ne_bytes());
                     render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 4, &y.to_ne_bytes());
-                    render_pass.draw_indexed(range[0].clone(), 0, 0..1);
+                    render_pass.draw_indexed(range[self.lod_level].clone(), 0, 0..1);
                 }
             }
         }
     }
 
     pub fn render_water(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+        // LOD ranges.
+        let range = [0..384, 384..480, 480..504, 504..510];
+
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -792,17 +645,16 @@ impl Terrain {
             wgpu::IndexFormat::Uint32,
         );
 
-        render_pass.set_bind_group(0, &self.water_texture_bind_group, &[]);
-        render_pass.set_bind_group(1, camera_bind_group, &[]);
-        render_pass.set_bind_group(2, &self.height_map_buffer.bind_group, &[]);
-        render_pass.set_bind_group(3, &self.terrain_data_uniform.bind_group, &[]);
+        render_pass.set_bind_group(0, camera_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.height_map_buffer.bind_group, &[]);
+        render_pass.set_bind_group(2, &self.terrain_data_uniform.bind_group, &[]);
+        render_pass.set_bind_group(3, &self.water_texture_bind_group, &[]);
 
         for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
             for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
                 render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, &x.to_ne_bytes());
                 render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 4, &y.to_ne_bytes());
-                // Render level 0.
-                render_pass.draw_indexed(0..384, 0, 0..1);
+                render_pass.draw_indexed(range[3].clone(), 0, 0..1);
             }
         }
     }
@@ -834,19 +686,16 @@ impl Terrain {
             wgpu::IndexFormat::Uint32,
         );
 
-        // TODO: This texture doesn't need binding during wirefram rendering, but we can't omit
-        //       it, because it is in the shader.
-        render_pass.set_bind_group(0, &self.water_texture_bind_group, &[]);
-        render_pass.set_bind_group(1, camera_bind_group, &[]);
-        render_pass.set_bind_group(2, &self.height_map_buffer.bind_group, &[]);
-        render_pass.set_bind_group(3, &self.terrain_data_uniform.bind_group, &[]);
+        render_pass.set_bind_group(0, camera_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.height_map_buffer.bind_group, &[]);
+        render_pass.set_bind_group(2, &self.terrain_data_uniform.bind_group, &[]);
 
         for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
             for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
                 render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, &x.to_ne_bytes());
                 render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 4, &y.to_ne_bytes());
                 // Render level 0.
-                render_pass.draw_indexed(levels[0].clone(), 0, 0..1);
+                render_pass.draw_indexed(levels[self.lod_level].clone(), 0, 0..1);
             }
         }
     }

@@ -1,22 +1,27 @@
 use std::collections::HashMap;
 
 use naga_oil::compose::{
-    ComposableModuleDescriptor, Composer, NagaModuleDescriptor, ShaderLanguage,
+    ComposableModuleDescriptor, Composer, NagaModuleDescriptor, ShaderDefValue, ShaderLanguage,
 };
+use wgpu::naga::valid::Capabilities;
 
 use super::renderer::Renderer;
 
-#[derive(Default)]
 pub struct Shaders {
     composer: Composer,
 }
 
 impl Shaders {
-    pub fn add_module(&mut self, source: &str, path: &str) {
+    pub fn new() -> Self {
+        let composer = Composer::default().with_capabilities(Capabilities::PUSH_CONSTANT);
+        Self { composer }
+    }
+
+    pub fn add_module(&mut self, source: &str, file_path: &str) {
         self.composer
             .add_composable_module(ComposableModuleDescriptor {
                 source,
-                file_path: path,
+                file_path,
                 language: ShaderLanguage::Wgsl,
                 as_name: None,
                 additional_imports: &[],
@@ -30,13 +35,14 @@ impl Shaders {
         renderer: &Renderer,
         label: &str,
         source: &str,
-        path: &str,
+        file_path: &str,
+        shader_defs: HashMap<String, ShaderDefValue>,
     ) -> wgpu::ShaderModule {
         let module = match self.composer.make_naga_module(NagaModuleDescriptor {
             source,
-            file_path: path,
+            file_path,
             shader_type: naga_oil::compose::ShaderType::Wgsl,
-            shader_defs: HashMap::default(),
+            shader_defs,
             additional_imports: &[],
         }) {
             Ok(module) => module,

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use glam::Mat4;
 use wgpu::{util::DeviceExt, vertex_attr_array, ShaderStages};
 
@@ -61,6 +63,7 @@ impl MeshRenderer {
             "model_renderer",
             include_str!("mesh.wgsl"),
             "model.wgsl",
+            HashMap::default(),
         );
 
         let transforms_bind_group_layout =
