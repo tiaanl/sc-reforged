@@ -1,6 +1,9 @@
-use std::{ops::Deref, sync::Arc};
+use std::{
+    ops::{Deref, Range},
+    sync::Arc,
+};
 
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, PushConstantRange};
 
 use crate::DepthBuffer;
 
@@ -75,7 +78,7 @@ impl Renderer {
         let winit::dpi::PhysicalSize { width, height } = window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
+            backends: wgpu::Backends::VULKAN,
             ..Default::default()
         });
 
@@ -88,13 +91,16 @@ impl Renderer {
             tracing::warn!("wgpu::Features::MULTI_DRAW_INDIRECT not available!");
         }
 
-        let required_features = wgpu::Features::MULTI_DRAW_INDIRECT;
+        let required_features = wgpu::Features::MULTI_DRAW_INDIRECT
+            | wgpu::Features::PUSH_CONSTANTS
+            | wgpu::Features::POLYGON_MODE_LINE;
 
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 required_features,
                 required_limits: wgpu::Limits {
                     max_bind_groups: 5,
+                    max_push_constant_size: 16,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -220,10 +226,13 @@ impl Renderer {
             renderer: self,
             label,
             bindings: vec![],
+            push_constants: vec![],
             module,
             color_target_format: None,
             primitive_state: None,
-            depth: None,
+            depth_compare: None,
+            depth_writes: true,
+            blend: None,
             vertex_entry: None,
             fragment_entry: None,
             _phantom: std::marker::PhantomData,
@@ -397,7 +406,10 @@ where
     renderer: &'a Renderer,
 
     label: &'a str,
+
     bindings: Vec<&'a wgpu::BindGroupLayout>,
+
+    push_constants: Vec<PushConstantRange>,
 
     module: &'a wgpu::ShaderModule,
     color_target_format: Option<wgpu::TextureFormat>,
@@ -406,7 +418,11 @@ where
     primitive_state: Option<wgpu::PrimitiveState>,
 
     /// Use depth testing in the pipeline.
-    depth: Option<wgpu::CompareFunction>,
+    depth_compare: Option<wgpu::CompareFunction>,
+    depth_writes: bool,
+
+    /// Blend state.
+    blend: Option<wgpu::BlendState>,
 
     /// Fragment shader entry point.
     fragment_entry: Option<&'a str>,
@@ -427,12 +443,23 @@ where
     }
 
     pub fn with_depth_compare(mut self, compare: wgpu::CompareFunction) -> Self {
-        self.depth = Some(compare);
+        self.depth_compare = Some(compare);
+        self
+    }
+
+    pub fn with_depth_writes(mut self, depth_writes: bool) -> Self {
+        self.depth_writes = depth_writes;
         self
     }
 
     pub fn binding(mut self, layout: &'a wgpu::BindGroupLayout) -> Self {
         self.bindings.push(layout);
+        self
+    }
+
+    pub fn push_constant(mut self, stages: wgpu::ShaderStages, range: Range<u32>) -> Self {
+        self.push_constants
+            .push(wgpu::PushConstantRange { stages, range });
         self
     }
 
@@ -446,6 +473,11 @@ where
         self
     }
 
+    pub fn with_blend(mut self, blend: wgpu::BlendState) -> Self {
+        self.blend = Some(blend);
+        self
+    }
+
     pub fn build(self) -> wgpu::RenderPipeline {
         let layout = self
             .renderer
@@ -453,7 +485,7 @@ where
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some(self.label),
                 bind_group_layouts: &self.bindings,
-                push_constant_ranges: &[],
+                push_constant_ranges: &self.push_constants,
             });
 
         self.renderer
@@ -468,9 +500,11 @@ where
                     buffers: V::vertex_buffers(),
                 },
                 primitive: self.primitive_state.unwrap_or_default(),
-                depth_stencil: self
-                    .depth
-                    .map(|comp| self.renderer.depth_buffer.depth_stencil_state(comp, true)),
+                depth_stencil: self.depth_compare.map(|comp| {
+                    self.renderer
+                        .depth_buffer
+                        .depth_stencil_state(comp, self.depth_writes)
+                }),
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: self.module,
@@ -482,7 +516,7 @@ where
                         format: self
                             .color_target_format
                             .unwrap_or(self.renderer.surface_config.format),
-                        blend: None,
+                        blend: self.blend,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                 }),

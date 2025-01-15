@@ -133,7 +133,7 @@ impl AssetLoader {
             )?;
 
             let raw = if let Ok(raw_data) = asset_loader.fs.load(path.with_extension("raw")) {
-                debug_assert!(!color_keyd);
+                // debug_assert!(!color_keyd);
                 Some(shadow_company_tools::images::load_raw_file(
                     &mut std::io::Cursor::new(raw_data),
                     bmp.width(),

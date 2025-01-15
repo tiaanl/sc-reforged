@@ -9,14 +9,15 @@ pub mod scene;
 pub mod shaders;
 pub mod utils;
 
+pub mod buffers;
 pub mod dirty;
 pub mod tracked;
 pub mod transform;
-pub mod uniform_buffer;
 
 pub mod prelude {
     #![allow(unused_imports)]
     pub use super::assets::{Asset, AssetStore, Handle};
+    pub use super::buffers::*;
     pub use super::depth_buffer::*;
     pub use super::dirty::*;
     pub use super::input::*;
@@ -26,7 +27,6 @@ pub mod prelude {
     pub use super::shaders::*;
     pub use super::tracked::*;
     pub use super::transform::*;
-    pub use super::uniform_buffer::*;
     pub use glam::{Mat4, Quat, Vec2, Vec3};
 }
 

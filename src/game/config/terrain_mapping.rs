@@ -1,3 +1,5 @@
+use glam::Vec2;
+
 use crate::game::asset_loader::AssetError;
 
 use super::ConfigFile;
@@ -25,6 +27,18 @@ pub struct TerrainMapping {
     pub altitude_map_height_base: f32,
     pub min_alt_grad: i32,
     pub max_alt_grad: i32,
+
+    // Water and other
+    pub water_modulate_textures: Vec<String>,
+    pub w1_modulators: Vec2,
+    pub w2_modulators: Vec2,
+    pub water_trans_depth: f32,
+    pub water_trans_high: u8,
+    pub water_trans_low: u8,
+    pub wind_direction: Vec2,
+    pub water_period: f32,
+    pub water_wavelength: f32,
+    pub water_amplitude: f32,
 }
 
 impl Default for TerrainMapping {
@@ -43,6 +57,18 @@ impl Default for TerrainMapping {
             altitude_map_height_base: 6.0,
             min_alt_grad: 1,
             max_alt_grad: 4,
+
+            // TODO: These are probably not the right defaults.
+            water_modulate_textures: vec![],
+            w1_modulators: Vec2::ZERO,
+            w2_modulators: Vec2::ZERO,
+            water_trans_depth: 0.0,
+            water_trans_high: 255,
+            water_trans_low: 0,
+            wind_direction: Vec2::ZERO,
+            water_period: 0.0,
+            water_wavelength: 0.0,
+            water_amplitude: 0.0,
         }
     }
 }
@@ -56,8 +82,8 @@ impl TryFrom<String> for TerrainMapping {
         let mut result = TerrainMapping::default();
 
         while let Some(params) = config.current() {
-            if params[0] == "SET" {
-                match params[1] {
+            match params[0] {
+                "SET" => match params[1] {
                     "map_dx" => result.map_dx = params[2].parse().unwrap(),
                     "map_dy" => result.map_dy = params[2].parse().unwrap(),
                     "water_level" => result.water_level = params[2].parse().unwrap(),
@@ -81,7 +107,45 @@ impl TryFrom<String> for TerrainMapping {
                         result.terrain_textures_dy = params[2].parse().unwrap()
                     }
                     _ => panic!("Invalid parameter {}", params[1]),
+                },
+
+                "LOAD_FULLY_TEXTURED_MAP_SET" => {
+                    // ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                    // ; next, define the textures that we want to be loaded (out of the
+                    // ; TextureMaps directory.)  These TextureMaps should be 128x128 .BMP
+                    // ; files. (starts counting at 1, as error.bmp is always texture index 0)
+                    //
+                    // LOAD_FULLY_TEXTURED_MAP_SET      not_important_but_needs_a_field
                 }
+
+                "SET_WATER_MODULATE_TEXTURES" => {
+                    if params.len() > 1 {
+                        result.water_modulate_textures.push(params[1].to_string());
+                        if params.len() > 2 {
+                            result.water_modulate_textures.push(params[2].to_string());
+                        }
+                    }
+                }
+                "SET_W1_MODULATORS" => {
+                    result.w1_modulators.x = params[1].parse().unwrap();
+                    result.w1_modulators.y = params[2].parse().unwrap();
+                }
+                "SET_W2_MODULATORS" => {
+                    result.w2_modulators.x = params[1].parse().unwrap();
+                    result.w2_modulators.y = params[2].parse().unwrap();
+                }
+                "WATER_TRANS_DEPTH" => result.water_trans_depth = params[1].parse().unwrap(),
+                "WATER_TRANS_HIGH" => result.water_trans_high = params[1].parse().unwrap(),
+                "WATER_TRANS_LOW" => result.water_trans_low = params[1].parse().unwrap(),
+                "SET_WIND_DIRECTION" => {
+                    result.wind_direction.x = params[1].parse().unwrap();
+                    result.wind_direction.y = params[2].parse().unwrap();
+                }
+                "SET_WATER_PERIOD" => result.water_period = params[1].parse().unwrap(),
+                "SET_WATER_WAVELENGTH" => result.water_wavelength = params[1].parse().unwrap(),
+                "SET_WATER_AMPLITUDE" => result.water_amplitude = params[1].parse().unwrap(),
+
+                e => panic!("Unexpected parameter {}", e),
             }
             config.next();
         }

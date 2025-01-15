@@ -126,7 +126,7 @@ impl MeshRenderer {
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     buffers: &[
-                        Vertex::vertex_buffer_layout(),
+                        Vertex::vertex_buffers()[0].clone(),
                         wgpu::VertexBufferLayout {
                             array_stride: std::mem::size_of::<glam::Mat4>() as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Instance,

@@ -232,9 +232,6 @@ impl Objects {
     }
 
     pub fn render_objects(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
-        // Build a list of all the meshes that needs rendering.
-        let mut boxes = vec![];
-
         self.model_renderer.render_multiple(
             frame,
             camera_bind_group,
@@ -248,15 +245,21 @@ impl Objects {
             BlendMode::ColorKeyed,
             &self.ck_meshes,
         );
+    }
 
+    pub fn render_alpha_objects(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         self.model_renderer.render_multiple(
             frame,
             camera_bind_group,
             BlendMode::Alpha,
             &self.alpha_meshes,
         );
+    }
 
+    pub fn render_gizmos(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         if self.render_bounding_boxes {
+            let mut boxes = vec![];
+
             for (object_index, object) in self.objects.iter().enumerate() {
                 let Some(model) = self.asset_store.get(object.model) else {
                     continue;

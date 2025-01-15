@@ -1,5 +1,4 @@
 use glam::{Vec2, Vec3};
-use wgpu::VertexAttribute;
 
 use super::{
     assets::Asset,
@@ -12,22 +11,6 @@ pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
     pub tex_coord: Vec2,
-}
-
-impl Vertex {
-    pub const fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
-        const ATTRS: &[VertexAttribute] = &wgpu::vertex_attr_array![
-            0 => Float32x3,
-            1 => Float32x3,
-            2 => Float32x2,
-        ];
-
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: ATTRS,
-        }
-    }
 }
 
 impl BufferLayout for Vertex {

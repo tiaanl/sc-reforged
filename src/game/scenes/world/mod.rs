@@ -432,14 +432,20 @@ impl Scene for WorldScene {
 
         let camera_bind_group = &self.gpu_camera.bind_group;
 
+        // Render Opaque geometry first.
         self.terrain.render(frame, camera_bind_group);
-
         self.objects.render_objects(frame, camera_bind_group);
+
+        // Now render alpha geoometry.
+        self.terrain.render_water(frame, camera_bind_group);
+        self.objects.render_alpha_objects(frame, camera_bind_group);
+
+        // Render any kind of debug overlays.
+        self.terrain.render_gizmos(frame, camera_bind_group);
+        self.objects.render_gizmos(frame, camera_bind_group);
 
         self.gizmos_renderer
             .render(frame, camera_bind_group, &self.gizmos_vertices);
-
-        self.terrain.render_water(frame, camera_bind_group);
     }
 
     fn end_frame(&mut self) {
