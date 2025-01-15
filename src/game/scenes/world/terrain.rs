@@ -64,8 +64,6 @@ impl ChunkMesh {
                     wireframe_indices.extend_from_slice(&[i0, i1, i1, i2, i2, i3, i3, i0]);
                 }
             }
-
-            println!("len: {}", wireframe_indices.len());
         }
 
         let indices_buffer = renderer.create_index_buffer("chunk_indices", &indices);
