@@ -99,19 +99,21 @@ impl winit::application::ApplicationHandler for App {
                         )
                         .unwrap();
 
+                    // Campaigns and total texture count.
+
                     let campaign_def = campaign_defs
                         .campaigns
                         .iter()
-                        // .find(|c| c.base_name == "training")
-                        // .find(|c| c.base_name == "angola_tutorial")
-                        // .find(|c| c.base_name == "angola")
-                        // .find(|c| c.base_name == "romania")
-                        // .find(|c| c.base_name == "kola")
-                        .find(|c| c.base_name == "caribbean")
-                        // .find(|c| c.base_name == "kola_2")
-                        // .find(|c| c.base_name == "ecuador")
-                        // .find(|c| c.base_name == "peru")
-                        // .find(|c| c.base_name == "angola_2")
+                        .find(|c| c.base_name == "training") // 140
+                        // .find(|c| c.base_name == "angola_tutorial") // 149
+                        // .find(|c| c.base_name == "angola") // 368
+                        // .find(|c| c.base_name == "romania") // 289
+                        // .find(|c| c.base_name == "kola") // 213
+                        // .find(|c| c.base_name == "caribbean") // 279
+                        // .find(|c| c.base_name == "kola_2") // 240
+                        // .find(|c| c.base_name == "ecuador") // 341
+                        // .find(|c| c.base_name == "peru") // 197
+                        // .find(|c| c.base_name == "angola_2") // 347
                         .cloned()
                         .unwrap();
 

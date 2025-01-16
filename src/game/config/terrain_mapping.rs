@@ -145,6 +145,16 @@ impl TryFrom<String> for TerrainMapping {
                 "SET_WATER_WAVELENGTH" => result.water_wavelength = params[1].parse().unwrap(),
                 "SET_WATER_AMPLITUDE" => result.water_amplitude = params[1].parse().unwrap(),
 
+                "WATER_EXCEPTION" => {
+                    // TODO: build a list of patches that get different water levels.
+                }
+
+                "LOAD_TEXTURE" | "SET_WATER_TEXTURE" => {
+                    // TODO: Looks like only the training campaign has this set. Same for
+                    //       LOAD_TEXTURE, which looks to be the same texture (water.bmp) and just
+                    //       happens to be the only campaign without water...
+                }
+
                 e => panic!("Unexpected parameter {}", e),
             }
             config.next();
