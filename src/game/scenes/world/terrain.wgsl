@@ -2,8 +2,6 @@
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
-@group(1) @binding(0) var<storage> u_height_map: array<f32>;
-
 struct TerrainData {
     size: vec2<u32>,
     nominal_edge_size: f32,
@@ -12,12 +10,12 @@ struct TerrainData {
     water_trans_low: f32,
     water_trans_high: f32,
 }
-@group(2) @binding(0) var<uniform> u_terrain_data: TerrainData;
 
-#ifndef WIREFRAME
-@group(3) @binding(0) var t_terrain_texture: texture_2d<f32>;
-@group(3) @binding(1) var s_terrain_texture: sampler;
-#endif
+@group(1) @binding(0) var<storage> u_height_map: array<f32>;
+@group(1) @binding(1) var<uniform> u_terrain_data: TerrainData;
+@group(1) @binding(2) var t_terrain_texture: texture_2d<f32>;
+@group(1) @binding(3) var t_water_texture: texture_2d<f32>;
+@group(1) @binding(4) var s_sampler: sampler;
 
 var<push_constant> u_chunk_index: vec2<u32>;
 
@@ -53,7 +51,6 @@ fn get_node_world_position(node: Node) -> vec3<f32> {
     );
 }
 
-#ifndef WIREFRAME
 @vertex
 fn vertex_main(vertex: VertexInput) -> VertexOutput {
     let node = get_node_index(u_chunk_index, vertex.index);
@@ -98,13 +95,13 @@ fn water_vertex_main(vertex: VertexInput) -> VertexOutput {
 
 @fragment
 fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
+    let color = textureSample(t_terrain_texture, s_sampler, vertex.tex_coord);
     return color;
 }
 
 @fragment
 fn water_fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let color = textureSample(t_terrain_texture, s_terrain_texture, vertex.tex_coord);
+    let color = textureSample(t_water_texture, s_sampler, vertex.tex_coord);
 
     let water_depth = u_terrain_data.water_level - vertex.world_position.z;
     if water_depth <= 0.0 {
@@ -114,10 +111,8 @@ fn water_fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var n = clamp(water_depth / u_terrain_data.water_trans_depth, 0.0, 1.0);
     // let alpha = u_terrain_data.water_trans_low + (u_terrain_data.water_trans_high - u_terrain_data.water_trans_low) * n;
 
-    // return vec4<f32>(color.rgb, alpha * u_terrain_data.water_trans_high);
-    return vec4<f32>(color.rgb, n * 0.95);
+    return vec4<f32>(color.rgb, n);
 }
-#endif
 
 @vertex
 fn wireframe_vertex_main(vertex: VertexInput) ->  @builtin(position) vec4<f32> {

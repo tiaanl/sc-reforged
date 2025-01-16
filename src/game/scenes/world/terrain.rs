@@ -3,6 +3,7 @@ use std::{borrow::Cow, collections::HashMap, path::PathBuf};
 use glam::{IVec2, UVec2};
 use naga_oil::compose::ShaderDefValue;
 use tracing::info;
+use wgpu::util::DeviceExt;
 
 use crate::{
     engine::prelude::*,
@@ -108,25 +109,17 @@ pub struct Terrain {
     /// Pipeline to render a wireframe over the terrain.
     wireframe_pipeline: wgpu::RenderPipeline,
 
+    /// Bind group containing all data required for rendering.
+    render_bind_group: wgpu::BindGroup,
+
     /// Pipeline that calculates LOD for each chunk and culls them in the camera frustum.
     process_chunks_pipeline: wgpu::ComputePipeline,
 
     /// Bind group layout with all the data required by the pipeline.
     process_chunks_bind_group_layout: wgpu::BindGroupLayout,
 
-    /// The texture used to render over the entire terrain.
-    terrain_texture_bind_group: wgpu::BindGroup,
-
-    /// The water texture.
-    water_texture_bind_group: wgpu::BindGroup,
-
     /// The mesh we use to render chunks.
     chunk_mesh: ChunkMesh,
-
-    /// Holds data for the terrain used by the GPU.
-    terrain_data_uniform: UniformBuffer<TerrainData>,
-
-    height_map_buffer: StorageBuffer<f32>,
 
     draw_wireframe: bool,
     draw_normals: bool,
@@ -224,27 +217,29 @@ impl Terrain {
 
         let water_level = water_level * altitude_map_height_base;
 
-        let terrain_texture_bind_group = {
-            let path = format!("trnhigh/{}.jpg", texture_map_base_name);
-            info!("Loading high detail terrain texture: {path}");
+        let terrain_texture_view = {
+            let path = PathBuf::from("trnhigh").join(format!("{}.jpg", texture_map_base_name));
+            info!("Loading high detail terrain texture: {}", path.display());
 
             let handle = asset_loader.load_jpeg(path)?;
             let image = asset_loader
                 .asset_store()
                 .get(handle)
                 .expect("Just loaded successfully.");
-            let texture_view = renderer.create_texture_view("terrain_texture", &image.data);
+            renderer.create_texture_view("terrain_texture", &image.data)
+        };
 
-            renderer.create_texture_bind_group(
-                "terrain_texture_bind_group",
-                &texture_view,
-                &renderer.create_sampler(
-                    "terrain_sampler",
-                    wgpu::AddressMode::ClampToEdge,
-                    wgpu::FilterMode::Linear,
-                    wgpu::FilterMode::Linear,
-                ),
-            )
+        let water_texture_view = {
+            let image = asset_loader.load_bmp(
+                PathBuf::from("textures")
+                    .join("image_processor")
+                    .join("water2.bmp"),
+            )?;
+            let image = asset_loader
+                .asset_store()
+                .get(image)
+                .expect("just loaded it successfully.");
+            renderer.create_texture_view("water", &image.data)
         };
 
         let height_map = {
@@ -280,20 +275,17 @@ impl Terrain {
                 }
             }
 
-            StorageBuffer::new(
-                renderer,
-                "height_map",
-                wgpu::ShaderStages::VERTEX,
-                true,
-                nodes,
-            )
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("height_map"),
+                    contents: bytemuck::cast_slice(&nodes),
+                    usage: wgpu::BufferUsages::STORAGE,
+                })
         };
 
-        let terrain_data_uniform = UniformBuffer::with_data(
-            renderer,
-            "terrain_data",
-            wgpu::ShaderStages::VERTEX_FRAGMENT,
-            TerrainData {
+        let terrain_data_buffer = {
+            let terrain_data = TerrainData {
                 size: height_map.size,
                 nominal_edge_size,
                 water_level,
@@ -303,8 +295,116 @@ impl Terrain {
                 water_trans_high: water_trans_high as f32 / 512.0,
 
                 _padding: 0.0,
-            },
+            };
+
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("terrain_data"),
+                    contents: bytemuck::cast_slice(&[terrain_data]),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                })
+        };
+
+        let bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("terrain_data"),
+                    entries: &[
+                        // u_height_map
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        // u_terrain_data
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        // t_terrain_texture
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        // t_water_texture
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        // s_terrain_texture
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 4,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
+
+        let sampler = renderer.create_sampler(
+            "terrain",
+            wgpu::AddressMode::Repeat,
+            wgpu::FilterMode::Linear,
+            wgpu::FilterMode::Linear,
         );
+
+        let render_bind_group = renderer
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("terrain_data"),
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(
+                            height_map_buffer.as_entire_buffer_binding(),
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Buffer(
+                            terrain_data_buffer.as_entire_buffer_binding(),
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&terrain_texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(&water_texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ],
+            });
 
         let module = shaders.create_shader(
             renderer,
@@ -319,9 +419,7 @@ impl Terrain {
             .with_vertex_entry("vertex_main")
             .with_fragment_entry("fragment_main")
             .binding(camera_bind_group_layout)
-            .binding(&height_map_buffer.bind_group_layout)
-            .binding(&terrain_data_uniform.bind_group_layout)
-            .binding(renderer.texture_bind_group_layout())
+            .binding(&bind_group_layout)
             .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .with_depth_compare(wgpu::CompareFunction::LessEqual)
             .build();
@@ -331,9 +429,7 @@ impl Terrain {
             .with_vertex_entry("water_vertex_main")
             .with_fragment_entry("water_fragment_main")
             .binding(camera_bind_group_layout)
-            .binding(&height_map_buffer.bind_group_layout)
-            .binding(&terrain_data_uniform.bind_group_layout)
-            .binding(renderer.texture_bind_group_layout())
+            .binding(&bind_group_layout)
             .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .with_depth_compare(wgpu::CompareFunction::LessEqual)
             // .with_depth_writes(false)
@@ -351,14 +447,6 @@ impl Terrain {
             })
             .build();
 
-        let module = shaders.create_shader(
-            renderer,
-            "terrain",
-            include_str!("terrain.wgsl"),
-            "terrain.wgsl",
-            HashMap::from([("WIREFRAME".to_string(), ShaderDefValue::Bool(true))]),
-        );
-
         let wireframe_pipeline = renderer
             .build_render_pipeline::<TerrainVertex>("terrain_wireframe", &module)
             .with_primitive(wgpu::PrimitiveState {
@@ -368,8 +456,7 @@ impl Terrain {
             .with_vertex_entry("wireframe_vertex_main")
             .with_fragment_entry("wireframe_fragment_main")
             .binding(camera_bind_group_layout)
-            .binding(&height_map_buffer.bind_group_layout)
-            .binding(&terrain_data_uniform.bind_group_layout)
+            .binding(&bind_group_layout)
             .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .build();
 
@@ -437,28 +524,6 @@ impl Terrain {
 
         let chunk_mesh = ChunkMesh::new(renderer);
 
-        let water_texture_bind_group = {
-            let image = asset_loader.load_bmp(
-                PathBuf::from("textures")
-                    .join("image_processor")
-                    .join("water2.bmp"),
-            )?;
-            let image = asset_loader
-                .asset_store()
-                .get(image)
-                .expect("just loaded it successfully.");
-            let water_texture = renderer.create_texture_view("water", &image.data);
-
-            let sampler = renderer.create_sampler(
-                "water",
-                wgpu::AddressMode::Repeat,
-                wgpu::FilterMode::Linear,
-                wgpu::FilterMode::Linear,
-            );
-
-            renderer.create_texture_bind_group("water", &water_texture, &sampler)
-        };
-
         Ok(Self {
             height_map,
             max_view_distance: 13_300.0,
@@ -467,11 +532,8 @@ impl Terrain {
             wireframe_pipeline,
             process_chunks_pipeline,
             process_chunks_bind_group_layout,
-            terrain_texture_bind_group,
-            water_texture_bind_group,
             chunk_mesh,
-            terrain_data_uniform,
-            height_map_buffer,
+            render_bind_group,
             draw_wireframe: false,
             draw_normals: false,
             lod_level: 0,
@@ -557,6 +619,18 @@ impl Terrain {
         */
     }
 
+    #[inline]
+    fn render_patch(
+        render_pass: &mut wgpu::RenderPass,
+        x: u32,
+        y: u32,
+        range: std::ops::Range<u32>,
+    ) {
+        render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, &x.to_ne_bytes());
+        render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 4, &y.to_ne_bytes());
+        render_pass.draw_indexed(range, 0, 0..1);
+    }
+
     fn render_terrain(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         // LOD ranges.
         let range = [0..384, 384..480, 480..504, 504..510];
@@ -593,15 +667,11 @@ impl Terrain {
                 wgpu::IndexFormat::Uint32,
             );
             render_pass.set_bind_group(0, camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.height_map_buffer.bind_group, &[]);
-            render_pass.set_bind_group(2, &self.terrain_data_uniform.bind_group, &[]);
-            render_pass.set_bind_group(3, &self.terrain_texture_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.render_bind_group, &[]);
 
             for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
                 for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
-                    render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, &x.to_ne_bytes());
-                    render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 4, &y.to_ne_bytes());
-                    render_pass.draw_indexed(range[self.lod_level].clone(), 0, 0..1);
+                    Self::render_patch(&mut render_pass, x, y, range[self.lod_level].clone());
                 }
             }
         }
@@ -644,15 +714,11 @@ impl Terrain {
         );
 
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.height_map_buffer.bind_group, &[]);
-        render_pass.set_bind_group(2, &self.terrain_data_uniform.bind_group, &[]);
-        render_pass.set_bind_group(3, &self.water_texture_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
 
         for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
             for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
-                render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, &x.to_ne_bytes());
-                render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 4, &y.to_ne_bytes());
-                render_pass.draw_indexed(range[3].clone(), 0, 0..1);
+                Self::render_patch(&mut render_pass, x, y, range[3].clone());
             }
         }
     }
@@ -685,15 +751,11 @@ impl Terrain {
         );
 
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.height_map_buffer.bind_group, &[]);
-        render_pass.set_bind_group(2, &self.terrain_data_uniform.bind_group, &[]);
+        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
 
         for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
             for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
-                render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, &x.to_ne_bytes());
-                render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 4, &y.to_ne_bytes());
-                // Render level 0.
-                render_pass.draw_indexed(levels[self.lod_level].clone(), 0, 0..1);
+                Self::render_patch(&mut render_pass, x, y, levels[self.lod_level].clone());
             }
         }
     }
