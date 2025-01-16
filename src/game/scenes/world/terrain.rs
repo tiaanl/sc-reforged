@@ -1,7 +1,6 @@
 use std::{borrow::Cow, collections::HashMap, path::PathBuf};
 
 use glam::{IVec2, UVec2};
-use naga_oil::compose::ShaderDefValue;
 use tracing::info;
 use wgpu::util::DeviceExt;
 
@@ -111,6 +110,9 @@ pub struct Terrain {
 
     /// Bind group containing all data required for rendering.
     render_bind_group: wgpu::BindGroup,
+
+    terrain_data: Tracked<TerrainData>,
+    terrain_data_buffer: wgpu::Buffer,
 
     /// Pipeline that calculates LOD for each chunk and culls them in the camera frustum.
     process_chunks_pipeline: wgpu::ComputePipeline,
@@ -284,27 +286,26 @@ impl Terrain {
                 })
         };
 
-        let terrain_data_buffer = {
-            let terrain_data = TerrainData {
-                size: height_map.size,
-                nominal_edge_size,
-                water_level,
+        let terrain_data = TerrainData {
+            size: height_map.size,
+            nominal_edge_size,
+            water_level,
 
-                water_trans_depth,
-                water_trans_low: water_trans_low as f32 / 512.0,
-                water_trans_high: water_trans_high as f32 / 512.0,
+            water_trans_depth,
+            water_trans_low: water_trans_low as f32 / 512.0,
+            water_trans_high: water_trans_high as f32 / 512.0,
 
-                _padding: 0.0,
-            };
+            _padding: 0.0,
+        };
 
+        let terrain_data_buffer =
             renderer
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("terrain_data"),
                     contents: bytemuck::cast_slice(&[terrain_data]),
-                    usage: wgpu::BufferUsages::UNIFORM,
-                })
-        };
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
 
         let bind_group_layout =
             renderer
@@ -433,18 +434,7 @@ impl Terrain {
             .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .with_depth_compare(wgpu::CompareFunction::LessEqual)
             // .with_depth_writes(false)
-            .with_blend(wgpu::BlendState {
-                color: wgpu::BlendComponent {
-                    src_factor: wgpu::BlendFactor::SrcAlpha,
-                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                    operation: wgpu::BlendOperation::Add,
-                },
-                alpha: wgpu::BlendComponent {
-                    src_factor: wgpu::BlendFactor::One,
-                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                    operation: wgpu::BlendOperation::Add,
-                },
-            })
+            .with_blend(wgpu::BlendState::ALPHA_BLENDING)
             .build();
 
         let wireframe_pipeline = renderer
@@ -530,6 +520,10 @@ impl Terrain {
             terrain_pipeline,
             water_pipeline,
             wireframe_pipeline,
+
+            terrain_data: Tracked::new(terrain_data),
+            terrain_data_buffer,
+
             process_chunks_pipeline,
             process_chunks_bind_group_layout,
             chunk_mesh,
@@ -544,6 +538,15 @@ impl Terrain {
     pub fn update(&mut self, _camera: &Camera) {}
 
     pub fn render(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+        // Make sure the terrain data is up to date if it changed.
+        self.terrain_data.if_changed(|terrain_data| {
+            frame.queue.write_buffer(
+                &self.terrain_data_buffer,
+                0,
+                bytemuck::cast_slice(&[*terrain_data]),
+            );
+        });
+
         // self.process_chunks(&frame.device, &frame.queue, camera_bind_group);
         self.render_terrain(frame, camera_bind_group);
     }
@@ -559,6 +562,42 @@ impl Terrain {
         ui.checkbox(&mut self.draw_wireframe, "Draw wireframe");
 
         ui.add(DragValue::new(&mut self.max_view_distance).speed(10.0));
+
+        ui.horizontal(|ui| {
+            ui.label("Water level");
+
+            let mut water_level = self.terrain_data.water_level;
+            if ui
+                .add(DragValue::new(&mut water_level).speed(1.0))
+                .changed()
+            {
+                self.terrain_data.water_level = water_level;
+            }
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Water depth");
+
+            let mut depth = self.terrain_data.water_trans_depth;
+            if ui.add(DragValue::new(&mut depth).speed(0.1)).changed() {
+                self.terrain_data.water_trans_depth =
+                    depth.clamp(0.0, self.terrain_data.water_level);
+            }
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Water trans");
+
+            let mut low = self.terrain_data.water_trans_low;
+            if ui.add(DragValue::new(&mut low).speed(0.001)).changed() {
+                self.terrain_data.water_trans_low = low.clamp(0.0, 1.0);
+            }
+
+            let mut high = self.terrain_data.water_trans_high;
+            if ui.add(DragValue::new(&mut high).speed(0.001)).changed() {
+                self.terrain_data.water_trans_high = high.clamp(0.0, 1.0);
+            }
+        });
 
         for level in 0..=Self::LOD_MAX as usize {
             if ui
@@ -718,7 +757,7 @@ impl Terrain {
 
         for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
             for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
-                Self::render_patch(&mut render_pass, x, y, range[3].clone());
+                Self::render_patch(&mut render_pass, x, y, range[0].clone());
             }
         }
     }

@@ -109,9 +109,9 @@ fn water_fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     var n = clamp(water_depth / u_terrain_data.water_trans_depth, 0.0, 1.0);
-    // let alpha = u_terrain_data.water_trans_low + (u_terrain_data.water_trans_high - u_terrain_data.water_trans_low) * n;
+    let alpha = u_terrain_data.water_trans_low + (u_terrain_data.water_trans_high - u_terrain_data.water_trans_low) * n;
 
-    return vec4<f32>(color.rgb, n);
+    return vec4<f32>(color.rgb, alpha);
 }
 
 @vertex
