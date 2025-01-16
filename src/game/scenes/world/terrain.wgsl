@@ -1,33 +1,15 @@
 #import world::camera
+#import world::terrain
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
-struct TerrainData {
-    size: vec2<u32>,
-    nominal_edge_size: f32,
-    water_level: f32,
-    water_trans_depth: f32,
-    water_trans_low: f32,
-    water_trans_high: f32,
-}
-
 @group(1) @binding(0) var<storage> u_height_map: array<f32>;
-@group(1) @binding(1) var<uniform> u_terrain_data: TerrainData;
+@group(1) @binding(1) var<uniform> u_terrain_data: terrain::TerrainData;
 @group(1) @binding(2) var t_terrain_texture: texture_2d<f32>;
 @group(1) @binding(3) var t_water_texture: texture_2d<f32>;
 @group(1) @binding(4) var s_sampler: sampler;
 
 var<push_constant> u_chunk_index: vec2<u32>;
-
-struct VertexInput {
-    @location(0) index: vec2<u32>,
-}
-
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) world_position: vec3<f32>,
-    @location(1) tex_coord: vec2<f32>,
-}
 
 struct Node {
     x: u32,
@@ -35,9 +17,19 @@ struct Node {
     index: u32,
 }
 
-fn get_node_index(chunk_index: vec2<u32>, vertex_index: vec2<u32>) -> Node {
-    let x = chunk_index.x * 8 + vertex_index.x;
-    let y = chunk_index.y * 8 + vertex_index.y;
+fn get_chunk_pos_from_index(chunk_index: u32) -> vec2<u32> {
+    let terrain_chunks_x = u_terrain_data.size.x / terrain::CELLS_PER_CHUNK;
+    let x = chunk_index % terrain_chunks_x;
+
+    let terrain_chunks_y = u_terrain_data.size.y / terrain::CELLS_PER_CHUNK;
+    let y = chunk_index / terrain_chunks_y;
+
+    return vec2<u32>(x, y);
+}
+
+fn get_node_index(chunk_pos: vec2<u32>, vertex_pos: vec2<u32>) -> Node {
+    let x = chunk_pos.x * terrain::CELLS_PER_CHUNK + vertex_pos.x;
+    let y = chunk_pos.y * terrain::CELLS_PER_CHUNK + vertex_pos.y;
     let index = y * (u_terrain_data.size.x + 1) + x;
 
     return Node(x, y, index);
@@ -51,9 +43,23 @@ fn get_node_world_position(node: Node) -> vec3<f32> {
     );
 }
 
+struct VertexInput {
+    @builtin(vertex_index) vertex_index: u32,
+    @location(0) index: vec2<u32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) world_position: vec3<f32>,
+    @location(1) tex_coord: vec2<f32>,
+    @location(2) chunk_pos: vec2<u32>,
+    @location(3) chunk_index: u32,
+}
+
 @vertex
-fn vertex_main(vertex: VertexInput) -> VertexOutput {
-    let node = get_node_index(u_chunk_index, vertex.index);
+fn vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -> VertexOutput {
+    let chunk_pos = get_chunk_pos_from_index(chunk_index);
+    let node = get_node_index(chunk_pos, vertex.index);
     let world_position = get_node_world_position(node);
 
     let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
@@ -67,12 +73,15 @@ fn vertex_main(vertex: VertexInput) -> VertexOutput {
         clip_position,
         world_position,
         tex_coord,
+        chunk_pos,
+        chunk_index,
     );
 }
 
 @vertex
-fn water_vertex_main(vertex: VertexInput) -> VertexOutput {
-    let node = get_node_index(u_chunk_index, vertex.index);
+fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -> VertexOutput {
+    let chunk_pos = get_chunk_pos_from_index(chunk_index);
+    let node = get_node_index(chunk_pos, vertex.index);
     let world_position = get_node_world_position(node);
 
     // We calculate the clip position from the correct water location, but we keep the height map
@@ -90,6 +99,8 @@ fn water_vertex_main(vertex: VertexInput) -> VertexOutput {
         clip_position,
         world_position,
         tex_coord,
+        vec2<u32>(0, 0),
+        0,
     );
 }
 
@@ -115,7 +126,8 @@ fn water_fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 }
 
 @vertex
-fn wireframe_vertex_main(vertex: VertexInput) ->  @builtin(position) vec4<f32> {
+fn wireframe_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) ->  @builtin(position) vec4<f32> {
+    let chunk_pos = get_chunk_pos_from_index(chunk_index);
     let node = get_node_index(u_chunk_index, vertex.index);
     let world_position = get_node_world_position(node);
 

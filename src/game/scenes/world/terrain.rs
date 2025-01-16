@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 use glam::{IVec2, UVec2};
 use tracing::info;
@@ -96,6 +96,9 @@ pub struct Terrain {
     /// Height data for the terrain.
     height_map: HeightMap,
 
+    /// The total amount of chunks of the terrain.
+    total_chunks: u32,
+
     /// Dictates the terrain resolution.
     pub max_view_distance: f32,
 
@@ -117,8 +120,14 @@ pub struct Terrain {
     /// Pipeline that calculates LOD for each chunk and culls them in the camera frustum.
     process_chunks_pipeline: wgpu::ComputePipeline,
 
-    /// Bind group layout with all the data required by the pipeline.
-    process_chunks_bind_group_layout: wgpu::BindGroupLayout,
+    /// The bind group with all the data required for processing all the chunks.
+    process_chunks_bind_group: wgpu::BindGroup,
+
+    /// Holds draw args for each terrain chunk.
+    terrain_draw_args_buffer: wgpu::Buffer,
+
+    /// Holds draw args for each water chunk.
+    water_draw_args_buffer: wgpu::Buffer,
 
     /// The mesh we use to render chunks.
     chunk_mesh: ChunkMesh,
@@ -157,6 +166,15 @@ struct ChunkData {
     _padding1: f32,
     max: Vec3,
     _padding2: f32,
+}
+
+impl std::fmt::Debug for ChunkData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChunkData")
+            .field("min", &self.min)
+            .field("max", &self.max)
+            .finish()
+    }
 }
 
 /// Fields copied from [wgpu::util::DrawIndexedIndirectArgs], but wgpu doesn't support bytemuck.
@@ -219,6 +237,8 @@ impl Terrain {
 
         let water_level = water_level * altitude_map_height_base;
 
+        shaders.add_module(include_str!("terrain_data.wgsl"), "terrain_data.wgsl");
+
         let terrain_texture_view = {
             let path = PathBuf::from("trnhigh").join(format!("{}.jpg", texture_map_base_name));
             info!("Loading high detail terrain texture: {}", path.display());
@@ -255,11 +275,38 @@ impl Terrain {
                 .map_err(|_| AssetError::Custom("Could not load height map data.".to_string()))?
         };
 
-        // let UVec2 {
-        //     x: chunks_x,
-        //     y: chunks_y,
-        // } = height_map.size / Terrain::CELLS_PER_CHUNK;
-        // let total_chunks = chunks_x * chunks_y;
+        let chunks = height_map.size / UVec2::splat(Terrain::CELLS_PER_CHUNK);
+        let total_chunks = chunks.x * chunks.y;
+
+        info!("chunks: {} x {} ({})", chunks.x, chunks.y, total_chunks);
+
+        // Generate the array of chunks we use for frustum culling.
+        let mut chunk_data = Vec::with_capacity(total_chunks as usize);
+        for chunk_y in 0..chunks.y {
+            for chunk_x in 0..chunks.x {
+                let y_range =
+                    (chunk_y * Self::CELLS_PER_CHUNK)..=((chunk_y + 1) * Self::CELLS_PER_CHUNK);
+                let x_range =
+                    (chunk_x * Self::CELLS_PER_CHUNK)..=((chunk_x + 1) * Self::CELLS_PER_CHUNK);
+
+                let mut min = Vec3::INFINITY;
+                let mut max = Vec3::NEG_INFINITY;
+                for y in y_range {
+                    for x in x_range.clone() {
+                        let position =
+                            height_map.position_for_vertex(IVec2::new(x as i32, y as i32));
+                        min = min.min(position);
+                        max = max.max(position);
+                    }
+                }
+                chunk_data.push(ChunkData {
+                    min,
+                    _padding1: 0.0,
+                    max,
+                    _padding2: 0.0,
+                });
+            }
+        }
 
         info!(
             "terrain size: {} x {}, terrain heightmap size: {} x {}",
@@ -421,7 +468,6 @@ impl Terrain {
             .with_fragment_entry("fragment_main")
             .binding(camera_bind_group_layout)
             .binding(&bind_group_layout)
-            .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .with_depth_compare(wgpu::CompareFunction::LessEqual)
             .build();
 
@@ -450,15 +496,49 @@ impl Terrain {
             .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .build();
 
+        // Process chunks
+
+        let chunk_data_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("chunk_data"),
+                    contents: bytemuck::cast_slice(&chunk_data),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+
+        let draw_args_descriptor = {
+            let size_of_indirect_args = std::mem::size_of::<wgpu::util::DrawIndexedIndirectArgs>();
+            wgpu::BufferDescriptor {
+                label: Some("terrain_draw_args"),
+                size: size_of_indirect_args as u64 * total_chunks as u64,
+                usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }
+        };
+        let terrain_draw_args_buffer = renderer.device.create_buffer(&draw_args_descriptor);
+        let water_draw_args_buffer = renderer.device.create_buffer(&draw_args_descriptor);
+
         let process_chunks_bind_group_layout =
             renderer
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("process_chunks"),
                     entries: &[
-                        // u_chunk_data
+                        // u_terrain_data
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        // u_chunk_data
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -467,9 +547,20 @@ impl Terrain {
                             },
                             count: None,
                         },
-                        // u_draw_commands
+                        // u_terrain_draw_args
                         wgpu::BindGroupLayoutEntry {
-                            binding: 1,
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        // u_water_draw_args
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Storage { read_only: false },
@@ -481,19 +572,18 @@ impl Terrain {
                     ],
                 });
 
-        let module = renderer
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("process_chunks"),
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                    "process_chunks.wgsl"
-                ))),
-            });
+        let module = shaders.create_shader(
+            renderer,
+            "process_chunks",
+            include_str!("process_chunks.wgsl"),
+            "process_chunks.wgsl",
+            HashMap::default(),
+        );
 
         let layout = renderer
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("terrain_process_chunks"),
+                label: Some("process_chunks"),
                 bind_group_layouts: &[camera_bind_group_layout, &process_chunks_bind_group_layout],
                 push_constant_ranges: &[],
             });
@@ -510,12 +600,48 @@ impl Terrain {
                     cache: None,
                 });
 
+        let process_chunks_bind_group =
+            renderer
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("process_chunks"),
+                    layout: &process_chunks_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::Buffer(
+                                terrain_data_buffer.as_entire_buffer_binding(),
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Buffer(
+                                chunk_data_buffer.as_entire_buffer_binding(),
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Buffer(
+                                terrain_draw_args_buffer.as_entire_buffer_binding(),
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::Buffer(
+                                water_draw_args_buffer.as_entire_buffer_binding(),
+                            ),
+                        },
+                    ],
+                });
+
         let normals_lookup = Self::generate_normals_lookup_table();
 
         let chunk_mesh = ChunkMesh::new(renderer);
 
         Ok(Self {
             height_map,
+            total_chunks,
+
             max_view_distance: 13_300.0,
             terrain_pipeline,
             water_pipeline,
@@ -525,7 +651,10 @@ impl Terrain {
             terrain_data_buffer,
 
             process_chunks_pipeline,
-            process_chunks_bind_group_layout,
+            process_chunks_bind_group,
+            terrain_draw_args_buffer,
+            water_draw_args_buffer,
+
             chunk_mesh,
             render_bind_group,
             draw_wireframe: false,
@@ -534,8 +663,6 @@ impl Terrain {
             normals_lookup,
         })
     }
-
-    pub fn update(&mut self, _camera: &Camera) {}
 
     pub fn render(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         // Make sure the terrain data is up to date if it changed.
@@ -547,7 +674,9 @@ impl Terrain {
             );
         });
 
-        // self.process_chunks(&frame.device, &frame.queue, camera_bind_group);
+        // Always use the main camera for frustum culling.
+        self.process_chunks(&frame.device, &frame.queue, camera_bind_group);
+
         self.render_terrain(frame, camera_bind_group);
     }
 
@@ -616,31 +745,14 @@ impl Terrain {
 impl Terrain {
     /// Run the process_chunks compute shader to cull chunks not in the camera frustum and to set
     /// the LOD level.
-    fn process_chunks(
+    pub fn process_chunks(
         &self,
-        _device: &RenderDevice,
-        _queue: &RenderQueue,
-        _camera_bind_group: &wgpu::BindGroup,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        camera_bind_group: &wgpu::BindGroup,
     ) {
-        /*
-        // Create the bind group
-        let process_chunks_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("process_chunks"),
-            layout: &self.process_chunks_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: self.chunk_data_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: self.chunk_draw_commands_buffer.as_entire_binding(),
-                },
-            ],
-        });
-
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("process_chunks_encoder"),
+            label: Some("process_chunks"),
         });
 
         {
@@ -648,14 +760,14 @@ impl Terrain {
                 label: Some("process_chunks"),
                 timestamp_writes: None,
             });
+
             compute_pass.set_pipeline(&self.process_chunks_pipeline);
             compute_pass.set_bind_group(0, camera_bind_group, &[]);
-            compute_pass.set_bind_group(1, &process_chunks_bind_group, &[]);
+            compute_pass.set_bind_group(1, &self.process_chunks_bind_group, &[]);
             compute_pass.dispatch_workgroups((self.total_chunks + 63) / 64, 1, 1);
         }
 
         queue.submit(std::iter::once(encoder.finish()));
-        */
     }
 
     #[inline]
@@ -671,49 +783,44 @@ impl Terrain {
     }
 
     fn render_terrain(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
-        // LOD ranges.
-        let range = [0..384, 384..480, 480..504, 504..510];
-
-        {
-            let mut render_pass = frame
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("terrain_chunks"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &frame.surface,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &frame.depth_buffer.texture_view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        }),
-                        stencil_ops: None,
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("terrain_chunks"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &frame.depth_buffer.texture_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
                     }),
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
-            render_pass.set_pipeline(&self.terrain_pipeline);
-            render_pass.set_vertex_buffer(0, self.chunk_mesh.vertices_buffer.slice(..));
-            render_pass.set_index_buffer(
-                self.chunk_mesh.indices_buffer.slice(..),
-                wgpu::IndexFormat::Uint32,
-            );
-            render_pass.set_bind_group(0, camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.render_bind_group, &[]);
+        render_pass.set_pipeline(&self.terrain_pipeline);
+        render_pass.set_vertex_buffer(0, self.chunk_mesh.vertices_buffer.slice(..));
+        render_pass.set_index_buffer(
+            self.chunk_mesh.indices_buffer.slice(..),
+            wgpu::IndexFormat::Uint32,
+        );
+        render_pass.set_bind_group(0, camera_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
 
-            for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
-                for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
-                    Self::render_patch(&mut render_pass, x, y, range[self.lod_level].clone());
-                }
-            }
-        }
+        render_pass.multi_draw_indexed_indirect(
+            &self.terrain_draw_args_buffer,
+            0,
+            self.total_chunks,
+        );
     }
 
     pub fn render_water(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
@@ -755,11 +862,7 @@ impl Terrain {
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.set_bind_group(1, &self.render_bind_group, &[]);
 
-        for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
-            for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
-                Self::render_patch(&mut render_pass, x, y, range[0].clone());
-            }
-        }
+        render_pass.multi_draw_indexed_indirect(&self.water_draw_args_buffer, 0, self.total_chunks);
     }
 
     fn render_wireframe(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {

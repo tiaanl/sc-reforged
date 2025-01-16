@@ -8,7 +8,7 @@ use crate::{
     },
     game::{
         asset_loader::{AssetError, AssetLoader},
-        camera::{self, render_camera_frustum, Frustum},
+        camera::{self, Frustum},
         config::{self, CampaignDef, Fog, LodModelProfileDefinition, SubModelDefinition},
     },
 };
@@ -32,9 +32,6 @@ pub struct WorldScene {
 
     camera_controller: camera::GameCameraController,
     camera: camera::Camera,
-    debug_camera_controller: camera::FreeCameraController,
-    debug_camera: camera::Camera,
-
     camera_matrices: Tracked<camera::Matrices>,
     gpu_camera: camera::GpuCamera,
 
@@ -124,18 +121,6 @@ impl WorldScene {
             10_000.0,
         );
 
-        let mut debug_camera_controller = camera::FreeCameraController::new(50.0, 0.2);
-        debug_camera_controller.move_to(Vec3::new(-5_000.0, -5_000.0, 10_000.0));
-        debug_camera_controller.look_at(Vec3::new(10_000.0, 10_000.0, 0.0));
-        let debug_camera = camera::Camera::new(
-            Vec3::ZERO,
-            Quat::IDENTITY,
-            45.0_f32.to_radians(),
-            1.0,
-            100.0,
-            100_000.0,
-        );
-
         let camera_matrices = camera.calculate_matrices().into();
         let gpu_camera = camera::GpuCamera::new(renderer, "camera", wgpu::ShaderStages::all());
 
@@ -220,10 +205,6 @@ impl WorldScene {
 
             camera_controller,
             camera,
-
-            debug_camera_controller,
-            debug_camera,
-
             camera_matrices,
             gpu_camera,
 
@@ -262,7 +243,6 @@ impl Scene for WorldScene {
 
         self.window_size = Vec2::new(width as f32, height as f32);
         self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
-        self.debug_camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
     fn event(&mut self, event: &SceneEvent) {
@@ -336,21 +316,10 @@ impl Scene for WorldScene {
 
         // Set the camera far plane to the `max_view_distance`.
         self.camera.far = self.terrain.max_view_distance;
+        self.camera_controller.update(input, delta_time);
 
-        if self.control_debug_camera {
-            self.debug_camera_controller.update(input, delta_time);
-        } else {
-            self.camera_controller.update(input, delta_time);
-        }
-
-        self.debug_camera_controller
-            .update_camera_if_dirty(&mut self.debug_camera);
-        if self
-            .camera_controller
-            .update_camera_if_dirty(&mut self.camera)
-        {
-            *self.camera_matrices = self.camera.calculate_matrices();
-        }
+        self.camera_controller
+            .update_camera_if_dirty(&mut self.camera);
 
         // Highlight whatever we're hovering on.
         match self.under_mouse {
@@ -361,36 +330,16 @@ impl Scene for WorldScene {
             } => self.objects.set_selected(Some(entity_index)),
         }
 
-        self.terrain.update(&self.camera);
-
-        // Only render the camera frustum if we're looking through the debug camera.
-        if self.view_debug_camera {
-            render_camera_frustum(&self.camera, &mut self.gizmos_vertices);
-        }
-
         self.objects.update(&self.camera);
-
-        // let height = self.terrain.height_at(self.terrain_height_sample);
-        // let pos = self.terrain_height_sample.extend(height);
-        // self.gizmos_vertices.extend(GizmosRenderer::_create_axis(
-        //     Mat4::from_translation(pos),
-        //     100.0,
-        // ));
     }
 
     fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
-        let camera = if self.view_debug_camera {
-            &self.debug_camera
-        } else {
-            &self.camera
-        };
-
-        let matrices = camera.calculate_matrices();
+        let matrices = self.camera.calculate_matrices();
         let frustum = Frustum::from_matrices(&matrices);
         self.gpu_camera.upload(queue, |c| {
             c.proj = matrices.projection;
             c.view = matrices.view;
-            c.position = camera.position.extend(1.0);
+            c.position = self.camera.position.extend(1.0);
             for i in 0..c.frustum.len() {
                 c.frustum[i] = frustum.planes[i].normal.extend(frustum.planes[i].distance)
             }
@@ -461,39 +410,6 @@ impl Scene for WorldScene {
                     ui.label("Intersection");
                     ui.label(format!("{}", intersection));
                 }
-
-                ui.heading("Camera");
-                ui.horizontal(|ui| {
-                    ui.label("Debug camera");
-                    ui.toggle_value(&mut self.view_debug_camera, "View");
-                    ui.toggle_value(&mut self.control_debug_camera, "Control");
-                });
-
-                if self.control_debug_camera {
-                    let c = &mut self.debug_camera_controller;
-
-                    egui::Grid::new("camera").show(ui, |ui| {
-                        ui.label("position");
-
-                        let mut pos = c.position;
-                        let mut changed = false;
-                        changed |= DragValue::new(&mut pos.x).ui(ui).changed();
-                        changed |= DragValue::new(&mut pos.y).ui(ui).changed();
-                        changed |= DragValue::new(&mut pos.z).ui(ui).changed();
-                        if changed {
-                            c.move_to(pos);
-                        }
-                        ui.end_row();
-
-                        ui.label("pitch/yaw");
-                        if DragValue::new(&mut c.pitch).speed(0.1).ui(ui).changed() {
-                            c.smudge();
-                        }
-                        if DragValue::new(&mut c.yaw).speed(0.1).ui(ui).changed() {
-                            c.smudge();
-                        }
-                    });
-                };
 
                 ui.heading("Terrain");
                 self.terrain.debug_panel(ui);
