@@ -1,7 +1,5 @@
 use glam::Vec3;
 
-use super::UniformBuffer;
-
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct RawFog {
@@ -12,8 +10,6 @@ pub struct RawFog {
     pub density: f32, // 4
     _padding2: f32,   // 4
 }
-
-pub type GpuFog = UniformBuffer<RawFog>;
 
 // pub struct GpuFog {
 //     buffer: wgpu::Buffer,

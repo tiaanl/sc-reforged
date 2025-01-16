@@ -9,7 +9,6 @@ pub mod scene;
 pub mod shaders;
 pub mod utils;
 
-pub mod buffers;
 pub mod dirty;
 pub mod tracked;
 pub mod transform;
@@ -17,7 +16,6 @@ pub mod transform;
 pub mod prelude {
     #![allow(unused_imports)]
     pub use super::assets::{Asset, AssetStore, Handle};
-    pub use super::buffers::*;
     pub use super::depth_buffer::*;
     pub use super::dirty::*;
     pub use super::input::*;

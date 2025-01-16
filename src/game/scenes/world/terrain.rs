@@ -8,7 +8,6 @@ use crate::{
     engine::prelude::*,
     game::{
         asset_loader::{AssetError, AssetLoader},
-        camera::Camera,
         config::{CampaignDef, TerrainMapping},
     },
 };
@@ -824,9 +823,6 @@ impl Terrain {
     }
 
     pub fn render_water(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
-        // LOD ranges.
-        let range = [0..384, 384..480, 480..504, 504..510];
-
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {

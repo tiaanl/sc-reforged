@@ -8,8 +8,8 @@ use crate::{
     },
     game::{
         asset_loader::{AssetError, AssetLoader},
-        camera::{self, Frustum},
-        config::{self, CampaignDef, Fog, LodModelProfileDefinition, SubModelDefinition},
+        camera,
+        config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
     },
 };
 use egui::Widget;
@@ -17,7 +17,6 @@ use glam::{Quat, Vec3, Vec4};
 use terrain::*;
 
 mod bounding_boxes;
-mod fog;
 mod height_map;
 mod objects;
 mod terrain;
@@ -41,9 +40,6 @@ pub struct WorldScene {
     terrain: Terrain,
     objects: objects::Objects,
 
-    fog: Option<Fog>,
-    gpu_fog: fog::GpuFog,
-
     gizmos_renderer: GizmosRenderer,
     gizmos_vertices: Vec<GizmoVertex>,
 
@@ -57,8 +53,6 @@ pub struct WorldScene {
     terrain_height_sample: Vec2,
 
     lod_model_definitions: HashMap<String, Vec<SubModelDefinition>>,
-
-    fog_density: f32,
 }
 
 #[derive(Debug)]
@@ -104,7 +98,6 @@ impl WorldScene {
 
         let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
-        shaders.add_module(include_str!("fog.wgsl"), "fog.wgsl");
 
         let camera_from = campaign.view_initial.from.extend(2500.0);
         let camera_to = campaign.view_initial.to.extend(0.0);
@@ -122,9 +115,7 @@ impl WorldScene {
         );
 
         let camera_matrices = camera.calculate_matrices().into();
-        let gpu_camera = camera::GpuCamera::new(renderer, "camera", wgpu::ShaderStages::all());
-
-        let gpu_fog = fog::GpuFog::new(renderer, "fog", wgpu::ShaderStages::FRAGMENT);
+        let gpu_camera = camera::GpuCamera::new(renderer);
 
         let terrain = Terrain::new(
             assets,
@@ -141,12 +132,8 @@ impl WorldScene {
             &gpu_camera.bind_group_layout,
         );
 
-        let mut fog = None;
-
         if let Some(mtf_name) = campaign.mtf_name {
             let mtf = assets.load_config::<config::Mtf>(PathBuf::from("maps").join(mtf_name))?;
-
-            fog = Some(mtf.game_config_fog_enabled);
 
             let mut to_spawn = mtf
                 .objects
@@ -213,8 +200,6 @@ impl WorldScene {
 
             terrain,
             objects,
-            fog,
-            gpu_fog,
 
             gizmos_renderer,
             gizmos_vertices: vec![],
@@ -230,8 +215,6 @@ impl WorldScene {
             terrain_height_sample: Vec2::ZERO,
 
             lod_model_definitions,
-
-            fog_density: 1.0,
         })
     }
 }
@@ -335,48 +318,20 @@ impl Scene for WorldScene {
 
     fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
         let matrices = self.camera.calculate_matrices();
-        let frustum = Frustum::from_matrices(&matrices);
-        self.gpu_camera.upload(queue, |c| {
-            c.proj = matrices.projection;
-            c.view = matrices.view;
-            c.position = self.camera.position.extend(1.0);
-            for i in 0..c.frustum.len() {
-                c.frustum[i] = frustum.planes[i].normal.extend(frustum.planes[i].distance)
-            }
-        });
-
-        if let Some(fog) = &self.fog {
-            self.gpu_fog.upload(queue, |f| {
-                f.color = fog.color;
-                f.start = fog.start;
-                f.end = fog.end;
-                f.density = self.fog_density;
-            });
-        }
+        let position = self.camera.position;
+        self.gpu_camera.upload_matrices(queue, &matrices, position);
     }
 
     fn render_frame(&self, frame: &mut Frame) {
-        if let Some(fog) = &self.fog {
-            frame.clear_color_and_depth(
-                wgpu::Color {
-                    r: fog.color.x as f64,
-                    g: fog.color.y as f64,
-                    b: fog.color.z as f64,
-                    a: 1.0,
-                },
-                1.0,
-            );
-        } else {
-            frame.clear_color_and_depth(
-                wgpu::Color {
-                    r: 0.1,
-                    g: 0.2,
-                    b: 0.3,
-                    a: 1.0,
-                },
-                1.0,
-            );
-        }
+        frame.clear_color_and_depth(
+            wgpu::Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
+            1.0,
+        );
 
         let camera_bind_group = &self.gpu_camera.bind_group;
 
@@ -436,31 +391,6 @@ impl Scene for WorldScene {
                     }
                 } else {
                     ui.label("Nothing");
-                }
-
-                // ui.heading("Height");
-                // ui.add(DragValue::new(&mut self.terrain_height_sample.x));
-                // ui.add(DragValue::new(&mut self.terrain_height_sample.y));
-
-                if let Some(fog) = &mut self.fog {
-                    ui.heading("Fog");
-                    ui.horizontal(|ui| {
-                        ui.label("Density");
-                        ui.add(DragValue::new(&mut self.fog_density).speed(0.01));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Range");
-                        ui.add(DragValue::new(&mut fog.start).speed(10));
-                        ui.add(DragValue::new(&mut fog.end).speed(10));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Color");
-                        ui.add(DragValue::new(&mut fog.color.x).speed(0.01));
-                        ui.add(DragValue::new(&mut fog.color.y).speed(0.01));
-                        ui.add(DragValue::new(&mut fog.color.z).speed(0.01));
-                    });
-
-                    self.fog_density = self.fog_density.clamp(0.0, 1.0);
                 }
             });
     }

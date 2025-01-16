@@ -447,6 +447,7 @@ where
         self
     }
 
+    #[allow(unused)]
     pub fn with_depth_writes(mut self, depth_writes: bool) -> Self {
         self.depth_writes = depth_writes;
         self

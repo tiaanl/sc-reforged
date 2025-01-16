@@ -232,9 +232,6 @@ pub struct RawCamera {
     pub frustum: [Vec4; 6],
 }
 
-pub type GpuCamera = UniformBuffer<RawCamera>;
-
-/*
 pub struct GpuCamera {
     buffer: wgpu::Buffer,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -243,15 +240,12 @@ pub struct GpuCamera {
 
 impl GpuCamera {
     pub fn new(renderer: &Renderer) -> Self {
-        let raw_camera = RawCamera::default();
-
-        let buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("camera_buffer"),
-                contents: bytemuck::cast_slice(&[raw_camera]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
+        let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("camera_buffer"),
+            size: std::mem::size_of::<RawCamera>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         let bind_group_layout =
             renderer
@@ -302,7 +296,6 @@ impl GpuCamera {
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[raw_camera]));
     }
 }
-*/
 
 pub struct FreeCameraControls {
     mouse_button: MouseButton,
