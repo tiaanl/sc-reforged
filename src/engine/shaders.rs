@@ -47,7 +47,8 @@ impl Shaders {
         }) {
             Ok(module) => module,
             Err(err) => {
-                panic!("Could not create shader module. {}", err);
+                let msg = err.emit_to_string(&self.composer);
+                panic!("Could not create shader module. {msg}");
             }
         };
 
