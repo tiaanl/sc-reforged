@@ -99,6 +99,11 @@ impl AssetLoader {
         &self.asset_store
     }
 
+    pub fn load_smf_direct(&self, path: impl AsRef<Path>) -> Result<smf::Model, AssetError> {
+        let mut reader = std::io::Cursor::new(self.load_raw(&path)?);
+        Ok(smf::Model::read(&mut reader)?)
+    }
+
     pub fn load_smf(
         &self,
         path: impl AsRef<Path>,

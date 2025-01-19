@@ -79,14 +79,46 @@ impl<V: BufferLayout + bytemuck::NoUninit> IndexedMesh<V> {
     }
 }
 
-// pub trait RenderPassMeshExt {
-//     fn draw_mesh(&mut self, mesh: &GpuIndexedMesh, instances: std::ops::Range<u32>);
-// }
+/// Mesh data for multiple meshes where each mesh is tracked by the range of indices.
+#[allow(unused)]
+pub struct MegaIndexedMesh<V: BufferLayout> {
+    vertices: Vec<V>,
+    indices: Vec<u32>,
+}
 
-// impl<'encoder> RenderPassMeshExt for wgpu::RenderPass<'encoder> {
-//     fn draw_mesh(&mut self, mesh: &GpuIndexedMesh, instances: std::ops::Range<u32>) {
-//         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-//         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-//         self.draw_indexed(0..mesh.index_count, 0, instances);
-//     }
-// }
+impl<V: BufferLayout> Default for MegaIndexedMesh<V> {
+    fn default() -> Self {
+        Self {
+            vertices: vec![],
+            indices: vec![],
+        }
+    }
+}
+
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[repr(C)]
+#[allow(unused)]
+pub struct MeshSlice {
+    pub start: u32,
+    pub end: u32,
+}
+
+#[allow(unused)]
+impl<V: BufferLayout> MegaIndexedMesh<V> {
+    pub fn push_mesh(&mut self, mesh: IndexedMesh<V>) -> MeshSlice {
+        let start_vertex = self.vertices.len();
+        let start_index = self.indices.len();
+
+        self.vertices.extend(mesh.vertices);
+
+        self.indices.reserve(mesh.indices.len());
+        mesh.indices
+            .iter()
+            .for_each(|i| self.indices.push(*i + start_vertex as u32));
+
+        MeshSlice {
+            start: start_index as u32,
+            end: self.indices.len() as u32,
+        }
+    }
+}
