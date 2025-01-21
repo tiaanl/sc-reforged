@@ -7,6 +7,7 @@ use crate::{
         shaders::Shaders,
     },
     game::{
+        animation::Timeline,
         asset_loader::{AssetError, AssetLoader},
         camera,
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
@@ -15,11 +16,32 @@ use crate::{
 use egui::Widget;
 use glam::{Quat, Vec3, Vec4};
 use terrain::*;
+use wgpu::util::DeviceExt;
 
 mod bounding_boxes;
 mod height_map;
 mod objects;
 mod terrain;
+
+#[derive(Default)]
+struct DayNightCycle {
+    sun_dir: Timeline<Vec3>,
+    sun_color: Timeline<Vec3>,
+
+    fog_distance: Timeline<f32>,
+    fog_near_fraction: Timeline<f32>,
+    fog_color: Timeline<Vec3>,
+}
+
+#[derive(Clone, Copy, Default, bytemuck::NoUninit)]
+#[repr(C)]
+struct Environment {
+    pub sun_dir: Vec4,
+    pub sun_color: Vec4,
+
+    pub fog_color: Vec4,
+    pub fog_params: Vec4,
+}
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
@@ -53,6 +75,15 @@ pub struct WorldScene {
     terrain_height_sample: Vec2,
 
     lod_model_definitions: HashMap<String, Vec<SubModelDefinition>>,
+
+    time_of_day: f32,
+    day_night_cycle: DayNightCycle,
+
+    environment: Environment,
+
+    environment_buffer: wgpu::Buffer,
+    environment_bind_group_layout: wgpu::BindGroupLayout,
+    environment_bind_group: wgpu::BindGroup,
 }
 
 #[derive(Debug)]
@@ -98,6 +129,7 @@ impl WorldScene {
 
         let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
+        shaders.add_module(include_str!("environment.wgsl"), "environment.wgsl");
 
         let camera_from = campaign.view_initial.from.extend(2500.0);
         let camera_to = campaign.view_initial.to.extend(0.0);
@@ -117,12 +149,72 @@ impl WorldScene {
         let camera_matrices = camera.calculate_matrices().into();
         let gpu_camera = camera::GpuCamera::new(renderer);
 
+        let time_of_day = 12.0;
+        let day_night_cycle = {
+            let mut e = DayNightCycle::default();
+
+            campaign.time_of_day.iter().enumerate().for_each(|(i, t)| {
+                let time = i as f32;
+                e.sun_dir.set_key_frame(time, t.sun_dir);
+                e.sun_color.set_key_frame(time, t.sun_color);
+
+                e.fog_distance.set_key_frame(time, t.fog_distance);
+                e.fog_near_fraction.set_key_frame(time, t.fog_near_fraction);
+                e.fog_color.set_key_frame(time, t.fog_color);
+            });
+
+            e
+        };
+
+        let environment = Environment::default();
+
+        let environment_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("environment_buffer"),
+                    contents: bytemuck::cast_slice(&[environment]),
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
+
+        let environment_bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("environment_bind_group_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
+        let environment_bind_group =
+            renderer
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("environment_bind_group_layout"),
+                    layout: &environment_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(
+                            environment_buffer.as_entire_buffer_binding(),
+                        ),
+                    }],
+                });
+
         let terrain = Terrain::new(
             assets,
             renderer,
             &mut shaders,
             &campaign_def,
             &gpu_camera.bind_group_layout,
+            &environment_bind_group_layout,
         )?;
 
         let mut objects = objects::Objects::new(
@@ -130,6 +222,7 @@ impl WorldScene {
             renderer,
             &mut shaders,
             &gpu_camera.bind_group_layout,
+            &environment_bind_group_layout,
         );
 
         if let Some(mtf_name) = campaign.mtf_name {
@@ -215,7 +308,31 @@ impl WorldScene {
             terrain_height_sample: Vec2::ZERO,
 
             lod_model_definitions,
+
+            time_of_day,
+            day_night_cycle,
+            environment,
+
+            environment_buffer,
+            environment_bind_group_layout,
+            environment_bind_group,
         })
+    }
+
+    fn calculate_environment(&self, time_of_day: f32) -> Environment {
+        let sun_dir = self.day_night_cycle.sun_dir.get(time_of_day);
+        let sun_color = self.day_night_cycle.sun_color.get(time_of_day);
+
+        let fog_far = self.day_night_cycle.fog_distance.get(time_of_day);
+        let fog_near = fog_far * self.day_night_cycle.fog_near_fraction.get(time_of_day);
+        let fog_color = self.day_night_cycle.fog_color.get(time_of_day);
+
+        Environment {
+            sun_dir: sun_dir.extend(0.0),
+            sun_color: sun_color.extend(0.0),
+            fog_color: fog_color.extend(0.0),
+            fog_params: Vec4::new(fog_near, fog_far, 0.0, 0.0),
+        }
     }
 }
 
@@ -297,6 +414,9 @@ impl Scene for WorldScene {
         const GREEN: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
         const BLUE: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
 
+        self.time_of_day = (self.time_of_day + delta_time * 0.001).rem_euclid(24.0);
+        self.environment = self.calculate_environment(self.time_of_day);
+
         // Set the camera far plane to the `max_view_distance`.
         self.camera.far = self.terrain.max_view_distance;
         self.camera_controller.update(input, delta_time);
@@ -320,31 +440,43 @@ impl Scene for WorldScene {
         let matrices = self.camera.calculate_matrices();
         let position = self.camera.position;
         self.gpu_camera.upload_matrices(queue, &matrices, position);
+
+        queue.write_buffer(
+            &self.environment_buffer,
+            0,
+            bytemuck::cast_slice(&[self.environment]),
+        );
     }
 
     fn render_frame(&self, frame: &mut Frame) {
         frame.clear_color_and_depth(
             wgpu::Color {
-                r: 0.1,
-                g: 0.2,
-                b: 0.3,
+                r: self.environment.fog_color.x as f64,
+                g: self.environment.fog_color.y as f64,
+                b: self.environment.fog_color.z as f64,
                 a: 1.0,
             },
             1.0,
         );
 
         let camera_bind_group = &self.gpu_camera.bind_group;
+        let environment_bind_group = &self.environment_bind_group;
 
         // Render Opaque geometry first.
-        self.terrain.render(frame, camera_bind_group);
-        self.objects.render_objects(frame, camera_bind_group);
+        self.terrain
+            .render(frame, camera_bind_group, environment_bind_group);
+        self.objects
+            .render_objects(frame, camera_bind_group, environment_bind_group);
 
         // Now render alpha geoometry.
-        self.terrain.render_water(frame, camera_bind_group);
-        self.objects.render_alpha_objects(frame, camera_bind_group);
+        self.terrain
+            .render_water(frame, camera_bind_group, environment_bind_group);
+        self.objects
+            .render_alpha_objects(frame, camera_bind_group, environment_bind_group);
 
         // Render any kind of debug overlays.
-        self.terrain.render_gizmos(frame, camera_bind_group);
+        self.terrain
+            .render_gizmos(frame, camera_bind_group, environment_bind_group);
         self.objects.render_gizmos(frame, camera_bind_group);
 
         self.gizmos_renderer
@@ -365,6 +497,25 @@ impl Scene for WorldScene {
                     ui.label("Intersection");
                     ui.label(format!("{}", intersection));
                 }
+
+                ui.heading("Environment");
+                ui.horizontal(|ui| {
+                    ui.label("Time of day");
+                    ui.label(format!("{:.2}", self.time_of_day));
+                    if ui.button("-").clicked() {
+                        self.time_of_day -= 1.0;
+                    }
+                    if ui.button("+").clicked() {
+                        self.time_of_day += 1.0;
+                    }
+
+                    ui.label(format!(
+                        "Sun dir: ({:.2}, {:.2}, {:.2})",
+                        self.environment.sun_dir.x,
+                        self.environment.sun_dir.y,
+                        self.environment.sun_dir.z,
+                    ));
+                });
 
                 ui.heading("Terrain");
                 self.terrain.debug_panel(ui);

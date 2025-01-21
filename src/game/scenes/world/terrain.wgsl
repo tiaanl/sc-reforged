@@ -1,13 +1,16 @@
 #import world::camera
+#import world::environment
 #import world::terrain
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
-@group(1) @binding(0) var<storage> u_height_map: array<f32>;
-@group(1) @binding(1) var<uniform> u_terrain_data: terrain::TerrainData;
-@group(1) @binding(2) var t_terrain_texture: texture_2d<f32>;
-@group(1) @binding(3) var t_water_texture: texture_2d<f32>;
-@group(1) @binding(4) var s_sampler: sampler;
+@group(1) @binding(0) var<uniform> u_environment: environment::Environment;
+
+@group(2) @binding(0) var<storage> u_height_map: array<f32>;
+@group(2) @binding(1) var<uniform> u_terrain_data: terrain::TerrainData;
+@group(2) @binding(2) var t_terrain_texture: texture_2d<f32>;
+@group(2) @binding(3) var t_water_texture: texture_2d<f32>;
+@group(2) @binding(4) var s_sampler: sampler;
 
 var<push_constant> u_chunk_index: vec2<u32>;
 
@@ -51,9 +54,10 @@ struct VertexInput {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_position: vec3<f32>,
-    @location(1) tex_coord: vec2<f32>,
-    @location(2) chunk_pos: vec2<u32>,
-    @location(3) chunk_index: u32,
+    @location(1) normal: vec3<f32>,
+    @location(2) tex_coord: vec2<f32>,
+    @location(3) chunk_pos: vec2<u32>,
+    @location(4) chunk_index: u32,
 }
 
 @vertex
@@ -72,6 +76,7 @@ fn vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -
     return VertexOutput(
         clip_position,
         world_position,
+        vec3<f32>(0.0, 0.0, 1.0), // normal
         tex_coord,
         chunk_pos,
         chunk_index,
@@ -98,6 +103,7 @@ fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexIn
     return VertexOutput(
         clip_position,
         world_position,
+        vec3<f32>(0.0, 0.0, 1.0), // normal
         tex_coord,
         vec2<u32>(0, 0),
         0,
@@ -106,23 +112,48 @@ fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexIn
 
 @fragment
 fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let color = textureSample(t_terrain_texture, s_sampler, vertex.tex_coord);
-    return color;
+    let base_color = textureSample(
+        t_terrain_texture,
+        s_sampler,
+        vertex.tex_coord,
+    );
+    let distance = length(u_camera.position - vertex.world_position);
+
+    let diffuse = environment::diffuse_with_fog(
+        u_environment,
+        vertex.normal,
+        base_color.rgb,
+        distance,
+    );
+
+    return vec4<f32>(diffuse, base_color.a);
 }
 
 @fragment
 fn water_fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let color = textureSample(t_water_texture, s_sampler, vertex.tex_coord);
-
     let water_depth = u_terrain_data.water_level - vertex.world_position.z;
     if water_depth <= 0.0 {
         discard;
     }
 
+    let base_color = textureSample(
+        t_water_texture,
+        s_sampler,
+        vertex.tex_coord,
+    );
+    let distance = length(u_camera.position - vertex.world_position);
+
+    let diffuse = environment::diffuse_with_fog(
+        u_environment,
+        vec3<f32>(0.0, 0.0, 1.0), // Water normal is straight up for now.
+        base_color.rgb,
+        distance,
+    );
+
     var n = clamp(water_depth / u_terrain_data.water_trans_depth, 0.0, 1.0);
     let alpha = u_terrain_data.water_trans_low + (u_terrain_data.water_trans_high - u_terrain_data.water_trans_low) * n;
 
-    return vec4<f32>(color.rgb, alpha);
+    return vec4<f32>(diffuse, alpha);
 }
 
 @vertex

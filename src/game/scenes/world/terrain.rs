@@ -212,6 +212,7 @@ impl Terrain {
         shaders: &mut Shaders,
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
+        environment_bind_group_layoout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
         let TerrainMapping {
             altitude_map_height_base,
@@ -466,6 +467,7 @@ impl Terrain {
             .with_vertex_entry("vertex_main")
             .with_fragment_entry("fragment_main")
             .binding(camera_bind_group_layout)
+            .binding(environment_bind_group_layoout)
             .binding(&bind_group_layout)
             .with_depth_compare(wgpu::CompareFunction::LessEqual)
             .build();
@@ -475,6 +477,7 @@ impl Terrain {
             .with_vertex_entry("water_vertex_main")
             .with_fragment_entry("water_fragment_main")
             .binding(camera_bind_group_layout)
+            .binding(environment_bind_group_layoout)
             .binding(&bind_group_layout)
             .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .with_depth_compare(wgpu::CompareFunction::LessEqual)
@@ -491,6 +494,7 @@ impl Terrain {
             .with_vertex_entry("wireframe_vertex_main")
             .with_fragment_entry("wireframe_fragment_main")
             .binding(camera_bind_group_layout)
+            .binding(environment_bind_group_layoout)
             .binding(&bind_group_layout)
             .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
             .build();
@@ -663,7 +667,12 @@ impl Terrain {
         })
     }
 
-    pub fn render(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    pub fn render(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
+    ) {
         // Make sure the terrain data is up to date if it changed.
         self.terrain_data.if_changed(|terrain_data| {
             frame.queue.write_buffer(
@@ -676,12 +685,17 @@ impl Terrain {
         // Always use the main camera for frustum culling.
         self.process_chunks(&frame.device, &frame.queue, camera_bind_group);
 
-        self.render_terrain(frame, camera_bind_group);
+        self.render_terrain(frame, camera_bind_group, environment_bind_group);
     }
 
-    pub fn render_gizmos(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    pub fn render_gizmos(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
+    ) {
         if self.draw_wireframe {
-            self.render_wireframe(frame, camera_bind_group);
+            self.render_wireframe(frame, camera_bind_group, environment_bind_group);
         }
     }
 
@@ -781,7 +795,12 @@ impl Terrain {
         render_pass.draw_indexed(range, 0, 0..1);
     }
 
-    fn render_terrain(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    fn render_terrain(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
+    ) {
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -813,7 +832,8 @@ impl Terrain {
             wgpu::IndexFormat::Uint32,
         );
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
+        render_pass.set_bind_group(1, environment_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.render_bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(
             &self.terrain_draw_args_buffer,
@@ -822,7 +842,12 @@ impl Terrain {
         );
     }
 
-    pub fn render_water(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    pub fn render_water(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
+    ) {
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -856,12 +881,18 @@ impl Terrain {
         );
 
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
+        render_pass.set_bind_group(1, environment_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.render_bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(&self.water_draw_args_buffer, 0, self.total_chunks);
     }
 
-    fn render_wireframe(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    fn render_wireframe(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
+    ) {
         let levels = [0..512, 512..640, 640..672, 672..680];
 
         let mut render_pass = frame
@@ -889,7 +920,8 @@ impl Terrain {
         );
 
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
+        render_pass.set_bind_group(1, environment_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.render_bind_group, &[]);
 
         for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
             for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {

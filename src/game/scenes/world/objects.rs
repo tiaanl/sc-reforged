@@ -58,12 +58,14 @@ impl Objects {
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
+        environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let model_renderer = MeshRenderer::new(
             asset_store.clone(),
             renderer,
             shaders,
             camera_bind_group_layout,
+            environment_bind_group_layout,
         );
 
         let bounding_box_renderer = BoundingBoxRenderer::new(renderer, camera_bind_group_layout);
@@ -231,10 +233,16 @@ impl Objects {
         });
     }
 
-    pub fn render_objects(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    pub fn render_objects(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
+    ) {
         self.model_renderer.render_multiple(
             frame,
             camera_bind_group,
+            environment_bind_group,
             BlendMode::None,
             &self.opaque_meshes,
         );
@@ -242,15 +250,22 @@ impl Objects {
         self.model_renderer.render_multiple(
             frame,
             camera_bind_group,
+            environment_bind_group,
             BlendMode::ColorKeyed,
             &self.ck_meshes,
         );
     }
 
-    pub fn render_alpha_objects(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    pub fn render_alpha_objects(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
+    ) {
         self.model_renderer.render_multiple(
             frame,
             camera_bind_group,
+            environment_bind_group,
             BlendMode::Alpha,
             &self.alpha_meshes,
         );

@@ -57,6 +57,7 @@ impl MeshRenderer {
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
+        environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let module = shaders.create_shader(
             renderer,
@@ -93,6 +94,8 @@ impl MeshRenderer {
                         renderer.texture_bind_group_layout(),
                         // u_camera
                         camera_bind_group_layout,
+                        // u_environment
+                        environment_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
                 });
@@ -200,6 +203,7 @@ impl MeshRenderer {
         &self,
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
         blend_mode: BlendMode,
         meshes: &[MeshItem],
     ) {
@@ -240,6 +244,7 @@ impl MeshRenderer {
 
         render_pass.set_pipeline(render_pipeline);
         render_pass.set_bind_group(1, camera_bind_group, &[]);
+        render_pass.set_bind_group(2, environment_bind_group, &[]);
 
         for mesh_item in meshes.iter() {
             let Some(mesh) = self.asset_store.get(mesh_item.mesh) else {
