@@ -137,7 +137,8 @@ impl Objects {
 
     pub fn update(&mut self, camera: &Camera) {
         let matrices = camera.calculate_matrices();
-        let frustum = Frustum::from_matrices(&matrices);
+        let proj_view = matrices.projection * matrices.view;
+        let frustum = Frustum::from(proj_view);
 
         self.objects.iter_mut().for_each(|object| {
             if let Some(model) = self.asset_store.get(object.model) {

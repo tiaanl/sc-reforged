@@ -1,4 +1,5 @@
 #import world::camera
+#import world::frustum
 #import world::terrain
 
 struct ChunkData {
@@ -22,26 +23,6 @@ struct DrawArgs {
 @group(1) @binding(1) var<storage, read> u_chunk_data: array<ChunkData>;
 @group(1) @binding(2) var<storage, read_write> u_terrain_draw_args: array<DrawArgs>;
 @group(1) @binding(3) var<storage, read_write> u_water_draw_args: array<DrawArgs>;
-
-fn aabb_in_frustum(frustum: array<vec4<f32>, 6>, min: vec3<f32>, max: vec3<f32>) -> bool {
-    for (var i = 0u; i < 6u; i++) {
-        let plane = frustum[i];
-
-        // Calculate the "positive vertex" of the AABB for this plane
-        let positive_vertex = vec3<f32>(
-            select(min.x, max.x, plane.x > 0.0),
-            select(min.y, max.y, plane.y > 0.0),
-            select(min.z, max.z, plane.z > 0.0),
-        );
-
-        // If the positive vertex is outside the plane, the AABB is culled
-        if dot(plane.xyz, positive_vertex) + plane.w < 0.0 {
-            return false;
-        }
-    }
-
-    return true;
-}
 
 const LEVELS: array<vec2<u32>, 4> = array<vec2<u32>, 4>(
     vec2<u32>(0u, 384u),
@@ -76,7 +57,6 @@ fn draw_water_chunk(chunk_index: u32) {
     );
 }
 
-
 fn hide_terrain_chunk(chunk_index: u32) {
     u_terrain_draw_args[chunk_index] = DrawArgs(0, 0, 0, 0, 0);
 }
@@ -93,10 +73,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         return;
     }
 
+    let f = frustum::extract_frustum_planes(u_camera.mat_projection * u_camera.mat_view);
+
     let chunk = u_chunk_data[chunk_index];
 
-    let visible = aabb_in_frustum(u_camera.frustum, chunk.min, chunk.max);
-    if visible {
+    if frustum::is_aabb_in_frustum(f, chunk.min, chunk.max) {
         draw_terrain_chunk(chunk_index, 0u);
     } else {
         hide_terrain_chunk(chunk_index);
@@ -107,11 +88,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     if u_terrain_data.water_level < chunk.min.z {
         hide_water_chunk(chunk_index);
     } else {
-
         let water_min = vec3<f32>(chunk.min.xy, u_terrain_data.water_level);
         let water_max = vec3<f32>(chunk.max.xy, u_terrain_data.water_level);
-        let water_visible = aabb_in_frustum(u_camera.frustum, water_min, water_max);
-        if water_visible {
+        if frustum::is_aabb_in_frustum(f, water_min, water_max) {
             draw_water_chunk(chunk_index);
         } else {
             hide_water_chunk(chunk_index);

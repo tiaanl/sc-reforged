@@ -1,11 +1,14 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use glam::{IVec2, UVec2};
+use glam::{IVec2, UVec2, Vec4};
 use tracing::info;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    engine::prelude::*,
+    engine::{
+        gizmos::{GizmoVertex, GizmosRenderer},
+        prelude::*,
+    },
     game::{
         asset_loader::{AssetError, AssetLoader},
         config::{CampaignDef, TerrainMapping},
@@ -130,6 +133,8 @@ pub struct Terrain {
 
     /// The mesh we use to render chunks.
     chunk_mesh: ChunkMesh,
+
+    chunk_data: Vec<ChunkData>,
 
     draw_wireframe: bool,
     draw_normals: bool,
@@ -659,6 +664,9 @@ impl Terrain {
             water_draw_args_buffer,
 
             chunk_mesh,
+
+            chunk_data,
+
             render_bind_group,
             draw_wireframe: false,
             draw_normals: false,
@@ -671,6 +679,7 @@ impl Terrain {
         &self,
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
+        frustum_camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
     ) {
         // Make sure the terrain data is up to date if it changed.
@@ -683,7 +692,7 @@ impl Terrain {
         });
 
         // Always use the main camera for frustum culling.
-        self.process_chunks(&frame.device, &frame.queue, camera_bind_group);
+        self.process_chunks(&frame.device, &frame.queue, frustum_camera_bind_group);
 
         self.render_terrain(frame, camera_bind_group, environment_bind_group);
     }
@@ -693,10 +702,54 @@ impl Terrain {
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
+        gizmos_renderer: &GizmosRenderer,
     ) {
         if self.draw_wireframe {
             self.render_wireframe(frame, camera_bind_group, environment_bind_group);
         }
+
+        let mut vertices = vec![];
+        let color = Vec4::new(0.0, 1.0, 0.0, 1.0);
+        for data in self.chunk_data.iter() {
+            let ChunkData { min, max, .. } = data;
+
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
+
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
+            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
+        }
+        gizmos_renderer.render(frame, camera_bind_group, &vertices);
     }
 
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {

@@ -1,15 +1,11 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
-    engine::{
-        gizmos::{GizmoVertex, GizmosRenderer},
-        prelude::*,
-        shaders::Shaders,
-    },
+    engine::{gizmos::GizmosRenderer, prelude::*, shaders::Shaders},
     game::{
         animation::Timeline,
         asset_loader::{AssetError, AssetLoader},
-        camera,
+        camera::{self, Controller},
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
     },
 };
@@ -43,6 +39,25 @@ struct Environment {
     pub fog_params: Vec4,
 }
 
+/// Wrap all the data for controlling the camera.
+struct Camera<C: camera::Controller> {
+    controller: C,
+    camera: camera::Camera,
+    matrices: Tracked<camera::Matrices>,
+    gpu_camera: camera::GpuCamera,
+}
+
+impl<C: camera::Controller> Camera<C> {
+    fn new(renderer: &Renderer, controller: C) -> Self {
+        Self {
+            controller,
+            camera: camera::Camera::default(),
+            matrices: Tracked::new(camera::Matrices::default()),
+            gpu_camera: camera::GpuCamera::new(renderer),
+        }
+    }
+}
+
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
     asset_store: AssetStore,
@@ -51,10 +66,8 @@ pub struct WorldScene {
     view_debug_camera: bool,
     control_debug_camera: bool,
 
-    camera_controller: camera::GameCameraController,
-    camera: camera::Camera,
-    camera_matrices: Tracked<camera::Matrices>,
-    gpu_camera: camera::GpuCamera,
+    main_camera: Camera<camera::GameCameraController>,
+    debug_camera: Camera<camera::FreeCameraController>,
 
     window_size: Vec2,
     intersection: Option<Vec3>,
@@ -63,7 +76,6 @@ pub struct WorldScene {
     objects: objects::Objects,
 
     gizmos_renderer: GizmosRenderer,
-    gizmos_vertices: Vec<GizmoVertex>,
 
     // Input handling.
     under_mouse: UnderMouse,
@@ -130,24 +142,54 @@ impl WorldScene {
         let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
         shaders.add_module(include_str!("environment.wgsl"), "environment.wgsl");
+        shaders.add_module(include_str!("frustum.wgsl"), "frustum.wgsl");
 
-        let camera_from = campaign.view_initial.from.extend(2500.0);
-        let camera_to = campaign.view_initial.to.extend(0.0);
+        let main_camera = {
+            let camera_from = campaign.view_initial.from.extend(2500.0);
+            let camera_to = campaign.view_initial.to.extend(0.0);
 
-        let mut camera_controller = camera::GameCameraController::new(50.0, 0.2);
-        camera_controller.move_to_direct(camera_from);
-        camera_controller.look_at_direct(camera_to);
-        let camera = camera::Camera::new(
-            camera_from,
-            Quat::IDENTITY,
-            45.0_f32.to_radians(),
-            1.0,
-            100.0,
-            10_000.0,
-        );
+            let mut controller = camera::GameCameraController::new(50.0, 0.2);
+            controller.move_to_direct(camera_from);
+            controller.look_at_direct(camera_to);
+            let camera = camera::Camera::new(
+                camera_from,
+                Quat::IDENTITY,
+                45.0_f32.to_radians(),
+                1.0,
+                100.0,
+                10_000.0,
+            );
+            let matrices = camera.calculate_matrices().into();
+            let gpu_camera = camera::GpuCamera::new(renderer);
 
-        let camera_matrices = camera.calculate_matrices().into();
-        let gpu_camera = camera::GpuCamera::new(renderer);
+            Camera {
+                controller,
+                camera,
+                matrices,
+                gpu_camera,
+            }
+        };
+
+        let debug_camera = {
+            let controller = camera::FreeCameraController::new(50.0, 0.2);
+            let camera = camera::Camera::new(
+                Vec3::new(0.0, 0.0, 10_000.0),
+                Quat::IDENTITY,
+                45.0_f32.to_radians(),
+                1.0,
+                100.0,
+                150_000.0,
+            );
+            let matrices = camera.calculate_matrices().into();
+            let gpu_camera = camera::GpuCamera::new(renderer);
+
+            Camera {
+                controller,
+                camera,
+                matrices,
+                gpu_camera,
+            }
+        };
 
         let time_of_day = 12.0;
         let day_night_cycle = {
@@ -213,7 +255,7 @@ impl WorldScene {
             renderer,
             &mut shaders,
             &campaign_def,
-            &gpu_camera.bind_group_layout,
+            &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
         )?;
 
@@ -221,7 +263,7 @@ impl WorldScene {
             asset_store.clone(),
             renderer,
             &mut shaders,
-            &gpu_camera.bind_group_layout,
+            &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
         );
 
@@ -274,7 +316,8 @@ impl WorldScene {
             }
         }
 
-        let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
+        let gizmos_renderer =
+            GizmosRenderer::new(renderer, &main_camera.gpu_camera.bind_group_layout);
 
         Ok(Self {
             asset_store,
@@ -283,10 +326,8 @@ impl WorldScene {
             view_debug_camera: false,
             control_debug_camera: false,
 
-            camera_controller,
-            camera,
-            camera_matrices,
-            gpu_camera,
+            main_camera,
+            debug_camera,
 
             window_size: Vec2::ZERO,
             intersection: None,
@@ -295,7 +336,6 @@ impl WorldScene {
             objects,
 
             gizmos_renderer,
-            gizmos_vertices: vec![],
 
             // Input handling.
             under_mouse: UnderMouse::Nothing {
@@ -342,7 +382,8 @@ impl Scene for WorldScene {
         let height = renderer.surface_config.height;
 
         self.window_size = Vec2::new(width as f32, height as f32);
-        self.camera.aspect_ratio = width as f32 / height.max(1) as f32;
+        self.main_camera.camera.aspect_ratio = width as f32 / height.max(1) as f32;
+        self.debug_camera.camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
     fn event(&mut self, event: &SceneEvent) {
@@ -358,7 +399,7 @@ impl Scene for WorldScene {
         macro_rules! update_under_mouse {
             ($position:expr,$window_size:expr) => {{
                 let ndc = ndc!($position);
-                let ray = self.camera.generate_ray(ndc);
+                let ray = self.main_camera.camera.generate_ray(ndc);
                 if let Some(object_index) = self.objects.ray_intersection(&ray) {
                     UnderMouse::Object {
                         object_index,
@@ -418,11 +459,19 @@ impl Scene for WorldScene {
         self.environment = self.calculate_environment(self.time_of_day);
 
         // Set the camera far plane to the `max_view_distance`.
-        self.camera.far = self.terrain.max_view_distance;
-        self.camera_controller.update(input, delta_time);
+        self.main_camera.camera.far = self.terrain.max_view_distance;
+        if self.control_debug_camera {
+            self.debug_camera.controller.update(delta_time, input);
+        } else {
+            self.main_camera.controller.update(delta_time, input);
+        }
 
-        self.camera_controller
-            .update_camera_if_dirty(&mut self.camera);
+        self.main_camera
+            .controller
+            .update_camera_if_dirty(&mut self.main_camera.camera);
+        self.debug_camera
+            .controller
+            .update_camera_if_dirty(&mut self.debug_camera.camera);
 
         // Highlight whatever we're hovering on.
         match self.under_mouse {
@@ -433,13 +482,25 @@ impl Scene for WorldScene {
             } => self.objects.set_selected(Some(entity_index)),
         }
 
-        self.objects.update(&self.camera);
+        self.objects.update(&self.main_camera.camera);
     }
 
     fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
-        let matrices = self.camera.calculate_matrices();
-        let position = self.camera.position;
-        self.gpu_camera.upload_matrices(queue, &matrices, position);
+        {
+            let matrices = self.main_camera.camera.calculate_matrices();
+            let position = self.main_camera.camera.position;
+            self.main_camera
+                .gpu_camera
+                .upload_matrices(queue, &matrices, position);
+        }
+
+        {
+            let matrices = self.debug_camera.camera.calculate_matrices();
+            let position = self.debug_camera.camera.position;
+            self.debug_camera
+                .gpu_camera
+                .upload_matrices(queue, &matrices, position);
+        }
 
         queue.write_buffer(
             &self.environment_buffer,
@@ -459,12 +520,20 @@ impl Scene for WorldScene {
             1.0,
         );
 
-        let camera_bind_group = &self.gpu_camera.bind_group;
+        let camera_bind_group = if self.view_debug_camera {
+            &self.debug_camera.gpu_camera.bind_group
+        } else {
+            &self.main_camera.gpu_camera.bind_group
+        };
         let environment_bind_group = &self.environment_bind_group;
 
         // Render Opaque geometry first.
-        self.terrain
-            .render(frame, camera_bind_group, environment_bind_group);
+        self.terrain.render(
+            frame,
+            camera_bind_group,
+            &self.main_camera.gpu_camera.bind_group, // Always the main camera.
+            environment_bind_group,
+        );
         self.objects
             .render_objects(frame, camera_bind_group, environment_bind_group);
 
@@ -475,17 +544,23 @@ impl Scene for WorldScene {
             .render_alpha_objects(frame, camera_bind_group, environment_bind_group);
 
         // Render any kind of debug overlays.
-        self.terrain
-            .render_gizmos(frame, camera_bind_group, environment_bind_group);
+        self.terrain.render_gizmos(
+            frame,
+            camera_bind_group,
+            environment_bind_group,
+            &self.gizmos_renderer,
+        );
         self.objects.render_gizmos(frame, camera_bind_group);
 
-        self.gizmos_renderer
-            .render(frame, camera_bind_group, &self.gizmos_vertices);
+        // Render the main camera frustum when we're looking through the debug camera.
+        if self.view_debug_camera {
+            let mut v = vec![];
+            camera::render_camera_frustum(&self.main_camera.camera, &mut v);
+            self.gizmos_renderer.render(frame, camera_bind_group, &v);
+        }
     }
 
-    fn end_frame(&mut self) {
-        self.gizmos_vertices.clear();
-    }
+    fn end_frame(&mut self) {}
 
     fn debug_panel(&mut self, egui: &egui::Context) {
         use egui::widgets::DragValue;
@@ -497,6 +572,10 @@ impl Scene for WorldScene {
                     ui.label("Intersection");
                     ui.label(format!("{}", intersection));
                 }
+
+                ui.heading("Camera");
+                ui.checkbox(&mut self.view_debug_camera, "View debug camera");
+                ui.checkbox(&mut self.control_debug_camera, "Control debug camera");
 
                 ui.heading("Environment");
                 ui.horizontal(|ui| {

@@ -12,6 +12,19 @@ pub struct Plane {
     pub distance: f32,
 }
 
+impl From<Vec4> for Plane {
+    fn from(value: Vec4) -> Self {
+        Self {
+            normal: Vec3 {
+                x: value.x,
+                y: value.y,
+                z: value.z,
+            },
+            distance: value.w,
+        }
+    }
+}
+
 impl Plane {
     pub fn new(normal: Vec3, distance: f32) -> Self {
         Self { normal, distance }
@@ -65,49 +78,29 @@ pub struct Frustum {
     pub planes: [Plane; 6],
 }
 
-impl Frustum {
-    pub fn from_matrices(matrices: &Matrices) -> Self {
-        let view_projection = matrices.projection * matrices.view;
-
-        // Extract rows from the matrix
-        let m = view_projection.to_cols_array_2d();
+impl From<Mat4> for Frustum {
+    fn from(value: Mat4) -> Self {
+        let left = value.row(3) + value.row(0);
+        let right = value.row(3) - value.row(0);
+        let bottom = value.row(3) + value.row(1);
+        let top = value.row(3) - value.row(1);
+        let near = value.row(3) + value.row(2);
+        let far = value.row(3) + value.row(2);
 
         Self {
             planes: [
-                // Left plane
-                Plane::new(
-                    Vec3::new(m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0]),
-                    m[3][3] + m[3][0],
-                ),
-                // Right plane
-                Plane::new(
-                    Vec3::new(m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0]),
-                    m[3][3] - m[3][0],
-                ),
-                // Bottom plane
-                Plane::new(
-                    Vec3::new(m[0][3] + m[0][1], m[1][3] + m[1][1], m[2][3] + m[2][1]),
-                    m[3][3] + m[3][1],
-                ),
-                // Top plane
-                Plane::new(
-                    Vec3::new(m[0][3] - m[0][1], m[1][3] - m[1][1], m[2][3] - m[2][1]),
-                    m[3][3] - m[3][1],
-                ),
-                // Near plane
-                Plane::new(
-                    Vec3::new(m[0][3] + m[0][2], m[1][3] + m[1][2], m[2][3] + m[2][2]),
-                    m[3][3] + m[3][2],
-                ),
-                // Far plane
-                Plane::new(
-                    Vec3::new(m[0][3] - m[0][2], m[1][3] - m[1][2], m[2][3] - m[2][2]),
-                    m[3][3] - m[3][2],
-                ),
+                Plane::from(left.normalize()),   // left
+                Plane::from(right.normalize()),  // right
+                Plane::from(bottom.normalize()), // bottom
+                Plane::from(top.normalize()),    // top
+                Plane::from(near.normalize()),   // near
+                Plane::from(far.normalize()),    // far
             ],
         }
     }
+}
 
+impl Frustum {
     pub fn contains_bounding_box(&self, bounding_box: &BoundingBox) -> bool {
         // Get all 8 corners of the bounding box
         let corners = [
@@ -225,7 +218,7 @@ impl Camera {
 
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
 #[repr(C)]
-pub struct RawCamera {
+pub struct CameraBuffer {
     pub proj: Mat4,
     pub view: Mat4,
     pub position: Vec4,
@@ -242,7 +235,7 @@ impl GpuCamera {
     pub fn new(renderer: &Renderer) -> Self {
         let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("camera_buffer"),
-            size: std::mem::size_of::<RawCamera>() as wgpu::BufferAddress,
+            size: std::mem::size_of::<CameraBuffer>() as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -283,18 +276,22 @@ impl GpuCamera {
     }
 
     pub fn upload_matrices(&self, queue: &wgpu::Queue, matrices: &Matrices, position: Vec3) {
-        let frustum = Frustum::from_matrices(matrices);
+        let proj_view = matrices.projection * matrices.view;
 
-        let raw_camera = RawCamera {
+        let data = CameraBuffer {
             proj: matrices.projection,
             view: matrices.view,
             position: position.extend(1.0),
-            frustum: frustum
+            frustum: Frustum::from(proj_view)
                 .planes
-                .map(|p| Vec4::new(p.normal.x, p.normal.y, p.normal.z, p.distance)),
+                .map(|p| p.normal.extend(p.distance)),
         };
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[raw_camera]));
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[data]));
     }
+}
+
+pub trait Controller {
+    fn update(&mut self, delta_time: f32, input: &InputState);
 }
 
 pub struct FreeCameraControls {
@@ -393,7 +390,16 @@ impl FreeCameraController {
         self.position += self.rotation() * Camera::UP * distance;
     }
 
-    pub fn update(&mut self, input: &InputState, delta_time: f32) {
+    pub fn update_camera_if_dirty(&self, camera: &mut Camera) -> bool {
+        self.dirty.if_dirty(|| {
+            camera.position = self.position;
+            camera.rotation = self.rotation();
+        })
+    }
+}
+
+impl Controller for FreeCameraController {
+    fn update(&mut self, delta_time: f32, input: &InputState) {
         let delta =
             if input.key_pressed(KeyCode::ShiftLeft) || input.key_pressed(KeyCode::ShiftRight) {
                 self.movement_speed * 2.0
@@ -430,13 +436,6 @@ impl FreeCameraController {
                 }
             }
         }
-    }
-
-    pub fn update_camera_if_dirty(&self, camera: &mut Camera) -> bool {
-        self.dirty.if_dirty(|| {
-            camera.position = self.position;
-            camera.rotation = self.rotation();
-        })
     }
 }
 
@@ -621,7 +620,17 @@ impl GameCameraController {
         self.desired.position += Camera::UP * distance;
     }
 
-    pub fn update(&mut self, input: &InputState, delta_time: f32) {
+    pub fn update_camera_if_dirty(&self, camera: &mut Camera) -> bool {
+        // self.dirty.if_dirty(|| {
+        camera.position = self.current.position;
+        camera.rotation = self.current.rotation();
+        // })
+        true
+    }
+}
+
+impl Controller for GameCameraController {
+    fn update(&mut self, delta_time: f32, input: &InputState) {
         let move_delta =
             if input.key_pressed(KeyCode::ShiftLeft) || input.key_pressed(KeyCode::ShiftRight) {
                 self.speed * 2.0
@@ -677,14 +686,6 @@ impl GameCameraController {
 
         // Interpolate the desired closer to the target.
         self.current.lerp(&self.desired, 0.1);
-    }
-
-    pub fn update_camera_if_dirty(&self, camera: &mut Camera) -> bool {
-        // self.dirty.if_dirty(|| {
-        camera.position = self.current.position;
-        camera.rotation = self.current.rotation();
-        // })
-        true
     }
 }
 
