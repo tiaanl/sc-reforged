@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, f32::consts::PI, path::PathBuf};
 
 use glam::{IVec2, UVec2, Vec4};
 use tracing::info;
@@ -315,12 +315,10 @@ impl Terrain {
                     let x_pos = height_map.position_for_vertex(IVec2::new(x + 1, y));
                     let y_pos = height_map.position_for_vertex(IVec2::new(x, y + 1));
 
-                    let v1 = (x_pos - center);
-                    let v2 = (y_pos - center);
+                    let normal = (x_pos - center).cross(y_pos - center).normalize();
 
-                    let normal = v1.cross(v2).normalize();
-
-                    normals[y as usize * (height_map.size.y as usize + 1) + x as usize] = normal;
+                    let index = y as usize * (height_map.size.y as usize + 1) + x as usize;
+                    normals[index] = normal;
                 }
             }
             normals
