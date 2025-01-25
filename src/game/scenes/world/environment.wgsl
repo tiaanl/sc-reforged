@@ -17,15 +17,17 @@ fn diffuse(
     base_color: vec3<f32>,
 ) -> vec3<f32> {
     let N = normalize(normal);
+    let L = -normalize(env.sun_dir.xyz); // Terrain to sun
 
-    // Direction from the terrain to the sun.
-    let L = -normalize(env.sun_dir.xyz);
+    let diffuse_intensity = max(dot(N, L), 0.0); // Lambertian reflectance
+    let diffuse_color = env.sun_color.rgb * diffuse_intensity;
 
-    // Amount of diffuse light emitted from the surface.
-    let diffuse_factor = max(dot(N, L), 0.0);
+    // TODO: Put this in the Environment struct.
+    let ambient_color = vec3<f32>(0.1, 0.1, 0.1);
 
-    // The lit base color.
-    let result = diffuse_factor * base_color;
+    let lighting = diffuse_color + ambient_color;
+
+    let result = lighting * base_color;
 
     return result;
 }

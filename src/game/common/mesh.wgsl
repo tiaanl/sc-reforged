@@ -61,7 +61,7 @@ fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn ck_fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
-    if base_color.x == 0.0 && base_color.y == 0.0 && base_color.z == 0 {
+    if base_color.x == 0.0 && base_color.y == 0.0 && base_color.z == 0.0 {
         discard;
     }
 

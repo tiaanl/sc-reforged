@@ -6,7 +6,7 @@
 
 @group(1) @binding(0) var<uniform> u_environment: environment::Environment;
 
-@group(2) @binding(0) var<storage> u_height_map: array<f32>;
+@group(2) @binding(0) var<storage> u_height_map: array<vec4<f32>>;
 @group(2) @binding(1) var<uniform> u_terrain_data: terrain::TerrainData;
 @group(2) @binding(2) var t_terrain_texture: texture_2d<f32>;
 @group(2) @binding(3) var t_water_texture: texture_2d<f32>;
@@ -42,8 +42,12 @@ fn get_node_world_position(node: Node) -> vec3<f32> {
     return vec3<f32>(
         f32(node.x) * u_terrain_data.nominal_edge_size,
         f32(node.y) * u_terrain_data.nominal_edge_size,
-        u_height_map[node.index],
+        u_height_map[node.index].w,
     );
+}
+
+fn get_node_normal(node: Node) -> vec3<f32> {
+    return u_height_map[node.index].xyz;
 }
 
 struct VertexInput {
@@ -65,6 +69,7 @@ fn vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -
     let chunk_pos = get_chunk_pos_from_index(chunk_index);
     let node = get_node_index(chunk_pos, vertex.index);
     let world_position = get_node_world_position(node);
+    let normal = get_node_normal(node);
 
     let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
 
@@ -76,7 +81,7 @@ fn vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -
     return VertexOutput(
         clip_position,
         world_position,
-        vec3<f32>(0.0, 0.0, 1.0), // normal
+        normal,
         tex_coord,
         chunk_pos,
         chunk_index,

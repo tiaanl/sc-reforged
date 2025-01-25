@@ -1,7 +1,11 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
-    engine::{gizmos::GizmosRenderer, prelude::*, shaders::Shaders},
+    engine::{
+        gizmos::{GizmoVertex, GizmosRenderer},
+        prelude::*,
+        shaders::Shaders,
+    },
     game::{
         animation::Timeline,
         asset_loader::{AssetError, AssetLoader},
@@ -10,7 +14,7 @@ use crate::{
     },
 };
 use egui::Widget;
-use glam::{Quat, Vec3, Vec4};
+use glam::{Quat, Vec3, Vec4, Vec4Swizzles};
 use terrain::*;
 use wgpu::util::DeviceExt;
 
@@ -552,6 +556,19 @@ impl Scene for WorldScene {
         );
         self.objects.render_gizmos(frame, camera_bind_group);
 
+        if false {
+            // Render the direction of the sun.
+            let vertices = [
+                GizmoVertex::new(Vec3::ZERO, Vec4::new(0.0, 0.0, 1.0, 1.0)),
+                GizmoVertex::new(
+                    self.environment.sun_dir.xyz() * 1_000.0,
+                    Vec4::new(0.0, 0.0, 1.0, 1.0),
+                ),
+            ];
+            self.gizmos_renderer
+                .render(frame, camera_bind_group, &vertices);
+        }
+
         // Render the main camera frustum when we're looking through the debug camera.
         if self.view_debug_camera {
             let mut v = vec![];
@@ -563,7 +580,7 @@ impl Scene for WorldScene {
     fn end_frame(&mut self) {}
 
     fn debug_panel(&mut self, egui: &egui::Context) {
-        use egui::widgets::DragValue;
+        use egui::widgets::{DragValue, Slider};
 
         egui::Window::new("World")
             .default_open(false)
@@ -580,16 +597,12 @@ impl Scene for WorldScene {
                 ui.heading("Environment");
                 ui.horizontal(|ui| {
                     ui.label("Time of day");
-                    ui.label(format!("{:.2}", self.time_of_day));
-                    if ui.button("-").clicked() {
-                        self.time_of_day -= 1.0;
-                    }
-                    if ui.button("+").clicked() {
-                        self.time_of_day += 1.0;
-                    }
-
+                    ui.add(Slider::new(&mut self.time_of_day, 0.0..=24.0));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Sun dir");
                     ui.label(format!(
-                        "Sun dir: ({:.2}, {:.2}, {:.2})",
+                        "{:.2}, {:.2}, {:.2}",
                         self.environment.sun_dir.x,
                         self.environment.sun_dir.y,
                         self.environment.sun_dir.z,

@@ -136,6 +136,9 @@ pub struct Terrain {
 
     chunk_data: Vec<ChunkData>,
 
+    /// Each node: (normal, elevation)
+    nodes: Vec<Vec4>,
+
     draw_wireframe: bool,
     draw_normals: bool,
     lod_level: usize,
@@ -272,12 +275,55 @@ impl Terrain {
         let height_map = {
             use super::height_map::HeightMap;
 
-            let path = format!("maps/{}.pcx", campaign_def.base_name); // TODO: Get the name of the map from the [CampaignDef].
-            info!("Loading terrain height map: {path}");
+            let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
+            info!("Loading terrain height map: {}", path.display());
             let data = asset_loader.load_raw(path)?;
             let mut reader = std::io::Cursor::new(data);
             HeightMap::from_pcx(nominal_edge_size, altitude_map_height_base, &mut reader)
                 .map_err(|_| AssetError::Custom("Could not load height map data.".to_string()))?
+        };
+
+        let normals_lookup = Self::generate_normals_lookup_table();
+
+        // let normals = {
+        //     // Load the normals: textures\terrain\{}\{}_vn.dat
+        //     let path = PathBuf::from("textures")
+        //         .join("terrain")
+        //         .join(&campaign_def.base_name)
+        //         .join(format!("{}_vn.dat", &campaign_def.base_name));
+        //     let mut reader = std::io::Cursor::new(asset_loader.load_raw(path)?);
+        //     let mut normals =
+        //         Vec::with_capacity((height_map.size.x as usize) + (height_map.size.y as usize));
+        //     for _ in 0..(height_map.size.x) * (height_map.size.y) {
+        //         let index = reader.read_u16::<LE>()?;
+        //         let normal = normals_lookup[index as usize];
+        //         println!("normal: {index} {normal}");
+        //         normals.push(normal);
+        //     }
+        //     normals
+        // };
+
+        let nodes_x: u32 = height_map.size.x + 1;
+        let nodes_y: u32 = height_map.size.y + 1;
+        let total_nodes = nodes_x * nodes_y;
+
+        let normals = {
+            let mut normals = vec![Vec3::Z; total_nodes as usize];
+            for y in 1..nodes_x as i32 {
+                for x in 1..nodes_y as i32 {
+                    let center = height_map.position_for_vertex(IVec2::new(x, y));
+                    let x_pos = height_map.position_for_vertex(IVec2::new(x + 1, y));
+                    let y_pos = height_map.position_for_vertex(IVec2::new(x, y + 1));
+
+                    let v1 = (x_pos - center);
+                    let v2 = (y_pos - center);
+
+                    let normal = v1.cross(v2).normalize();
+
+                    normals[y as usize * (height_map.size.y as usize + 1) + x as usize] = normal;
+                }
+            }
+            normals
         };
 
         let chunks = height_map.size / UVec2::splat(Terrain::CELLS_PER_CHUNK);
@@ -318,24 +364,29 @@ impl Terrain {
             map_dx, map_dy, height_map.size.x, height_map.size.y,
         );
 
-        let height_map_buffer = {
-            let mut nodes =
-                Vec::with_capacity(height_map.size.y as usize * height_map.size.x as usize);
+        let (height_map_buffer, nodes) = {
+            let mut nodes = Vec::with_capacity(total_nodes as usize);
 
-            for y in 0..(height_map.size.y + 1) {
-                for x in 0..(height_map.size.x + 1) {
+            for y in 0..nodes_y {
+                for x in 0..nodes_x {
                     let position = height_map.position_for_vertex(IVec2::new(x as i32, y as i32));
-                    nodes.push(position.z);
+                    let normal = normals
+                        .get(y as usize * (nodes_x as usize) + x as usize)
+                        .unwrap_or(&Vec3::Z);
+                    nodes.push(normal.extend(position.z));
                 }
             }
 
-            renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("height_map"),
-                    contents: bytemuck::cast_slice(&nodes),
-                    usage: wgpu::BufferUsages::STORAGE,
-                })
+            (
+                renderer
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("height_map"),
+                        contents: bytemuck::cast_slice(&nodes),
+                        usage: wgpu::BufferUsages::STORAGE,
+                    }),
+                nodes,
+            )
         };
 
         let terrain_data = TerrainData {
@@ -642,8 +693,6 @@ impl Terrain {
                     ],
                 });
 
-        let normals_lookup = Self::generate_normals_lookup_table();
-
         let chunk_mesh = ChunkMesh::new(renderer);
 
         Ok(Self {
@@ -666,6 +715,8 @@ impl Terrain {
             chunk_mesh,
 
             chunk_data,
+
+            nodes,
 
             render_bind_group,
             draw_wireframe: false,
@@ -709,47 +760,94 @@ impl Terrain {
         }
 
         let mut vertices = vec![];
-        let color = Vec4::new(0.0, 1.0, 0.0, 1.0);
-        for data in self.chunk_data.iter() {
-            let ChunkData { min, max, .. } = data;
 
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
+        if false {
+            let color = Vec4::new(0.0, 1.0, 0.0, 1.0);
+            for data in self.chunk_data.iter() {
+                let ChunkData { min, max, .. } = data;
 
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
 
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
 
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
 
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
 
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
 
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
 
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
 
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
 
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
 
-            vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
 
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
-            vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
+
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
+                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
+            }
+            gizmos_renderer.render(frame, camera_bind_group, &vertices);
         }
-        gizmos_renderer.render(frame, camera_bind_group, &vertices);
+
+        if false {
+            // Normals lookup.
+
+            for (index, normal) in self.normals_lookup.iter().enumerate() {
+                let color = if index == 0 {
+                    Vec4::new(1.0, 0.0, 0.0, 1.0)
+                } else if index == 0x1ff {
+                    Vec4::new(0.0, 1.0, 0.0, 1.0)
+                } else {
+                    Vec4::new(1.0, 1.0, 1.0, 0.5)
+                };
+                vertices.push(GizmoVertex::new(Vec3::ZERO, color));
+                vertices.push(GizmoVertex::new(*normal * 1_000.0, color));
+            }
+        }
+
+        if false {
+            // Normals
+            for y in 0..self.height_map.size.y + 1 {
+                for x in 0..self.height_map.size.x + 1 {
+                    use glam::Vec4Swizzles;
+
+                    let index = y as usize * (self.height_map.size.x + 1) as usize + x as usize;
+
+                    let position = self
+                        .height_map
+                        .position_for_vertex(IVec2::new(x as i32, y as i32));
+                    let normal = if x >= self.height_map.size.x || y >= self.height_map.size.y {
+                        Vec3::Z
+                    } else {
+                        self.nodes.get(index).unwrap_or(&Vec3::Z.extend(1.0)).xyz()
+                    };
+
+                    vertices.push(GizmoVertex::new(position, Vec4::new(1.0, 0.0, 0.0, 1.0)));
+                    vertices.push(GizmoVertex::new(
+                        position + normal * 100.0,
+                        Vec4::new(0.0, 1.0, 0.0, 1.0),
+                    ));
+                }
+            }
+
+            gizmos_renderer.render(frame, camera_bind_group, &vertices);
+        }
     }
 
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
@@ -984,18 +1082,57 @@ impl Terrain {
     }
 
     fn generate_normals_lookup_table() -> Vec<Vec3> {
-        let mut normals = Vec::with_capacity(1024);
+        let mut normals = Vec::with_capacity(1024); // 16 x 64 = 1024
+
+        // x            y           z
+        // 1            0           0
+        // 0.995185     0.0980171   0
+        // 0.980785     0.19509     0
+        // 0.95694      0.290285    0
+        // 0.92388      0.382683    0
+        // 0.881921     0.471397    0
+        // 0.83147      0.55557     0
+
+        const INC: f32 = PI / 32.0; // 0.09817477 ~ PI/32
 
         for pitch in 0..16 {
-            let z = (pitch as f32).sin();
-            for yaw in 0..64 {
-                let x = (yaw as f32).cos();
-                let y = (yaw as f32).sin();
+            let z = ((pitch as f32) * INC).sin();
 
-                normals.push(Vec3::new(x, y, z));
+            for yaw in 0..64 {
+                let angle = (yaw as f32) * INC;
+                let x = angle.cos();
+                let y = angle.sin();
+
+                normals.push(Vec3 { x, y, z }.normalize());
             }
         }
 
         normals
+    }
+
+    fn calculate_node_normals(&mut self) {
+        for y in 1..self.height_map.size.y as i32 {
+            for x in 1..self.height_map.size.x as i32 {
+                let center = self.height_map.position_for_vertex(IVec2::new(x, y));
+                let x_pos = self.height_map.position_for_vertex(IVec2::new(x + 1, y));
+                let y_pos = self.height_map.position_for_vertex(IVec2::new(x, y + 1));
+                let x_neg = self.height_map.position_for_vertex(IVec2::new(x - 1, y));
+                let y_neg = self.height_map.position_for_vertex(IVec2::new(x, y - 1));
+
+                let v1 = (x_pos - center).cross(y_pos - center);
+                let v2 = (y_pos - center).cross(x_neg - center);
+                let v3 = (x_neg - center).cross(y_neg - center);
+                let v4 = (y_neg - center).cross(x_pos - center);
+
+                let normal = (v1 + v2 + v3 + v4).normalize();
+
+                let node = &mut self.nodes
+                    [y as usize * (self.height_map.size.x as usize + 1) + x as usize];
+
+                node.x = normal.x;
+                node.y = normal.y;
+                node.z = normal.z;
+            }
+        }
     }
 }
