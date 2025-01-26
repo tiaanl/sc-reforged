@@ -107,6 +107,36 @@ impl AssetStore {
     }
 }
 
+pub struct AssetStorage<A: Asset + Send + Sync + 'static> {
+    storage: Vec<A>,
+}
+
+impl<A: Asset + Send + Sync + 'static> Default for AssetStorage<A> {
+    fn default() -> Self {
+        Self {
+            storage: Vec::default(),
+        }
+    }
+}
+
+impl<A: Asset + Send + Sync + 'static> AssetStorage<A> {
+    pub fn add(&mut self, asset: A) -> Handle<A> {
+        let new_id = self.storage.len() as u64;
+        self.storage.push(asset);
+        Handle::from_raw(new_id)
+    }
+
+    pub fn get(&self, handle: Handle<A>) -> Option<&A> {
+        let index = handle.0;
+        self.storage.get(index as usize)
+    }
+
+    pub fn get_mut(&mut self, handle: Handle<A>) -> Option<&mut A> {
+        let index = handle.0;
+        self.storage.get_mut(index as usize)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -155,14 +155,15 @@ impl Model {
             .iter()
             .map(|v| crate::engine::mesh::Vertex {
                 position: v.position,
-                normal: v.normal,
+                normal: -v.normal, // Normals are inverted.
                 tex_coord: v.tex_coord,
             })
             .collect();
 
         let indices = smf_mesh.faces.iter().flat_map(|i| i.indices).collect();
 
-        let gpu_mesh = crate::engine::mesh::IndexedMesh { vertices, indices }.to_gpu(renderer);
+        let indexed_mesh = crate::engine::mesh::IndexedMesh { vertices, indices };
+        let gpu_mesh = indexed_mesh.to_gpu(renderer);
 
         let texture_path = std::path::PathBuf::from("textures")
             .join("shared")
@@ -193,6 +194,7 @@ impl Model {
         );
 
         let mesh = TexturedMesh {
+            indexed_mesh,
             gpu_mesh,
             texture: Texture {
                 bind_group,

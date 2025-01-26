@@ -31,6 +31,7 @@ impl BufferLayout for Vertex {
     }
 }
 
+#[derive(Debug)]
 pub struct IndexedMesh<V: BufferLayout> {
     pub vertices: Vec<V>,
     pub indices: Vec<u32>,

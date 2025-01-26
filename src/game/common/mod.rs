@@ -4,4 +4,5 @@ pub mod assets;
 pub mod camera;
 pub mod mesh_renderer;
 pub mod model;
+pub mod static_meshes;
 pub mod vfs;

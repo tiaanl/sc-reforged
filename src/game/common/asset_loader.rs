@@ -125,42 +125,49 @@ impl AssetLoader {
         Ok(self.fs.load(path)?)
     }
 
+    pub fn load_bmp_direct(&self, path: impl AsRef<Path>) -> Result<Image, AssetError> {
+        let color_keyd = path
+            .as_ref()
+            .file_name()
+            .map(|n| n.to_string_lossy().contains("_ck"))
+            .unwrap_or(false);
+
+        let bmp = shadow_company_tools::images::load_bmp_file(
+            &mut std::io::Cursor::new(self.fs.load(&path)?),
+            color_keyd,
+        )?;
+
+        let raw = if let Ok(raw_data) = self.fs.load(path.as_ref().with_extension("raw")) {
+            Some(shadow_company_tools::images::load_raw_file(
+                &mut std::io::Cursor::new(raw_data),
+                bmp.width(),
+                bmp.height(),
+            )?)
+        } else {
+            None
+        };
+
+        Ok(if color_keyd {
+            Image::from_rgba(
+                image::DynamicImage::from(bmp).into_rgba8(),
+                BlendMode::ColorKeyed,
+            )
+        } else if let Some(raw) = raw {
+            Image::from_rgba(
+                shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw),
+                BlendMode::Alpha,
+            )
+        } else {
+            Image::from_rgba(
+                image::DynamicImage::from(bmp).into_rgba8(),
+                BlendMode::Opaque,
+            )
+        })
+    }
+
     pub fn load_bmp(&self, path: impl AsRef<Path>) -> Result<Handle<Image>, AssetError> {
         self.load_cached(path, |asset_loader, path| {
-            let color_keyd = path
-                .file_name()
-                .map(|n| n.to_string_lossy().contains("_ck"))
-                .unwrap_or(false);
-
-            let bmp = shadow_company_tools::images::load_bmp_file(
-                &mut std::io::Cursor::new(asset_loader.fs.load(path)?),
-                color_keyd,
-            )?;
-
-            let raw = if let Ok(raw_data) = asset_loader.fs.load(path.with_extension("raw")) {
-                // debug_assert!(!color_keyd);
-                Some(shadow_company_tools::images::load_raw_file(
-                    &mut std::io::Cursor::new(raw_data),
-                    bmp.width(),
-                    bmp.height(),
-                )?)
-            } else {
-                None
-            };
-
-            Ok(if color_keyd {
-                Image::from_rgba(
-                    image::DynamicImage::from(bmp).into_rgba8(),
-                    BlendMode::ColorKeyed,
-                )
-            } else if let Some(raw) = raw {
-                Image::from_rgba(
-                    shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw),
-                    BlendMode::Alpha,
-                )
-            } else {
-                Image::from_rgba(image::DynamicImage::from(bmp).into_rgba8(), BlendMode::None)
-            })
+            asset_loader.load_bmp_direct(path)
         })
     }
 
@@ -169,7 +176,7 @@ impl AssetLoader {
             let data = asset_loader.load_raw(path)?;
             let image =
                 image::load_from_memory_with_format(data.as_ref(), image::ImageFormat::Jpeg)?;
-            Ok(Image::from_rgba(image.into_rgba8(), BlendMode::None))
+            Ok(Image::from_rgba(image.into_rgba8(), BlendMode::Opaque))
         })
     }
 

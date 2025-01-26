@@ -11,6 +11,7 @@ use crate::{
         asset_loader::{AssetError, AssetLoader},
         camera::{self, Controller},
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
+        static_meshes::StaticMeshes,
     },
 };
 use egui::Widget;
@@ -78,6 +79,8 @@ pub struct WorldScene {
 
     terrain: Terrain,
     objects: objects::Objects,
+
+    static_meshes: StaticMeshes,
 
     gizmos_renderer: GizmosRenderer,
 
@@ -271,6 +274,48 @@ impl WorldScene {
             &environment_bind_group_layout,
         );
 
+        let static_meshes = {
+            let mut sm = StaticMeshes::new(renderer);
+            let smf = assets.load_smf_direct(
+                PathBuf::from("models")
+                    .join("pusths-shack")
+                    .join("pusths-shack.smf"),
+            )?;
+
+            for node in smf.nodes.iter().filter(|n| !n.meshes.is_empty()) {
+                for mesh in node.meshes.iter() {
+                    let texture_path = PathBuf::from("textures")
+                        .join("shared")
+                        .join(&mesh.texture_name);
+                    tracing::info!("Loading mesh texture: {}", texture_path.display());
+                    let image = assets.load_bmp_direct(texture_path)?;
+
+                    let vertices = mesh
+                        .vertices
+                        .iter()
+                        .map(|v| Vertex {
+                            position: v.position,
+                            normal: v.normal,
+                            tex_coord: v.tex_coord,
+                        })
+                        .collect::<Vec<_>>();
+
+                    let indices = mesh
+                        .faces
+                        .iter()
+                        .flat_map(|f| f.indices)
+                        .collect::<Vec<_>>();
+
+                    let texture_handle = sm.add_texture(renderer, &image);
+
+                    let mesh_handle = sm.add_mesh(texture_handle);
+                    sm.add_lod(mesh_handle, &vertices, &indices);
+                }
+            }
+
+            sm
+        };
+
         if let Some(mtf_name) = campaign.mtf_name {
             let mtf = assets.load_config::<config::Mtf>(PathBuf::from("maps").join(mtf_name))?;
 
@@ -338,6 +383,8 @@ impl WorldScene {
 
             terrain,
             objects,
+
+            static_meshes,
 
             gizmos_renderer,
 
@@ -459,7 +506,7 @@ impl Scene for WorldScene {
         const GREEN: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
         const BLUE: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
 
-        self.time_of_day = (self.time_of_day + delta_time * 0.001).rem_euclid(24.0);
+        self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
         self.environment = self.calculate_environment(self.time_of_day);
 
         // Set the camera far plane to the `max_view_distance`.
@@ -554,7 +601,8 @@ impl Scene for WorldScene {
             environment_bind_group,
             &self.gizmos_renderer,
         );
-        self.objects.render_gizmos(frame, camera_bind_group);
+        self.objects
+            .render_gizmos(frame, camera_bind_group, &self.gizmos_renderer);
 
         if false {
             // Render the direction of the sun.

@@ -23,7 +23,8 @@ fn diffuse(
     let diffuse_color = env.sun_color.rgb * diffuse_intensity;
 
     // TODO: Put this in the Environment struct.
-    let ambient_color = vec3<f32>(0.1, 0.1, 0.1);
+    // let ambient_color = vec3<f32>(0.3, 0.3, 0.3);
+    let ambient_color = env.sun_color.rgb * 0.3;
 
     let lighting = diffuse_color + ambient_color;
 

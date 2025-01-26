@@ -10,7 +10,7 @@ use super::model::Model;
 #[derive(Clone, Copy, Debug)]
 pub enum BlendMode {
     /// No blending.
-    None,
+    Opaque,
     /// Color keyed (use black as the key).
     ColorKeyed,
     /// Use the alpha channel of the texture.
@@ -29,6 +29,7 @@ pub struct Texture {
 /// A mesh containing gpu resources that we can render.
 #[derive(Debug)]
 pub struct TexturedMesh {
+    pub indexed_mesh: IndexedMesh<Vertex>,
     pub gpu_mesh: GpuIndexedMesh,
     pub texture: Texture,
 }
@@ -101,7 +102,7 @@ impl MeshRenderer {
                 });
 
         let opaque_render_pipeline =
-            Self::create_pipeline(renderer, &pipeline_layout, &module, BlendMode::None);
+            Self::create_pipeline(renderer, &pipeline_layout, &module, BlendMode::Opaque);
         let ck_render_pipeline =
             Self::create_pipeline(renderer, &pipeline_layout, &module, BlendMode::ColorKeyed);
         let alpha_render_pipeline =
@@ -134,13 +135,18 @@ impl MeshRenderer {
                     buffers: &[
                         Vertex::vertex_buffers()[0].clone(),
                         wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<glam::Mat4>() as wgpu::BufferAddress,
+                            array_stride: (std::mem::size_of::<glam::Mat4>() * 2)
+                                as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Instance,
                             attributes: &vertex_attr_array![
                                 3 => Float32x4,
                                 4 => Float32x4,
                                 5 => Float32x4,
                                 6 => Float32x4,
+
+                                7 => Float32x3,
+                                8 => Float32x3,
+                                9 => Float32x3,
                             ],
                         },
                     ],
@@ -155,7 +161,7 @@ impl MeshRenderer {
                 depth_stencil: Some(renderer.depth_buffer.depth_stencil_state(
                     wgpu::CompareFunction::Less,
                     match blend_mode {
-                        BlendMode::None | BlendMode::ColorKeyed | BlendMode::Multiply => true,
+                        BlendMode::Opaque | BlendMode::ColorKeyed | BlendMode::Multiply => true,
                         // Don't write to the depth buffer if we use alpha blending.
                         BlendMode::Alpha => false,
                     },
@@ -165,7 +171,7 @@ impl MeshRenderer {
                     module,
                     entry_point: match blend_mode {
                         BlendMode::ColorKeyed => Some("ck_fragment_main"),
-                        BlendMode::None | BlendMode::Alpha | BlendMode::Multiply => {
+                        BlendMode::Opaque | BlendMode::Alpha | BlendMode::Multiply => {
                             Some("fragment_main")
                         }
                     },
@@ -173,7 +179,7 @@ impl MeshRenderer {
                     targets: &[Some(wgpu::ColorTargetState {
                         format: renderer.surface_config.format,
                         blend: match blend_mode {
-                            BlendMode::None => None,
+                            BlendMode::Opaque => None,
                             BlendMode::ColorKeyed => None,
                             BlendMode::Alpha => Some(wgpu::BlendState::ALPHA_BLENDING),
                             BlendMode::Multiply => None,
@@ -198,7 +204,6 @@ impl MeshRenderer {
             .collect()
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn render_multiple(
         &self,
         frame: &mut Frame,
@@ -236,7 +241,7 @@ impl MeshRenderer {
             });
 
         let render_pipeline = match blend_mode {
-            BlendMode::None => &self.opaque_render_pipeline,
+            BlendMode::Opaque => &self.opaque_render_pipeline,
             BlendMode::ColorKeyed => &self.ck_render_pipeline,
             BlendMode::Alpha => &self.alpha_render_pipeline,
             BlendMode::Multiply => todo!(),
@@ -254,11 +259,13 @@ impl MeshRenderer {
             };
 
             // Create a buffer to render to.
+            let normal_matrix = mesh_item.transform.inverse().transpose();
+            let data = [mesh_item.transform, normal_matrix];
             let buffer = frame
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("mesh_indices_buffer"),
-                    contents: bytemuck::cast_slice(&[mesh_item.transform]),
+                    contents: bytemuck::cast_slice(&data),
                     usage: wgpu::BufferUsages::VERTEX,
                 });
 

@@ -1,9 +1,12 @@
 use std::cmp::Ordering;
 
-use glam::Vec4Swizzles;
+use glam::{Mat3, Vec4, Vec4Swizzles};
 
 use crate::{
-    engine::prelude::*,
+    engine::{
+        gizmos::{GizmoVertex, GizmosRenderer},
+        prelude::*,
+    },
     game::{
         camera::{BoundingBox, Camera, Frustum, Ray},
         mesh_renderer::{BlendMode, MeshItem, MeshRenderer},
@@ -192,7 +195,7 @@ impl Objects {
                 let distance_from_camera = camera.position.distance_squared(mesh_position.xyz());
 
                 match mesh.blend_mode {
-                    BlendMode::None => self.opaque_meshes.push(MeshItem {
+                    BlendMode::Opaque => self.opaque_meshes.push(MeshItem {
                         transform,
                         mesh: mesh.mesh,
                         distance_from_camera,
@@ -244,7 +247,7 @@ impl Objects {
             frame,
             camera_bind_group,
             environment_bind_group,
-            BlendMode::None,
+            BlendMode::Opaque,
             &self.opaque_meshes,
         );
 
@@ -272,7 +275,12 @@ impl Objects {
         );
     }
 
-    pub fn render_gizmos(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    pub fn render_gizmos(
+        &self,
+        frame: &mut Frame,
+        camera_bind_group: &wgpu::BindGroup,
+        gizmos_renderer: &GizmosRenderer,
+    ) {
         if self.render_bounding_boxes {
             let mut boxes = vec![];
 
@@ -309,6 +317,47 @@ impl Objects {
 
             self.bounding_box_renderer
                 .render_all(frame, camera_bind_group, &boxes);
+        }
+
+        if false {
+            let mut gv = vec![];
+
+            for object in self.objects.iter() {
+                let Some(model) = self.asset_store.get(object.model) else {
+                    continue;
+                };
+
+                for mesh in model.meshes.iter() {
+                    let Some(textured_mesh) = self.asset_store.get(mesh.mesh) else {
+                        continue;
+                    };
+
+                    let m = Mat4::from_rotation_translation(
+                        Quat::from_euler(
+                            glam::EulerRot::XYZ,
+                            object.rotation.x,
+                            object.rotation.y,
+                            -object.rotation.z,
+                        ),
+                        object.translation,
+                    ) * mesh.model_transform;
+
+                    let normal_matrix = Mat3::from_mat4(m).inverse().transpose();
+
+                    for vertex in textured_mesh.indexed_mesh.vertices.iter() {
+                        let position = m.project_point3(vertex.position);
+                        let normal = normal_matrix * vertex.normal;
+
+                        gv.push(GizmoVertex::new(position, Vec4::new(0.0, 0.0, 1.0, 1.0)));
+                        gv.push(GizmoVertex::new(
+                            position - normal * 10.0,
+                            Vec4::new(1.0, 0.0, 1.0, 1.0),
+                        ));
+                    }
+                }
+            }
+
+            gizmos_renderer.render(frame, camera_bind_group, &gv);
         }
     }
 
