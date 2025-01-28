@@ -107,6 +107,7 @@ impl AssetStore {
     }
 }
 
+#[allow(unused)]
 pub struct AssetStorage<A: Asset + Send + Sync + 'static> {
     storage: Vec<A>,
 }
@@ -119,6 +120,7 @@ impl<A: Asset + Send + Sync + 'static> Default for AssetStorage<A> {
     }
 }
 
+#[allow(unused)]
 impl<A: Asset + Send + Sync + 'static> AssetStorage<A> {
     pub fn add(&mut self, asset: A) -> Handle<A> {
         let new_id = self.storage.len() as u64;
