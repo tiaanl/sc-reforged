@@ -10,7 +10,7 @@ use crate::{
     game::{
         camera::{BoundingBox, Camera, Frustum, Ray},
         mesh_renderer::{BlendMode, MeshItem, MeshRenderer},
-        model::{Model, NodeIndex},
+        model::Model,
     },
 };
 
