@@ -10,7 +10,7 @@ use crate::{
     game::{
         camera::{BoundingBox, Camera, Frustum, Ray},
         mesh_renderer::{BlendMode, MeshItem, MeshRenderer},
-        model::Model,
+        model::{Model, NodeIndex},
     },
 };
 
@@ -327,30 +327,31 @@ impl Objects {
                     continue;
                 };
 
+                let object_transform = Mat4::from_rotation_translation(
+                    Quat::from_euler(
+                        glam::EulerRot::XYZ,
+                        object.rotation.x,
+                        object.rotation.y,
+                        -object.rotation.z,
+                    ),
+                    object.translation,
+                );
+
                 for mesh in model.meshes.iter() {
                     let Some(textured_mesh) = self.asset_store.get(mesh.mesh) else {
                         continue;
                     };
 
-                    let m = Mat4::from_rotation_translation(
-                        Quat::from_euler(
-                            glam::EulerRot::XYZ,
-                            object.rotation.x,
-                            object.rotation.y,
-                            -object.rotation.z,
-                        ),
-                        object.translation,
-                    ) * mesh.model_transform;
-
-                    let normal_matrix = Mat3::from_mat4(m).inverse().transpose();
+                    let mesh_transform = object_transform * mesh.model_transform;
+                    let normal_matrix = Mat3::from_mat4(mesh_transform).inverse().transpose();
 
                     for vertex in textured_mesh.indexed_mesh.vertices.iter() {
-                        let position = m.project_point3(vertex.position);
+                        let position = mesh_transform.project_point3(vertex.position);
                         let normal = normal_matrix * vertex.normal;
 
                         gv.push(GizmoVertex::new(position, Vec4::new(0.0, 0.0, 1.0, 1.0)));
                         gv.push(GizmoVertex::new(
-                            position - normal * 10.0,
+                            position + normal * 10.0,
                             Vec4::new(1.0, 0.0, 1.0, 1.0),
                         ));
                     }

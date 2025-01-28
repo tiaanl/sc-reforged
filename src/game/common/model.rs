@@ -42,19 +42,6 @@ impl Model {
         transform
     }
 
-    // // Calculate the global transform for the given node.
-    // pub fn global_transform(&self, node_index: NodeIndex) -> Transform {
-    //     let mut transform = Transform::default();
-    //     let mut current = node_index;
-    //     while current != NodeIndex::MAX {
-    //         let node = &self.nodes[current];
-    //         transform.translation += node.transform.translation;
-    //         transform.rotation *= node.transform.rotation;
-    //         current = node.parent;
-    //     }
-    //     transform
-    // }
-
     pub fn from_smf(
         smf: &smf::Model,
         renderer: &Renderer,
