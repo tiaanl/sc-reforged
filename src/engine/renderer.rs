@@ -77,8 +77,8 @@ impl Renderer {
     pub fn new(window: Arc<winit::window::Window>) -> Self {
         let winit::dpi::PhysicalSize { width, height } = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
             ..Default::default()
         });
 
@@ -101,6 +101,7 @@ impl Renderer {
                 required_limits: wgpu::Limits {
                     max_bind_groups: 5,
                     max_push_constant_size: 16,
+                    max_vertex_attributes: 24,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -264,14 +265,14 @@ impl Renderer {
         });
 
         self.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::default(),
                 aspect: wgpu::TextureAspect::All,
             },
             image,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(width * 4),
                 rows_per_image: Some(height),
