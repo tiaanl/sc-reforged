@@ -143,10 +143,6 @@ impl MeshRenderer {
                                 4 => Float32x4,
                                 5 => Float32x4,
                                 6 => Float32x4,
-
-                                7 => Float32x3,
-                                8 => Float32x3,
-                                9 => Float32x3,
                             ],
                         },
                     ],
@@ -259,13 +255,11 @@ impl MeshRenderer {
             };
 
             // Create a buffer to render to.
-            let normal_matrix = mesh_item.transform.inverse().transpose();
-            let data = [mesh_item.transform, normal_matrix];
             let buffer = frame
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("mesh_indices_buffer"),
-                    contents: bytemuck::cast_slice(&data),
+                    contents: bytemuck::cast_slice(&[mesh_item.transform]),
                     usage: wgpu::BufferUsages::VERTEX,
                 });
 

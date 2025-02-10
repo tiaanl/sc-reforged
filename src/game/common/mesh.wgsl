@@ -19,9 +19,6 @@ struct InstanceInput {
     @location(4) model1: vec4<f32>,
     @location(5) model2: vec4<f32>,
     @location(6) model3: vec4<f32>,
-    @location(7) normal0: vec3<f32>,
-    @location(8) normal1: vec3<f32>,
-    @location(9) normal2: vec3<f32>,
 }
 
 struct VertexOutput {
@@ -34,12 +31,12 @@ struct VertexOutput {
 @vertex
 fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     let model = mat4x4<f32>(instance.model0, instance.model1, instance.model2, instance.model3);
-    let mat_normal = mat3x3<f32>(instance.normal0, instance.normal1, instance.normal2);
 
     let world_position = (model * vec4(vertex.position, 1.0)).xyz;
     let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
 
-    let world_normal = mat_normal * vertex.normal;
+    // We don't scale objects, so the model matrix without translation is good for now.
+    let world_normal = (model * vec4<f32>(vertex.normal, 0.0)).xyz;
 
     return VertexOutput(
         clip_position,
