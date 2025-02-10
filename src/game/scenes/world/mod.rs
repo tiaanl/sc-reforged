@@ -21,6 +21,7 @@ use wgpu::util::DeviceExt;
 mod bounding_boxes;
 mod height_map;
 mod objects;
+mod strata;
 mod terrain;
 
 #[derive(Default)]

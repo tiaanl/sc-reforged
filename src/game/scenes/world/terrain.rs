@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-use super::height_map::HeightMap;
+use super::{height_map::HeightMap, strata::Strata};
 
 struct ChunkMesh {
     vertices_buffer: wgpu::Buffer,
@@ -118,6 +118,8 @@ pub struct Terrain {
 
     terrain_data: Tracked<TerrainData>,
     terrain_data_buffer: wgpu::Buffer,
+
+    strata: Strata,
 
     /// Pipeline that calculates LOD for each chunk and culls them in the camera frustum.
     process_chunks_pipeline: wgpu::ComputePipeline,
@@ -576,6 +578,17 @@ impl Terrain {
         let terrain_draw_args_buffer = renderer.device.create_buffer(&draw_args_descriptor);
         let water_draw_args_buffer = renderer.device.create_buffer(&draw_args_descriptor);
 
+        let strata = Strata::new(
+            asset_loader,
+            renderer,
+            shaders,
+            height_map.size,
+            camera_bind_group_layout,
+            environment_bind_group_layoout,
+            &height_map_buffer,
+            &terrain_data_buffer,
+        )?;
+
         let process_chunks_bind_group_layout =
             renderer
                 .device
@@ -705,6 +718,8 @@ impl Terrain {
             terrain_data: Tracked::new(terrain_data),
             terrain_data_buffer,
 
+            strata,
+
             process_chunks_pipeline,
             process_chunks_bind_group,
             terrain_draw_args_buffer,
@@ -742,6 +757,9 @@ impl Terrain {
 
         // Always use the main camera for frustum culling.
         self.process_chunks(&frame.device, &frame.queue, frustum_camera_bind_group);
+
+        self.strata
+            .render(frame, camera_bind_group, environment_bind_group);
 
         self.render_terrain(frame, camera_bind_group, environment_bind_group);
     }

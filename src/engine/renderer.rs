@@ -101,7 +101,7 @@ impl Renderer {
                 required_limits: wgpu::Limits {
                     max_bind_groups: 5,
                     max_push_constant_size: 16,
-                    max_vertex_attributes: 24,
+                    max_vertex_attributes: 32,
                     ..Default::default()
                 },
                 ..Default::default()
