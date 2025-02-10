@@ -64,7 +64,6 @@ impl<C: camera::Controller> Camera<C> {
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
-    asset_store: AssetStore,
     _campaign_def: CampaignDef,
 
     view_debug_camera: bool,
@@ -110,7 +109,7 @@ enum UnderMouse {
 
 impl WorldScene {
     pub fn new(
-        assets: &AssetLoader,
+        asset_loader: &AssetLoader,
         asset_store: AssetStore,
         renderer: &Renderer,
         campaign_def: CampaignDef,
@@ -120,7 +119,7 @@ impl WorldScene {
         let lod_model_definitions = {
             let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
-            for lod_path in assets
+            for lod_path in asset_loader
                 .enum_dir(r"config\lod_model_profiles")
                 .map_err(|err| {
                     AssetError::FileSystemError(crate::game::vfs::FileSystemError::Io(err))
@@ -128,7 +127,7 @@ impl WorldScene {
                 .into_iter()
                 .filter(|e| e.as_path().extension().unwrap() == "txt")
             {
-                let profile = assets.load_config::<LodModelProfileDefinition>(lod_path)?;
+                let profile = asset_loader.load_config::<LodModelProfileDefinition>(lod_path)?;
                 lod_definitions.insert(profile.lod_model_name, profile.sub_model_definitions);
             }
 
@@ -136,7 +135,7 @@ impl WorldScene {
         };
 
         // Load the campaign specification.
-        let campaign = assets.load_config::<config::Campaign>(
+        let campaign = asset_loader.load_config::<config::Campaign>(
             PathBuf::from("campaign")
                 .join(&campaign_def.base_name)
                 .join(&campaign_def.base_name)
@@ -255,7 +254,7 @@ impl WorldScene {
                 });
 
         let terrain = Terrain::new(
-            assets,
+            asset_loader,
             renderer,
             &mut shaders,
             &campaign_def,
@@ -272,7 +271,8 @@ impl WorldScene {
         );
 
         if let Some(mtf_name) = campaign.mtf_name {
-            let mtf = assets.load_config::<config::Mtf>(PathBuf::from("maps").join(mtf_name))?;
+            let mtf =
+                asset_loader.load_config::<config::Mtf>(PathBuf::from("maps").join(mtf_name))?;
 
             let mut to_spawn = mtf
                 .objects
@@ -300,7 +300,7 @@ impl WorldScene {
                             .with_extension("smf")
                     };
 
-                    let model_handle = match assets.load_smf(&path, renderer) {
+                    let model_handle = match asset_loader.load_smf(&path, renderer) {
                         Ok(handle) => handle,
                         Err(err) => {
                             tracing::warn!("Could not load .smf model: {}", path.display());
@@ -324,7 +324,6 @@ impl WorldScene {
             GizmosRenderer::new(renderer, &main_camera.gpu_camera.bind_group_layout);
 
         Ok(Self {
-            asset_store,
             _campaign_def: campaign_def,
 
             view_debug_camera: false,

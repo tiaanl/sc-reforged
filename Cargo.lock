@@ -1519,6 +1519,7 @@ dependencies = [
  "pathdiff",
  "pollster",
  "shadow_company_tools",
+ "slab",
  "thiserror 2.0.11",
  "tracing",
  "tracing-subscriber",

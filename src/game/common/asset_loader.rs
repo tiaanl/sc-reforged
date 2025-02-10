@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-    assets::Image,
+    image::Image,
     mesh_renderer::BlendMode,
     model::Model,
     vfs::{FileSystemError, VirtualFileSystem},
@@ -191,13 +191,6 @@ impl AssetLoader {
         })?;
         C::try_from(s)
     }
-
-    // pub fn load_string(&self, path: impl AsRef<Path>) -> Result<String, AssetError> {
-    //     String::from_utf8(self.load_raw(&path)?).map_err(|_| {
-    //         tracing::warn!("Could not load string: {}", path.as_ref().display());
-    //         AssetError::DecodeError
-    //     })
-    // }
 
     #[inline]
     pub fn enum_dir(&self, path: impl AsRef<Path>) -> Result<Vec<PathBuf>, std::io::Error> {
