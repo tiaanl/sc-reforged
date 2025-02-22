@@ -489,13 +489,13 @@ impl Scene for WorldScene {
         self.objects.update(&self.main_camera.camera);
     }
 
-    fn begin_frame(&mut self, _device: &wgpu::Device, queue: &wgpu::Queue) {
+    fn render(&mut self, frame: &mut Frame) {
         {
             let matrices = self.main_camera.camera.calculate_matrices();
             let position = self.main_camera.camera.position;
             self.main_camera
                 .gpu_camera
-                .upload_matrices(queue, &matrices, position);
+                .upload_matrices(&frame.queue, &matrices, position);
         }
 
         {
@@ -503,17 +503,15 @@ impl Scene for WorldScene {
             let position = self.debug_camera.camera.position;
             self.debug_camera
                 .gpu_camera
-                .upload_matrices(queue, &matrices, position);
+                .upload_matrices(&frame.queue, &matrices, position);
         }
 
-        queue.write_buffer(
+        frame.queue.write_buffer(
             &self.environment_buffer,
             0,
             bytemuck::cast_slice(&[self.environment]),
         );
-    }
 
-    fn render_frame(&self, frame: &mut Frame) {
         frame.clear_color_and_depth(
             wgpu::Color {
                 r: self.environment.fog_color.x as f64,
@@ -577,8 +575,6 @@ impl Scene for WorldScene {
             self.gizmos_renderer.render(frame, camera_bind_group, &v);
         }
     }
-
-    fn end_frame(&mut self) {}
 
     fn debug_panel(&mut self, egui: &egui::Context) {
         use egui::widgets::{DragValue, Slider};

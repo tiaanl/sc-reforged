@@ -19,24 +19,17 @@ pub enum SceneEvent {
 #[allow(unused)]
 pub trait Scene {
     /// Called when the size of the window surface is changed.
-    fn resize(&mut self, renderer: &Renderer);
+    fn resize(&mut self, renderer: &Renderer) {}
 
     /// Called when an engine event occurs. This includes input events.
     fn event(&mut self, event: &SceneEvent) {}
 
     /// Called each frame with the `delta_time` based on the time the last frame took and the state
     /// of all input devices.
-    fn update(&mut self, delta_time: f32, input: &InputState);
-
-    /// Called before `render_frame`, but after `update` to allow render resources to be created and
-    /// updated before rendering.
-    fn begin_frame(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {}
+    fn update(&mut self, delta_time: f32, input: &InputState) {}
 
     /// Called to render the the frame to the surface.
-    fn render_frame(&self, frame: &mut Frame) {}
-
-    /// Called after rendering the frame to do any cleanup.
-    fn end_frame(&mut self) {}
+    fn render(&mut self, frame: &mut Frame);
 
     /// Called to allow debug panels to be added to the window.
     fn debug_panel(&mut self, egui: &egui::Context) {}

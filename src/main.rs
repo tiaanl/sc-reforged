@@ -221,10 +221,7 @@ impl winit::application::ApplicationHandler for App {
                         };
 
                         {
-                            scene.begin_frame(&renderer.device, &renderer.queue);
-                            scene.render_frame(&mut frame);
-                            scene.end_frame();
-
+                            scene.render(&mut frame);
                             input.reset_current_frame();
                         }
 

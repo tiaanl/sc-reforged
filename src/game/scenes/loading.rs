@@ -40,11 +40,7 @@ impl LoadingScene {
 }
 
 impl Scene for LoadingScene {
-    fn resize(&mut self, _renderer: &Renderer) {}
-
-    fn update(&mut self, _delta_time: f32, _input: &InputState) {}
-
-    fn render_frame(&self, frame: &mut Frame) {
+    fn render(&mut self, frame: &mut Frame) {
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
