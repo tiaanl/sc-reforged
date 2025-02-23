@@ -6,7 +6,7 @@ pub struct DepthBuffer {
 }
 
 impl DepthBuffer {
-    const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+    pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
     pub fn new(device: &wgpu::Device, surface_config: &wgpu::SurfaceConfiguration) -> Self {
         let texture_view = Self::create_texture(device, surface_config);
@@ -79,7 +79,7 @@ impl DepthBuffer {
         }
     }
 
-    fn create_texture(
+    pub fn create_texture(
         device: &wgpu::Device,
         surface_config: &wgpu::SurfaceConfiguration,
     ) -> wgpu::TextureView {

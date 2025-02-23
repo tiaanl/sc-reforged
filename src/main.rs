@@ -3,7 +3,11 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 use clap::Parser;
 use egui::Widget;
 use engine::{egui_integration::EguiIntegration, prelude::*};
-use game::{asset_loader::AssetLoader, config, scenes::world::WorldScene};
+use game::{
+    asset_loader::AssetLoader,
+    config,
+    scenes::{model_viewer::ModelViewer, world::WorldScene},
+};
 use tracing::{error, info, warn};
 use winit::{
     dpi::PhysicalPosition,
@@ -33,7 +37,7 @@ enum App {
         /// egui integration.
         egui_integration: engine::egui_integration::EguiIntegration,
         /// The main way of loading assets from the /data directory.
-        _assets: AssetLoader,
+        _assets: Arc<AssetLoader>,
         _asset_store: AssetStore,
 
         input: InputState,
@@ -87,13 +91,15 @@ impl winit::application::ApplicationHandler for App {
                 let egui_integration = EguiIntegration::new(event_loop, &renderer);
 
                 let asset_store = AssetStore::default();
-                let assets = AssetLoader::new(asset_store.clone(), &opts.path)
-                    .expect("Could not initialize assets.");
+                let asset_loader = Arc::new(
+                    AssetLoader::new(asset_store.clone(), &opts.path)
+                        .expect("Could not initialize assets."),
+                );
 
-                let scene: Box<dyn Scene> = {
+                let scene: Box<dyn Scene> = if false {
                     // WorldScene
 
-                    let campaign_defs = assets
+                    let campaign_defs = asset_loader
                         .load_config::<config::CampaignDefs>(
                             PathBuf::from("config").join("campaign_defs.txt"),
                         )
@@ -118,8 +124,12 @@ impl winit::application::ApplicationHandler for App {
                         .unwrap();
 
                     Box::new(
-                        match WorldScene::new(&assets, asset_store.clone(), &renderer, campaign_def)
-                        {
+                        match WorldScene::new(
+                            &asset_loader,
+                            asset_store.clone(),
+                            &renderer,
+                            campaign_def,
+                        ) {
                             Ok(scene) => scene,
                             Err(err) => {
                                 error!("Could not create world scene! - {}", err);
@@ -127,6 +137,8 @@ impl winit::application::ApplicationHandler for App {
                             }
                         },
                     )
+                } else {
+                    Box::new(ModelViewer::new(&renderer, Arc::clone(&asset_loader)).unwrap())
                 };
 
                 info!("Application initialized!");
@@ -135,7 +147,7 @@ impl winit::application::ApplicationHandler for App {
                     window,
                     renderer,
                     egui_integration,
-                    _assets: assets,
+                    _assets: asset_loader,
                     _asset_store: asset_store,
                     input: InputState::default(),
                     last_mouse_position: None,
@@ -199,7 +211,7 @@ impl winit::application::ApplicationHandler for App {
                         *last_frame_time = now;
 
                         let delta_time = last_frame_duration.as_secs_f32() * 60.0;
-                        scene.update(delta_time, input);
+                        scene.update(renderer, delta_time, input);
 
                         let output = renderer.surface.get_current_texture().unwrap();
                         let surface = output
@@ -255,7 +267,7 @@ impl winit::application::ApplicationHandler for App {
                                     });
 
                                     // Debug stuff from the scene.
-                                    scene.debug_panel(ctx);
+                                    scene.debug_panel(ctx, renderer);
                                 },
                             );
                         }

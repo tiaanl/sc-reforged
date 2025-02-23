@@ -455,7 +455,7 @@ impl ArcBallCameraController {
         Self {
             yaw: 0.0,
             pitch: 0.0,
-            distance: 0.0,
+            distance: 100.0,
             mouse_sensitivity,
             dirty: Dirty::smudged(),
         }
@@ -494,6 +494,10 @@ impl ArcBallCameraController {
             camera.position = position;
             camera.rotation = rotation;
         })
+    }
+
+    pub fn dirty(&mut self) {
+        self.dirty.smudge();
     }
 }
 

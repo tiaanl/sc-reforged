@@ -26,11 +26,11 @@ pub trait Scene {
 
     /// Called each frame with the `delta_time` based on the time the last frame took and the state
     /// of all input devices.
-    fn update(&mut self, delta_time: f32, input: &InputState) {}
+    fn update(&mut self, renderer: &Renderer, delta_time: f32, input: &InputState) {}
 
     /// Called to render the the frame to the surface.
     fn render(&mut self, frame: &mut Frame);
 
     /// Called to allow debug panels to be added to the window.
-    fn debug_panel(&mut self, egui: &egui::Context) {}
+    fn debug_panel(&mut self, egui: &egui::Context, renderer: &Renderer) {}
 }

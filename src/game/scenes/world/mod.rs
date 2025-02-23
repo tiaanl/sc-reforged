@@ -452,7 +452,7 @@ impl Scene for WorldScene {
         }
     }
 
-    fn update(&mut self, delta_time: f32, input: &InputState) {
+    fn update(&mut self, _renderer: &Renderer, delta_time: f32, input: &InputState) {
         const GIZMO_SCALE: f32 = 1000.0;
         const CENTER: Vec3 = Vec3::ZERO;
         const RED: Vec4 = Vec4::new(1.0, 0.0, 0.0, 1.0);
@@ -576,7 +576,7 @@ impl Scene for WorldScene {
         }
     }
 
-    fn debug_panel(&mut self, egui: &egui::Context) {
+    fn debug_panel(&mut self, egui: &egui::Context, _renderer: &Renderer) {
         use egui::widgets::{DragValue, Slider};
 
         egui::Window::new("World")

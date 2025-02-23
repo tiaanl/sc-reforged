@@ -78,6 +78,9 @@ pub struct AssetLoader {
     image_defs: ImageDefs,
 }
 
+unsafe impl Send for AssetLoader {}
+unsafe impl Sync for AssetLoader {}
+
 impl AssetLoader {
     pub fn new(asset_store: AssetStore, data_dir: impl AsRef<Path>) -> std::io::Result<Self> {
         let mut s = Self {
