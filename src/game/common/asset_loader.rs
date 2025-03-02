@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use shadow_company_tools::smf;
+use shadow_company_tools::{bmf, smf};
 
 use crate::{
     engine::{
@@ -181,6 +181,11 @@ impl AssetLoader {
                 image::load_from_memory_with_format(data.as_ref(), image::ImageFormat::Jpeg)?;
             Ok(Image::from_rgba(image.into_rgba8(), BlendMode::Opaque))
         })
+    }
+
+    pub fn load_bmf_direct(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
+        let mut data = std::io::Cursor::new(self.fs.load(&path)?);
+        Ok(bmf::Motion::read(&mut data)?)
     }
 
     pub fn load_config<C>(&self, path: impl AsRef<Path>) -> Result<C, AssetError>

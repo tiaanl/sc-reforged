@@ -36,14 +36,14 @@ struct VertexOutput {
         vec4<f32>(0.0, 0.0, 0.0, 1.0),
     );
     var node_index = vertex.node_index;
-    while node_index != 0xFFFFFFFF {
-        model = model * u_node_data[node_index].transform;
-        node_index = u_node_data[node_index].parent;
-    }
+    // while node_index != 0xFFFFFFFF {
+    //     model = model * u_node_data[node_index].transform;
+    //     node_index = u_node_data[node_index].parent;
+    // }
 
-    let mat_model = model;
+    // let mat_model = model;
 
-    //let mat_model = u_node_data[vertex.node_index];
+    let mat_model = u_node_data[vertex.node_index].transform;
 
     let world_position = (mat_model * vec4<f32>(vertex.position, 1.0)).xyz;
 

@@ -1,20 +1,35 @@
-use glam::Vec3;
+use glam::{Quat, Vec3};
 
 pub trait Interpolate: Clone {
-    fn lerp(left: &Self, right: &Self, n: f32) -> Self;
+    fn interpolate(left: &Self, right: &Self, n: f32) -> Self;
 }
 
 impl Interpolate for f32 {
     #[inline]
-    fn lerp(left: &Self, right: &Self, n: f32) -> Self {
+    fn interpolate(left: &Self, right: &Self, n: f32) -> Self {
         left + (right - left) * n
     }
 }
 
 impl Interpolate for Vec3 {
     #[inline]
-    fn lerp(left: &Self, right: &Self, n: f32) -> Self {
+    fn interpolate(left: &Self, right: &Self, n: f32) -> Self {
         left.lerp(*right, n)
+    }
+}
+
+impl Interpolate for Quat {
+    fn interpolate(left: &Self, right: &Self, n: f32) -> Self {
+        left.slerp(*right, n)
+    }
+}
+
+impl<A: Interpolate, B: Interpolate> Interpolate for (A, B) {
+    fn interpolate(left: &Self, right: &Self, n: f32) -> Self {
+        (
+            A::interpolate(&left.0, &right.0, n),
+            B::interpolate(&left.1, &right.1, n),
+        )
     }
 }
 
@@ -24,11 +39,11 @@ pub struct KeyFrame<V: Interpolate> {
 }
 
 #[derive(Default)]
-pub struct Timeline<V: Interpolate> {
+pub struct Track<V: Interpolate> {
     key_frames: Vec<KeyFrame<V>>,
 }
 
-impl<V: Interpolate> Timeline<V> {
+impl<V: Interpolate> Track<V> {
     pub fn set_key_frame(&mut self, time: f32, value: V) {
         let pos = self
             .key_frames
@@ -40,7 +55,7 @@ impl<V: Interpolate> Timeline<V> {
     pub fn get(&self, time: f32) -> V {
         let len = self.key_frames.len();
         if len == 0 {
-            panic!("No keyframes in timeline");
+            panic!("No keyframes in track");
         }
 
         if time <= self.key_frames[0].time {
@@ -55,7 +70,7 @@ impl<V: Interpolate> Timeline<V> {
             let (left, right) = (&window[0], &window[1]);
             if time >= left.time && time <= right.time {
                 let t = (time - left.time) / (right.time - left.time);
-                return V::lerp(&left.value, &right.value, t);
+                return V::interpolate(&left.value, &right.value, t);
             }
         }
 

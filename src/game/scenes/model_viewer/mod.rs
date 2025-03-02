@@ -2,10 +2,13 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use shadow_company_tools::smf;
+use glam::Vec4;
+use shadow_company_tools::{bmf, smf};
 use wgpu::util::DeviceExt;
 
+use crate::engine::gizmos::{GizmoVertex, GizmosRenderer};
 use crate::engine::prelude::*;
+use crate::game::animation::Track;
 use crate::game::asset_loader::{AssetError, AssetLoader};
 use crate::game::camera;
 
@@ -13,6 +16,7 @@ pub struct ModelViewer {
     asset_loader: Arc<AssetLoader>,
 
     model: Option<Model>,
+    animation: Option<Animation>,
 
     node_data_bind_group_layout: wgpu::BindGroupLayout,
     material_bind_group_layout: wgpu::BindGroupLayout,
@@ -25,8 +29,15 @@ pub struct ModelViewer {
     depth_texture: wgpu::TextureView,
     pipeline: wgpu::RenderPipeline,
 
-    dirs: DirNode,
-    to_load: Option<PathBuf>,
+    models: DirNode,
+    model_to_load: Option<PathBuf>,
+
+    animations: DirNode,
+    animation_to_load: Option<PathBuf>,
+
+    gizmos_renderer: GizmosRenderer,
+
+    time: f32,
 }
 
 impl ModelViewer {
@@ -159,19 +170,68 @@ impl ModelViewer {
                 cache: None,
             });
 
-        let mut dirs = DirNode::default();
+        let mut models = DirNode::default();
         for path in asset_loader
             .enum_dir(PathBuf::from("models"))?
             .iter()
             .filter(|p| p.extension().map(|e| e == "smf").unwrap_or(false))
         {
-            dirs.insert(path.clone());
+            models.insert(path.clone());
         }
+
+        let mut animations = DirNode::default();
+        for path in asset_loader
+            .enum_dir(PathBuf::from("motions"))?
+            .iter()
+            .filter(|p| p.extension().map(|e| e == "bmf").unwrap_or(false))
+        {
+            animations.insert(path.clone());
+        }
+
+        let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
+
+        let model = {
+            let path = PathBuf::from("models")
+                .join("alan-crow01")
+                .join("alan-crow01.smf");
+            let smf = asset_loader.load_smf_direct(path)?;
+
+            Model::from_smf(
+                renderer,
+                &asset_loader,
+                &node_data_bind_group_layout,
+                &material_bind_group_layout,
+                &sampler,
+                &smf,
+            )
+            .expect("Could not load model.")
+        };
+
+        let animation = {
+            let path = PathBuf::from("motions").join("crow_flight_cycle.bmf");
+            let bmf = asset_loader.load_bmf_direct(path)?;
+
+            Animation::from_bmf(&bmf)?
+        };
+
+        // let animation = {
+        //     let mut animation = Animation::default();
+        //     let rotations = animation.rotations.entry(55).or_default();
+        //     rotations.set_key_frame(0.0, Quat::IDENTITY);
+        //     rotations.set_key_frame(32.0, Quat::from_rotation_x(PI));
+
+        //     let rotations = animation.rotations.entry(1).or_default();
+        //     rotations.set_key_frame(0.0, Quat::IDENTITY);
+        //     rotations.set_key_frame(32.0, Quat::from_rotation_z(PI));
+
+        //     animation
+        // };
 
         Ok(Self {
             asset_loader,
 
-            model: None,
+            model: Some(model),
+            animation: Some(animation),
 
             node_data_bind_group_layout,
             material_bind_group_layout,
@@ -184,8 +244,15 @@ impl ModelViewer {
             pipeline,
             depth_texture,
 
-            dirs,
-            to_load: None,
+            models,
+            model_to_load: None,
+
+            animations,
+            animation_to_load: None,
+
+            gizmos_renderer,
+
+            time: 0.0,
         })
     }
 
@@ -205,6 +272,51 @@ impl ModelViewer {
             &smf,
         )
     }
+
+    fn load_animation(
+        &mut self,
+        _renderer: &Renderer,
+        path: impl AsRef<Path>,
+    ) -> Result<Animation, AssetError> {
+        let bmf = self.asset_loader.load_bmf_direct(path)?;
+
+        Animation::from_bmf(&bmf)
+    }
+
+    fn update_animations(&mut self, renderer: &Renderer) {
+        let Some(ref model) = self.model else {
+            return;
+        };
+
+        let Some(ref animation) = self.animation else {
+            return;
+        };
+
+        // Calculate the transforms for each node.
+        let nodes = model
+            .nodes
+            .iter()
+            .map(|node| {
+                let mut new_node = node.clone();
+
+                let bone_id = node.bone_id as usize;
+                if let Some(translations) = animation.translations.get(&bone_id) {
+                    new_node.translation = translations.get(self.time);
+                }
+                if let Some(rotations) = animation.rotations.get(&bone_id) {
+                    new_node.rotation = rotations.get(self.time);
+                }
+
+                new_node
+            })
+            .collect::<Vec<_>>();
+
+        let node_data = Model::nodes_to_node_data(&nodes);
+
+        renderer
+            .queue
+            .write_buffer(&model.nodes_buffer, 0, bytemuck::cast_slice(&node_data));
+    }
 }
 
 impl Scene for ModelViewer {
@@ -220,11 +332,18 @@ impl Scene for ModelViewer {
     }
 
     fn update(&mut self, renderer: &Renderer, delta_time: f32, input: &InputState) {
-        if let Some(ref to_load) = self.to_load.take() {
+        if let Some(ref to_load) = self.model_to_load.take() {
             self.model = Some(self.load_model(renderer, to_load).unwrap());
         }
 
+        if let Some(ref to_load) = self.animation_to_load.take() {
+            self.animation = Some(self.load_animation(renderer, to_load).unwrap());
+        }
+
         self.camera_controller.on_input(input, delta_time);
+
+        // Update the animation
+        self.update_animations(renderer);
     }
 
     fn render(&mut self, frame: &mut Frame) {
@@ -237,56 +356,119 @@ impl Scene for ModelViewer {
                 .upload_matrices(&frame.queue, &matrices, self.camera.position);
         }
 
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("model_virewer_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLUE),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
+        {
+            let mut render_pass = frame
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("model_virewer_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &frame.surface,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.1,
+                                g: 0.2,
+                                b: 0.3,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &self.depth_texture,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
                     }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
 
-        let Some(ref model) = self.model else {
-            return;
-        };
+            let Some(ref model) = self.model else {
+                return;
+            };
 
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(1, &self.gpu_camera.bind_group, &[]);
-        render_pass.set_bind_group(2, &model.nodes_bind_group, &[]);
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(1, &self.gpu_camera.bind_group, &[]);
+            render_pass.set_bind_group(2, &model.nodes_bind_group, &[]);
 
-        for mesh in model.meshes.iter() {
-            render_pass.set_bind_group(0, &mesh.material_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, mesh.gpu_mesh.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(
-                mesh.gpu_mesh.index_buffer.slice(..),
-                wgpu::IndexFormat::Uint32,
-            );
-            render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..1);
+            for mesh in model.meshes.iter() {
+                render_pass.set_bind_group(0, &mesh.material_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, mesh.gpu_mesh.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(
+                    mesh.gpu_mesh.index_buffer.slice(..),
+                    wgpu::IndexFormat::Uint32,
+                );
+                render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..1);
+            }
+        }
+
+        {
+            const RED: Vec4 = Vec4::new(1.0, 0.0, 0.0, 1.0);
+            const GREEN: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
+            const BLUE: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
+
+            let size = 10.0;
+            let vertices = vec![
+                GizmoVertex::new(Vec3::ZERO, RED),
+                GizmoVertex::new(Vec3::X * size, RED),
+                GizmoVertex::new(Vec3::ZERO, GREEN),
+                GizmoVertex::new(Vec3::Y * size, GREEN),
+                GizmoVertex::new(Vec3::ZERO, BLUE),
+                GizmoVertex::new(Vec3::Z * size, BLUE),
+            ];
+            self.gizmos_renderer
+                .render(frame, &self.gpu_camera.bind_group, &vertices);
+        }
+
+        if let Some(ref model) = self.model {
+            // Draw the skeleton.
+            let mut vertices = Vec::default();
+
+            fn add_children(
+                vertices: &mut Vec<GizmoVertex>,
+                nodes: &[Node],
+                node_index: usize,
+                parent_position: Vec3,
+            ) {
+                const COLOR: Vec4 = Vec4::new(0.0, 1.0, 1.0, 1.0);
+
+                let node = &nodes[node_index];
+
+                let start = parent_position + node.translation;
+                for (child_index, child) in nodes.iter().enumerate() {
+                    if child.parent_index == node_index {
+                        vertices.push(GizmoVertex::new(
+                            start,
+                            if node_index == 0 {
+                                Vec4::new(1.0, 0.0, 0.0, 1.0)
+                            } else {
+                                COLOR
+                            },
+                        ));
+                        vertices.push(GizmoVertex::new(start + child.translation, COLOR));
+
+                        add_children(vertices, nodes, child_index, start);
+                    }
+                }
+            }
+
+            add_children(&mut vertices, &model.nodes, 0, Vec3::ZERO);
+
+            self.gizmos_renderer
+                .render(frame, &self.gpu_camera.bind_group, &vertices);
         }
     }
 
     fn debug_panel(&mut self, egui: &egui::Context, _renderer: &Renderer) {
-        fn dir_ui(dir_node: &DirNode, ui: &mut egui::Ui, to_load: &mut Option<PathBuf>) {
+        fn entries(dir_node: &DirNode, ui: &mut egui::Ui, to_load: &mut Option<PathBuf>) {
             for dir in dir_node.children.iter() {
                 egui::CollapsingHeader::new(dir.0)
                     .default_open(false)
                     .show(ui, |ui| {
-                        dir_ui(dir.1, ui, to_load);
+                        entries(dir.1, ui, to_load);
                     });
             }
 
@@ -299,12 +481,20 @@ impl Scene for ModelViewer {
 
         egui::Window::new("Models").show(egui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                dir_ui(&self.dirs, ui, &mut self.to_load);
+                entries(&self.models, ui, &mut self.model_to_load);
             });
         });
 
-        egui::Window::new("Model").show(egui, |ui| {
-            ui.label("test");
+        egui::Window::new("Animations").show(egui, |ui| {
+            ui.add(
+                egui::Slider::new(&mut self.time, 0.0..=32.0)
+                    .drag_value_speed(0.1)
+                    .step_by(0.1),
+            );
+
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                entries(&self.animations, ui, &mut self.animation_to_load);
+            });
         });
     }
 }
@@ -333,7 +523,6 @@ impl Model {
         for (node_index, smf_node) in smf.nodes.iter().enumerate() {
             node_names.insert(smf_node.name.clone(), node_index);
 
-            let local_transform = Mat4::from_translation(smf_node.position);
             let bone_id = smf_node.tree_id;
             let parent_index = node_names
                 .get(&smf_node.parent_name)
@@ -353,12 +542,19 @@ impl Model {
                 )?);
             }
 
+            println!("bone_id: {bone_id}, rotation: {}", smf_node.rotation);
+
             nodes.push(Node {
                 parent_index,
                 bone_id,
-                local_transform,
+
+                translation: smf_node.position,
+                rotation: smf_node.rotation,
+                name: smf_node.name.clone(),
             });
         }
+
+        println!("nodes: {:#?}", nodes);
 
         let nodes_buffer = Self::create_nodes_buffer(renderer, &nodes);
         let nodes_bind_group = renderer
@@ -380,30 +576,50 @@ impl Model {
         })
     }
 
-    fn create_nodes_buffer(renderer: &Renderer, nodes: &[Node]) -> wgpu::Buffer {
-        let node_data = nodes
-            .iter()
-            .map(|node| NodeData {
-                mat_model: node.local_transform.to_cols_array_2d(),
+    fn nodes_to_node_data(nodes: &[Node]) -> Vec<NodeData> {
+        let mut new_nodes: Vec<NodeData> = Vec::with_capacity(nodes.len());
+
+        for node in nodes.iter() {
+            let parent_transform = if node.parent_index == 0xFFFF_FFFF {
+                Mat4::IDENTITY
+            } else {
+                new_nodes[node.parent_index].transform
+            };
+
+            let transform =
+                parent_transform * Mat4::from_rotation_translation(node.rotation, node.translation);
+
+            new_nodes.push(NodeData {
+                transform,
                 parent: node.parent_index as u32,
                 _pad: [0; 3],
-            })
-            .collect::<Vec<_>>();
+            });
+        }
+
+        new_nodes
+    }
+
+    fn create_nodes_buffer(renderer: &Renderer, nodes: &[Node]) -> wgpu::Buffer {
+        let node_data = Self::nodes_to_node_data(nodes);
 
         renderer
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("nodes_buffer"),
                 contents: bytemuck::cast_slice(&node_data),
-                usage: wgpu::BufferUsages::STORAGE,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             })
     }
 }
 
+#[derive(Clone, Debug)]
 struct Node {
     parent_index: usize,
     bone_id: u32,
-    local_transform: Mat4,
+
+    translation: Vec3,
+    rotation: Quat,
+    name: String,
 }
 
 struct Mesh {
@@ -437,11 +653,21 @@ impl Mesh {
         let gpu_mesh = IndexedMesh { vertices, indices }.to_gpu(renderer);
 
         let material_bind_group = {
-            let image = asset_loader.load_bmp_direct(
-                PathBuf::from("textures")
-                    .join("shared")
-                    .join(&smf_mesh.texture_name),
-            )?;
+            let path = PathBuf::from("textures")
+                .join("shared")
+                .join(&smf_mesh.texture_name);
+            let image = match asset_loader.load_bmp_direct(&path) {
+                Ok(image) => image,
+                Err(_) => {
+                    tracing::warn!(
+                        "Could not load {}. Loading error.bmp instead.",
+                        path.display()
+                    );
+                    asset_loader.load_bmp_direct(
+                        PathBuf::from("textures").join("object").join("error.bmp"),
+                    )?
+                }
+            };
             let texture = renderer
                 .create_texture_view(&format!("texture ({})", smf_mesh.texture_name), &image.data);
 
@@ -502,7 +728,7 @@ impl BufferLayout for Vertex {
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
 struct NodeData {
-    mat_model: [[f32; 4]; 4],
+    transform: Mat4,
     parent: u32,
     _pad: [u32; 3],
 }
@@ -525,5 +751,78 @@ impl DirNode {
                 current = current.children.entry(name).or_default();
             }
         }
+    }
+}
+
+fn do_node(ui: &mut egui::Ui, nodes: &mut [Node], node_index: usize) {
+    let child_indices = nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(child_index, node)| (node.parent_index == node_index).then_some(child_index))
+        .collect::<Vec<_>>();
+
+    let node = &mut nodes[node_index];
+
+    ui.horizontal(|ui| {
+        ui.label("Translation");
+        ui.add(egui::DragValue::new(&mut node.translation.x));
+        ui.add(egui::DragValue::new(&mut node.translation.y));
+        ui.add(egui::DragValue::new(&mut node.translation.z));
+    });
+
+    egui::CollapsingHeader::new(&node.name).show(ui, |ui| {
+        for child_index in child_indices.iter() {
+            do_node(ui, nodes, *child_index);
+        }
+    });
+}
+
+#[derive(Default)]
+struct Animation {
+    translations: HashMap<usize, Track<Vec3>>,
+    rotations: HashMap<usize, Track<Quat>>,
+}
+
+impl Animation {
+    fn from_bmf(bmf: &bmf::Motion) -> Result<Self, AssetError> {
+        let mut animation = Animation::default();
+
+        for key_frame in bmf.key_frames.iter() {
+            for bone in key_frame.bones.iter() {
+                let time = bone.time as f32;
+                let bone_id = bone.bone_index as usize;
+
+                if let Some(position) = bone.position {
+                    animation
+                        .translations
+                        .entry(bone_id)
+                        .or_default()
+                        .set_key_frame(time, position);
+                }
+
+                if let Some(rotation) = bone.rotation {
+                    animation
+                        .rotations
+                        .entry(bone_id)
+                        .or_default()
+                        .set_key_frame(
+                            time,
+                            Quat::from_xyzw(rotation.x, rotation.y, -rotation.z, rotation.w),
+                        );
+                }
+            }
+        }
+
+        Ok(animation)
+    }
+
+    fn translation_at(&self, bone_index: usize, time: f32) -> Option<Vec3> {
+        self.translations
+            .get(&bone_index)
+            .map(|track| track.get(time))
+    }
+
+    fn rotation_at(&self, bone_index: usize, time: f32) -> Option<Quat> {
+        self.rotations.get(&bone_index).map(|track| track.get(time))
     }
 }

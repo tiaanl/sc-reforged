@@ -7,7 +7,7 @@ use crate::{
         shaders::Shaders,
     },
     game::{
-        animation::Timeline,
+        animation::Track,
         asset_loader::{AssetError, AssetLoader},
         camera::{self, Controller},
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
@@ -26,12 +26,12 @@ mod terrain;
 
 #[derive(Default)]
 struct DayNightCycle {
-    sun_dir: Timeline<Vec3>,
-    sun_color: Timeline<Vec3>,
+    sun_dir: Track<Vec3>,
+    sun_color: Track<Vec3>,
 
-    fog_distance: Timeline<f32>,
-    fog_near_fraction: Timeline<f32>,
-    fog_color: Timeline<Vec3>,
+    fog_distance: Track<f32>,
+    fog_near_fraction: Track<f32>,
+    fog_color: Track<Vec3>,
 }
 
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
