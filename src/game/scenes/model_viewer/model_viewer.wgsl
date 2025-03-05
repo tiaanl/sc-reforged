@@ -22,27 +22,9 @@ struct VertexInput {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) tex_coord: vec2<f32>,
-    @location(1) col0: vec4<f32>,
-    @location(2) col1: vec4<f32>,
-    @location(3) col2: vec4<f32>,
-    @location(4) col3: vec4<f32>,
 }
 
 @vertex fn vertex(vertex: VertexInput) -> VertexOutput {
-    var model = mat4x4<f32>(
-        vec4<f32>(1.0, 0.0, 0.0, 0.0),
-        vec4<f32>(0.0, 1.0, 0.0, 0.0),
-        vec4<f32>(0.0, 0.0, 1.0, 0.0),
-        vec4<f32>(0.0, 0.0, 0.0, 1.0),
-    );
-    var node_index = vertex.node_index;
-    // while node_index != 0xFFFFFFFF {
-    //     model = model * u_node_data[node_index].transform;
-    //     node_index = u_node_data[node_index].parent;
-    // }
-
-    // let mat_model = model;
-
     let mat_model = u_node_data[vertex.node_index].transform;
 
     let world_position = (mat_model * vec4<f32>(vertex.position, 1.0)).xyz;
@@ -52,10 +34,6 @@ struct VertexOutput {
     return VertexOutput(
         clip_position,
         vertex.tex_coord,
-        model[0],
-        model[1],
-        model[2],
-        model[3],
     );
 }
 

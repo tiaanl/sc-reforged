@@ -207,12 +207,14 @@ impl ModelViewer {
             .expect("Could not load model.")
         };
 
-        let animation = {
-            let path = PathBuf::from("motions").join("crow_flight_cycle.bmf");
-            let bmf = asset_loader.load_bmf_direct(path)?;
+        let animation = None;
 
-            Animation::from_bmf(&bmf)?
-        };
+        // let animation = {
+        //     let path = PathBuf::from("motions").join("crow_flight_cycle.bmf");
+        //     let bmf = asset_loader.load_bmf_direct(path)?;
+
+        //     Animation::from_bmf(&bmf)?
+        // };
 
         // let animation = {
         //     let mut animation = Animation::default();
@@ -231,7 +233,7 @@ impl ModelViewer {
             asset_loader,
 
             model: Some(model),
-            animation: Some(animation),
+            animation,
 
             node_data_bind_group_layout,
             material_bind_group_layout,
@@ -283,8 +285,18 @@ impl ModelViewer {
         Animation::from_bmf(&bmf)
     }
 
+    fn update_model_node_data(&self, renderer: &Renderer) {
+        if let Some(ref model) = self.model {
+            let node_data = Model::nodes_to_node_data(&model.nodes);
+
+            renderer
+                .queue
+                .write_buffer(&model.nodes_buffer, 0, bytemuck::cast_slice(&node_data));
+        }
+    }
+
     fn update_animations(&mut self, renderer: &Renderer) {
-        let Some(ref model) = self.model else {
+        let Some(ref mut model) = self.model else {
             return;
         };
 
@@ -292,30 +304,22 @@ impl ModelViewer {
             return;
         };
 
-        // Calculate the transforms for each node.
-        let nodes = model
-            .nodes
-            .iter()
-            .map(|node| {
-                let mut new_node = node.clone();
+        for node in model.nodes.iter_mut() {
+            let bone_id = node.bone_id as usize;
+            let translation = if let Some(translations) = animation.translations.get(&bone_id) {
+                translations.get(self.time)
+            } else {
+                Vec3::ZERO
+            };
+            let rotation = if let Some(rotations) = animation.rotations.get(&bone_id) {
+                rotations.get(self.time)
+            } else {
+                Quat::IDENTITY
+            };
 
-                let bone_id = node.bone_id as usize;
-                if let Some(translations) = animation.translations.get(&bone_id) {
-                    new_node.translation = translations.get(self.time);
-                }
-                if let Some(rotations) = animation.rotations.get(&bone_id) {
-                    new_node.rotation = rotations.get(self.time);
-                }
-
-                new_node
-            })
-            .collect::<Vec<_>>();
-
-        let node_data = Model::nodes_to_node_data(&nodes);
-
-        renderer
-            .queue
-            .write_buffer(&model.nodes_buffer, 0, bytemuck::cast_slice(&node_data));
+            node.translation = translation;
+            node.rotation = rotation;
+        }
     }
 }
 
@@ -342,8 +346,11 @@ impl Scene for ModelViewer {
 
         self.camera_controller.on_input(input, delta_time);
 
-        // Update the animation
+        // Update the nodes from the animation data.
         self.update_animations(renderer);
+
+        // Update the nodes on the gpu.
+        self.update_model_node_data(renderer);
     }
 
     fn render(&mut self, frame: &mut Frame) {
@@ -486,16 +493,88 @@ impl Scene for ModelViewer {
         });
 
         egui::Window::new("Animations").show(egui, |ui| {
-            ui.add(
-                egui::Slider::new(&mut self.time, 0.0..=32.0)
-                    .drag_value_speed(0.1)
-                    .step_by(0.1),
-            );
-
             egui::ScrollArea::vertical().show(ui, |ui| {
                 entries(&self.animations, ui, &mut self.animation_to_load);
             });
         });
+
+        if self.animation.is_some() {
+            egui::Window::new("Animation").show(egui, |ui| {
+                if ui.button("Clear").clicked() {
+                    self.animation = None;
+                }
+                ui.add(
+                    egui::Slider::new(&mut self.time, 0.0..=32.0)
+                        .drag_value_speed(0.1)
+                        .step_by(0.1),
+                );
+            });
+        }
+
+        if let Some(ref mut model) = self.model {
+            egui::Window::new("Model").show(egui, |ui| {
+                fn do_node(ui: &mut egui::Ui, nodes: &mut [Node], parent_index: usize) {
+                    // Gather up a list of child indices.
+                    let children = nodes
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(child_index, node)| {
+                            if node.parent_index == parent_index {
+                                Some(child_index)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
+
+                    for child_index in children.iter() {
+                        let node = &nodes[*child_index];
+                        let node_label =
+                            format!("{} {} ({})", child_index, node.name, node.parent_index);
+
+                        ui.collapsing(node_label, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("Translation");
+                                ui.add(
+                                    egui::DragValue::new(&mut nodes[*child_index].translation.x)
+                                        .speed(0.01),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut nodes[*child_index].translation.y)
+                                        .speed(0.01),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut nodes[*child_index].translation.z)
+                                        .speed(0.01),
+                                );
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Rotation");
+                                ui.add(
+                                    egui::DragValue::new(&mut nodes[*child_index].rotation.x)
+                                        .speed(0.01),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut nodes[*child_index].rotation.y)
+                                        .speed(0.01),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut nodes[*child_index].rotation.z)
+                                        .speed(0.01),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut nodes[*child_index].rotation.w)
+                                        .speed(0.01),
+                                );
+                            });
+                            do_node(ui, nodes, *child_index);
+                        });
+                    }
+                }
+
+                do_node(ui, &mut model.nodes, 0xFFFF_FFFF);
+            });
+        }
     }
 }
 
@@ -554,7 +633,7 @@ impl Model {
             });
         }
 
-        println!("nodes: {:#?}", nodes);
+        // println!("nodes: {:#?}", nodes);
 
         let nodes_buffer = Self::create_nodes_buffer(renderer, &nodes);
         let nodes_bind_group = renderer
