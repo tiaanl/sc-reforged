@@ -113,7 +113,7 @@ impl Objects {
                     glam::EulerRot::XYZ,
                     object.rotation.x,
                     object.rotation.y,
-                    -object.rotation.z,
+                    object.rotation.z,
                 ),
                 object.translation,
             );
@@ -150,7 +150,7 @@ impl Objects {
                         glam::EulerRot::XYZ,
                         object.rotation.x,
                         object.rotation.y,
-                        -object.rotation.z,
+                        object.rotation.z,
                     ),
                     object.translation,
                 );
@@ -182,7 +182,7 @@ impl Objects {
                     glam::EulerRot::XYZ,
                     object.rotation.x,
                     object.rotation.y,
-                    -object.rotation.z,
+                    object.rotation.z,
                 ),
                 object.translation,
             );

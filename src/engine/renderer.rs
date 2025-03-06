@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use wgpu::{util::DeviceExt, PushConstantRange};
+use wgpu::{PushConstantRange, util::DeviceExt};
 
 use crate::DepthBuffer;
 

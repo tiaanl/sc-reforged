@@ -19,6 +19,7 @@ use terrain::*;
 use wgpu::util::DeviceExt;
 
 mod bounding_boxes;
+mod ecs;
 mod height_map;
 mod objects;
 mod strata;
@@ -65,6 +66,8 @@ impl<C: camera::Controller> Camera<C> {
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
+    world: ecs::World,
+
     _campaign_def: CampaignDef,
 
     view_debug_camera: bool,
@@ -115,6 +118,12 @@ impl WorldScene {
         renderer: &Renderer,
         campaign_def: CampaignDef,
     ) -> Result<Self, AssetError> {
+        let mut world = ecs::World::new();
+
+        world
+            .update_schedule
+            .add_systems(axis_gizmo_for_each_object);
+
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let lod_model_definitions = {
@@ -309,14 +318,29 @@ impl WorldScene {
                         }
                     };
 
-                    let object =
-                        objects::Object::new(object.position, object.rotation, model_handle);
+                    // Because we're using a left handed coordinate system, the z rotations have
+                    // to be reversed.  (Why though!???)
+                    let rotation =
+                        Vec3::new(object.rotation.x, object.rotation.y, -object.rotation.z);
+
+                    let object = objects::Object::new(object.position, rotation, model_handle);
 
                     Ok::<_, AssetError>(object)
                 })
                 .collect::<Vec<_>>();
 
             for object in to_spawn.drain(..) {
+                world.spawn_object(ecs::Transform {
+                    translation: object.translation,
+                    rotation: Quat::from_euler(
+                        glam::EulerRot::XYZ,
+                        object.rotation.x,
+                        object.rotation.y,
+                        object.rotation.z,
+                    ),
+                    scale: Vec3::ONE,
+                });
+
                 objects.spawn(object);
             }
         }
@@ -325,6 +349,8 @@ impl WorldScene {
             GizmosRenderer::new(renderer, &main_camera.gpu_camera.bind_group_layout);
 
         Ok(Self {
+            world,
+
             _campaign_def: campaign_def,
 
             view_debug_camera: false,
@@ -453,6 +479,8 @@ impl Scene for WorldScene {
     }
 
     fn update(&mut self, _renderer: &Renderer, delta_time: f32, input: &InputState) {
+        self.world.update();
+
         const GIZMO_SCALE: f32 = 1000.0;
         const CENTER: Vec3 = Vec3::ZERO;
         const RED: Vec4 = Vec4::new(1.0, 0.0, 0.0, 1.0);
@@ -574,6 +602,15 @@ impl Scene for WorldScene {
             camera::render_camera_frustum(&self.main_camera.camera, &mut v);
             self.gizmos_renderer.render(frame, camera_bind_group, &v);
         }
+
+        self.world.prepare_render();
+
+        {
+            // Render the gizmos from each entity from the ecs.
+            let vertices = self.world.world.resource_mut::<ecs::GizmosBatch>().take();
+            self.gizmos_renderer
+                .render(frame, camera_bind_group, &vertices);
+        }
     }
 
     fn debug_panel(&mut self, egui: &egui::Context, _renderer: &Renderer) {
@@ -633,5 +670,11 @@ impl Scene for WorldScene {
                     ui.label("Nothing");
                 }
             });
+    }
+}
+
+fn axis_gizmo_for_each_object(mut gizmos_q: ecs::ecs::Query<&mut ecs::EntityGizmos>) {
+    for mut gizmos in gizmos_q.iter_mut() {
+        gizmos.axis(Vec3::ZERO, 10.0);
     }
 }

@@ -8,9 +8,9 @@ use super::renderer::{BufferLayout, Renderer};
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct GizmoVertex {
-    position: Vec3,
+    pub position: Vec3,
     _padding: f32,
-    color: Vec4,
+    pub color: Vec4,
 }
 
 impl GizmoVertex {

@@ -96,7 +96,7 @@ impl winit::application::ApplicationHandler for App {
                         .expect("Could not initialize assets."),
                 );
 
-                let scene: Box<dyn Scene> = if false {
+                let scene: Box<dyn Scene> = if true {
                     // WorldScene
 
                     let campaign_defs = asset_loader
