@@ -58,16 +58,16 @@ pub struct Renderer {
 }
 
 pub trait BufferLayout: Sized {
-    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>];
+    fn layout() -> wgpu::VertexBufferLayout<'static>;
 }
 
 impl BufferLayout for () {
-    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
-        &[wgpu::VertexBufferLayout {
+    fn layout() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
             array_stride: 0,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[],
-        }]
+        }
     }
 }
 
@@ -499,7 +499,7 @@ where
                     module: self.module,
                     entry_point: self.vertex_entry,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: V::vertex_buffers(),
+                    buffers: &[V::layout()],
                 },
                 primitive: self.primitive_state.unwrap_or_default(),
                 depth_stencil: self.depth_compare.map(|comp| {

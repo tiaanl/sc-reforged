@@ -155,16 +155,16 @@ struct TerrainVertex {
 }
 
 impl BufferLayout for TerrainVertex {
-    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
-        const BUFFERS: &[wgpu::VertexBufferLayout] = &[wgpu::VertexBufferLayout {
+    fn layout() -> wgpu::VertexBufferLayout<'static> {
+        const ATTRS: &[wgpu::VertexAttribute] = &wgpu::vertex_attr_array![
+            0 => Uint32x2,
+        ];
+
+        wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<TerrainVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &wgpu::vertex_attr_array![
-                0 => Uint32x2,
-            ],
-        }];
-
-        BUFFERS
+            attributes: ATTRS,
+        }
     }
 }
 

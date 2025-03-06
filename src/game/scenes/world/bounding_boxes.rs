@@ -1,4 +1,4 @@
-use glam::{vec2, vec3, Mat4};
+use glam::{Mat4, vec2, vec3};
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
 use crate::{engine::prelude::*, game::camera::Ray};
@@ -182,7 +182,7 @@ impl BoundingBoxRenderer {
                             entry_point: None,
                             compilation_options: wgpu::PipelineCompilationOptions::default(),
                             buffers: &[
-                                Vertex::vertex_buffers()[0].clone(),
+                                Vertex::layout(),
                                 wgpu::VertexBufferLayout {
                                     array_stride: std::mem::size_of::<RawBoundingBox>() as wgpu::BufferAddress,
                                     step_mode: wgpu::VertexStepMode::Instance,

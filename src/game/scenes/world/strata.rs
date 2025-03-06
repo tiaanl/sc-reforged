@@ -223,17 +223,7 @@ impl Strata {
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[
-                            wgpu::VertexBufferLayout {
-                                array_stride: std::mem::size_of::<StrataVertex>()
-                                    as wgpu::BufferAddress,
-                                step_mode: wgpu::VertexStepMode::Vertex,
-                                attributes: &wgpu::vertex_attr_array![
-                                    0 => Float32x3, // position
-                                    1 => Float32x3, // normal
-                                    2 => Float32x2, // tex_coord
-                                    3 => Uint32x2,  // vertex_index
-                                ],
-                            },
+                            StrataVertex::layout(),
                             wgpu::VertexBufferLayout {
                                 array_stride: std::mem::size_of::<UVec2>() as wgpu::BufferAddress,
                                 step_mode: wgpu::VertexStepMode::Instance,
@@ -305,7 +295,18 @@ struct StrataVertex {
 }
 
 impl BufferLayout for StrataVertex {
-    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
-        todo!()
+    fn layout() -> wgpu::VertexBufferLayout<'static> {
+        const ATTRS: &[wgpu::VertexAttribute] = &wgpu::vertex_attr_array![
+            0 => Float32x3,
+            1 => Float32x3,
+            2 => Float32x2,
+            3 => Uint32x2,
+        ];
+
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<StrataVertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: ATTRS,
+        }
     }
 }

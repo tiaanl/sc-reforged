@@ -141,7 +141,7 @@ impl ModelViewer {
                     module: &module,
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: Vertex::vertex_buffers(),
+                    buffers: &[Vertex::layout()],
                 },
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Cw,
@@ -786,21 +786,19 @@ struct Vertex {
 }
 
 impl BufferLayout for Vertex {
-    fn vertex_buffers() -> &'static [wgpu::VertexBufferLayout<'static>] {
-        use wgpu::vertex_attr_array;
-
-        const VERTEX_ATTR_ARRAY: &[wgpu::VertexAttribute] = &vertex_attr_array!(
+    fn layout() -> wgpu::VertexBufferLayout<'static> {
+        const VERTEX_ATTR_ARRAY: &[wgpu::VertexAttribute] = &wgpu::vertex_attr_array!(
             0 => Float32x3, // position
             1 => Float32x3, // normal
             2 => Float32x2, // tex_coord
             3 => Uint32,    // node_index
         );
 
-        &[wgpu::VertexBufferLayout {
+        wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: VERTEX_ATTR_ARRAY,
-        }]
+        }
     }
 }
 
