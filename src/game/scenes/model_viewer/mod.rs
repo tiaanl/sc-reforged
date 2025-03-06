@@ -295,7 +295,7 @@ impl ModelViewer {
         }
     }
 
-    fn update_animations(&mut self, renderer: &Renderer) {
+    fn update_animations(&mut self, _renderer: &Renderer) {
         let Some(ref mut model) = self.model else {
             return;
         };
