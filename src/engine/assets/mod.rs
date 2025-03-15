@@ -1,7 +1,7 @@
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
-    sync::{atomic::AtomicU64, Arc, RwLock},
+    sync::{Arc, RwLock, atomic::AtomicU64},
 };
 
 pub trait Asset {}

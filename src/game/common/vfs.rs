@@ -166,11 +166,7 @@ impl VirtualFileSystem {
         let first = path.components().next()?;
         let path = self.root_path.join(first).with_extension("gut");
 
-        if path.exists() {
-            Some(path)
-        } else {
-            None
-        }
+        path.exists().then_some(path)
     }
 }
 
@@ -212,7 +208,7 @@ impl GutFile {
     }
 
     pub fn path_exists(&self, path: impl AsRef<Path>) -> bool {
-        let path = PathBuf::from(path.as_ref().to_string_lossy().to_lowercase());
+        let path = Self::to_gut_file_path(path);
         self.entries.contains_key(&path)
     }
 
@@ -260,11 +256,7 @@ impl GutFile {
 
         // The entries in the .gut file uses "\".
         // Do a case-insensitive camparison.
-        let path = PathBuf::from(
-            change_separator(path, '\\')
-                .to_string_lossy()
-                .to_ascii_lowercase(),
-        );
+        let path = Self::to_gut_file_path(path);
 
         let entry = self
             .entries
@@ -282,5 +274,13 @@ impl GutFile {
         }
 
         Ok(buf)
+    }
+
+    fn to_gut_file_path(path: impl AsRef<Path>) -> PathBuf {
+        PathBuf::from(
+            change_separator(path, '\\')
+                .to_string_lossy()
+                .to_ascii_lowercase(),
+        )
     }
 }

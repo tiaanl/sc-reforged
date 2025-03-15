@@ -8,12 +8,12 @@ use std::{
 use shadow_company_tools::{bmf, smf};
 
 use crate::{
+    Asset,
     engine::{
         assets::{AssetStore, Handle},
         renderer::Renderer,
     },
     game::config::ImageDefs,
-    Asset,
 };
 
 use super::{
@@ -91,7 +91,7 @@ impl AssetLoader {
         };
 
         let image_defs = s
-            .load_config::<ImageDefs>(r"config\image_defs.txt")
+            .load_config::<ImageDefs>(PathBuf::from("config").join("image_defs.txt"))
             .unwrap();
         s.image_defs = image_defs;
 

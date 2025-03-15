@@ -82,9 +82,14 @@ impl Renderer {
             ..Default::default()
         });
 
+        let surface = instance.create_surface(window).expect("create surface");
+
         let adapter =
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-                .expect("request adapter");
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptionsBase {
+                compatible_surface: Some(&surface),
+                ..Default::default()
+            }))
+            .expect("Could not request an adapter.");
 
         let features = adapter.features();
         if !features.contains(wgpu::Features::MULTI_DRAW_INDIRECT) {
@@ -101,7 +106,7 @@ impl Renderer {
                 required_limits: wgpu::Limits {
                     max_bind_groups: 5,
                     max_push_constant_size: 16,
-                    max_vertex_attributes: 32,
+                    max_vertex_attributes: 24,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -109,8 +114,6 @@ impl Renderer {
             None,
         ))
         .expect("request device");
-
-        let surface = instance.create_surface(window).expect("create surface");
 
         let surface_caps = surface.get_capabilities(&adapter);
 
