@@ -130,7 +130,7 @@ impl WorldScene {
             let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
             for lod_path in asset_loader
-                .enum_dir(r"config\lod_model_profiles")
+                .enum_dir(PathBuf::from("config").join("lod_model_profiles"))
                 .map_err(|err| {
                     AssetError::FileSystemError(crate::game::vfs::FileSystemError::Io(err))
                 })?

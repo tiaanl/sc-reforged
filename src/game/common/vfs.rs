@@ -17,18 +17,11 @@ pub enum FileSystemError {
     #[error("Path not found: {0}")]
     NotFound(PathBuf),
 
+    #[error("A .gut file ({0}) does not exist for the specified path: {1}")]
+    GutFileNotFound(PathBuf, PathBuf),
+
     #[error("IO Error: {0}")]
     Io(#[from] std::io::Error),
-}
-
-fn change_separator(path: impl AsRef<Path>, separator: char) -> PathBuf {
-    PathBuf::from(
-        path.as_ref()
-            .to_string_lossy()
-            .chars()
-            .map(|c| if c == '/' || c == '\\' { separator } else { c })
-            .collect::<String>(),
-    )
 }
 
 #[derive(Debug)]
@@ -44,63 +37,42 @@ pub struct VirtualFileSystem {
 
 impl VirtualFileSystem {
     pub fn new(root_path: impl AsRef<Path>) -> std::io::Result<Self> {
-        // Make sure the root_path uses the OS separators.
-        let root_path = change_separator(root_path, std::path::MAIN_SEPARATOR);
-
-        if !root_path.exists() {
+        if !root_path.as_ref().exists() {
             return Err(std::io::ErrorKind::NotFound.into());
         }
 
         Ok(Self {
-            root_path,
+            root_path: root_path.as_ref().to_owned(),
             guts: RefCell::new(HashMap::default()),
         })
     }
 
-    /// Find a way to get to the specified `path`.
-    fn path_for(&self, path: impl AsRef<Path>) -> Option<PathPointer> {
+    pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         // Check if the external file exists.
         let external_path = self.root_path.join(&path);
         if external_path.exists() {
-            return Some(PathPointer::External(external_path));
+            return Ok(std::fs::read(path)?);
         }
 
-        let first = path.as_ref().components().next().unwrap();
-        let gut_path = self.root_path.join(first).with_extension("gut");
-
+        let gut_path = self.gut_path_for(&path);
         if !gut_path.exists() {
-            return None;
+            return Err(FileSystemError::GutFileNotFound(
+                gut_path,
+                path.as_ref().to_owned(),
+            ));
         }
 
-        // Load the .gut file and check if the path exists inside.
         let gut_file = self.get_gut_file(&gut_path)?;
-        if gut_file.path_exists(&path) {
-            Some(PathPointer::Internal(gut_path, path.as_ref().to_path_buf()))
-        } else {
-            None
+        if !gut_file.path_exists(&path) {
+            return Err(FileSystemError::NotFound(path.as_ref().to_owned()));
         }
+
+        gut_file.get_contents(path)
     }
 
-    pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
-        let Some(path) = self.path_for(&path) else {
-            return Err(FileSystemError::NotFound(path.as_ref().to_path_buf()));
-        };
-
-        match path {
-            PathPointer::External(path) => Ok(std::fs::read(path)?),
-            PathPointer::Internal(gut_path, path) => {
-                let Some(gut_file) = self.get_gut_file(&gut_path) else {
-                    return Err(FileSystemError::Io(std::io::ErrorKind::NotFound.into()));
-                };
-
-                gut_file.get_contents(path).map_err(FileSystemError::Io)
-            }
-        }
-    }
-
-    fn get_gut_file(&self, gut_path: &PathBuf) -> Option<Rc<GutFile>> {
+    fn get_gut_file(&self, gut_path: &PathBuf) -> Result<Rc<GutFile>, FileSystemError> {
         if let Some(gut_file) = self.guts.borrow().get(gut_path) {
-            return Some(Rc::clone(gut_file));
+            return Ok(Rc::clone(gut_file));
         }
 
         // Try to load the .gut file.
@@ -114,7 +86,7 @@ impl VirtualFileSystem {
                     gut_path.display(),
                     err
                 );
-                return None;
+                return Err(FileSystemError::Io(err));
             }
         });
 
@@ -122,18 +94,22 @@ impl VirtualFileSystem {
             .borrow_mut()
             .insert(gut_path.clone(), Rc::clone(&gut_file));
 
-        Some(gut_file)
+        Ok(gut_file)
     }
 
     pub fn enum_dir(&self, path: impl AsRef<Path>) -> Result<Vec<PathBuf>, std::io::Error> {
         let gut_path = self
             .root_path
-            .join(path.as_ref().to_path_buf().components().next().unwrap())
+            .join(path.as_ref().components().next().unwrap())
             .with_extension("gut");
 
         let mut entries = vec![];
 
         if let Some(gut) = self.guts.borrow().get(&gut_path) {
+            // let path = GutFile::to_gut_file_path(&path);
+            // let path = path.to_string_lossy();
+            // Use string comparison here, becuase PathBuf::starts_woth uses path seperators which
+            // might not be the same as we need for .gut files.
             gut.entries
                 .values()
                 .filter(|e| e.name.starts_with(&path))
@@ -141,9 +117,7 @@ impl VirtualFileSystem {
         }
 
         // Add external files.
-        let search_path = self
-            .root_path
-            .join(change_separator(path, std::path::MAIN_SEPARATOR));
+        let search_path = self.root_path.join(path);
 
         walkdir::WalkDir::new(search_path)
             .into_iter()
@@ -159,14 +133,9 @@ impl VirtualFileSystem {
         Ok(entries)
     }
 
-    fn find_gut_file_path_for(&self, path: impl AsRef<Path>) -> Option<PathBuf> {
-        // Use OS separators for the path, because we'll be checking the filesystem with it.
-        let path = change_separator(path, std::path::MAIN_SEPARATOR);
-
-        let first = path.components().next()?;
-        let path = self.root_path.join(first).with_extension("gut");
-
-        path.exists().then_some(path)
+    fn gut_path_for(&self, path: impl AsRef<Path>) -> PathBuf {
+        let first = path.as_ref().components().next().unwrap();
+        self.root_path.join(first).with_extension("gut")
     }
 }
 
@@ -208,7 +177,7 @@ impl GutFile {
     }
 
     pub fn path_exists(&self, path: impl AsRef<Path>) -> bool {
-        let path = Self::to_gut_file_path(path);
+        let path = PathBuf::from(path.as_ref().to_string_lossy().to_lowercase());
         self.entries.contains_key(&path)
     }
 
@@ -232,13 +201,28 @@ impl GutFile {
             let mut name = vec![0; name_length as usize - 1];
             reader.read_exact(&mut name)?;
             utils::crypt(&mut name);
-            let name = PathBuf::from(std::str::from_utf8(&name).unwrap());
 
             // Read the null terminator after the name.
             let _ = reader.read_u8()?;
 
+            // All paths inside the .gut file are in all lowercase, but also change the path
+            // separators to use the OS main separator to make it easier to work `std::path::*`.
+            let name = PathBuf::from(
+                std::str::from_utf8(&name)
+                    .unwrap()
+                    .chars()
+                    .map(|c| {
+                        if c == '\\' {
+                            std::path::MAIN_SEPARATOR
+                        } else {
+                            c
+                        }
+                    })
+                    .collect::<String>(),
+            );
+
             entries.insert(
-                PathBuf::from(&name),
+                name.clone(),
                 Entry {
                     name,
                     offset: header_size + offset,
@@ -251,17 +235,14 @@ impl GutFile {
         Ok(entries)
     }
 
-    fn get_contents(&self, path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
+    fn get_contents(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         use std::io::Seek;
 
-        // The entries in the .gut file uses "\".
-        // Do a case-insensitive camparison.
-        let path = Self::to_gut_file_path(path);
+        let path = Self::normalize_path(path);
 
-        let entry = self
-            .entries
-            .get(&path)
-            .expect("The entry should exist, because we checked for it in path_for!");
+        let Some(entry) = self.entries.get(&path) else {
+            return Err(FileSystemError::NotFound(path));
+        };
 
         let mut reader = std::fs::File::open(&self.path)?;
         reader.seek(SeekFrom::Start(entry.offset as u64))?;
@@ -276,11 +257,23 @@ impl GutFile {
         Ok(buf)
     }
 
-    fn to_gut_file_path(path: impl AsRef<Path>) -> PathBuf {
-        PathBuf::from(
-            change_separator(path, '\\')
-                .to_string_lossy()
-                .to_ascii_lowercase(),
-        )
+    fn normalize_path(path: impl AsRef<Path>) -> PathBuf {
+        use std::path::Component as C;
+
+        let mut normalized = PathBuf::new();
+
+        for component in path.as_ref().components() {
+            match component {
+                C::RootDir => normalized.push(component),
+                C::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+                C::Normal(part) => {
+                    let part = part.to_string_lossy().to_lowercase();
+                    normalized.push(part);
+                }
+                _ => {}
+            }
+        }
+
+        normalized
     }
 }
