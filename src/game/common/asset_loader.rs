@@ -107,7 +107,7 @@ impl AssetLoader {
     }
 
     pub fn load_smf_direct(&self, path: &Path) -> Result<smf::Model, AssetError> {
-        let mut reader = std::io::Cursor::new(self.load_raw(&path)?);
+        let mut reader = std::io::Cursor::new(self.load_raw(path)?);
         Ok(smf::Model::read(&mut reader)?)
     }
 
@@ -135,7 +135,7 @@ impl AssetLoader {
             .unwrap_or(false);
 
         let bmp = shadow_company_tools::images::load_bmp_file(
-            &mut std::io::Cursor::new(self.file_system.load(&path)?),
+            &mut std::io::Cursor::new(self.file_system.load(path)?),
             color_keyd,
         )?;
 
@@ -183,7 +183,7 @@ impl AssetLoader {
     }
 
     pub fn load_bmf_direct(&self, path: &Path) -> Result<bmf::Motion, AssetError> {
-        let mut data = std::io::Cursor::new(self.file_system.load(&path)?);
+        let mut data = std::io::Cursor::new(self.file_system.load(path)?);
         Ok(bmf::Motion::read(&mut data)?)
     }
 
@@ -191,7 +191,7 @@ impl AssetLoader {
     where
         C: TryFrom<String, Error = AssetError>,
     {
-        let raw = self.file_system.load(&path)?;
+        let raw = self.file_system.load(path)?;
         let s = String::from_utf8(raw).map_err(|_| {
             tracing::warn!("Could not load string: {}", path.display());
             AssetError::DecodeError
