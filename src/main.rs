@@ -96,12 +96,12 @@ impl winit::application::ApplicationHandler for App {
                         .expect("Could not initialize assets."),
                 );
 
-                let scene: Box<dyn Scene> = if false {
+                let scene: Box<dyn Scene> = if true {
                     // WorldScene
 
                     let campaign_defs = asset_loader
                         .load_config::<config::CampaignDefs>(
-                            PathBuf::from("config").join("campaign_defs.txt"),
+                            &PathBuf::from("config").join("campaign_defs.txt"),
                         )
                         .unwrap();
 

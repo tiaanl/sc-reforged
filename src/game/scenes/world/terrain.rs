@@ -253,7 +253,7 @@ impl Terrain {
             let path = PathBuf::from("trnhigh").join(format!("{}.jpg", texture_map_base_name));
             info!("Loading high detail terrain texture: {}", path.display());
 
-            let handle = asset_loader.load_jpeg(path)?;
+            let handle = asset_loader.load_jpeg(&path)?;
             let image = asset_loader
                 .asset_store()
                 .get(handle)
@@ -263,7 +263,7 @@ impl Terrain {
 
         let water_texture_view = {
             let image = asset_loader.load_bmp(
-                PathBuf::from("textures")
+                &PathBuf::from("textures")
                     .join("image_processor")
                     .join("water2.bmp"),
             )?;
@@ -279,7 +279,7 @@ impl Terrain {
 
             let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
             info!("Loading terrain height map: {}", path.display());
-            let data = asset_loader.load_raw(path)?;
+            let data = asset_loader.load_raw(&path)?;
             let mut reader = std::io::Cursor::new(data);
             HeightMap::from_pcx(nominal_edge_size, altitude_map_height_base, &mut reader)
                 .map_err(|_| AssetError::Custom("Could not load height map data.".to_string()))?

@@ -129,11 +129,8 @@ impl WorldScene {
         let lod_model_definitions = {
             let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
-            for lod_path in asset_loader
-                .enum_dir(PathBuf::from("config").join("lod_model_profiles"))
-                .map_err(|err| {
-                    AssetError::FileSystemError(crate::game::vfs::FileSystemError::Io(err))
-                })?
+            for ref lod_path in asset_loader
+                .enum_dir(&PathBuf::from("config").join("lod_model_profiles"))?
                 .into_iter()
                 .filter(|e| e.as_path().extension().unwrap() == "txt")
             {
@@ -146,7 +143,7 @@ impl WorldScene {
 
         // Load the campaign specification.
         let campaign = asset_loader.load_config::<config::Campaign>(
-            PathBuf::from("campaign")
+            &PathBuf::from("campaign")
                 .join(&campaign_def.base_name)
                 .join(&campaign_def.base_name)
                 .with_extension("txt"),
@@ -282,7 +279,7 @@ impl WorldScene {
 
         if let Some(mtf_name) = campaign.mtf_name {
             let mtf =
-                asset_loader.load_config::<config::Mtf>(PathBuf::from("maps").join(mtf_name))?;
+                asset_loader.load_config::<config::Mtf>(&PathBuf::from("maps").join(mtf_name))?;
 
             let mut to_spawn = mtf
                 .objects

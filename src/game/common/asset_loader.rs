@@ -17,10 +17,10 @@ use crate::{
 };
 
 use super::{
+    file_system::{FileSystem, FileSystemError, GutFileSystemLayer, OsFileSystemLayer},
     image::Image,
     mesh_renderer::BlendMode,
     model::Model,
-    vfs::{FileSystemError, VirtualFileSystem},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -55,15 +55,13 @@ impl PathCache {
         typed_paths.insert(path, handle.as_raw());
     }
 
-    fn get<A>(&self, path: impl AsRef<Path>) -> Option<Handle<A>>
+    fn get<A>(&self, path: &Path) -> Option<Handle<A>>
     where
         A: Asset + Send + Sync + 'static,
     {
-        self.paths.get(&TypeId::of::<A>()).map(|typed_paths| {
-            typed_paths
-                .get(path.as_ref())
-                .map(|id| Handle::from_raw(*id))
-        })?
+        self.paths
+            .get(&TypeId::of::<A>())
+            .map(|typed_paths| typed_paths.get(path).map(|id| Handle::from_raw(*id)))?
     }
 }
 
@@ -71,7 +69,7 @@ pub struct AssetLoader {
     /// The backend storing all the loaded assets and associated handles.
     asset_store: AssetStore,
     /// The file system we use to load data from the OS.
-    fs: VirtualFileSystem,
+    file_system: FileSystem,
     /// A cache of paths to handles we use to avoid loading duplicate data.
     paths: RefCell<PathCache>,
     /// A cache of the image definitions used to load images.
@@ -82,16 +80,22 @@ unsafe impl Send for AssetLoader {}
 unsafe impl Sync for AssetLoader {}
 
 impl AssetLoader {
-    pub fn new(asset_store: AssetStore, data_dir: impl AsRef<Path>) -> std::io::Result<Self> {
+    pub fn new(asset_store: AssetStore, data_dir: &Path) -> std::io::Result<Self> {
+        let root = data_dir.canonicalize()?;
+
+        let mut file_system = FileSystem::default();
+        file_system.push_layer(OsFileSystemLayer::new(&root));
+        file_system.push_layer(GutFileSystemLayer::new(&root));
+
         let mut s = Self {
             asset_store,
-            fs: VirtualFileSystem::new(data_dir)?,
+            file_system,
             paths: RefCell::new(PathCache::default()),
             image_defs: ImageDefs::default(),
         };
 
         let image_defs = s
-            .load_config::<ImageDefs>(PathBuf::from("config").join("image_defs.txt"))
+            .load_config::<ImageDefs>(&PathBuf::from("config").join("image_defs.txt"))
             .unwrap();
         s.image_defs = image_defs;
 
@@ -102,20 +106,16 @@ impl AssetLoader {
         &self.asset_store
     }
 
-    pub fn load_smf_direct(&self, path: impl AsRef<Path>) -> Result<smf::Model, AssetError> {
+    pub fn load_smf_direct(&self, path: &Path) -> Result<smf::Model, AssetError> {
         let mut reader = std::io::Cursor::new(self.load_raw(&path)?);
         Ok(smf::Model::read(&mut reader)?)
     }
 
-    pub fn load_smf(
-        &self,
-        path: impl AsRef<Path>,
-        renderer: &Renderer,
-    ) -> Result<Handle<Model>, AssetError> {
+    pub fn load_smf(&self, path: &Path, renderer: &Renderer) -> Result<Handle<Model>, AssetError> {
         self.load_cached(path, |asset_loader, path| {
             // We convert the .smf to our own model data, so we can just throw it away and not
             // store it in the asset cache.
-            let raw = self.fs.load(path)?;
+            let raw = self.file_system.load(path)?;
             let mut reader = std::io::Cursor::new(raw);
             let smf = smf::Model::read(&mut reader)
                 .map_err(|err| AssetError::FileSystemError(FileSystemError::Io(err)))?;
@@ -124,23 +124,22 @@ impl AssetLoader {
         })
     }
 
-    pub fn load_raw(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, AssetError> {
-        Ok(self.fs.load(path)?)
+    pub fn load_raw(&self, path: &Path) -> Result<Vec<u8>, AssetError> {
+        Ok(self.file_system.load(path)?)
     }
 
-    pub fn load_bmp_direct(&self, path: impl AsRef<Path>) -> Result<Image, AssetError> {
+    pub fn load_bmp_direct(&self, path: &Path) -> Result<Image, AssetError> {
         let color_keyd = path
-            .as_ref()
             .file_name()
             .map(|n| n.to_string_lossy().contains("_ck"))
             .unwrap_or(false);
 
         let bmp = shadow_company_tools::images::load_bmp_file(
-            &mut std::io::Cursor::new(self.fs.load(&path)?),
+            &mut std::io::Cursor::new(self.file_system.load(&path)?),
             color_keyd,
         )?;
 
-        let raw = if let Ok(raw_data) = self.fs.load(path.as_ref().with_extension("raw")) {
+        let raw = if let Ok(raw_data) = self.file_system.load(&path.with_extension("raw")) {
             Some(shadow_company_tools::images::load_raw_file(
                 &mut std::io::Cursor::new(raw_data),
                 bmp.width(),
@@ -168,13 +167,13 @@ impl AssetLoader {
         })
     }
 
-    pub fn load_bmp(&self, path: impl AsRef<Path>) -> Result<Handle<Image>, AssetError> {
+    pub fn load_bmp(&self, path: &Path) -> Result<Handle<Image>, AssetError> {
         self.load_cached(path, |asset_loader, path| {
             asset_loader.load_bmp_direct(path)
         })
     }
 
-    pub fn load_jpeg(&self, path: impl AsRef<Path>) -> Result<Handle<Image>, AssetError> {
+    pub fn load_jpeg(&self, path: &Path) -> Result<Handle<Image>, AssetError> {
         self.load_cached(path, |asset_loader, path| {
             let data = asset_loader.load_raw(path)?;
             let image =
@@ -183,26 +182,27 @@ impl AssetLoader {
         })
     }
 
-    pub fn load_bmf_direct(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
-        let mut data = std::io::Cursor::new(self.fs.load(&path)?);
+    pub fn load_bmf_direct(&self, path: &Path) -> Result<bmf::Motion, AssetError> {
+        let mut data = std::io::Cursor::new(self.file_system.load(&path)?);
         Ok(bmf::Motion::read(&mut data)?)
     }
 
-    pub fn load_config<C>(&self, path: impl AsRef<Path>) -> Result<C, AssetError>
+    pub fn load_config<C>(&self, path: &Path) -> Result<C, AssetError>
     where
         C: TryFrom<String, Error = AssetError>,
     {
-        let raw = self.fs.load(&path)?;
+        let raw = self.file_system.load(&path)?;
         let s = String::from_utf8(raw).map_err(|_| {
-            tracing::warn!("Could not load string: {}", path.as_ref().display());
+            tracing::warn!("Could not load string: {}", path.display());
             AssetError::DecodeError
         })?;
+
         C::try_from(s)
     }
 
     #[inline]
-    pub fn enum_dir(&self, path: impl AsRef<Path>) -> Result<Vec<PathBuf>, std::io::Error> {
-        self.fs.enum_dir(path)
+    pub fn enum_dir(&self, path: &Path) -> Result<Vec<PathBuf>, FileSystemError> {
+        self.file_system.dir(path)
     }
 
     fn load_cached<P, A, F>(&self, path: P, create: F) -> Result<Handle<A>, AssetError>

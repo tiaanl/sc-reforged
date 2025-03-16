@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{engine::prelude::*, game::asset_loader::AssetLoader};
 
 pub struct LoadingScene {
@@ -8,7 +10,11 @@ pub struct LoadingScene {
 impl LoadingScene {
     pub fn new(assets: &AssetLoader, renderer: &Renderer) -> Self {
         let handle = assets
-            .load_jpeg(r"textures/interface/loadscr2.jpg")
+            .load_jpeg(
+                &PathBuf::from("textures")
+                    .join("interface")
+                    .join("loadscr2.jpg"),
+            )
             .unwrap();
         let image = assets.asset_store().get(handle).unwrap();
         let texture_view =

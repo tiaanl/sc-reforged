@@ -172,7 +172,7 @@ impl ModelViewer {
 
         let mut models = DirNode::default();
         for path in asset_loader
-            .enum_dir(PathBuf::from("models"))?
+            .enum_dir(&PathBuf::from("models"))?
             .iter()
             .filter(|p| p.extension().map(|e| e == "smf").unwrap_or(false))
         {
@@ -181,7 +181,7 @@ impl ModelViewer {
 
         let mut animations = DirNode::default();
         for path in asset_loader
-            .enum_dir(PathBuf::from("motions"))?
+            .enum_dir(&PathBuf::from("motions"))?
             .iter()
             .filter(|p| p.extension().map(|e| e == "bmf").unwrap_or(false))
         {
@@ -194,7 +194,7 @@ impl ModelViewer {
             let path = PathBuf::from("models")
                 .join("alan-crow01")
                 .join("alan-crow01.smf");
-            let smf = asset_loader.load_smf_direct(path)?;
+            let smf = asset_loader.load_smf_direct(&path)?;
 
             Model::from_smf(
                 renderer,
@@ -258,11 +258,7 @@ impl ModelViewer {
         })
     }
 
-    fn load_model(
-        &mut self,
-        renderer: &Renderer,
-        path: impl AsRef<Path>,
-    ) -> Result<Model, AssetError> {
+    fn load_model(&mut self, renderer: &Renderer, path: &Path) -> Result<Model, AssetError> {
         let smf = self.asset_loader.load_smf_direct(path)?;
 
         Model::from_smf(
@@ -278,7 +274,7 @@ impl ModelViewer {
     fn load_animation(
         &mut self,
         _renderer: &Renderer,
-        path: impl AsRef<Path>,
+        path: &Path,
     ) -> Result<Animation, AssetError> {
         let bmf = self.asset_loader.load_bmf_direct(path)?;
 
@@ -337,7 +333,7 @@ impl Scene for ModelViewer {
 
     fn update(&mut self, renderer: &Renderer, delta_time: f32, input: &InputState) {
         if let Some(to_load) = self.model_to_load.take() {
-            self.model = Some(self.load_model(renderer, to_load).unwrap());
+            self.model = Some(self.load_model(renderer, &to_load).unwrap());
         }
 
         if let Some(ref to_load) = self.animation_to_load.take() {
@@ -743,7 +739,7 @@ impl Mesh {
                         path.display()
                     );
                     asset_loader.load_bmp_direct(
-                        PathBuf::from("textures").join("object").join("error.bmp"),
+                        &PathBuf::from("textures").join("object").join("error.bmp"),
                     )?
                 }
             };
