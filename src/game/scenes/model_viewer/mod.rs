@@ -336,7 +336,7 @@ impl Scene for ModelViewer {
     }
 
     fn update(&mut self, renderer: &Renderer, delta_time: f32, input: &InputState) {
-        if let Some(ref to_load) = self.model_to_load.take() {
+        if let Some(to_load) = self.model_to_load.take() {
             self.model = Some(self.load_model(renderer, to_load).unwrap());
         }
 

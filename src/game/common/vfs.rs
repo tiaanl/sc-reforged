@@ -37,12 +37,10 @@ pub struct VirtualFileSystem {
 
 impl VirtualFileSystem {
     pub fn new(root_path: impl AsRef<Path>) -> std::io::Result<Self> {
-        if !root_path.as_ref().exists() {
-            return Err(std::io::ErrorKind::NotFound.into());
-        }
+        let root_path = root_path.as_ref().canonicalize()?;
 
         Ok(Self {
-            root_path: root_path.as_ref().to_owned(),
+            root_path,
             guts: RefCell::new(HashMap::default()),
         })
     }
@@ -51,7 +49,7 @@ impl VirtualFileSystem {
         // Check if the external file exists.
         let external_path = self.root_path.join(&path);
         if external_path.exists() {
-            return Ok(std::fs::read(path)?);
+            return Ok(std::fs::read(external_path)?);
         }
 
         let gut_path = self.gut_path_for(&path);
@@ -64,7 +62,10 @@ impl VirtualFileSystem {
 
         let gut_file = self.get_gut_file(&gut_path)?;
         if !gut_file.path_exists(&path) {
-            return Err(FileSystemError::NotFound(path.as_ref().to_owned()));
+            return Err(FileSystemError::GutFileNotFound(
+                gut_path,
+                path.as_ref().to_owned(),
+            ));
         }
 
         gut_file.get_contents(path)
