@@ -99,7 +99,8 @@ impl ModelViewer {
             1.0,
             10_000.0,
         );
-        let camera_controller = camera::ArcBallCameraController::new(0.5);
+        let mut camera_controller = camera::ArcBallCameraController::new(0.5);
+        camera_controller.distance = 1000.0;
         let gpu_camera = camera::GpuCamera::new(renderer);
 
         let mut shaders = Shaders::new();
@@ -192,8 +193,8 @@ impl ModelViewer {
 
         let model = {
             let path = PathBuf::from("models")
-                .join("alan-crow01")
-                .join("alan-crow01.smf");
+                .join("alvhqd-hummer")
+                .join("alvhqd-hummer.smf");
             let smf = asset_loader.load_smf_direct(&path)?;
 
             Model::from_smf(
@@ -334,6 +335,8 @@ impl Scene for ModelViewer {
     fn update(&mut self, renderer: &Renderer, delta_time: f32, input: &InputState) {
         if let Some(to_load) = self.model_to_load.take() {
             self.model = Some(self.load_model(renderer, &to_load).unwrap());
+            self.animation = None;
+            self.time = 0.0;
         }
 
         if let Some(ref to_load) = self.animation_to_load.take() {
@@ -598,7 +601,8 @@ impl Model {
         for (node_index, smf_node) in smf.nodes.iter().enumerate() {
             node_names.insert(smf_node.name.clone(), node_index);
 
-            let bone_id = smf_node.tree_id;
+            let bone_id = smf_node.bone_id;
+
             let parent_index = node_names
                 .get(&smf_node.parent_name)
                 .cloned()
