@@ -96,9 +96,8 @@ impl Renderer {
             tracing::warn!("wgpu::Features::MULTI_DRAW_INDIRECT not available!");
         }
 
-        let required_features = wgpu::Features::MULTI_DRAW_INDIRECT
-            | wgpu::Features::PUSH_CONSTANTS
-            | wgpu::Features::POLYGON_MODE_LINE;
+        let required_features =
+            wgpu::Features::MULTI_DRAW_INDIRECT | wgpu::Features::PUSH_CONSTANTS;
 
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {

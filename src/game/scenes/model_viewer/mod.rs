@@ -47,16 +47,38 @@ impl ModelViewer {
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("node_data_bind_group_layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
                         },
-                        count: None,
-                    }],
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
                 });
 
         let material_bind_group_layout =
@@ -400,15 +422,10 @@ impl Scene for ModelViewer {
             render_pass.set_bind_group(1, &self.gpu_camera.bind_group, &[]);
             render_pass.set_bind_group(2, &model.nodes_bind_group, &[]);
 
-            for mesh in model.meshes.iter() {
-                render_pass.set_bind_group(0, &mesh.material_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, mesh.gpu_mesh.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(
-                    mesh.gpu_mesh.index_buffer.slice(..),
-                    wgpu::IndexFormat::Uint32,
-                );
-                render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..1);
-            }
+            render_pass.set_vertex_buffer(0, model.mesh.vertex_buffer.slice(..));
+            render_pass
+                .set_index_buffer(model.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..model.mesh.index_count, 0, 0..1);
         }
 
         {
@@ -579,7 +596,7 @@ impl Scene for ModelViewer {
 
 struct Model {
     nodes: Vec<Node>,
-    meshes: Vec<Mesh>,
+    mesh: GpuIndexedMesh,
 
     nodes_buffer: wgpu::Buffer,
     nodes_bind_group: wgpu::BindGroup,
@@ -596,6 +613,8 @@ impl Model {
     ) -> Result<Self, AssetError> {
         let mut nodes = Vec::default();
         let mut meshes = Vec::default();
+        let mut texture_views = Vec::default();
+        let mut mesh = IndexedMesh::<Vertex>::default();
         let mut node_names = HashMap::with_capacity(smf.nodes.len());
 
         for (node_index, smf_node) in smf.nodes.iter().enumerate() {
@@ -609,16 +628,25 @@ impl Model {
                 .unwrap_or(0xFFFF_FFFF);
 
             let node_index = nodes.len();
-            nodes.reserve(smf_node.meshes.len());
             for smf_mesh in smf_node.meshes.iter() {
-                meshes.push(Mesh::from_smf_mesh(
-                    renderer,
-                    asset_loader,
-                    material_bind_group_layout,
-                    sampler,
-                    smf_mesh,
-                    node_index,
-                )?);
+                // Create a [wgpu::TextureView] for the texture.
+                let image = asset_loader.load_bmp_direct(
+                    &PathBuf::from("textures")
+                        .join("shared")
+                        .join(&smf_mesh.texture_name),
+                )?;
+
+                let texture_index = texture_views.len() as u32;
+                let texture_view = renderer
+                    .create_texture_view(&format!("image_{}", smf_mesh.texture_name), &image.data);
+                texture_views.push(texture_view);
+
+                let mesh_index = meshes.len() as u32;
+                meshes.push(MeshData {
+                    node_index: node_index as u32,
+                    texture_index,
+                });
+                extend_indexed_mesh_from_smf_mesh(&mut mesh, smf_mesh, mesh_index);
             }
 
             println!("bone_id: {bone_id}, rotation: {}", smf_node.rotation);
@@ -633,23 +661,45 @@ impl Model {
             });
         }
 
-        // println!("nodes: {:#?}", nodes);
+        let mesh_data_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("mesh_data"),
+                    contents: bytemuck::cast_slice(&meshes),
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                });
 
         let nodes_buffer = Self::create_nodes_buffer(renderer, &nodes);
+
+        let tv = texture_views.iter().collect::<Vec<_>>();
+
         let nodes_bind_group = renderer
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("nodes_bind_group"),
                 layout: node_data_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: nodes_buffer.as_entire_binding(),
-                }],
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureViewArray(&tv),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: mesh_data_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: nodes_buffer.as_entire_binding(),
+                    },
+                ],
             });
+
+        let mesh = mesh.to_gpu(renderer);
 
         Ok(Self {
             nodes,
-            meshes,
+            mesh,
             nodes_buffer,
             nodes_bind_group,
         })
@@ -723,7 +773,7 @@ impl Mesh {
                 position: v.position,
                 normal: v.normal,
                 tex_coord: v.tex_coord,
-                node_index: node_index as u32,
+                mesh_index: node_index as u32,
             })
             .collect();
 
@@ -782,7 +832,7 @@ struct Vertex {
     position: Vec3,
     normal: Vec3,
     tex_coord: Vec2,
-    node_index: u32,
+    mesh_index: u32,
 }
 
 impl BufferLayout for Vertex {
@@ -808,6 +858,13 @@ struct NodeData {
     transform: Mat4,
     parent: u32,
     _pad: [u32; 3],
+}
+
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[repr(C)]
+struct MeshData {
+    node_index: u32,
+    texture_index: u32,
 }
 
 #[derive(Default)]
@@ -902,4 +959,27 @@ impl Animation {
     fn rotation_at(&self, bone_index: usize, time: f32) -> Option<Quat> {
         self.rotations.get(&bone_index).map(|track| track.get(time))
     }
+}
+
+fn extend_indexed_mesh_from_smf_mesh(
+    mesh: &mut IndexedMesh<Vertex>,
+    smf_mesh: &smf::Mesh,
+    mesh_index: u32,
+) {
+    let first_index = mesh.indices.len() as u32;
+
+    mesh.indices.extend(
+        smf_mesh
+            .faces
+            .iter()
+            .flat_map(|face| face.indices.map(|i| i + first_index)),
+    );
+
+    mesh.vertices
+        .extend(smf_mesh.vertices.iter().map(|v| Vertex {
+            position: v.position,
+            normal: v.normal,
+            tex_coord: v.tex_coord,
+            mesh_index,
+        }));
 }

@@ -1,7 +1,7 @@
 #import world::camera
 
-@group(0) @binding(0) var t_texture: texture_2d<f32>;
-@group(0) @binding(1) var s_sampler: sampler;
+// @group(0) @binding(0) var t_texture: texture_2d<f32>;
+// @group(0) @binding(1) var s_sampler: sampler;
 
 @group(1) @binding(0) var<uniform> u_camera: camera::Camera;
 
@@ -10,7 +10,13 @@ struct NodeData {
     parent: u32,
 }
 
-@group(2) @binding(0) var<storage, read> u_node_data: array<NodeData>;
+struct MeshData {
+    node_index: u32,
+    texture_index: u32,
+}
+
+@group(2) @binding(0) var<storage, read> u_mesh_data: array<MeshData>;
+@group(2) @binding(1) var<storage, read> u_node_data: array<NodeData>;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -38,7 +44,8 @@ struct VertexOutput {
 }
 
 @fragment fn fragment(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
+    // let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
+    let base_color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
 
     return base_color;
 }

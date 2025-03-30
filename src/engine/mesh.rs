@@ -35,6 +35,17 @@ pub struct IndexedMesh<V: BufferLayout> {
     pub indices: Vec<u32>,
 }
 
+impl<V: BufferLayout> IndexedMesh<V> {
+    pub fn extend<I: IntoIterator<Item = Self>>(&mut self, iter: I) {
+        for mesh in iter.into_iter() {
+            let start_index = self.indices.len() as u32;
+            self.indices
+                .extend(mesh.indices.iter().map(|i| i + start_index));
+            self.vertices.extend(mesh.vertices);
+        }
+    }
+}
+
 impl<V: BufferLayout> Default for IndexedMesh<V> {
     fn default() -> Self {
         Self {
