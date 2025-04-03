@@ -275,7 +275,6 @@ impl WorldScene {
             &mut shaders,
             &campaign_def,
             &main_camera.gpu_camera.bind_group_layout,
-            &environment_bind_group_layout,
         )?;
 
         let mut objects = objects::Objects::new(
@@ -594,7 +593,6 @@ impl Scene for WorldScene {
             &self.geometry_buffers,
             camera_bind_group,
             &self.main_camera.gpu_camera.bind_group, // Always the main camera.
-            environment_bind_group,
         );
         self.objects
             .render_objects(frame, &self.geometry_buffers, camera_bind_group);
@@ -606,12 +604,8 @@ impl Scene for WorldScene {
             .render_alpha_objects(frame, &self.geometry_buffers, camera_bind_group);
 
         // Render any kind of debug overlays.
-        self.terrain.render_gizmos(
-            frame,
-            camera_bind_group,
-            environment_bind_group,
-            &self.gizmos_renderer,
-        );
+        self.terrain
+            .render_gizmos(frame, camera_bind_group, &self.gizmos_renderer);
         self.objects
             .render_gizmos(frame, camera_bind_group, &self.gizmos_renderer);
 
