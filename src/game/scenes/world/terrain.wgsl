@@ -1,5 +1,6 @@
 #import world::camera
 #import world::environment
+#import world::geometry_buffers
 #import world::terrain
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
@@ -116,7 +117,7 @@ fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexIn
 }
 
 @fragment
-fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let base_color = textureSample(
         t_terrain_texture,
         s_sampler,
@@ -131,7 +132,12 @@ fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
         distance,
     );
 
-    return vec4<f32>(diffuse, base_color.a);
+    return geometry_buffers::GeometryBuffers(
+        vec4<f32>(diffuse, base_color.a),
+        vec4<f32>(vertex.world_position, 1.0),
+        vec4<f32>(vertex.normal, 1.0),
+        0,
+    );
 }
 
 @fragment

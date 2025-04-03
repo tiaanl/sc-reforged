@@ -12,6 +12,7 @@ use crate::{
     game::{
         asset_loader::{AssetError, AssetLoader},
         config::{CampaignDef, TerrainMapping},
+        geometry_buffers::GeometryBuffers,
     },
 };
 
@@ -518,15 +519,47 @@ impl Terrain {
             HashMap::default(),
         );
 
-        let terrain_pipeline = renderer
-            .build_render_pipeline::<TerrainVertex>("terrain", &module)
-            .with_vertex_entry("vertex_main")
-            .with_fragment_entry("fragment_main")
-            .binding(camera_bind_group_layout)
-            .binding(environment_bind_group_layoout)
-            .binding(&bind_group_layout)
-            .with_depth_compare(wgpu::CompareFunction::LessEqual)
-            .build();
+        let terrain_pipeline_layout =
+            renderer
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("terrain_pipeline_layout"),
+                    bind_group_layouts: &[
+                        camera_bind_group_layout,
+                        environment_bind_group_layoout,
+                        &bind_group_layout,
+                    ],
+                    push_constant_ranges: &[],
+                });
+
+        let terrain_pipeline =
+            renderer
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("terrain_render_pipeline"),
+                    layout: Some(&terrain_pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &module,
+                        entry_point: Some("vertex_main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers: &[TerrainVertex::layout()],
+                    },
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: Some(
+                        renderer
+                            .depth_buffer
+                            .depth_stencil_state(wgpu::CompareFunction::LessEqual, true),
+                    ),
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module: &module,
+                        entry_point: Some("fragment_main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        targets: GeometryBuffers::targets(),
+                    }),
+                    multiview: None,
+                    cache: None,
+                });
 
         let water_pipeline = renderer
             .build_render_pipeline::<TerrainVertex>("water", &module)
@@ -584,7 +617,6 @@ impl Terrain {
             shaders,
             height_map.size,
             camera_bind_group_layout,
-            environment_bind_group_layoout,
             &height_map_buffer,
             &terrain_data_buffer,
         )?;
@@ -742,6 +774,7 @@ impl Terrain {
     pub fn render(
         &self,
         frame: &mut Frame,
+        geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
         frustum_camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
@@ -759,9 +792,14 @@ impl Terrain {
         self.process_chunks(&frame.device, &frame.queue, frustum_camera_bind_group);
 
         self.strata
-            .render(frame, camera_bind_group, environment_bind_group);
+            .render(frame, geometry_buffers, camera_bind_group);
 
-        self.render_terrain(frame, camera_bind_group, environment_bind_group);
+        self.render_terrain(
+            frame,
+            geometry_buffers,
+            camera_bind_group,
+            environment_bind_group,
+        );
     }
 
     pub fn render_gizmos(
@@ -965,6 +1003,7 @@ impl Terrain {
     fn render_terrain(
         &self,
         frame: &mut Frame,
+        geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
     ) {
@@ -972,14 +1011,40 @@ impl Terrain {
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("terrain_chunks"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.colors_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.positions_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.normals_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.ids_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                ],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &frame.depth_buffer.texture_view,
                     depth_ops: Some(wgpu::Operations {

@@ -1,12 +1,10 @@
 #import world::camera
-#import world::environment
+#import world::geometry_buffers
 
 @group(0) @binding(0) var t_texture: texture_2d<f32>;
 @group(0) @binding(1) var s_sampler: sampler;
 
 @group(1) @binding(0) var<uniform> u_camera: camera::Camera;
-
-@group(2) @binding(0) var<uniform> u_environment: environment::Environment;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -47,35 +45,28 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
 }
 
 @fragment
-fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
-    let distance = length(u_camera.position - vertex.world_position);
 
-    let diffuse = environment::diffuse_with_fog(
-        u_environment,
-        vertex.normal,
-        base_color.rgb,
-        distance,
+    return geometry_buffers::GeometryBuffers(
+        base_color,
+        vec4<f32>(vertex.world_position, 1.0),
+        vec4<f32>(vertex.normal, 1.0),
+        0,
     );
-
-    return vec4<f32>(diffuse, base_color.a);
 }
 
 @fragment
-fn ck_fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+fn ck_fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
     if base_color.x == 0.0 && base_color.y == 0.0 && base_color.z == 0.0 {
         discard;
     }
 
-    let distance = length(u_camera.position - vertex.world_position);
-
-    let diffuse = environment::diffuse_with_fog(
-        u_environment,
-        vertex.normal,
-        base_color.rgb,
-        distance,
+    return geometry_buffers::GeometryBuffers(
+        base_color,
+        vec4<f32>(vertex.world_position, 1.0),
+        vec4<f32>(vertex.normal, 1.0),
+        0,
     );
-
-    return vec4<f32>(diffuse, base_color.a);
 }

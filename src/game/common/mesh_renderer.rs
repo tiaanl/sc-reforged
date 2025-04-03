@@ -5,7 +5,7 @@ use wgpu::{ShaderStages, util::DeviceExt, vertex_attr_array};
 
 use crate::engine::prelude::*;
 
-use super::model::Model;
+use super::{geometry_buffers::GeometryBuffers, model::Model};
 
 #[derive(Clone, Copy, Debug)]
 pub enum BlendMode {
@@ -58,7 +58,6 @@ impl MeshRenderer {
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
-        environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let module = shaders.create_shader(
             renderer,
@@ -95,8 +94,6 @@ impl MeshRenderer {
                         renderer.texture_bind_group_layout(),
                         // u_camera
                         camera_bind_group_layout,
-                        // u_environment
-                        environment_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
                 });
@@ -135,7 +132,7 @@ impl MeshRenderer {
                     buffers: &[
                         Vertex::layout(),
                         wgpu::VertexBufferLayout {
-                            array_stride: (std::mem::size_of::<glam::Mat4>() * 2)
+                            array_stride: (std::mem::size_of::<glam::Mat4>())
                                 as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Instance,
                             attributes: &vertex_attr_array![
@@ -172,16 +169,17 @@ impl MeshRenderer {
                         }
                     },
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: renderer.surface_config.format,
-                        blend: match blend_mode {
-                            BlendMode::Opaque => None,
-                            BlendMode::ColorKeyed => None,
-                            BlendMode::Alpha => Some(wgpu::BlendState::ALPHA_BLENDING),
-                            BlendMode::Multiply => None,
-                        },
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
+                    // targets: &[Some(wgpu::ColorTargetState {
+                    //     format: renderer.surface_config.format,
+                    //     blend: match blend_mode {
+                    //         BlendMode::Opaque => None,
+                    //         BlendMode::ColorKeyed => None,
+                    //         BlendMode::Alpha => Some(wgpu::BlendState::ALPHA_BLENDING),
+                    //         BlendMode::Multiply => None,
+                    //     },
+                    //     write_mask: wgpu::ColorWrites::ALL,
+                    // })],
+                    targets: GeometryBuffers::targets(),
                 }),
                 multiview: None,
                 cache: None,
@@ -203,8 +201,8 @@ impl MeshRenderer {
     pub fn render_multiple(
         &self,
         frame: &mut Frame,
+        geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
-        environment_bind_group: &wgpu::BindGroup,
         blend_mode: BlendMode,
         meshes: &[MeshItem],
     ) {
@@ -216,14 +214,40 @@ impl MeshRenderer {
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("opaque_meshes"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.colors_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.positions_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.normals_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.ids_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                ],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &frame.depth_buffer.texture_view,
                     depth_ops: Some(wgpu::Operations {
@@ -245,7 +269,6 @@ impl MeshRenderer {
 
         render_pass.set_pipeline(render_pipeline);
         render_pass.set_bind_group(1, camera_bind_group, &[]);
-        render_pass.set_bind_group(2, environment_bind_group, &[]);
 
         for mesh_item in meshes.iter() {
             let Some(mesh) = self.asset_store.get(mesh_item.mesh) else {

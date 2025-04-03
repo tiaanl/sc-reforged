@@ -13,6 +13,7 @@ fn vertex_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
 @group(0) @binding(0) var t_albedo: texture_2d<f32>;
 @group(0) @binding(1) var t_position: texture_2d<f32>;
+@group(0) @binding(2) var t_normal: texture_2d<f32>;
 
 fn get_frag(texture: texture_2d<f32>, uv: vec2<f32>) -> vec4<f32> {
     let texture_size = vec2<f32>(textureDimensions(texture));
@@ -28,6 +29,7 @@ fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     let albedo = get_frag(t_albedo, vertex.uv);
     let position = get_frag(t_position, vertex.uv);
+    let normal = get_frag(t_normal, vertex.uv);
 
     // let distance_from_camera = position.w;
     // let fog_start = 0.0;

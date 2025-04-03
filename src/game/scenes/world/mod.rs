@@ -10,7 +10,9 @@ use crate::{
         animation::Track,
         asset_loader::{AssetError, AssetLoader},
         camera::{self, Controller},
+        compositor::Compositor,
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
+        geometry_buffers::GeometryBuffers,
     },
 };
 use egui::Widget;
@@ -82,6 +84,9 @@ pub struct WorldScene {
     terrain: Terrain,
     objects: objects::Objects,
 
+    // Render
+    geometry_buffers: GeometryBuffers,
+    compositor: Compositor,
     gizmos_renderer: GizmosRenderer,
 
     // Input handling.
@@ -152,6 +157,10 @@ impl WorldScene {
         let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
         shaders.add_module(include_str!("environment.wgsl"), "environment.wgsl");
+        shaders.add_module(
+            include_str!("../../common/geometry_buffers.wgsl"),
+            "geometry_buffers.wgsl",
+        );
         shaders.add_module(include_str!("frustum.wgsl"), "frustum.wgsl");
 
         let main_camera = {
@@ -274,7 +283,6 @@ impl WorldScene {
             renderer,
             &mut shaders,
             &main_camera.gpu_camera.bind_group_layout,
-            &environment_bind_group_layout,
         );
 
         if let Some(mtf_name) = campaign.mtf_name {
@@ -342,6 +350,10 @@ impl WorldScene {
             }
         }
 
+        let geometry_buffers = GeometryBuffers::new(renderer);
+        let compositor =
+            Compositor::new(renderer, &mut shaders, &geometry_buffers.bind_group_layout);
+
         let gizmos_renderer =
             GizmosRenderer::new(renderer, &main_camera.gpu_camera.bind_group_layout);
 
@@ -362,6 +374,8 @@ impl WorldScene {
             terrain,
             objects,
 
+            geometry_buffers,
+            compositor,
             gizmos_renderer,
 
             // Input handling.
@@ -405,6 +419,9 @@ impl WorldScene {
 
 impl Scene for WorldScene {
     fn resize(&mut self, renderer: &Renderer) {
+        // Replace the buffers with new ones.
+        self.geometry_buffers = GeometryBuffers::new(renderer);
+
         let width = renderer.surface_config.width;
         let height = renderer.surface_config.height;
 
@@ -537,15 +554,32 @@ impl Scene for WorldScene {
             bytemuck::cast_slice(&[self.environment]),
         );
 
-        frame.clear_color_and_depth(
-            wgpu::Color {
-                r: self.environment.fog_color.x as f64,
-                g: self.environment.fog_color.y as f64,
-                b: self.environment.fog_color.z as f64,
-                a: 1.0,
-            },
-            1.0,
-        );
+        // Clear the buffers.
+        {
+            frame
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("world_clear_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.geometry_buffers.colors_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &frame.depth_buffer.texture_view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+        }
 
         let camera_bind_group = if self.view_debug_camera {
             &self.debug_camera.gpu_camera.bind_group
@@ -557,18 +591,19 @@ impl Scene for WorldScene {
         // Render Opaque geometry first.
         self.terrain.render(
             frame,
+            &self.geometry_buffers,
             camera_bind_group,
             &self.main_camera.gpu_camera.bind_group, // Always the main camera.
             environment_bind_group,
         );
         self.objects
-            .render_objects(frame, camera_bind_group, environment_bind_group);
+            .render_objects(frame, &self.geometry_buffers, camera_bind_group);
 
         // Now render alpha geoometry.
         self.terrain
             .render_water(frame, camera_bind_group, environment_bind_group);
         self.objects
-            .render_alpha_objects(frame, camera_bind_group, environment_bind_group);
+            .render_alpha_objects(frame, &self.geometry_buffers, camera_bind_group);
 
         // Render any kind of debug overlays.
         self.terrain.render_gizmos(
@@ -599,6 +634,8 @@ impl Scene for WorldScene {
             camera::render_camera_frustum(&self.main_camera.camera, &mut v);
             self.gizmos_renderer.render(frame, camera_bind_group, &v);
         }
+
+        self.compositor.render(frame, &self.geometry_buffers);
 
         self.world.prepare_render();
 

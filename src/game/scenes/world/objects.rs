@@ -9,6 +9,7 @@ use crate::{
     },
     game::{
         camera::{BoundingBox, Camera, Frustum, Ray},
+        geometry_buffers::GeometryBuffers,
         mesh_renderer::{BlendMode, MeshItem, MeshRenderer},
         model::Model,
     },
@@ -61,14 +62,12 @@ impl Objects {
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
-        environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let model_renderer = MeshRenderer::new(
             asset_store.clone(),
             renderer,
             shaders,
             camera_bind_group_layout,
-            environment_bind_group_layout,
         );
 
         let bounding_box_renderer = BoundingBoxRenderer::new(renderer, camera_bind_group_layout);
@@ -240,21 +239,21 @@ impl Objects {
     pub fn render_objects(
         &self,
         frame: &mut Frame,
+        geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
-        environment_bind_group: &wgpu::BindGroup,
     ) {
         self.model_renderer.render_multiple(
             frame,
+            geometry_buffers,
             camera_bind_group,
-            environment_bind_group,
             BlendMode::Opaque,
             &self.opaque_meshes,
         );
 
         self.model_renderer.render_multiple(
             frame,
+            geometry_buffers,
             camera_bind_group,
-            environment_bind_group,
             BlendMode::ColorKeyed,
             &self.ck_meshes,
         );
@@ -263,13 +262,13 @@ impl Objects {
     pub fn render_alpha_objects(
         &self,
         frame: &mut Frame,
+        geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
-        environment_bind_group: &wgpu::BindGroup,
     ) {
         self.model_renderer.render_multiple(
             frame,
+            geometry_buffers,
             camera_bind_group,
-            environment_bind_group,
             BlendMode::Alpha,
             &self.alpha_meshes,
         );

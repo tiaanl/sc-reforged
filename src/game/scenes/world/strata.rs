@@ -5,6 +5,7 @@ use wgpu::util::DeviceExt;
 
 use crate::engine::prelude::*;
 use crate::game::asset_loader::{AssetError, AssetLoader};
+use crate::game::geometry_buffers::GeometryBuffers;
 use crate::game::scenes::world::terrain::Terrain;
 
 pub struct Strata {
@@ -23,7 +24,6 @@ impl Strata {
         shaders: &mut Shaders,
         terrain_size: UVec2,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
-        environment_bind_group_layout: &wgpu::BindGroupLayout,
         height_map_buffer: &wgpu::Buffer,
         terrain_buffer: &wgpu::Buffer,
     ) -> Result<Self, AssetError> {
@@ -204,11 +204,7 @@ impl Strata {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("strata_render_pipeline_layout"),
-                    bind_group_layouts: &[
-                        camera_bind_group_layout,
-                        environment_bind_group_layout,
-                        &bind_group_layout,
-                    ],
+                    bind_group_layouts: &[camera_bind_group_layout, &bind_group_layout],
                     push_constant_ranges: &[],
                 });
 
@@ -247,11 +243,7 @@ impl Strata {
                         module: &module,
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: renderer.surface_config.format,
-                            blend: None,
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
+                        targets: GeometryBuffers::targets(),
                     }),
                     multiview: None,
                     cache: None,
@@ -269,18 +261,65 @@ impl Strata {
     pub fn render(
         &self,
         frame: &mut Frame,
+        geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
-        environment_bind_group: &wgpu::BindGroup,
     ) {
-        let mut render_pass = frame.begin_basic_render_pass("strata_render_pass", true);
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("strata_render_pass"),
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.colors_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.positions_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.normals_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &geometry_buffers.ids_buffer,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                ],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &frame.depth_buffer.texture_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, self.instances_buffer.slice(..));
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, environment_bind_group, &[]);
-        render_pass.set_bind_group(2, &self.bind_group, &[]);
+        render_pass.set_bind_group(1, &self.bind_group, &[]);
         render_pass.draw_indexed(0..self.mesh.index_count, 0, 0..self.instances_count);
     }
 }
