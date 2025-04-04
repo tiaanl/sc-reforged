@@ -101,7 +101,7 @@ impl ResourcesInner {
             let mut types = self.types.write();
             types
                 .entry(type_id)
-                .or_insert(Box::new(TypedResources::<R>::default()));
+                .or_insert(Box::new(ResourceCache::<R>::default()));
         }
 
         let path_buf = path.as_ref().to_path_buf();
@@ -109,7 +109,7 @@ impl ResourcesInner {
         {
             let types = self.types.read();
             if let Some(resource) = types[&type_id]
-                .downcast_ref::<TypedResources<R>>()
+                .downcast_ref::<ResourceCache<R>>()
                 .unwrap()
                 .resources
                 .get(&path_buf)
@@ -134,7 +134,7 @@ impl ResourcesInner {
             types
                 .get_mut(&type_id)
                 .unwrap()
-                .downcast_mut::<TypedResources<R>>()
+                .downcast_mut::<ResourceCache<R>>()
                 .unwrap()
                 .resources
                 .insert(path_buf, resource.clone());
@@ -144,11 +144,11 @@ impl ResourcesInner {
     }
 }
 
-struct TypedResources<R: ResourceType> {
+struct ResourceCache<R: ResourceType> {
     resources: HashMap<PathBuf, Resource<R>>,
 }
 
-impl<R: ResourceType> Default for TypedResources<R> {
+impl<R: ResourceType> Default for ResourceCache<R> {
     fn default() -> Self {
         Self {
             resources: HashMap::default(),
