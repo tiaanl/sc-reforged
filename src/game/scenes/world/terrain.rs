@@ -1058,12 +1058,7 @@ impl Terrain {
         );
     }
 
-    pub fn render_water(
-        &self,
-        frame: &mut Frame,
-        camera_bind_group: &wgpu::BindGroup,
-        environment_bind_group: &wgpu::BindGroup,
-    ) {
+    pub fn render_water(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {

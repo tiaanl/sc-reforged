@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, RwLock, atomic::AtomicU64},
 };
 
+pub mod resources;
+
 pub trait Asset {}
 
 pub struct Handle<A: Asset>(u64, std::marker::PhantomData<A>);

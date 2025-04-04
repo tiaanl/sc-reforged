@@ -2,6 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
     engine::{
+        assets::resources::Resources,
         gizmos::{GizmoVertex, GizmosRenderer},
         prelude::*,
         shaders::Shaders,
@@ -13,6 +14,7 @@ use crate::{
         compositor::Compositor,
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
         geometry_buffers::{GeometryBuffers, GeometryData},
+        text_file::TextFile,
     },
 };
 use glam::{Quat, UVec2, Vec3, Vec4, Vec4Swizzles};
@@ -110,6 +112,7 @@ enum UnderMouse {
 
 impl WorldScene {
     pub fn new(
+        resources: Resources,
         asset_loader: &AssetLoader,
         asset_store: AssetStore,
         renderer: &Renderer,
@@ -138,13 +141,22 @@ impl WorldScene {
             lod_definitions
         };
 
-        // Load the campaign specification.
-        let campaign = asset_loader.load_config::<config::Campaign>(
-            &PathBuf::from("campaign")
+        // // Load the campaign specification.
+        // let campaign = asset_loader.load_config::<config::Campaign>(
+        //     &PathBuf::from("campaign")
+        //         .join(&campaign_def.base_name)
+        //         .join(&campaign_def.base_name)
+        //         .with_extension("txt"),
+        // )?;
+
+        let campaign = {
+            let path = PathBuf::from("campaign")
                 .join(&campaign_def.base_name)
                 .join(&campaign_def.base_name)
-                .with_extension("txt"),
-        )?;
+                .with_extension("txt");
+            let data = resources.request::<TextFile>(path).unwrap();
+            config::Campaign::try_from(data).unwrap()
+        };
 
         let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
@@ -306,7 +318,7 @@ impl WorldScene {
                             .with_extension("smf")
                     };
 
-                    let model_handle = match asset_loader.load_smf(&path, renderer) {
+                    let model_handle = match asset_loader.load_smf(&path, renderer, &resources) {
                         Ok(handle) => handle,
                         Err(err) => {
                             tracing::warn!("Could not load .smf model: {}", path.display());
@@ -527,8 +539,7 @@ impl Scene for WorldScene {
             .render_objects(frame, &self.geometry_buffers, camera_bind_group);
 
         // Now render alpha geoometry.
-        self.terrain
-            .render_water(frame, camera_bind_group, environment_bind_group);
+        self.terrain.render_water(frame, camera_bind_group);
         self.objects
             .render_alpha_objects(frame, &self.geometry_buffers, camera_bind_group);
 

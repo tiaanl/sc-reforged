@@ -16,6 +16,7 @@ glam = { version = "0.29", default-features = false, features = ["bytemuck", "st
 half = { version = "2.5.0", features = ["bytemuck"] }
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg"] }
 naga_oil = { version = "0.17.0", default-features = false }
+parking_lot = "0.12.3"
 pathdiff = "0.2.3"
 pollster = { version = "0.4", default-features = false }
 shadow_company_tools = { path = "../shadow_company_tools" }

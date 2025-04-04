@@ -10,7 +10,7 @@ use shadow_company_tools::{bmf, smf};
 use crate::{
     Asset,
     engine::{
-        assets::{AssetStore, Handle},
+        assets::{AssetStore, Handle, resources::Resources},
         renderer::Renderer,
     },
     game::config::ImageDefs,
@@ -111,7 +111,12 @@ impl AssetLoader {
         Ok(smf::Model::read(&mut reader)?)
     }
 
-    pub fn load_smf(&self, path: &Path, renderer: &Renderer) -> Result<Handle<Model>, AssetError> {
+    pub fn load_smf(
+        &self,
+        path: &Path,
+        renderer: &Renderer,
+        resources: &Resources,
+    ) -> Result<Handle<Model>, AssetError> {
         self.load_cached(path, |asset_loader, path| {
             // We convert the .smf to our own model data, so we can just throw it away and not
             // store it in the asset cache.
@@ -120,7 +125,7 @@ impl AssetLoader {
             let smf = smf::Model::read(&mut reader)
                 .map_err(|err| AssetError::FileSystemError(FileSystemError::Io(err)))?;
 
-            Model::from_smf(&smf, renderer, asset_loader)
+            Model::from_smf(&smf, renderer, resources, asset_loader.asset_store())
         })
     }
 

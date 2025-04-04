@@ -1862,6 +1862,7 @@ dependencies = [
  "half",
  "image",
  "naga_oil",
+ "parking_lot",
  "pathdiff",
  "pollster",
  "shadow_company_tools",

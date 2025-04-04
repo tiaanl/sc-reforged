@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
 use egui::Widget;
-use engine::{egui_integration::EguiIntegration, prelude::*};
+use engine::{assets::resources::Resources, egui_integration::EguiIntegration, prelude::*};
 use game::{
     asset_loader::AssetLoader,
     config,
@@ -91,6 +91,9 @@ impl winit::application::ApplicationHandler for App {
 
                 let egui_integration = EguiIntegration::new(event_loop, &renderer);
 
+                let resources =
+                    Resources::new(&opts.path).expect("Could not initialize resources.");
+
                 let asset_store = AssetStore::default();
                 let asset_loader = Arc::new(
                     AssetLoader::new(asset_store.clone(), &opts.path)
@@ -126,6 +129,7 @@ impl winit::application::ApplicationHandler for App {
 
                     Box::new(
                         match WorldScene::new(
+                            resources,
                             &asset_loader,
                             asset_store.clone(),
                             &renderer,

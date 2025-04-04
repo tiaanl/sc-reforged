@@ -7,3 +7,4 @@ pub mod geometry_buffers;
 pub mod image;
 pub mod mesh_renderer;
 pub mod model;
+pub mod text_file;

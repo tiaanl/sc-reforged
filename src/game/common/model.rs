@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use shadow_company_tools::smf;
 
-use crate::engine::prelude::*;
+use crate::engine::{assets::resources::Resources, prelude::*};
 
 use super::{
-    asset_loader::{AssetError, AssetLoader},
+    asset_loader::AssetError,
+    image::Image,
     mesh_renderer::{BlendMode, Texture, TexturedMesh},
 };
 
@@ -45,14 +46,16 @@ impl Model {
     pub fn from_smf(
         smf: &smf::Model,
         renderer: &Renderer,
-        asset_loader: &AssetLoader,
+        resources: &Resources,
+        asset_store: &AssetStore,
     ) -> Result<Self, AssetError> {
-        Self::smf_to_model(renderer, asset_loader, smf)
+        Self::smf_to_model(renderer, resources, asset_store, smf)
     }
 
     fn smf_to_model(
         renderer: &Renderer,
-        asset_loader: &AssetLoader,
+        resources: &Resources,
+        asset_store: &AssetStore,
         smf: &smf::Model,
     ) -> Result<Model, AssetError> {
         let mut names = NameLookup::default();
@@ -87,11 +90,11 @@ impl Model {
             });
 
             for smf_mesh in smf_node.meshes.iter() {
-                let mesh = Self::smf_mesh_to_mesh(renderer, asset_loader, smf_mesh)?;
+                let mesh = Self::smf_mesh_to_mesh(renderer, resources, smf_mesh)?;
                 let blend_mode = mesh.texture.blend_mode;
                 meshes.push(ModelMesh {
                     node_index,
-                    mesh: asset_loader.asset_store().add(mesh),
+                    mesh: asset_store.add(mesh),
                     blend_mode,
                     model_transform: Mat4::IDENTITY,
                 });
@@ -134,7 +137,7 @@ impl Model {
 
     fn smf_mesh_to_mesh(
         renderer: &Renderer,
-        asset_loader: &AssetLoader,
+        resources: &Resources,
         smf_mesh: &smf::Mesh,
     ) -> Result<TexturedMesh, AssetError> {
         let vertices = smf_mesh
@@ -158,11 +161,7 @@ impl Model {
 
         // TODO: Avoid uploding duplicate textures to the GPU.
 
-        let image = asset_loader.load_bmp(&texture_path)?;
-        let image = asset_loader
-            .asset_store()
-            .get(image)
-            .expect("Just loaded it successfully");
+        let image = resources.request::<Image>(&texture_path).unwrap();
         let texture_view =
             renderer.create_texture_view(texture_path.to_str().unwrap(), &image.data);
 
