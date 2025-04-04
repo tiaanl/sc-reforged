@@ -998,7 +998,7 @@ impl Terrain {
                 label: Some("terrain_chunks"),
                 color_attachments: &[
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &geometry_buffers.colors_buffer,
+                        view: &geometry_buffers.colors.view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -1006,7 +1006,7 @@ impl Terrain {
                         },
                     }),
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &geometry_buffers.positions_buffer,
+                        view: &geometry_buffers.positions.view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -1014,7 +1014,7 @@ impl Terrain {
                         },
                     }),
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &geometry_buffers.normals_buffer,
+                        view: &geometry_buffers.normals.view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -1022,7 +1022,7 @@ impl Terrain {
                         },
                     }),
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &geometry_buffers.ids_buffer,
+                        view: &geometry_buffers.ids.view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,

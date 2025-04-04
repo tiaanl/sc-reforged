@@ -8,6 +8,7 @@ use game::{
     config,
     scenes::{model_viewer::ModelViewer, world::WorldScene},
 };
+use glam::UVec2;
 use tracing::{error, info, warn};
 use winit::{
     dpi::PhysicalPosition,
@@ -43,7 +44,7 @@ enum App {
         input: InputState,
 
         /// The last position the mouse was on the window client area.
-        last_mouse_position: Option<Vec2>,
+        last_mouse_position: Option<UVec2>,
 
         // The instant that the last frame started to render.
         last_frame_time: Instant,
@@ -285,24 +286,25 @@ impl winit::application::ApplicationHandler for App {
                         let position =
                             last_mouse_position.expect("mouse button without a position?");
 
-                        let event = if state.is_pressed() {
+                        scene.event(if state.is_pressed() {
                             SceneEvent::MouseDown { position, button }
                         } else {
                             SceneEvent::MouseUp { position, button }
-                        };
-
-                        scene.event(&event);
+                        });
                     }
 
                     WindowEvent::CursorMoved {
                         position: PhysicalPosition { x, y },
                         ..
                     } => {
-                        *last_mouse_position = Some(Vec2::new(x as f32, y as f32));
+                        let position = UVec2::new(x as u32, y as u32);
+                        *last_mouse_position = Some(position);
+                        scene.event(SceneEvent::MouseMove { position });
                     }
 
                     WindowEvent::CursorLeft { .. } => {
                         *last_mouse_position = None;
+                        scene.event(SceneEvent::MouseLeft);
                     }
 
                     WindowEvent::KeyboardInput {
@@ -313,7 +315,7 @@ impl winit::application::ApplicationHandler for App {
                                 ..
                             },
                         ..
-                    } => scene.event(&match state {
+                    } => scene.event(match state {
                         ElementState::Pressed => SceneEvent::KeyDown { key: code },
                         ElementState::Released => SceneEvent::KeyUp { key: code },
                     }),

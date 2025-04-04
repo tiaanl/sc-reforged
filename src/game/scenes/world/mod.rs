@@ -12,11 +12,10 @@ use crate::{
         camera::{self, Controller},
         compositor::Compositor,
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
-        geometry_buffers::GeometryBuffers,
+        geometry_buffers::{GeometryBuffers, GeometryData},
     },
 };
-use egui::Widget;
-use glam::{Quat, Vec3, Vec4, Vec4Swizzles};
+use glam::{Quat, UVec2, Vec3, Vec4, Vec4Swizzles};
 use terrain::*;
 use wgpu::util::DeviceExt;
 
@@ -70,7 +69,7 @@ impl<C: camera::Controller> Camera<C> {
 pub struct WorldScene {
     world: ecs::World,
 
-    _campaign_def: CampaignDef,
+    campaign_def: CampaignDef,
 
     view_debug_camera: bool,
     control_debug_camera: bool,
@@ -79,7 +78,6 @@ pub struct WorldScene {
     debug_camera: Camera<camera::FreeCameraController>,
 
     window_size: Vec2,
-    intersection: Option<Vec3>,
 
     terrain: Terrain,
     objects: objects::Objects,
@@ -88,15 +86,6 @@ pub struct WorldScene {
     geometry_buffers: GeometryBuffers,
     compositor: Compositor,
     gizmos_renderer: GizmosRenderer,
-
-    // Input handling.
-    under_mouse: UnderMouse,
-    selected_object: Option<usize>,
-
-    new_id: String,
-
-    // test
-    terrain_height_sample: Vec2,
 
     lod_model_definitions: HashMap<String, Vec<SubModelDefinition>>,
 
@@ -108,6 +97,9 @@ pub struct WorldScene {
     environment_buffer: wgpu::Buffer,
     environment_bind_group_layout: wgpu::BindGroupLayout,
     environment_bind_group: wgpu::BindGroup,
+
+    last_mouse_position: Option<UVec2>,
+    geometry_data: Option<GeometryData>,
 }
 
 #[derive(Debug)]
@@ -350,8 +342,13 @@ impl WorldScene {
         }
 
         let geometry_buffers = GeometryBuffers::new(renderer);
-        let compositor =
-            Compositor::new(renderer, &mut shaders, &geometry_buffers.bind_group_layout);
+        let compositor = Compositor::new(
+            renderer,
+            &mut shaders,
+            &geometry_buffers.bind_group_layout,
+            &main_camera.gpu_camera.bind_group_layout,
+            &environment_bind_group_layout,
+        );
 
         let gizmos_renderer =
             GizmosRenderer::new(renderer, &main_camera.gpu_camera.bind_group_layout);
@@ -359,7 +356,7 @@ impl WorldScene {
         Ok(Self {
             world,
 
-            _campaign_def: campaign_def,
+            campaign_def,
 
             view_debug_camera: false,
             control_debug_camera: false,
@@ -368,7 +365,6 @@ impl WorldScene {
             debug_camera,
 
             window_size: Vec2::ZERO,
-            intersection: None,
 
             terrain,
             objects,
@@ -378,15 +374,6 @@ impl WorldScene {
             gizmos_renderer,
 
             // Input handling.
-            under_mouse: UnderMouse::Nothing {
-                position: Vec2::ZERO,
-            },
-            selected_object: None,
-
-            new_id: String::new(),
-
-            terrain_height_sample: Vec2::ZERO,
-
             lod_model_definitions,
 
             time_of_day,
@@ -396,6 +383,9 @@ impl WorldScene {
             environment_buffer,
             environment_bind_group_layout,
             environment_bind_group,
+
+            last_mouse_position: None,
+            geometry_data: None,
         })
     }
 
@@ -429,63 +419,11 @@ impl Scene for WorldScene {
         self.debug_camera.camera.aspect_ratio = width as f32 / height.max(1) as f32;
     }
 
-    fn event(&mut self, event: &SceneEvent) {
-        macro_rules! ndc {
-            ($position:expr) => {{
-                Vec2::new(
-                    $position.x / self.window_size.x.max(1.0) * 2.0 - 1.0,
-                    (1.0 - $position.y / self.window_size.y.max(1.0)) * 2.0 - 1.0,
-                )
-            }};
-        }
-
-        macro_rules! update_under_mouse {
-            ($position:expr,$window_size:expr) => {{
-                let ndc = ndc!($position);
-                let ray = self.main_camera.camera.generate_ray(ndc);
-                if let Some(object_index) = self.objects.ray_intersection(&ray) {
-                    UnderMouse::Object {
-                        object_index,
-                        position: $position,
-                    }
-                } else {
-                    UnderMouse::Nothing {
-                        position: $position,
-                    }
-                }
-            }};
-        }
-
-        // Update the `under_mouse`.
-        match *event {
-            SceneEvent::MouseDown {
-                position,
-                button: MouseButton::Left,
-            } => {
-                self.under_mouse = update_under_mouse!(position, window_size);
-            }
+    fn event(&mut self, event: SceneEvent) {
+        match event {
+            SceneEvent::MouseLeft => self.last_mouse_position = None,
             SceneEvent::MouseMove { position } => {
-                self.under_mouse = update_under_mouse!(position, window_size);
-            }
-            SceneEvent::MouseUp {
-                position,
-                button: MouseButton::Left,
-            } => {
-                match self.under_mouse {
-                    UnderMouse::Object {
-                        object_index: entity_index,
-                        position: p,
-                    } if (position - p).length_squared() < 100.0 => {
-                        // Set the selected entity.
-                        self.selected_object = Some(entity_index);
-                    }
-                    UnderMouse::Nothing { position: p }
-                        if (position - p).length_squared() < 100.0 =>
-                    {
-                        self.selected_object = None;
-                    }
-                    _ => {}
-                }
+                self.last_mouse_position = Some(position);
             }
             _ => {}
         }
@@ -517,15 +455,6 @@ impl Scene for WorldScene {
         self.debug_camera
             .controller
             .update_camera_if_dirty(&mut self.debug_camera.camera);
-
-        // Highlight whatever we're hovering on.
-        match self.under_mouse {
-            UnderMouse::Nothing { .. } => self.objects.set_selected(None),
-            UnderMouse::Object {
-                object_index: entity_index,
-                ..
-            } => self.objects.set_selected(Some(entity_index)),
-        }
 
         self.objects.update(&self.main_camera.camera);
     }
@@ -560,7 +489,7 @@ impl Scene for WorldScene {
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("world_clear_render_pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &self.geometry_buffers.colors_buffer,
+                        view: &self.geometry_buffers.colors.view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -629,7 +558,49 @@ impl Scene for WorldScene {
             self.gizmos_renderer.render(frame, camera_bind_group, &v);
         }
 
-        self.compositor.render(frame, &self.geometry_buffers);
+        self.compositor.render(
+            frame,
+            &self.geometry_buffers,
+            &self.main_camera.gpu_camera.bind_group,
+            &self.environment_bind_group,
+        );
+
+        self.geometry_data = self.last_mouse_position.map(|position| {
+            self.geometry_buffers
+                .fetch_data(&frame.device, &frame.queue, position)
+        });
+
+        if let Some(ref data) = self.geometry_data {
+            let up = data.normal;
+
+            // Define a "forward" vector that lies along the surface
+            // We'll construct an orthonormal basis (right, up, forward)
+            let forward_hint = if data.normal.z.abs() < 0.99 {
+                Vec3::Z
+            } else {
+                Vec3::X
+            };
+
+            // Right = up × forward
+            let right = up.cross(forward_hint).normalize();
+            // Recomputed forward = right × up
+            let forward = right.cross(up).normalize();
+
+            // Rotation matrix from basis
+            let rotation = Mat4::from_cols(
+                right.extend(0.0),
+                up.extend(0.0),
+                forward.extend(0.0),
+                Vec4::W, // placeholder
+            );
+
+            // Translation matrix
+            let translation = Mat4::from_translation(data.position);
+
+            let vertices = GizmosRenderer::_create_axis(translation * rotation, 100.0);
+            self.gizmos_renderer
+                .render(frame, camera_bind_group, &vertices);
+        }
 
         self.world.prepare_render();
 
@@ -642,16 +613,11 @@ impl Scene for WorldScene {
     }
 
     fn debug_panel(&mut self, egui: &egui::Context, _renderer: &Renderer) {
-        use egui::widgets::{DragValue, Slider};
+        use egui::widgets::Slider;
 
         egui::Window::new("World")
             .default_open(false)
             .show(egui, |ui| {
-                if let Some(intersection) = self.intersection {
-                    ui.label("Intersection");
-                    ui.label(format!("{}", intersection));
-                }
-
                 ui.heading("Camera");
                 ui.checkbox(&mut self.view_debug_camera, "View debug camera");
                 ui.checkbox(&mut self.control_debug_camera, "Control debug camera");
@@ -674,29 +640,18 @@ impl Scene for WorldScene {
                 ui.heading("Terrain");
                 self.terrain.debug_panel(ui);
 
+                ui.heading("Geometry Data");
+                if let Some(ref geometry_data) = self.geometry_data {
+                    ui.label(format!("color: {:?}", geometry_data.color));
+                    ui.label(format!("position: {:?}", geometry_data.position));
+                    ui.label(format!("normal: {:?}", geometry_data.normal));
+                    ui.label(format!("id: {:?}", geometry_data.id));
+                } else {
+                    ui.label("None");
+                }
+
                 ui.heading("Entities");
                 self.objects.debug_panel(ui);
-
-                ui.heading("Object");
-                if let Some(e) = self.selected_object {
-                    ui.label(format!("{}", e));
-                    if let Some(object) = self.objects.get_mut(e) {
-                        ui.horizontal(|ui| {
-                            ui.label("translation");
-                            DragValue::new(&mut object.translation.x).ui(ui);
-                            DragValue::new(&mut object.translation.y).ui(ui);
-                            DragValue::new(&mut object.translation.z).ui(ui);
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("rotation");
-                            DragValue::new(&mut object.rotation.x).speed(0.01).ui(ui);
-                            DragValue::new(&mut object.rotation.y).speed(0.01).ui(ui);
-                            DragValue::new(&mut object.rotation.z).speed(0.01).ui(ui);
-                        });
-                    }
-                } else {
-                    ui.label("Nothing");
-                }
             });
     }
 }

@@ -1,4 +1,4 @@
-use glam::Vec2;
+use glam::UVec2;
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 use crate::Renderer;
@@ -7,11 +7,25 @@ use super::{input::InputState, renderer::Frame};
 
 #[allow(unused)]
 pub enum SceneEvent {
-    MouseDown { position: Vec2, button: MouseButton },
-    MouseMove { position: Vec2 },
-    MouseUp { position: Vec2, button: MouseButton },
-    KeyDown { key: KeyCode },
-    KeyUp { key: KeyCode },
+    /// The mouse pointer left the window.
+    MouseLeft,
+    MouseDown {
+        position: UVec2,
+        button: MouseButton,
+    },
+    MouseMove {
+        position: UVec2,
+    },
+    MouseUp {
+        position: UVec2,
+        button: MouseButton,
+    },
+    KeyDown {
+        key: KeyCode,
+    },
+    KeyUp {
+        key: KeyCode,
+    },
 }
 
 /// A trait that represents a scene in the engine. I splits each stage of the render pipeline into
@@ -22,7 +36,7 @@ pub trait Scene {
     fn resize(&mut self, renderer: &Renderer) {}
 
     /// Called when an engine event occurs. This includes input events.
-    fn event(&mut self, event: &SceneEvent) {}
+    fn event(&mut self, event: SceneEvent) {}
 
     /// Called each frame with the `delta_time` based on the time the last frame took and the state
     /// of all input devices.
