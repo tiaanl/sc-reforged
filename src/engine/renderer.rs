@@ -9,7 +9,7 @@ use crate::DepthBuffer;
 
 use super::mip_maps::MipMaps;
 
-#[derive(Clone)]
+#[derive(Clone, bevy_ecs::system::Resource)]
 pub struct RenderDevice(Arc<wgpu::Device>);
 
 impl From<wgpu::Device> for RenderDevice {
@@ -26,7 +26,7 @@ impl Deref for RenderDevice {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, bevy_ecs::system::Resource)]
 pub struct RenderQueue(Arc<wgpu::Queue>);
 
 impl From<wgpu::Queue> for RenderQueue {

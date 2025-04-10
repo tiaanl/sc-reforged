@@ -1,13 +1,18 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
+use bevy_ecs::component::Component;
 use shadow_company_tools::smf;
 
-use crate::engine::{assets::resources::Resources, prelude::*};
+use crate::engine::{
+    assets::resources::{ResourceLoadContext, ResourceType, Resources},
+    prelude::*,
+};
 
 use super::{
     asset_loader::AssetError,
     image::Image,
-    mesh_renderer::{BlendMode, Texture, TexturedMesh},
+    render::RenderTexture,
+    storage::{Handle, Storage},
 };
 
 pub type NodeIndex = usize;
@@ -15,12 +20,12 @@ pub type NodeIndex = usize;
 type NameLookup = HashMap<String, NodeIndex>;
 
 /// Model instance data held by each enitty.
-#[derive(Debug)]
+#[derive(Component, Debug)]
 pub struct Model {
     /// A list of [Node]s contained in this [Model]. Parent nodes are guarranteed to be before its
     /// child nodes. Hierarchy is based on indices.
     pub nodes: Vec<ModelNode>,
-    /// A list of [Mesh]es contained in this [Model]. They link back to [Node]s by index.
+    /// A list of meshes for the [Model].
     pub meshes: Vec<ModelMesh>,
     /// A list of [BoundingBox]es contained in this [Model].
     pub bounding_boxes: Vec<ModelBoundingBox>,
@@ -47,21 +52,12 @@ impl Model {
         smf: &smf::Model,
         renderer: &Renderer,
         resources: &Resources,
-        asset_store: &AssetStore,
+        texture_storage: &mut Storage<RenderTexture>,
     ) -> Result<Self, AssetError> {
-        Self::smf_to_model(renderer, resources, asset_store, smf)
-    }
-
-    fn smf_to_model(
-        renderer: &Renderer,
-        resources: &Resources,
-        asset_store: &AssetStore,
-        smf: &smf::Model,
-    ) -> Result<Model, AssetError> {
-        let mut names = NameLookup::default();
         let mut nodes = Vec::with_capacity(smf.nodes.len());
-        let mut meshes = Vec::new();
+        let mut mesh_lookup: HashMap<PathBuf, IndexedMesh<ModelVertex>> = HashMap::default();
         let mut bounding_boxes = Vec::new();
+        let mut names = NameLookup::default();
 
         for (node_index, smf_node) in smf.nodes.iter().enumerate() {
             names.insert(smf_node.name.clone(), node_index);
@@ -90,14 +86,16 @@ impl Model {
             });
 
             for smf_mesh in smf_node.meshes.iter() {
-                let mesh = Self::smf_mesh_to_mesh(renderer, resources, smf_mesh)?;
-                let blend_mode = mesh.texture.blend_mode;
-                meshes.push(ModelMesh {
-                    node_index,
-                    mesh: asset_store.add(mesh),
-                    blend_mode,
-                    model_transform: Mat4::IDENTITY,
-                });
+                let texture_path = PathBuf::from("textures")
+                    .join("shared")
+                    .join(&smf_mesh.texture_name);
+                let mesh = mesh_lookup
+                    .entry(texture_path.clone())
+                    .or_insert(IndexedMesh::default());
+                mesh.extend(std::iter::once(Self::smf_mesh_to_mesh(
+                    smf_mesh,
+                    node_index as u32,
+                )));
             }
 
             for smf_bounding_box in smf_node.bounding_boxes.iter() {
@@ -110,85 +108,56 @@ impl Model {
             }
         }
 
-        let mut model = Model {
+        let sampler = renderer.create_sampler(
+            "model sampler",
+            wgpu::AddressMode::Repeat,
+            wgpu::FilterMode::Nearest,
+            wgpu::FilterMode::Nearest,
+        );
+
+        let meshes = mesh_lookup
+            .drain()
+            .map(|(texture_path, mesh)| {
+                let image = resources
+                    .request::<Image>(&texture_path)
+                    .expect(format!("Could not load texture. {}", texture_path.display()).as_str());
+                let texture_view = renderer.create_texture_view("object texture", &image.data);
+                let bind_group =
+                    renderer.create_texture_bind_group("object texture", &texture_view, &sampler);
+                let texture = texture_storage.insert(RenderTexture {
+                    texture_view,
+                    bind_group,
+                });
+
+                let mesh = mesh.to_gpu(renderer);
+
+                ModelMesh { texture, mesh }
+            })
+            .collect();
+
+        Ok(Model {
             nodes,
             meshes,
             bounding_boxes,
             names,
-        };
-
-        // Precalculate the model transforms for each node.
-        for node_index in 0..model.nodes.len() {
-            let t = model.global_transform(node_index);
-            model.nodes[node_index].model_transform = t;
-        }
-
-        model
-            .meshes
-            .iter_mut()
-            .for_each(|mesh| mesh.model_transform = model.nodes[mesh.node_index].model_transform);
-
-        model.bounding_boxes.iter_mut().for_each(|bounding_box| {
-            bounding_box.model_transform = model.nodes[bounding_box.node_index].model_transform
-        });
-
-        Ok(model)
+        })
     }
 
-    fn smf_mesh_to_mesh(
-        renderer: &Renderer,
-        resources: &Resources,
-        smf_mesh: &smf::Mesh,
-    ) -> Result<TexturedMesh, AssetError> {
+    fn smf_mesh_to_mesh(smf_mesh: &smf::Mesh, node_index: u32) -> IndexedMesh<ModelVertex> {
         let vertices = smf_mesh
             .vertices
             .iter()
-            .map(|v| crate::engine::mesh::Vertex {
+            .map(|v| ModelVertex {
                 position: v.position,
                 normal: -v.normal, // Normals are inverted.
                 tex_coord: v.tex_coord,
+                node_index,
             })
             .collect();
 
         let indices = smf_mesh.faces.iter().flat_map(|i| i.indices).collect();
 
-        let indexed_mesh = crate::engine::mesh::IndexedMesh { vertices, indices };
-        let gpu_mesh = indexed_mesh.to_gpu(renderer);
-
-        let texture_path = std::path::PathBuf::from("textures")
-            .join("shared")
-            .join(&smf_mesh.texture_name);
-
-        // TODO: Avoid uploding duplicate textures to the GPU.
-
-        let image = resources.request::<Image>(&texture_path).unwrap();
-        let texture_view =
-            renderer.create_texture_view(texture_path.to_str().unwrap(), &image.data);
-
-        // TODO: Reuse samplers.
-        let sampler = renderer.create_sampler(
-            "texture_sampler",
-            wgpu::AddressMode::Repeat,
-            wgpu::FilterMode::Linear,
-            wgpu::FilterMode::Linear,
-        );
-
-        let bind_group = renderer.create_texture_bind_group(
-            texture_path.to_str().unwrap(),
-            &texture_view,
-            &sampler,
-        );
-
-        let mesh = TexturedMesh {
-            indexed_mesh,
-            gpu_mesh,
-            texture: Texture {
-                bind_group,
-                blend_mode: image.blend_mode,
-            },
-        };
-
-        Ok(mesh)
+        IndexedMesh { vertices, indices }
     }
 }
 
@@ -204,15 +173,34 @@ pub struct ModelNode {
 
 #[derive(Debug)]
 pub struct ModelMesh {
-    /// An index to the [ModelNode] this mesh is attached to.
-    pub node_index: NodeIndex,
-    /// Handle to the mesh to render.
-    pub mesh: Handle<TexturedMesh>,
-    /// The blend mode associated with the mesh. Kept here so we don't have to dig into the [Mesh]
-    /// to get the blend mode.
-    pub blend_mode: BlendMode,
-    /// A precomputed cache of the model local transform.
-    pub model_transform: Mat4,
+    pub texture: Handle<RenderTexture>,
+    pub mesh: GpuIndexedMesh,
+}
+
+#[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
+#[repr(C)]
+pub struct ModelVertex {
+    position: Vec3,
+    normal: Vec3,
+    tex_coord: Vec2,
+    node_index: u32,
+}
+
+impl BufferLayout for ModelVertex {
+    fn layout() -> wgpu::VertexBufferLayout<'static> {
+        const ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
+            0 => Float32x3,
+            1 => Float32x3,
+            2 => Float32x2,
+            3 => Uint32,
+        ];
+
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<ModelVertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &ATTRS,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -225,4 +213,9 @@ pub struct ModelBoundingBox {
     pub max: Vec3,
     // Precalculated model transform.
     pub model_transform: Mat4,
+}
+
+struct MeshCollection {
+    texture: Handle<RenderTexture>,
+    mesh: IndexedMesh<ModelVertex>,
 }

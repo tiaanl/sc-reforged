@@ -186,18 +186,6 @@ impl MeshRenderer {
             })
     }
 
-    pub fn mesh_list_from_model(model: &Model, transform: &Mat4) -> Vec<MeshItem> {
-        model
-            .meshes
-            .iter()
-            .map(|mesh| MeshItem {
-                transform: *transform * mesh.model_transform,
-                mesh: mesh.mesh,
-                distance_from_camera: f32::MAX,
-            })
-            .collect()
-    }
-
     pub fn render_multiple(
         &self,
         frame: &mut Frame,

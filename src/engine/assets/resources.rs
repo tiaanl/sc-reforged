@@ -54,7 +54,7 @@ impl<R: ResourceType> Clone for Resource<R> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, bevy_ecs::system::Resource)]
 pub struct Resources(Arc<ResourcesInner>);
 
 impl Resources {

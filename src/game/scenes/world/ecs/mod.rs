@@ -2,12 +2,12 @@ pub use bevy_ecs::prelude as ecs;
 use bevy_ecs::schedule::ScheduleLabel;
 
 mod gizmos;
-mod storage;
 mod transform;
 
 pub use gizmos::*;
-pub use storage::*;
 pub use transform::*;
+
+use crate::game::{render::RenderTexture, storage::Storage};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, ScheduleLabel)]
 struct UpdateSchedule;
@@ -27,7 +27,7 @@ impl World {
         let mut update_schedule = ecs::Schedule::new(UpdateSchedule);
         let mut render_schedule = ecs::Schedule::new(RenderSchedule);
 
-        world.init_resource::<Storage<i32>>();
+        world.insert_resource(Storage::<RenderTexture>::default());
 
         update_schedule.add_systems(update);
 

@@ -14,6 +14,8 @@ use crate::{
         compositor::Compositor,
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
         geometry_buffers::{GeometryBuffers, GeometryData},
+        render::RenderTexture,
+        storage::Storage,
         text_file::TextFile,
     },
 };
@@ -119,6 +121,8 @@ impl WorldScene {
         campaign_def: CampaignDef,
     ) -> Result<Self, AssetError> {
         let mut world = ecs::World::new();
+
+        let mut texture_storage = world.world.resource_mut::<Storage<RenderTexture>>();
 
         world
             .update_schedule
@@ -318,7 +322,12 @@ impl WorldScene {
                             .with_extension("smf")
                     };
 
-                    let model_handle = match asset_loader.load_smf(&path, renderer, &resources) {
+                    let model_handle = match asset_loader.load_smf(
+                        &path,
+                        renderer,
+                        &resources,
+                        &mut texture_storage,
+                    ) {
                         Ok(handle) => handle,
                         Err(err) => {
                             tracing::warn!("Could not load .smf model: {}", path.display());
@@ -521,12 +530,13 @@ impl Scene for WorldScene {
                 });
         }
 
+        let texture_storage = self.world.world.resource_ref::<Storage<RenderTexture>>();
+
         let camera_bind_group = if self.view_debug_camera {
             &self.debug_camera.gpu_camera.bind_group
         } else {
             &self.main_camera.gpu_camera.bind_group
         };
-        let environment_bind_group = &self.environment_bind_group;
 
         // Render Opaque geometry first.
         self.terrain.render(
@@ -535,13 +545,17 @@ impl Scene for WorldScene {
             camera_bind_group,
             &self.main_camera.gpu_camera.bind_group, // Always the main camera.
         );
-        self.objects
-            .render_objects(frame, &self.geometry_buffers, camera_bind_group);
+        self.objects.render_objects(
+            frame,
+            &self.geometry_buffers,
+            camera_bind_group,
+            &texture_storage,
+        );
 
         // Now render alpha geoometry.
         self.terrain.render_water(frame, camera_bind_group);
-        self.objects
-            .render_alpha_objects(frame, &self.geometry_buffers, camera_bind_group);
+        // self.objects
+        //     .render_alpha_objects(frame, &self.geometry_buffers, camera_bind_group);
 
         // Render any kind of debug overlays.
         self.terrain

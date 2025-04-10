@@ -21,6 +21,8 @@ use super::{
     image::Image,
     mesh_renderer::BlendMode,
     model::Model,
+    render::RenderTexture,
+    storage::Storage,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -116,6 +118,7 @@ impl AssetLoader {
         path: &Path,
         renderer: &Renderer,
         resources: &Resources,
+        texture_storage: &mut Storage<RenderTexture>,
     ) -> Result<Handle<Model>, AssetError> {
         self.load_cached(path, |asset_loader, path| {
             // We convert the .smf to our own model data, so we can just throw it away and not
@@ -125,7 +128,7 @@ impl AssetLoader {
             let smf = smf::Model::read(&mut reader)
                 .map_err(|err| AssetError::FileSystemError(FileSystemError::Io(err)))?;
 
-            Model::from_smf(&smf, renderer, resources, asset_loader.asset_store())
+            Model::from_smf(&smf, renderer, resources, texture_storage)
         })
     }
 
@@ -210,11 +213,11 @@ impl AssetLoader {
         self.file_system.dir(path)
     }
 
-    fn load_cached<P, A, F>(&self, path: P, create: F) -> Result<Handle<A>, AssetError>
+    fn load_cached<P, A, F>(&self, path: P, mut create: F) -> Result<Handle<A>, AssetError>
     where
         P: AsRef<Path>,
         A: Asset + Send + Sync + 'static,
-        F: Fn(&AssetLoader, &Path) -> Result<A, AssetError>,
+        F: FnMut(&AssetLoader, &Path) -> Result<A, AssetError>,
     {
         debug_assert!(!path.as_ref().is_absolute());
 

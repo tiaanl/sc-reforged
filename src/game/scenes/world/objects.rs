@@ -1,17 +1,14 @@
-use std::cmp::Ordering;
-
-use glam::{Mat3, Vec4, Vec4Swizzles};
+use glam::Vec4Swizzles;
 
 use crate::{
-    engine::{
-        gizmos::{GizmoVertex, GizmosRenderer},
-        prelude::*,
-    },
+    engine::{gizmos::GizmosRenderer, prelude::*},
     game::{
         camera::{BoundingBox, Camera, Frustum, Ray},
         geometry_buffers::GeometryBuffers,
-        mesh_renderer::{BlendMode, MeshItem, MeshRenderer},
         model::Model,
+        model_renderer::ModelRenderer,
+        render::RenderTexture,
+        storage::Storage,
     },
 };
 
@@ -40,12 +37,7 @@ impl Object {
 pub struct Objects {
     asset_store: AssetStore,
 
-    pub model_renderer: MeshRenderer,
-
-    /// Keep a local list of meshes to render each frame.
-    opaque_meshes: Vec<MeshItem>,
-    ck_meshes: Vec<MeshItem>,
-    alpha_meshes: Vec<MeshItem>,
+    pub model_renderer: ModelRenderer,
 
     render_bounding_boxes: bool,
     pub bounding_box_renderer: BoundingBoxRenderer,
@@ -63,21 +55,13 @@ impl Objects {
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let model_renderer = MeshRenderer::new(
-            asset_store.clone(),
-            renderer,
-            shaders,
-            camera_bind_group_layout,
-        );
+        let model_renderer = ModelRenderer::new(renderer, shaders, camera_bind_group_layout);
 
         let bounding_box_renderer = BoundingBoxRenderer::new(renderer, camera_bind_group_layout);
 
         Self {
             asset_store,
             model_renderer,
-            opaque_meshes: Vec::default(),
-            ck_meshes: Vec::default(),
-            alpha_meshes: Vec::default(),
             render_bounding_boxes: false,
             bounding_box_renderer,
             objects: vec![],
@@ -165,75 +149,6 @@ impl Objects {
                 });
             }
         });
-
-        self.opaque_meshes.clear();
-        self.ck_meshes.clear();
-        self.alpha_meshes.clear();
-
-        // Update the local mesh list with visible objects only.
-        for object in self.objects.iter().filter(|o| o.visible) {
-            let Some(model) = self.asset_store.get(object.model) else {
-                continue;
-            };
-
-            let entity_transform = Mat4::from_rotation_translation(
-                Quat::from_euler(
-                    glam::EulerRot::XYZ,
-                    object.rotation.x,
-                    object.rotation.y,
-                    object.rotation.z,
-                ),
-                object.translation,
-            );
-
-            for mesh in model.meshes.iter() {
-                let transform = entity_transform * mesh.model_transform;
-
-                // We can use the squared distance here, because we only use it for sorting.
-                let mesh_position = transform.col(3);
-                let distance_from_camera = camera.position.distance_squared(mesh_position.xyz());
-
-                match mesh.blend_mode {
-                    BlendMode::Opaque => self.opaque_meshes.push(MeshItem {
-                        transform,
-                        mesh: mesh.mesh,
-                        distance_from_camera,
-                    }),
-                    BlendMode::ColorKeyed => self.ck_meshes.push(MeshItem {
-                        transform,
-                        mesh: mesh.mesh,
-                        distance_from_camera,
-                    }),
-                    BlendMode::Alpha => self.alpha_meshes.push(MeshItem {
-                        transform,
-                        mesh: mesh.mesh,
-                        distance_from_camera,
-                    }),
-                    BlendMode::Multiply => todo!("not implemented yet"),
-                };
-            }
-        }
-
-        // Sort opaque meshes near to far to take advantage of the depth buffer to discard pixels.
-        self.opaque_meshes.sort_unstable_by(|a, b| {
-            a.distance_from_camera
-                .partial_cmp(&b.distance_from_camera)
-                .unwrap_or(Ordering::Equal)
-        });
-
-        // Sort color keyed meshes as if they were opaque meshes.
-        self.ck_meshes.sort_unstable_by(|a, b| {
-            a.distance_from_camera
-                .partial_cmp(&b.distance_from_camera)
-                .unwrap_or(Ordering::Equal)
-        });
-
-        // Sort alpha meshes far to near to avoid overlap in rendering.
-        self.alpha_meshes.sort_unstable_by(|a, b| {
-            b.distance_from_camera
-                .partial_cmp(&a.distance_from_camera)
-                .unwrap_or(Ordering::Equal)
-        });
     }
 
     pub fn render_objects(
@@ -241,37 +156,34 @@ impl Objects {
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
+        texture_storage: &Storage<RenderTexture>,
     ) {
-        self.model_renderer.render_multiple(
-            frame,
-            geometry_buffers,
-            camera_bind_group,
-            BlendMode::Opaque,
-            &self.opaque_meshes,
-        );
+        for object in self.objects.iter() {
+            if let Some(model) = self.asset_store.get(object.model) {
+                self.model_renderer.render(
+                    frame,
+                    geometry_buffers,
+                    camera_bind_group,
+                    model.as_ref(),
+                    texture_storage,
+                );
+            }
+        }
+        // self.model_renderer.render_multiple(
+        //     frame,
+        //     geometry_buffers,
+        //     camera_bind_group,
+        //     BlendMode::Opaque,
+        //     &self.opaque_meshes,
+        // );
 
-        self.model_renderer.render_multiple(
-            frame,
-            geometry_buffers,
-            camera_bind_group,
-            BlendMode::ColorKeyed,
-            &self.ck_meshes,
-        );
-    }
-
-    pub fn render_alpha_objects(
-        &self,
-        frame: &mut Frame,
-        geometry_buffers: &GeometryBuffers,
-        camera_bind_group: &wgpu::BindGroup,
-    ) {
-        self.model_renderer.render_multiple(
-            frame,
-            geometry_buffers,
-            camera_bind_group,
-            BlendMode::Alpha,
-            &self.alpha_meshes,
-        );
+        // self.model_renderer.render_multiple(
+        //     frame,
+        //     geometry_buffers,
+        //     camera_bind_group,
+        //     BlendMode::ColorKeyed,
+        //     &self.ck_meshes,
+        // );
     }
 
     pub fn render_gizmos(
@@ -318,47 +230,47 @@ impl Objects {
                 .render_all(frame, camera_bind_group, &boxes);
         }
 
-        if false {
-            let mut gv = vec![];
+        // if false {
+        //     let mut gv = vec![];
 
-            for object in self.objects.iter() {
-                let Some(model) = self.asset_store.get(object.model) else {
-                    continue;
-                };
+        //     for object in self.objects.iter() {
+        //         let Some(model) = self.asset_store.get(object.model) else {
+        //             continue;
+        //         };
 
-                let object_transform = Mat4::from_rotation_translation(
-                    Quat::from_euler(
-                        glam::EulerRot::XYZ,
-                        object.rotation.x,
-                        object.rotation.y,
-                        -object.rotation.z,
-                    ),
-                    object.translation,
-                );
+        //         let object_transform = Mat4::from_rotation_translation(
+        //             Quat::from_euler(
+        //                 glam::EulerRot::XYZ,
+        //                 object.rotation.x,
+        //                 object.rotation.y,
+        //                 -object.rotation.z,
+        //             ),
+        //             object.translation,
+        //         );
 
-                for mesh in model.meshes.iter() {
-                    let Some(textured_mesh) = self.asset_store.get(mesh.mesh) else {
-                        continue;
-                    };
+        //         for mesh in model.meshes.iter() {
+        //             let Some(textured_mesh) = self.asset_store.get(mesh.mesh) else {
+        //                 continue;
+        //             };
 
-                    let mesh_transform = object_transform * mesh.model_transform;
-                    let normal_matrix = Mat3::from_mat4(mesh_transform).inverse().transpose();
+        //             let mesh_transform = object_transform * mesh.model_transform;
+        //             let normal_matrix = Mat3::from_mat4(mesh_transform).inverse().transpose();
 
-                    for vertex in textured_mesh.indexed_mesh.vertices.iter() {
-                        let position = mesh_transform.project_point3(vertex.position);
-                        let normal = normal_matrix * vertex.normal;
+        //             for vertex in textured_mesh.indexed_mesh.vertices.iter() {
+        //                 let position = mesh_transform.project_point3(vertex.position);
+        //                 let normal = normal_matrix * vertex.normal;
 
-                        gv.push(GizmoVertex::new(position, Vec4::new(0.0, 0.0, 1.0, 1.0)));
-                        gv.push(GizmoVertex::new(
-                            position + normal * 10.0,
-                            Vec4::new(1.0, 0.0, 1.0, 1.0),
-                        ));
-                    }
-                }
-            }
+        //                 gv.push(GizmoVertex::new(position, Vec4::new(0.0, 0.0, 1.0, 1.0)));
+        //                 gv.push(GizmoVertex::new(
+        //                     position + normal * 10.0,
+        //                     Vec4::new(1.0, 0.0, 1.0, 1.0),
+        //                 ));
+        //             }
+        //         }
+        //     }
 
-            gizmos_renderer.render(frame, camera_bind_group, &gv);
-        }
+        //     gizmos_renderer.render(frame, camera_bind_group, &gv);
+        // }
     }
 
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
