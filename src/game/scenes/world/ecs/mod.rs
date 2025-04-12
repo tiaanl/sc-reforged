@@ -7,7 +7,7 @@ mod transform;
 pub use gizmos::*;
 pub use transform::*;
 
-use crate::game::{render::RenderTexture, storage::Storage};
+use crate::{engine::storage::Storage, game::render::RenderTexture};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, ScheduleLabel)]
 struct UpdateSchedule;

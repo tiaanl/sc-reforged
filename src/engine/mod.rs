@@ -7,6 +7,7 @@ pub mod mesh;
 pub mod renderer;
 pub mod scene;
 pub mod shaders;
+pub mod storage;
 
 pub mod dirty;
 pub mod tracked;

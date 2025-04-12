@@ -4,16 +4,12 @@ use bevy_ecs::component::Component;
 use shadow_company_tools::smf;
 
 use crate::engine::{
-    assets::resources::{ResourceLoadContext, ResourceType, Resources},
+    assets::resources::Resources,
     prelude::*,
-};
-
-use super::{
-    asset_loader::AssetError,
-    image::Image,
-    render::RenderTexture,
     storage::{Handle, Storage},
 };
+
+use super::{asset_loader::AssetError, image::Image, render::RenderTexture};
 
 pub type NodeIndex = usize;
 

@@ -12,6 +12,7 @@ use crate::{
     engine::{
         assets::{AssetStore, Handle, resources::Resources},
         renderer::Renderer,
+        storage::Storage,
     },
     game::config::ImageDefs,
 };
@@ -22,7 +23,6 @@ use super::{
     mesh_renderer::BlendMode,
     model::Model,
     render::RenderTexture,
-    storage::Storage,
 };
 
 #[derive(Debug, thiserror::Error)]

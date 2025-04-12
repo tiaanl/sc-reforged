@@ -6,6 +6,7 @@ use crate::{
         gizmos::{GizmoVertex, GizmosRenderer},
         prelude::*,
         shaders::Shaders,
+        storage::Storage,
     },
     game::{
         animation::Track,
@@ -15,7 +16,6 @@ use crate::{
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
         geometry_buffers::{GeometryBuffers, GeometryData},
         render::RenderTexture,
-        storage::Storage,
         text_file::TextFile,
     },
 };

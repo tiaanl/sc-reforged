@@ -1,10 +1,9 @@
-use crate::engine::prelude::*;
+use crate::engine::{prelude::*, storage::Storage};
 
 use super::{
     geometry_buffers::GeometryBuffers,
     model::{Model, ModelVertex},
     render::RenderTexture,
-    storage::Storage,
 };
 
 pub struct ModelRenderer {
