@@ -8,16 +8,11 @@ use std::{
 use parking_lot::RwLock;
 use shadow_company_tools::{bmf, smf};
 
-use crate::{
-    engine::{assets::resources::Resources, renderer::Renderer, storage::Storage},
-    game::config::ImageDefs,
-};
+use crate::game::config::ImageDefs;
 
 use super::{
     file_system::{FileSystem, FileSystemError, GutFileSystemLayer, OsFileSystemLayer},
     image::{BlendMode, Image},
-    model::Model,
-    render::RenderTexture,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -81,22 +76,14 @@ impl AssetLoader {
         Ok(smf::Model::read(&mut reader)?)
     }
 
-    pub fn load_smf(
-        &self,
-        path: &Path,
-        renderer: &Renderer,
-        resources: &Resources,
-        texture_storage: &mut Storage<RenderTexture>,
-    ) -> Result<Arc<Model>, AssetError> {
+    pub fn load_smf(&self, path: &Path) -> Result<Arc<smf::Model>, AssetError> {
         self.load_cached(path, |_, path| {
             // We convert the .smf to our own model data, so we can just throw it away and not
             // store it in the asset cache.
             let raw = self.file_system.load(path)?;
             let mut reader = std::io::Cursor::new(raw);
-            let smf = smf::Model::read(&mut reader)
-                .map_err(|err| AssetError::FileSystemError(FileSystemError::Io(err)))?;
-
-            Model::from_smf(&smf, renderer, resources, texture_storage)
+            smf::Model::read(&mut reader)
+                .map_err(|err| AssetError::FileSystemError(FileSystemError::Io(err)))
         })
     }
 

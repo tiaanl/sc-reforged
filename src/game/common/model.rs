@@ -33,7 +33,7 @@ pub struct Model {
     names: NameLookup,
 }
 
-impl Asset for Model {}
+impl Asset for smf::Model {}
 
 impl Model {
     /// Calculate the global transform for the given node.
@@ -46,117 +46,6 @@ impl Model {
             current = node.parent;
         }
         transform
-    }
-
-    pub fn from_smf(
-        smf: &smf::Model,
-        renderer: &Renderer,
-        resources: &Resources,
-        texture_storage: &mut Storage<RenderTexture>,
-    ) -> Result<Self, AssetError> {
-        let mut nodes = Vec::with_capacity(smf.nodes.len());
-        let mut mesh_lookup: HashMap<PathBuf, IndexedMesh<ModelVertex>> = HashMap::default();
-        let mut bounding_boxes = Vec::new();
-        let mut names = NameLookup::default();
-
-        for (node_index, smf_node) in smf.nodes.iter().enumerate() {
-            names.insert(smf_node.name.clone(), node_index);
-
-            let parent_node_index = if smf_node.parent_name == "<root>" {
-                // Use a sentinel for root nodes.
-                NodeIndex::MAX
-            } else {
-                assert!(!smf_node.parent_name.eq("<root>"));
-                match names.get(&smf_node.parent_name) {
-                    Some(id) => *id,
-                    None => {
-                        let n = names.keys().cloned().collect::<Vec<_>>().join(", ");
-                        return Err(AssetError::Custom(format!(
-                            "Parent name [{}] not found, existing names: {}",
-                            smf_node.parent_name, n
-                        )));
-                    }
-                }
-            };
-
-            nodes.push(ModelNode {
-                parent: parent_node_index,
-                transform: Transform::new(smf_node.position, Quat::IDENTITY),
-            });
-
-            for smf_mesh in smf_node.meshes.iter() {
-                let texture_path = PathBuf::from("textures")
-                    .join("shared")
-                    .join(&smf_mesh.texture_name);
-                let mesh = mesh_lookup.entry(texture_path.clone()).or_default();
-                mesh.extend(std::iter::once(Self::smf_mesh_to_mesh(
-                    smf_mesh,
-                    node_index as u32,
-                )));
-            }
-
-            for smf_bounding_box in smf_node.bounding_boxes.iter() {
-                bounding_boxes.push(ModelBoundingBox {
-                    node_index,
-                    min: smf_bounding_box.min,
-                    max: smf_bounding_box.max,
-                    model_transform: Mat4::IDENTITY,
-                });
-            }
-        }
-
-        let sampler = renderer.create_sampler(
-            "model sampler",
-            wgpu::AddressMode::Repeat,
-            wgpu::FilterMode::Nearest,
-            wgpu::FilterMode::Nearest,
-        );
-
-        let meshes = mesh_lookup
-            .drain()
-            .map(|(texture_path, mesh)| {
-                let image = resources
-                    .request::<Image>(&texture_path)
-                    .unwrap_or_else(|_| {
-                        panic!("Could not load texture. {}", texture_path.display())
-                    });
-                let texture_view = renderer.create_texture_view("object texture", &image.data);
-                let bind_group =
-                    renderer.create_texture_bind_group("object texture", &texture_view, &sampler);
-                let texture = texture_storage.insert(RenderTexture {
-                    texture_view,
-                    bind_group,
-                });
-
-                let mesh = mesh.to_gpu(renderer);
-
-                ModelMesh { texture, mesh }
-            })
-            .collect();
-
-        Ok(Model {
-            nodes,
-            meshes,
-            bounding_boxes,
-            names,
-        })
-    }
-
-    fn smf_mesh_to_mesh(smf_mesh: &smf::Mesh, node_index: u32) -> IndexedMesh<ModelVertex> {
-        let vertices = smf_mesh
-            .vertices
-            .iter()
-            .map(|v| ModelVertex {
-                position: v.position,
-                normal: -v.normal, // Normals are inverted.
-                tex_coord: v.tex_coord,
-                node_index,
-            })
-            .collect();
-
-        let indices = smf_mesh.faces.iter().flat_map(|i| i.indices).collect();
-
-        IndexedMesh { vertices, indices }
     }
 }
 
@@ -215,4 +104,113 @@ pub struct ModelBoundingBox {
 struct MeshCollection {
     texture: Handle<RenderTexture>,
     mesh: IndexedMesh<ModelVertex>,
+}
+
+pub fn smf_to_model(
+    smf: &smf::Model,
+    renderer: &Renderer,
+    resources: &Resources,
+    texture_storage: &mut Storage<RenderTexture>,
+) -> Result<Model, AssetError> {
+    fn smf_mesh_to_mesh(smf_mesh: &smf::Mesh, node_index: u32) -> IndexedMesh<ModelVertex> {
+        let vertices = smf_mesh
+            .vertices
+            .iter()
+            .map(|v| ModelVertex {
+                position: v.position,
+                normal: -v.normal, // Normals are inverted.
+                tex_coord: v.tex_coord,
+                node_index,
+            })
+            .collect();
+
+        let indices = smf_mesh.faces.iter().flat_map(|i| i.indices).collect();
+
+        IndexedMesh { vertices, indices }
+    }
+
+    let mut nodes = Vec::with_capacity(smf.nodes.len());
+    let mut mesh_lookup: HashMap<PathBuf, IndexedMesh<ModelVertex>> = HashMap::default();
+    let mut bounding_boxes = Vec::new();
+    let mut names = NameLookup::default();
+
+    for (node_index, smf_node) in smf.nodes.iter().enumerate() {
+        names.insert(smf_node.name.clone(), node_index);
+
+        let parent_node_index = if smf_node.parent_name == "<root>" {
+            // Use a sentinel for root nodes.
+            NodeIndex::MAX
+        } else {
+            assert!(!smf_node.parent_name.eq("<root>"));
+            match names.get(&smf_node.parent_name) {
+                Some(id) => *id,
+                None => {
+                    let n = names.keys().cloned().collect::<Vec<_>>().join(", ");
+                    return Err(AssetError::Custom(format!(
+                        "Parent name [{}] not found, existing names: {}",
+                        smf_node.parent_name, n
+                    )));
+                }
+            }
+        };
+
+        nodes.push(ModelNode {
+            parent: parent_node_index,
+            transform: Transform::new(smf_node.position, Quat::IDENTITY),
+        });
+
+        for smf_mesh in smf_node.meshes.iter() {
+            let texture_path = PathBuf::from("textures")
+                .join("shared")
+                .join(&smf_mesh.texture_name);
+            let mesh = mesh_lookup.entry(texture_path.clone()).or_default();
+            mesh.extend(std::iter::once(smf_mesh_to_mesh(
+                smf_mesh,
+                node_index as u32,
+            )));
+        }
+
+        for smf_bounding_box in smf_node.bounding_boxes.iter() {
+            bounding_boxes.push(ModelBoundingBox {
+                node_index,
+                min: smf_bounding_box.min,
+                max: smf_bounding_box.max,
+                model_transform: Mat4::IDENTITY,
+            });
+        }
+    }
+
+    let sampler = renderer.create_sampler(
+        "model sampler",
+        wgpu::AddressMode::Repeat,
+        wgpu::FilterMode::Nearest,
+        wgpu::FilterMode::Nearest,
+    );
+
+    let meshes = mesh_lookup
+        .drain()
+        .map(|(texture_path, mesh)| {
+            let image = resources
+                .request::<Image>(&texture_path)
+                .unwrap_or_else(|_| panic!("Could not load texture. {}", texture_path.display()));
+            let texture_view = renderer.create_texture_view("object texture", &image.data);
+            let bind_group =
+                renderer.create_texture_bind_group("object texture", &texture_view, &sampler);
+            let texture = texture_storage.insert(RenderTexture {
+                texture_view,
+                bind_group,
+            });
+
+            let mesh = mesh.to_gpu(renderer);
+
+            ModelMesh { texture, mesh }
+        })
+        .collect();
+
+    Ok(Model {
+        nodes,
+        meshes,
+        bounding_boxes,
+        names,
+    })
 }

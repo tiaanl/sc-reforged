@@ -15,6 +15,7 @@ use crate::{
         compositor::Compositor,
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
         geometry_buffers::{GeometryBuffers, GeometryData},
+        model::smf_to_model,
         render::RenderTexture,
         text_file::TextFile,
     },
@@ -320,12 +321,7 @@ impl WorldScene {
                             .with_extension("smf")
                     };
 
-                    let model_handle = match asset_loader.load_smf(
-                        &path,
-                        renderer,
-                        &resources,
-                        &mut texture_storage,
-                    ) {
+                    let smf = match asset_loader.load_smf(&path) {
                         Ok(handle) => handle,
                         Err(err) => {
                             tracing::warn!("Could not load .smf model: {}", path.display());
@@ -338,6 +334,9 @@ impl WorldScene {
                     let rotation =
                         Vec3::new(object.rotation.x, object.rotation.y, -object.rotation.z);
 
+                    let model_handle = objects.models.insert(
+                        smf_to_model(&smf, renderer, &resources, &mut texture_storage).unwrap(),
+                    );
                     let object = objects::Object::new(object.position, rotation, model_handle);
 
                     Ok::<_, AssetError>(object)

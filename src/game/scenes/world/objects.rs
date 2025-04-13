@@ -1,9 +1,11 @@
-use std::sync::Arc;
-
 use glam::Vec4Swizzles;
 
 use crate::{
-    engine::{gizmos::GizmosRenderer, prelude::*, storage::Storage},
+    engine::{
+        gizmos::GizmosRenderer,
+        prelude::*,
+        storage::{Handle, Storage},
+    },
     game::{
         camera::{BoundingBox, Camera, Frustum, Ray},
         geometry_buffers::GeometryBuffers,
@@ -20,12 +22,12 @@ use super::bounding_boxes::{BoundingBoxRenderer, RawBoundingBox};
 pub struct Object {
     pub translation: Vec3,
     pub rotation: Vec3,
-    pub model: Arc<Model>,
+    pub model: Handle<Model>,
     pub visible: bool,
 }
 
 impl Object {
-    pub fn new(translation: Vec3, rotation: Vec3, model: Arc<Model>) -> Self {
+    pub fn new(translation: Vec3, rotation: Vec3, model: Handle<Model>) -> Self {
         Self {
             translation,
             rotation,
@@ -36,6 +38,7 @@ impl Object {
 }
 
 pub struct Objects {
+    pub models: Storage<Model>,
     pub model_renderer: ModelRenderer,
 
     render_bounding_boxes: bool,
@@ -53,11 +56,13 @@ impl Objects {
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
+        let models = Storage::default();
         let model_renderer = ModelRenderer::new(renderer, shaders, camera_bind_group_layout);
 
         let bounding_box_renderer = BoundingBoxRenderer::new(renderer, camera_bind_group_layout);
 
         Self {
+            models,
             model_renderer,
             render_bounding_boxes: false,
             bounding_box_renderer,
@@ -84,6 +89,10 @@ impl Objects {
 
         // Gather up a list of bounding boxes for each entity/model.
         for (object_index, object) in self.objects.iter().enumerate() {
+            let Some(model) = self.models.get(object.model) else {
+                continue;
+            };
+
             let entity_transform = Mat4::from_rotation_translation(
                 Quat::from_euler(
                     glam::EulerRot::XYZ,
@@ -94,7 +103,7 @@ impl Objects {
                 object.translation,
             );
 
-            for bounding_box in object.model.bounding_boxes.iter() {
+            for bounding_box in model.bounding_boxes.iter() {
                 let transform = entity_transform * bounding_box.model_transform;
                 let bbox =
                     RawBoundingBox::new(transform, bounding_box.min, bounding_box.max, false);
@@ -120,6 +129,10 @@ impl Objects {
         let frustum = Frustum::from(proj_view);
 
         self.objects.iter_mut().for_each(|object| {
+            let Some(model) = self.models.get(object.model) else {
+                return;
+            };
+
             let object_transform = Mat4::from_rotation_translation(
                 Quat::from_euler(
                     glam::EulerRot::XYZ,
@@ -130,7 +143,7 @@ impl Objects {
                 object.translation,
             );
 
-            object.visible = object.model.bounding_boxes.iter().any(|bounding_box| {
+            object.visible = model.bounding_boxes.iter().any(|bounding_box| {
                 let transform = object_transform * bounding_box.model_transform;
                 let bbox = BoundingBox {
                     min: (transform * bounding_box.min.extend(1.0)).xyz(),
@@ -152,7 +165,7 @@ impl Objects {
         let models = self
             .objects
             .iter()
-            .map(|object| object.model.as_ref())
+            .filter_map(|object| self.models.get(object.model))
             .collect::<Vec<&Model>>();
 
         self.model_renderer.render(
@@ -210,19 +223,21 @@ impl Objects {
                     object.translation,
                 );
 
-                for bounding_box in object.model.bounding_boxes.iter() {
-                    let transform = entity_transform * bounding_box.model_transform;
-                    let highlight = if let Some(hover_index) = self.selected_object {
-                        hover_index == object_index
-                    } else {
-                        false
-                    };
-                    boxes.push(RawBoundingBox::new(
-                        transform,
-                        bounding_box.min,
-                        bounding_box.max,
-                        highlight,
-                    ));
+                if let Some(model) = self.models.get(object.model) {
+                    for bounding_box in model.bounding_boxes.iter() {
+                        let transform = entity_transform * bounding_box.model_transform;
+                        let highlight = if let Some(hover_index) = self.selected_object {
+                            hover_index == object_index
+                        } else {
+                            false
+                        };
+                        boxes.push(RawBoundingBox::new(
+                            transform,
+                            bounding_box.min,
+                            bounding_box.max,
+                            highlight,
+                        ));
+                    }
                 }
             }
 
