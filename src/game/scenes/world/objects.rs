@@ -149,15 +149,30 @@ impl Objects {
         camera_bind_group: &wgpu::BindGroup,
         texture_storage: &Storage<RenderTexture>,
     ) {
-        for object in self.objects.iter() {
-            self.model_renderer.render(
-                frame,
-                geometry_buffers,
-                camera_bind_group,
-                object.model.as_ref(),
-                texture_storage,
-            );
-        }
+        let models = self
+            .objects
+            .iter()
+            .map(|object| object.model.as_ref())
+            .collect::<Vec<&Model>>();
+
+        self.model_renderer.render(
+            frame,
+            geometry_buffers,
+            camera_bind_group,
+            &models,
+            texture_storage,
+        );
+
+        // for object in self.objects.iter() {
+        //     self.model_renderer.render(
+        //         frame,
+        //         geometry_buffers,
+        //         camera_bind_group,
+        //         object.model.as_ref(),
+        //         texture_storage,
+        //     );
+        // }
+
         // self.model_renderer.render_multiple(
         //     frame,
         //     geometry_buffers,

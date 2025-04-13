@@ -82,7 +82,6 @@ impl Model {
             nodes.push(ModelNode {
                 parent: parent_node_index,
                 transform: Transform::new(smf_node.position, Quat::IDENTITY),
-                model_transform: Mat4::IDENTITY,
             });
 
             for smf_mesh in smf_node.meshes.iter() {
@@ -167,8 +166,6 @@ pub struct ModelNode {
     pub parent: NodeIndex,
     /// Local transform.
     pub transform: Transform,
-    /// Precalculated model transform for the node.
-    pub model_transform: Mat4,
 }
 
 #[derive(Debug)]
