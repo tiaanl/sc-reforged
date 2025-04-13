@@ -85,9 +85,7 @@ impl Model {
                 let texture_path = PathBuf::from("textures")
                     .join("shared")
                     .join(&smf_mesh.texture_name);
-                let mesh = mesh_lookup
-                    .entry(texture_path.clone())
-                    .or_insert(IndexedMesh::default());
+                let mesh = mesh_lookup.entry(texture_path.clone()).or_default();
                 mesh.extend(std::iter::once(Self::smf_mesh_to_mesh(
                     smf_mesh,
                     node_index as u32,
@@ -116,7 +114,9 @@ impl Model {
             .map(|(texture_path, mesh)| {
                 let image = resources
                     .request::<Image>(&texture_path)
-                    .expect(format!("Could not load texture. {}", texture_path.display()).as_str());
+                    .unwrap_or_else(|_| {
+                        panic!("Could not load texture. {}", texture_path.display())
+                    });
                 let texture_view = renderer.create_texture_view("object texture", &image.data);
                 let bind_group =
                     renderer.create_texture_bind_group("object texture", &texture_view, &sampler);

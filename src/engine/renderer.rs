@@ -348,7 +348,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn clear_color_and_depth(&mut self, color: wgpu::Color, depth: f32) {
+    pub fn _clear_color_and_depth(&mut self, color: wgpu::Color, depth: f32) {
         // Creating and dropping the render pass will clear the buffers.
         self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("world_clear_render_pass"),

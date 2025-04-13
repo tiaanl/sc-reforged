@@ -219,15 +219,8 @@ impl ModelViewer {
                 .join("alvhqd-hummer.smf");
             let smf = asset_loader.load_smf_direct(&path)?;
 
-            Model::from_smf(
-                renderer,
-                &asset_loader,
-                &node_data_bind_group_layout,
-                &material_bind_group_layout,
-                &sampler,
-                &smf,
-            )
-            .expect("Could not load model.")
+            Model::from_smf(renderer, &asset_loader, &node_data_bind_group_layout, &smf)
+                .expect("Could not load model.")
         };
 
         let animation = None;
@@ -288,8 +281,6 @@ impl ModelViewer {
             renderer,
             &self.asset_loader,
             &self.node_data_bind_group_layout,
-            &self.material_bind_group_layout,
-            &self.sampler,
             &smf,
         )
     }
@@ -607,8 +598,6 @@ impl Model {
         renderer: &Renderer,
         asset_loader: &AssetLoader,
         node_data_bind_group_layout: &wgpu::BindGroupLayout,
-        material_bind_group_layout: &wgpu::BindGroupLayout,
-        sampler: &wgpu::Sampler,
         smf: &smf::Model,
     ) -> Result<Self, AssetError> {
         let mut nodes = Vec::default();

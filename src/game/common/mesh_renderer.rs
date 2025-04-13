@@ -5,7 +5,7 @@ use wgpu::{ShaderStages, util::DeviceExt, vertex_attr_array};
 
 use crate::engine::prelude::*;
 
-use super::{geometry_buffers::GeometryBuffers, model::Model};
+use super::geometry_buffers::GeometryBuffers;
 
 #[derive(Clone, Copy, Debug)]
 pub enum BlendMode {

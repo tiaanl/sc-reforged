@@ -1,10 +1,10 @@
 use std::{
     any::TypeId,
-    cell::RefCell,
     collections::HashMap,
     path::{Path, PathBuf},
 };
 
+use parking_lot::RwLock;
 use shadow_company_tools::{bmf, smf};
 
 use crate::{
@@ -73,7 +73,7 @@ pub struct AssetLoader {
     /// The file system we use to load data from the OS.
     file_system: FileSystem,
     /// A cache of paths to handles we use to avoid loading duplicate data.
-    paths: RefCell<PathCache>,
+    paths: RwLock<PathCache>,
     /// A cache of the image definitions used to load images.
     image_defs: ImageDefs,
 }
@@ -92,7 +92,7 @@ impl AssetLoader {
         let mut s = Self {
             asset_store,
             file_system,
-            paths: RefCell::new(PathCache::default()),
+            paths: RwLock::new(PathCache::default()),
             image_defs: ImageDefs::default(),
         };
 
@@ -120,7 +120,7 @@ impl AssetLoader {
         resources: &Resources,
         texture_storage: &mut Storage<RenderTexture>,
     ) -> Result<Handle<Model>, AssetError> {
-        self.load_cached(path, |asset_loader, path| {
+        self.load_cached(path, |_, path| {
             // We convert the .smf to our own model data, so we can just throw it away and not
             // store it in the asset cache.
             let raw = self.file_system.load(path)?;
@@ -221,14 +221,14 @@ impl AssetLoader {
     {
         debug_assert!(!path.as_ref().is_absolute());
 
-        if let Some(handle) = self.paths.borrow().get(path.as_ref()) {
+        if let Some(handle) = self.paths.read().get(path.as_ref()) {
             return Ok(handle);
         }
 
         let asset = create(self, path.as_ref())?;
         let handle = self.asset_store.add(asset);
         self.paths
-            .borrow_mut()
+            .write()
             .insert(path.as_ref().to_path_buf(), handle);
 
         Ok(handle)

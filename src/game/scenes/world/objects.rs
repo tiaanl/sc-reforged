@@ -189,7 +189,7 @@ impl Objects {
         &self,
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
-        gizmos_renderer: &GizmosRenderer,
+        _gizmos_renderer: &GizmosRenderer,
     ) {
         if self.render_bounding_boxes {
             let mut boxes = vec![];

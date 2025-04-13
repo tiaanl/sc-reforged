@@ -1,15 +1,15 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 use bevy_ecs::system::Resource;
 
 pub struct Handle<T>(usize, PhantomData<T>);
 
 impl<T> Handle<T> {
-    pub fn from_raw(raw: usize) -> Self {
+    pub fn _from_raw(raw: usize) -> Self {
         Self(raw, PhantomData)
     }
 
-    pub fn as_raw(&self) -> usize {
+    pub fn _as_raw(&self) -> usize {
         self.0
     }
 }
@@ -65,30 +65,7 @@ impl<T> Storage<T> {
         self.items.get(handle.0)
     }
 
-    pub fn get_mut(&mut self, handle: Handle<T>) -> Option<&mut T> {
+    pub fn _get_mut(&mut self, handle: Handle<T>) -> Option<&mut T> {
         self.items.get_mut(handle.0)
-    }
-}
-
-#[derive(Resource)]
-pub struct ArcStorage<T> {
-    items: slab::Slab<Arc<T>>,
-}
-
-impl<T> Default for ArcStorage<T> {
-    fn default() -> Self {
-        Self {
-            items: Default::default(),
-        }
-    }
-}
-
-impl<T> ArcStorage<T> {
-    pub fn insert(&mut self, item: T) -> Handle<T> {
-        Handle(self.items.insert(Arc::new(item)), PhantomData)
-    }
-
-    pub fn get(&self, handle: Handle<T>) -> Option<Arc<T>> {
-        self.items.get(handle.0).cloned()
     }
 }
