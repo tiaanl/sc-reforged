@@ -14,8 +14,6 @@ pub mod tracked;
 pub mod transform;
 
 pub mod prelude {
-    #![allow(unused_imports)]
-    pub use super::assets::{Asset, AssetStore, Handle};
     pub use super::depth_buffer::*;
     pub use super::dirty::*;
     pub use super::input::*;

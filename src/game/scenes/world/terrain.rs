@@ -253,11 +253,7 @@ impl Terrain {
             let path = PathBuf::from("trnhigh").join(format!("{}.jpg", texture_map_base_name));
             info!("Loading high detail terrain texture: {}", path.display());
 
-            let handle = asset_loader.load_jpeg(&path)?;
-            let image = asset_loader
-                .asset_store()
-                .get(handle)
-                .expect("Just loaded successfully.");
+            let image = asset_loader.load_jpeg(&path)?;
             renderer.create_texture_view("terrain_texture", &image.data)
         };
 
@@ -267,10 +263,6 @@ impl Terrain {
                     .join("image_processor")
                     .join("water2.bmp"),
             )?;
-            let image = asset_loader
-                .asset_store()
-                .get(image)
-                .expect("just loaded it successfully.");
             renderer.create_texture_view("water", &image.data)
         };
 

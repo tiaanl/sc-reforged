@@ -9,14 +9,13 @@ pub struct LoadingScene {
 
 impl LoadingScene {
     pub fn new(assets: &AssetLoader, renderer: &Renderer) -> Self {
-        let handle = assets
+        let image = assets
             .load_jpeg(
                 &PathBuf::from("textures")
                     .join("interface")
                     .join("loadscr2.jpg"),
             )
             .unwrap();
-        let image = assets.asset_store().get(handle).unwrap();
         let texture_view =
             renderer.create_texture_view("texture: textures/interface/loadscr2.jpg", &image.data);
 

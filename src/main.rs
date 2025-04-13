@@ -37,15 +37,10 @@ enum App {
         renderer: Renderer,
         /// egui integration.
         egui_integration: engine::egui_integration::EguiIntegration,
-        /// The main way of loading assets from the /data directory.
-        _assets: Arc<AssetLoader>,
-        _asset_store: AssetStore,
-
+        /// The current input state of the engine.
         input: InputState,
-
         /// The last position the mouse was on the window client area.
         last_mouse_position: Option<UVec2>,
-
         // The instant that the last frame started to render.
         last_frame_time: Instant,
         /// The scene we are currently rendering to the screen.
@@ -94,11 +89,8 @@ impl winit::application::ApplicationHandler for App {
                 let resources =
                     Resources::new(&opts.path).expect("Could not initialize resources.");
 
-                let asset_store = AssetStore::default();
-                let asset_loader = Arc::new(
-                    AssetLoader::new(asset_store.clone(), &opts.path)
-                        .expect("Could not initialize assets."),
-                );
+                let asset_loader =
+                    Arc::new(AssetLoader::new(&opts.path).expect("Could not initialize assets."));
 
                 let scene: Box<dyn Scene> = if true {
                     // WorldScene
@@ -128,13 +120,7 @@ impl winit::application::ApplicationHandler for App {
                         .unwrap();
 
                     Box::new(
-                        match WorldScene::new(
-                            resources,
-                            &asset_loader,
-                            asset_store.clone(),
-                            &renderer,
-                            campaign_def,
-                        ) {
+                        match WorldScene::new(resources, &asset_loader, &renderer, campaign_def) {
                             Ok(scene) => scene,
                             Err(err) => {
                                 error!("Could not create world scene! - {}", err);
@@ -152,8 +138,6 @@ impl winit::application::ApplicationHandler for App {
                     window,
                     renderer,
                     egui_integration,
-                    _assets: asset_loader,
-                    _asset_store: asset_store,
                     input: InputState::default(),
                     last_mouse_position: None,
                     last_frame_time: Instant::now(),

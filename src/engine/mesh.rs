@@ -1,9 +1,8 @@
 use glam::{Vec2, Vec3};
 
-use super::{
-    assets::Asset,
-    renderer::{BufferLayout, Renderer},
-};
+use crate::game::asset_loader::Asset;
+
+use super::renderer::{BufferLayout, Renderer};
 
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]

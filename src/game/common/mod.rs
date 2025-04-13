@@ -6,7 +6,6 @@ pub mod file_system;
 pub mod geometry_buffers;
 pub mod image;
 pub mod image_packer;
-pub mod mesh_renderer;
 pub mod model;
 pub mod model_renderer;
 pub mod render;

@@ -1,11 +1,20 @@
 use glam::UVec2;
 
-use crate::{
-    Asset,
-    engine::assets::resources::{ResourceLoadContext, ResourceType},
-};
+use crate::engine::assets::resources::{ResourceLoadContext, ResourceType};
 
-use super::mesh_renderer::BlendMode;
+use super::asset_loader::Asset;
+
+#[derive(Clone, Copy, Debug)]
+pub enum BlendMode {
+    /// No blending.
+    Opaque,
+    /// Color keyed (use black as the key).
+    ColorKeyed,
+    /// Use the alpha channel of the texture.
+    Alpha,
+    /// Multiply the values from the texture with the background. Mostly used for light effects.
+    Multiply,
+}
 
 pub struct Image {
     pub size: UVec2,

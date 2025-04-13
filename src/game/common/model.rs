@@ -9,7 +9,11 @@ use crate::engine::{
     storage::{Handle, Storage},
 };
 
-use super::{asset_loader::AssetError, image::Image, render::RenderTexture};
+use super::{
+    asset_loader::{Asset, AssetError},
+    image::Image,
+    render::RenderTexture,
+};
 
 pub type NodeIndex = usize;
 

@@ -109,8 +109,7 @@ impl Strata {
             let path = PathBuf::from("textures").join("shared").join("strata.bmp");
             tracing::info!("Loading strata texture: {}", path.display());
 
-            let handle = asset_loader.load_bmp(&path)?;
-            let image = asset_loader.asset_store().get(handle).expect("Just loaded");
+            let image = asset_loader.load_bmp(&path)?;
             renderer.create_texture_view("terrain_strata", &image.data)
         };
 

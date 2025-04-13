@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use glam::Vec4Swizzles;
 
 use crate::{
@@ -18,12 +20,12 @@ use super::bounding_boxes::{BoundingBoxRenderer, RawBoundingBox};
 pub struct Object {
     pub translation: Vec3,
     pub rotation: Vec3,
-    pub model: Handle<Model>,
+    pub model: Arc<Model>,
     pub visible: bool,
 }
 
 impl Object {
-    pub fn new(translation: Vec3, rotation: Vec3, model: Handle<Model>) -> Self {
+    pub fn new(translation: Vec3, rotation: Vec3, model: Arc<Model>) -> Self {
         Self {
             translation,
             rotation,
@@ -34,8 +36,6 @@ impl Object {
 }
 
 pub struct Objects {
-    asset_store: AssetStore,
-
     pub model_renderer: ModelRenderer,
 
     render_bounding_boxes: bool,
@@ -49,7 +49,6 @@ pub struct Objects {
 
 impl Objects {
     pub fn new(
-        asset_store: AssetStore,
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
@@ -59,7 +58,6 @@ impl Objects {
         let bounding_box_renderer = BoundingBoxRenderer::new(renderer, camera_bind_group_layout);
 
         Self {
-            asset_store,
             model_renderer,
             render_bounding_boxes: false,
             bounding_box_renderer,
@@ -86,10 +84,6 @@ impl Objects {
 
         // Gather up a list of bounding boxes for each entity/model.
         for (object_index, object) in self.objects.iter().enumerate() {
-            let Some(model) = self.asset_store.get(object.model) else {
-                continue;
-            };
-
             let entity_transform = Mat4::from_rotation_translation(
                 Quat::from_euler(
                     glam::EulerRot::XYZ,
@@ -100,7 +94,7 @@ impl Objects {
                 object.translation,
             );
 
-            for bounding_box in model.bounding_boxes.iter() {
+            for bounding_box in object.model.bounding_boxes.iter() {
                 let transform = entity_transform * bounding_box.model_transform;
                 let bbox =
                     RawBoundingBox::new(transform, bounding_box.min, bounding_box.max, false);
@@ -126,27 +120,25 @@ impl Objects {
         let frustum = Frustum::from(proj_view);
 
         self.objects.iter_mut().for_each(|object| {
-            if let Some(model) = self.asset_store.get(object.model) {
-                let object_transform = Mat4::from_rotation_translation(
-                    Quat::from_euler(
-                        glam::EulerRot::XYZ,
-                        object.rotation.x,
-                        object.rotation.y,
-                        object.rotation.z,
-                    ),
-                    object.translation,
-                );
+            let object_transform = Mat4::from_rotation_translation(
+                Quat::from_euler(
+                    glam::EulerRot::XYZ,
+                    object.rotation.x,
+                    object.rotation.y,
+                    object.rotation.z,
+                ),
+                object.translation,
+            );
 
-                object.visible = model.bounding_boxes.iter().any(|bounding_box| {
-                    let transform = object_transform * bounding_box.model_transform;
-                    let bbox = BoundingBox {
-                        min: (transform * bounding_box.min.extend(1.0)).xyz(),
-                        max: (transform * bounding_box.max.extend(1.0)).xyz(),
-                    };
+            object.visible = object.model.bounding_boxes.iter().any(|bounding_box| {
+                let transform = object_transform * bounding_box.model_transform;
+                let bbox = BoundingBox {
+                    min: (transform * bounding_box.min.extend(1.0)).xyz(),
+                    max: (transform * bounding_box.max.extend(1.0)).xyz(),
+                };
 
-                    frustum.contains_bounding_box(&bbox)
-                });
-            }
+                frustum.contains_bounding_box(&bbox)
+            });
         });
     }
 
@@ -158,15 +150,13 @@ impl Objects {
         texture_storage: &Storage<RenderTexture>,
     ) {
         for object in self.objects.iter() {
-            if let Some(model) = self.asset_store.get(object.model) {
-                self.model_renderer.render(
-                    frame,
-                    geometry_buffers,
-                    camera_bind_group,
-                    model.as_ref(),
-                    texture_storage,
-                );
-            }
+            self.model_renderer.render(
+                frame,
+                geometry_buffers,
+                camera_bind_group,
+                object.model.as_ref(),
+                texture_storage,
+            );
         }
         // self.model_renderer.render_multiple(
         //     frame,
@@ -195,10 +185,6 @@ impl Objects {
             let mut boxes = vec![];
 
             for (object_index, object) in self.objects.iter().enumerate() {
-                let Some(model) = self.asset_store.get(object.model) else {
-                    continue;
-                };
-
                 let entity_transform = Mat4::from_rotation_translation(
                     Quat::from_euler(
                         glam::EulerRot::XYZ,
@@ -209,7 +195,7 @@ impl Objects {
                     object.translation,
                 );
 
-                for bounding_box in model.bounding_boxes.iter() {
+                for bounding_box in object.model.bounding_boxes.iter() {
                     let transform = entity_transform * bounding_box.model_transform;
                     let highlight = if let Some(hover_index) = self.selected_object {
                         hover_index == object_index

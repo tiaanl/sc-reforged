@@ -116,7 +116,6 @@ impl WorldScene {
     pub fn new(
         resources: Resources,
         asset_loader: &AssetLoader,
-        asset_store: AssetStore,
         renderer: &Renderer,
         campaign_def: CampaignDef,
     ) -> Result<Self, AssetError> {
@@ -286,7 +285,6 @@ impl WorldScene {
         )?;
 
         let mut objects = objects::Objects::new(
-            asset_store.clone(),
             renderer,
             &mut shaders,
             &main_camera.gpu_camera.bind_group_layout,

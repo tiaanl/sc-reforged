@@ -1,26 +1,21 @@
 use std::{
-    any::TypeId,
+    any::{Any, TypeId},
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use parking_lot::RwLock;
 use shadow_company_tools::{bmf, smf};
 
 use crate::{
-    Asset,
-    engine::{
-        assets::{AssetStore, Handle, resources::Resources},
-        renderer::Renderer,
-        storage::Storage,
-    },
+    engine::{assets::resources::Resources, renderer::Renderer, storage::Storage},
     game::config::ImageDefs,
 };
 
 use super::{
     file_system::{FileSystem, FileSystemError, GutFileSystemLayer, OsFileSystemLayer},
-    image::Image,
-    mesh_renderer::BlendMode,
+    image::{BlendMode, Image},
     model::Model,
     render::RenderTexture,
 };
@@ -43,37 +38,13 @@ pub enum AssetError {
     Custom(String),
 }
 
-#[derive(Default)]
-struct PathCache {
-    paths: HashMap<TypeId, HashMap<PathBuf, u64>>,
-}
-
-impl PathCache {
-    fn insert<A>(&mut self, path: PathBuf, handle: Handle<A>)
-    where
-        A: Asset + Send + Sync + 'static,
-    {
-        let typed_paths = self.paths.entry(TypeId::of::<A>()).or_default();
-        typed_paths.insert(path, handle.as_raw());
-    }
-
-    fn get<A>(&self, path: &Path) -> Option<Handle<A>>
-    where
-        A: Asset + Send + Sync + 'static,
-    {
-        self.paths
-            .get(&TypeId::of::<A>())
-            .map(|typed_paths| typed_paths.get(path).map(|id| Handle::from_raw(*id)))?
-    }
-}
+pub trait Asset {}
 
 pub struct AssetLoader {
-    /// The backend storing all the loaded assets and associated handles.
-    asset_store: AssetStore,
+    /// A cache holding all loaded assets.
+    asset_cache: AssetCache,
     /// The file system we use to load data from the OS.
     file_system: FileSystem,
-    /// A cache of paths to handles we use to avoid loading duplicate data.
-    paths: RwLock<PathCache>,
     /// A cache of the image definitions used to load images.
     image_defs: ImageDefs,
 }
@@ -82,17 +53,18 @@ unsafe impl Send for AssetLoader {}
 unsafe impl Sync for AssetLoader {}
 
 impl AssetLoader {
-    pub fn new(asset_store: AssetStore, data_dir: &Path) -> std::io::Result<Self> {
+    pub fn new(data_dir: &Path) -> std::io::Result<Self> {
         let root = data_dir.canonicalize()?;
+
+        let asset_cache = AssetCache::default();
 
         let mut file_system = FileSystem::default();
         file_system.push_layer(OsFileSystemLayer::new(&root));
         file_system.push_layer(GutFileSystemLayer::new(&root));
 
         let mut s = Self {
-            asset_store,
+            asset_cache,
             file_system,
-            paths: RwLock::new(PathCache::default()),
             image_defs: ImageDefs::default(),
         };
 
@@ -102,10 +74,6 @@ impl AssetLoader {
         s.image_defs = image_defs;
 
         Ok(s)
-    }
-
-    pub fn asset_store(&self) -> &AssetStore {
-        &self.asset_store
     }
 
     pub fn load_smf_direct(&self, path: &Path) -> Result<smf::Model, AssetError> {
@@ -119,7 +87,7 @@ impl AssetLoader {
         renderer: &Renderer,
         resources: &Resources,
         texture_storage: &mut Storage<RenderTexture>,
-    ) -> Result<Handle<Model>, AssetError> {
+    ) -> Result<Arc<Model>, AssetError> {
         self.load_cached(path, |_, path| {
             // We convert the .smf to our own model data, so we can just throw it away and not
             // store it in the asset cache.
@@ -175,13 +143,13 @@ impl AssetLoader {
         })
     }
 
-    pub fn load_bmp(&self, path: &Path) -> Result<Handle<Image>, AssetError> {
+    pub fn load_bmp(&self, path: &Path) -> Result<Arc<Image>, AssetError> {
         self.load_cached(path, |asset_loader, path| {
             asset_loader.load_bmp_direct(path)
         })
     }
 
-    pub fn load_jpeg(&self, path: &Path) -> Result<Handle<Image>, AssetError> {
+    pub fn load_jpeg(&self, path: &Path) -> Result<Arc<Image>, AssetError> {
         self.load_cached(path, |asset_loader, path| {
             let data = asset_loader.load_raw(path)?;
             let image =
@@ -213,7 +181,7 @@ impl AssetLoader {
         self.file_system.dir(path)
     }
 
-    fn load_cached<P, A, F>(&self, path: P, mut create: F) -> Result<Handle<A>, AssetError>
+    fn load_cached<P, A, F>(&self, path: P, mut create: F) -> Result<Arc<A>, AssetError>
     where
         P: AsRef<Path>,
         A: Asset + Send + Sync + 'static,
@@ -221,16 +189,68 @@ impl AssetLoader {
     {
         debug_assert!(!path.as_ref().is_absolute());
 
-        if let Some(handle) = self.paths.read().get(path.as_ref()) {
-            return Ok(handle);
+        // Return the asset if it exists in the cache already.
+        if let Some(asset) = self.asset_cache.get::<A>(path.as_ref()) {
+            return Ok(asset);
         }
 
         let asset = create(self, path.as_ref())?;
-        let handle = self.asset_store.add(asset);
-        self.paths
-            .write()
-            .insert(path.as_ref().to_path_buf(), handle);
+        Ok(self.asset_cache.insert(path.as_ref().to_path_buf(), asset))
+    }
+}
 
-        Ok(handle)
+struct TypedAssetCache<A: Asset> {
+    cache: HashMap<PathBuf, Arc<A>>,
+}
+
+impl<A: Asset> TypedAssetCache<A> {
+    fn insert(&mut self, path: PathBuf, asset: A) -> Arc<A> {
+        let asset = Arc::new(asset);
+        self.cache.insert(path, Arc::clone(&asset));
+        asset
+    }
+
+    fn get(&self, path: &PathBuf) -> Option<Arc<A>> {
+        self.cache.get(path).cloned()
+    }
+}
+
+impl<A: Asset> Default for TypedAssetCache<A> {
+    fn default() -> Self {
+        Self {
+            cache: Default::default(),
+        }
+    }
+}
+
+#[derive(Default)]
+struct AssetCache {
+    cache: RwLock<HashMap<TypeId, Box<dyn Any>>>,
+}
+
+impl AssetCache {
+    fn insert<A: Asset + 'static>(&self, path: PathBuf, asset: A) -> Arc<A> {
+        let type_id = TypeId::of::<A>();
+
+        let mut storage = self.cache.write();
+        let typed_cache = storage
+            .entry(type_id)
+            .or_insert_with(|| Box::new(TypedAssetCache::<A>::default()))
+            .downcast_mut::<TypedAssetCache<A>>()
+            .expect("Failed to downcast to TypedAssetCache");
+
+        typed_cache.insert(path, asset)
+    }
+
+    fn get<A: Asset + 'static>(&self, path: &Path) -> Option<Arc<A>> {
+        let type_id = TypeId::of::<A>();
+
+        let storage = self.cache.read();
+        let typed_cache = storage
+            .get(&type_id)?
+            .downcast_ref::<TypedAssetCache<A>>()
+            .expect("Failed to downcast to TypedAssetCache");
+
+        typed_cache.get(&path.to_path_buf())
     }
 }
