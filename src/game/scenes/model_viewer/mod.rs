@@ -609,7 +609,7 @@ impl Model {
         for (node_index, smf_node) in smf.nodes.iter().enumerate() {
             node_names.insert(smf_node.name.clone(), node_index);
 
-            let bone_id = smf_node.bone_id;
+            let bone_id = smf_node.tree_id;
 
             let parent_index = node_names
                 .get(&smf_node.parent_name)

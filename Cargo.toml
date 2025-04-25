@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy_ecs = { version = "0.15", default-features = false, features = ["trace"] }
-bevy_app = { version = "0.15" }
+shadow_company_tools = { path = "../shadow_company_tools" }
+
+bevy_ecs = { version = "0.16", default-features = false, features = ["trace"] }
 bytemuck = { version = "1.18.0", default-features = false, features = ["derive"] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 clap = { version = "4.5", features = ["derive"] }
@@ -13,14 +14,13 @@ egui = { version = "0.31", default-features = false }
 egui-wgpu = { version = "0.31", default-features = false }
 egui-winit = { version = "0.31", default-features = false }
 epaint = { version = "0.31", default-features = false, features = ["default_fonts"] }
-glam = { version = "0.29", default-features = false, features = ["bytemuck", "std"] }
+glam = { version = "0.30", default-features = false, features = ["bytemuck", "std"] }
 half = { version = "2.5.0", features = ["bytemuck"] }
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg"] }
 naga_oil = { version = "0.17.0", default-features = false }
 parking_lot = "0.12.3"
 pathdiff = "0.2.3"
 pollster = { version = "0.4", default-features = false }
-shadow_company_tools = { path = "../shadow_company_tools" }
 slab = "0.4.9"
 thiserror = { version = "2.0", default-features = false }
 tracing = { version = "0.1.40", default-features = false, features = ["release_max_level_info", "max_level_debug"] }

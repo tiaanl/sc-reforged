@@ -1,7 +1,5 @@
 use std::marker::PhantomData;
 
-use bevy_ecs::system::Resource;
-
 pub struct Handle<T>(usize, PhantomData<T>);
 
 impl<T> Handle<T> {
@@ -43,7 +41,7 @@ impl<T> std::fmt::Debug for Handle<T> {
     }
 }
 
-#[derive(Resource)]
+#[derive(bevy_ecs::resource::Resource)]
 pub struct Storage<T> {
     items: slab::Slab<T>,
 }
