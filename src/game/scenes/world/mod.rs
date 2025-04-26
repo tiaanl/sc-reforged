@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
     engine::{
-        assets::resources::Resources,
+        assets::AssetError,
         gizmos::{GizmoVertex, GizmosRenderer},
         prelude::*,
         shaders::Shaders,
@@ -10,14 +10,13 @@ use crate::{
     },
     game::{
         animation::Track,
-        asset_loader::{AssetError, AssetLoader},
+        assets::DataDir,
         camera::{self, Controller},
         compositor::Compositor,
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
         geometry_buffers::{GeometryBuffers, GeometryData},
         model::smf_to_model,
         render::RenderTexture,
-        text_file::TextFile,
     },
 };
 use glam::{Quat, UVec2, Vec3, Vec4, Vec4Swizzles};
@@ -115,8 +114,7 @@ enum UnderMouse {
 
 impl WorldScene {
     pub fn new(
-        resources: Resources,
-        asset_loader: &AssetLoader,
+        data_dir: DataDir,
         renderer: &Renderer,
         campaign_def: CampaignDef,
     ) -> Result<Self, AssetError> {
@@ -133,34 +131,27 @@ impl WorldScene {
         let lod_model_definitions = {
             let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
-            for ref lod_path in asset_loader
-                .enum_dir(&PathBuf::from("config").join("lod_model_profiles"))?
-                .into_iter()
+            for ref lod_path in data_dir
+                .assets()
+                .dir(&PathBuf::from("config").join("lod_model_profiles"))?
                 .filter(|e| e.as_path().extension().unwrap() == "txt")
             {
-                let profile = asset_loader.load_config::<LodModelProfileDefinition>(lod_path)?;
-                lod_definitions.insert(profile.lod_model_name, profile.sub_model_definitions);
+                let profile = data_dir.load_config::<LodModelProfileDefinition>(lod_path)?;
+                lod_definitions.insert(
+                    profile.lod_model_name.clone(),
+                    profile.sub_model_definitions.clone(),
+                );
             }
 
             lod_definitions
         };
 
-        // // Load the campaign specification.
-        // let campaign = asset_loader.load_config::<config::Campaign>(
-        //     &PathBuf::from("campaign")
-        //         .join(&campaign_def.base_name)
-        //         .join(&campaign_def.base_name)
-        //         .with_extension("txt"),
-        // )?;
-
-        let campaign = {
-            let path = PathBuf::from("campaign")
+        let campaign = data_dir.load_config::<config::Campaign>(
+            PathBuf::from("campaign")
                 .join(&campaign_def.base_name)
                 .join(&campaign_def.base_name)
-                .with_extension("txt");
-            let data = resources.request::<TextFile>(path).unwrap();
-            config::Campaign::try_from(data).unwrap()
-        };
+                .with_extension("txt"),
+        )?;
 
         let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
@@ -278,7 +269,7 @@ impl WorldScene {
                 });
 
         let terrain = Terrain::new(
-            asset_loader,
+            data_dir.clone(),
             renderer,
             &mut shaders,
             &campaign_def,
@@ -291,43 +282,27 @@ impl WorldScene {
             &main_camera.gpu_camera.bind_group_layout,
         );
 
-        if let Some(mtf_name) = campaign.mtf_name {
-            let mtf =
-                asset_loader.load_config::<config::Mtf>(&PathBuf::from("maps").join(mtf_name))?;
+        if let Some(ref mtf_name) = campaign.mtf_name {
+            let mtf = data_dir.load_config::<config::Mtf>(&PathBuf::from("maps").join(mtf_name))?;
 
             let mut to_spawn = mtf
                 .objects
                 .iter()
                 .flat_map(|object| {
-                    let prefix = {
-                        let mut prefix = PathBuf::from("models");
-                        if object.typ == "Bipedal" {
-                            prefix = prefix.join("people").join("bodies")
-                        }
-                        prefix
-                    };
-
-                    let path = if let Some(defs) = lod_model_definitions.get(&object.name) {
-                        let model_name = &defs[0].sub_model_model;
-
-                        prefix
-                            .join(model_name)
-                            .join(model_name)
-                            .with_extension("smf")
+                    let model_name = if let Some(defs) = lod_model_definitions.get(&object.name) {
+                        defs[0].sub_model_model.as_str()
                     } else {
-                        prefix
-                            .join(&object.name)
-                            .join(&object.name)
-                            .with_extension("smf")
+                        object.name.as_str()
                     };
 
-                    let smf = match asset_loader.load_smf(&path) {
-                        Ok(handle) => handle,
-                        Err(err) => {
-                            tracing::warn!("Could not load .smf model: {}", path.display());
-                            return Err(err);
-                        }
-                    };
+                    let smf = if object.typ == "Bipedal" {
+                        data_dir.load_bipedal_model(model_name)
+                    } else {
+                        data_dir.load_object_model(model_name)
+                    }
+                    .inspect_err(|err| {
+                        tracing::error!("Could not load model ({model_name}) ({err})");
+                    })?;
 
                     // Because we're using a left handed coordinate system, the z rotations have
                     // to be reversed.  (Why though!???)
@@ -335,7 +310,7 @@ impl WorldScene {
                         Vec3::new(object.rotation.x, object.rotation.y, -object.rotation.z);
 
                     let model_handle = objects.models.insert(
-                        smf_to_model(&smf, renderer, &resources, &mut texture_storage).unwrap(),
+                        smf_to_model(&smf, renderer, &data_dir, &mut texture_storage).unwrap(),
                     );
                     let object = objects::Object::new(object.position, rotation, model_handle);
 

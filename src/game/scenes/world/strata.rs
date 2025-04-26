@@ -3,8 +3,9 @@ use std::path::PathBuf;
 use glam::UVec2;
 use wgpu::util::DeviceExt;
 
+use crate::engine::assets::AssetError;
 use crate::engine::prelude::*;
-use crate::game::asset_loader::{AssetError, AssetLoader};
+use crate::game::assets::DataDir;
 use crate::game::geometry_buffers::GeometryBuffers;
 use crate::game::scenes::world::terrain::Terrain;
 
@@ -19,7 +20,7 @@ pub struct Strata {
 impl Strata {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        asset_loader: &AssetLoader,
+        data_dir: DataDir,
         renderer: &Renderer,
         shaders: &mut Shaders,
         terrain_size: UVec2,
@@ -109,7 +110,7 @@ impl Strata {
             let path = PathBuf::from("textures").join("shared").join("strata.bmp");
             tracing::info!("Loading strata texture: {}", path.display());
 
-            let image = asset_loader.load_bmp(&path)?;
+            let image = data_dir.load_image(&path)?;
             renderer.create_texture_view("terrain_strata", &image.data)
         };
 

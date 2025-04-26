@@ -1,7 +1,5 @@
 use glam::{Vec2, Vec3};
 
-use crate::game::asset_loader::Asset;
-
 use super::renderer::{BufferLayout, Renderer};
 
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
@@ -59,8 +57,6 @@ pub struct GpuIndexedMesh {
     pub index_buffer: wgpu::Buffer,
     pub index_count: u32,
 }
-
-impl Asset for GpuIndexedMesh {}
 
 impl std::fmt::Debug for GpuIndexedMesh {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

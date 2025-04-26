@@ -4,16 +4,12 @@ use bevy_ecs::component::Component;
 use shadow_company_tools::smf;
 
 use crate::engine::{
-    assets::resources::Resources,
+    assets::AssetError,
     prelude::*,
     storage::{Handle, Storage},
 };
 
-use super::{
-    asset_loader::{Asset, AssetError},
-    image::Image,
-    render::RenderTexture,
-};
+use super::{assets::DataDir, render::RenderTexture};
 
 pub type NodeIndex = usize;
 
@@ -32,8 +28,6 @@ pub struct Model {
     /// A map of node names to their indices in `nodes`.
     names: NameLookup,
 }
-
-impl Asset for smf::Model {}
 
 impl Model {
     /// Calculate the global transform for the given node.
@@ -109,7 +103,7 @@ struct MeshCollection {
 pub fn smf_to_model(
     smf: &smf::Model,
     renderer: &Renderer,
-    resources: &Resources,
+    data_dir: &DataDir,
     texture_storage: &mut Storage<RenderTexture>,
 ) -> Result<Model, AssetError> {
     fn smf_mesh_to_mesh(smf_mesh: &smf::Mesh, node_index: u32) -> IndexedMesh<ModelVertex> {
@@ -146,10 +140,13 @@ pub fn smf_to_model(
                 Some(id) => *id,
                 None => {
                     let n = names.keys().cloned().collect::<Vec<_>>().join(", ");
-                    return Err(AssetError::Custom(format!(
-                        "Parent name [{}] not found, existing names: {}",
-                        smf_node.parent_name, n
-                    )));
+                    return Err(AssetError::Unknown(
+                        PathBuf::from(&smf.name),
+                        format!(
+                            "Parent name [{}] not found, existing names: {}",
+                            smf_node.parent_name, n
+                        ),
+                    ));
                 }
             }
         };
@@ -190,8 +187,8 @@ pub fn smf_to_model(
     let meshes = mesh_lookup
         .drain()
         .map(|(texture_path, mesh)| {
-            let image = resources
-                .request::<Image>(&texture_path)
+            let image = data_dir
+                .load_image(&texture_path)
                 .unwrap_or_else(|_| panic!("Could not load texture. {}", texture_path.display()));
             let texture_view = renderer.create_texture_view("object texture", &image.data);
             let bind_group =

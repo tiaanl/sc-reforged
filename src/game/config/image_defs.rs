@@ -1,6 +1,4 @@
-#![allow(unused)]
-
-use crate::game::{asset_loader::AssetError, config::ConfigFile};
+use crate::game::{assets::Config, config::ConfigFile};
 
 #[derive(Debug, Default)]
 pub struct Image {
@@ -262,118 +260,112 @@ pub struct ImageDefs {
     pub anim_sprite_3d: Vec<AnimSprite3d>,
 }
 
-pub fn read_image_defs(data: &str) -> ImageDefs {
-    let mut image_defs = ImageDefs::default();
+impl Config for ImageDefs {
+    fn from_string(str: &str) -> Result<Self, crate::engine::assets::AssetError> {
+        let mut image_defs = ImageDefs::default();
 
-    let mut config = ConfigFile::new(data);
+        let mut config = ConfigFile::new(str);
 
-    #[derive(Debug)]
-    enum State {
-        None,
-        Sprite3d(Sprite3d),
-        AnimSprite(AnimSprite),
-        AnimSprite3d(AnimSprite3d),
-    }
-    let mut state = State::None;
-
-    while let Some(current) = config.current() {
-        match current[0] {
-            s if s.starts_with(';') => {}
-
-            "IMAGE" => {
-                image_defs.images.push(Image::from_params(current));
-            }
-
-            "SPRITE3D" => {
-                let sprite_3d = Sprite3d::from_params(current);
-                state = State::Sprite3d(sprite_3d);
-            }
-
-            s @ "SPRITEFRAME" | s @ "SPRITEFRAME_XRUN" | s @ "SPRITEFRAME_DXRUN" => {
-                let sprite_frame = match s {
-                    "SPRITEFRAME" => SpriteFrame::from_params(&current[1..]),
-                    "SPRITEFRAME_XRUN" => SpriteFrame::from_params_x_run(&current[1..]),
-                    "SPRITEFRAME_DXRUN" => SpriteFrame::from_params_dx_run(&current[1..]),
-                    _ => unreachable!("already checked"),
-                };
-                match state {
-                    State::Sprite3d(Sprite3d { ref mut frames, .. })
-                    | State::AnimSprite(AnimSprite { ref mut frames, .. })
-                    | State::AnimSprite3d(AnimSprite3d { ref mut frames, .. }) => {
-                        frames.push(sprite_frame);
-                    }
-                    _ => panic!("Found SPRITEFRAME, but not in correct state! {:?}", state),
-                }
-            }
-
-            "ENDDEF" => {
-                let state = std::mem::replace(&mut state, State::None);
-                match state {
-                    State::Sprite3d(sprite_3d) => image_defs.sprite_3d.push(sprite_3d),
-                    State::AnimSprite(anim_sprite) => image_defs.anim_sprite.push(anim_sprite),
-                    State::AnimSprite3d(anim_sprite_3d) => {
-                        image_defs.anim_sprite_3d.push(anim_sprite_3d)
-                    }
-                    _ => panic!("Found ENDDEF, but not in correct state! {:?}", state),
-                }
-            }
-
-            "ANIMSPRITE3D" => {
-                let anim_sprite_3d = AnimSprite3d::from_params(&current[1..]);
-                state = State::AnimSprite3d(anim_sprite_3d);
-            }
-
-            "FRAMEDESCRIPTOR" => {
-                let frame_descriptor = FrameDescritor::from_params(&current[1..]);
-                match state {
-                    State::AnimSprite(ref mut anim_sprite) => {
-                        //
-                        anim_sprite.frames_descriptor = frame_descriptor;
-                    }
-                    State::AnimSprite3d(ref mut anim_sprite_3d) => {
-                        anim_sprite_3d.frame_descriptor = frame_descriptor;
-                    }
-                    _ => panic!(
-                        "Found FRAMEDESCRIPTOR, but not in correct state! {:?}",
-                        state
-                    ),
-                }
-            }
-
-            "FRAMEORDER" => {
-                let frame_order = current[1..].iter().map(|s| s.parse().unwrap()).collect();
-                match state {
-                    State::AnimSprite3d(ref mut anim_sprite_3d) => {
-                        anim_sprite_3d.frame_order = frame_order;
-                    }
-                    _ => panic!(
-                        "Found FRAMEDESCRIPTOR, but not in correct state! {:?}",
-                        state
-                    ),
-                }
-            }
-
-            "ANIMSPRITE" => {
-                let anim_sprite = AnimSprite::from_params(&current[1..]);
-                state = State::AnimSprite(anim_sprite);
-            }
-
-            _ => panic!(
-                "Unexpected config value: {:?}, state: {:?}",
-                current.join(", "),
-                state
-            ),
+        #[derive(Debug)]
+        enum State {
+            None,
+            Sprite3d(Sprite3d),
+            AnimSprite(AnimSprite),
+            AnimSprite3d(AnimSprite3d),
         }
-        config.next();
-    }
+        let mut state = State::None;
 
-    image_defs
-}
+        while let Some(current) = config.current() {
+            match current[0] {
+                s if s.starts_with(';') => {}
 
-impl TryFrom<String> for ImageDefs {
-    type Error = AssetError;
+                "IMAGE" => {
+                    image_defs.images.push(Image::from_params(current));
+                }
 
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        Ok(read_image_defs(&value))
+                "SPRITE3D" => {
+                    let sprite_3d = Sprite3d::from_params(current);
+                    state = State::Sprite3d(sprite_3d);
+                }
+
+                s @ "SPRITEFRAME" | s @ "SPRITEFRAME_XRUN" | s @ "SPRITEFRAME_DXRUN" => {
+                    let sprite_frame = match s {
+                        "SPRITEFRAME" => SpriteFrame::from_params(&current[1..]),
+                        "SPRITEFRAME_XRUN" => SpriteFrame::from_params_x_run(&current[1..]),
+                        "SPRITEFRAME_DXRUN" => SpriteFrame::from_params_dx_run(&current[1..]),
+                        _ => unreachable!("already checked"),
+                    };
+                    match state {
+                        State::Sprite3d(Sprite3d { ref mut frames, .. })
+                        | State::AnimSprite(AnimSprite { ref mut frames, .. })
+                        | State::AnimSprite3d(AnimSprite3d { ref mut frames, .. }) => {
+                            frames.push(sprite_frame);
+                        }
+                        _ => panic!("Found SPRITEFRAME, but not in correct state! {:?}", state),
+                    }
+                }
+
+                "ENDDEF" => {
+                    let state = std::mem::replace(&mut state, State::None);
+                    match state {
+                        State::Sprite3d(sprite_3d) => image_defs.sprite_3d.push(sprite_3d),
+                        State::AnimSprite(anim_sprite) => image_defs.anim_sprite.push(anim_sprite),
+                        State::AnimSprite3d(anim_sprite_3d) => {
+                            image_defs.anim_sprite_3d.push(anim_sprite_3d)
+                        }
+                        _ => panic!("Found ENDDEF, but not in correct state! {:?}", state),
+                    }
+                }
+
+                "ANIMSPRITE3D" => {
+                    let anim_sprite_3d = AnimSprite3d::from_params(&current[1..]);
+                    state = State::AnimSprite3d(anim_sprite_3d);
+                }
+
+                "FRAMEDESCRIPTOR" => {
+                    let frame_descriptor = FrameDescritor::from_params(&current[1..]);
+                    match state {
+                        State::AnimSprite(ref mut anim_sprite) => {
+                            //
+                            anim_sprite.frames_descriptor = frame_descriptor;
+                        }
+                        State::AnimSprite3d(ref mut anim_sprite_3d) => {
+                            anim_sprite_3d.frame_descriptor = frame_descriptor;
+                        }
+                        _ => panic!(
+                            "Found FRAMEDESCRIPTOR, but not in correct state! {:?}",
+                            state
+                        ),
+                    }
+                }
+
+                "FRAMEORDER" => {
+                    let frame_order = current[1..].iter().map(|s| s.parse().unwrap()).collect();
+                    match state {
+                        State::AnimSprite3d(ref mut anim_sprite_3d) => {
+                            anim_sprite_3d.frame_order = frame_order;
+                        }
+                        _ => panic!(
+                            "Found FRAMEDESCRIPTOR, but not in correct state! {:?}",
+                            state
+                        ),
+                    }
+                }
+
+                "ANIMSPRITE" => {
+                    let anim_sprite = AnimSprite::from_params(&current[1..]);
+                    state = State::AnimSprite(anim_sprite);
+                }
+
+                _ => panic!(
+                    "Unexpected config value: {:?}, state: {:?}",
+                    current.join(", "),
+                    state
+                ),
+            }
+            config.next();
+        }
+
+        Ok(image_defs)
     }
 }

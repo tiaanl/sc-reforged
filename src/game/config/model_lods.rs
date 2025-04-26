@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::game::asset_loader::AssetError;
+use crate::game::assets::Config;
 
 use super::ConfigFile;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SubModelDefinition {
     pub sub_model_model: String,
     pub sub_model_range: f32,
@@ -16,11 +16,9 @@ pub struct LodModelProfileDefinition {
     pub sub_model_definitions: Vec<SubModelDefinition>,
 }
 
-impl TryFrom<String> for LodModelProfileDefinition {
-    type Error = AssetError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let mut config = ConfigFile::new(&value);
+impl Config for LodModelProfileDefinition {
+    fn from_string(str: &str) -> Result<Self, crate::engine::assets::AssetError> {
+        let mut config = ConfigFile::new(str);
 
         enum State {
             None,

@@ -1,9 +1,6 @@
 use glam::{Vec2, Vec3};
 
-use crate::{
-    engine::assets::resources::Resource,
-    game::{asset_loader::AssetError, text_file::TextFile},
-};
+use crate::{engine::assets::AssetError, game::assets::Config};
 
 use super::ConfigFile;
 
@@ -46,21 +43,11 @@ pub struct Campaign {
     pub time_of_day: [TimeOfDayEntry; 24],
 }
 
-impl TryFrom<Resource<TextFile>> for Campaign {
-    type Error = AssetError;
-
-    fn try_from(value: Resource<TextFile>) -> Result<Self, Self::Error> {
-        Self::try_from(value.as_str())
-    }
-}
-
-impl TryFrom<&str> for Campaign {
-    type Error = AssetError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+impl Config for Campaign {
+    fn from_string(str: &str) -> Result<Self, AssetError> {
         let mut campaign = Campaign::default();
 
-        let mut config = ConfigFile::new(value);
+        let mut config = ConfigFile::new(str);
 
         macro_rules! tod {
             ($params:expr,$s1:ident) => {{

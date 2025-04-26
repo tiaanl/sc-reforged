@@ -1,4 +1,10 @@
-use crate::game::{asset_loader::AssetError, config::ConfigFile};
+use crate::{
+    engine::assets::{Asset, AssetError},
+    game::{
+        assets::{Config, TextFile},
+        config::ConfigFile,
+    },
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct EmitterConfig {
@@ -293,11 +299,9 @@ pub struct CampaignDefs {
     pub campaigns: Vec<CampaignDef>,
 }
 
-impl TryFrom<String> for CampaignDefs {
-    type Error = AssetError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let mut config = ConfigFile::new(&value);
+impl Config for CampaignDefs {
+    fn from_string(str: &str) -> Result<Self, AssetError> {
+        let mut config = ConfigFile::new(str);
 
         let mut campaigns = vec![];
 

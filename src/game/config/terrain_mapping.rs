@@ -1,6 +1,6 @@
 use glam::Vec2;
 
-use crate::game::asset_loader::AssetError;
+use crate::{engine::assets::AssetError, game::assets::Config};
 
 use super::ConfigFile;
 
@@ -73,11 +73,9 @@ impl Default for TerrainMapping {
     }
 }
 
-impl TryFrom<String> for TerrainMapping {
-    type Error = AssetError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let mut config = ConfigFile::new(&value);
+impl Config for TerrainMapping {
+    fn from_string(str: &str) -> Result<Self, AssetError> {
+        let mut config = ConfigFile::new(str);
 
         let mut result = TerrainMapping::default();
 

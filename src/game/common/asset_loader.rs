@@ -76,6 +76,7 @@ impl AssetLoader {
         Ok(smf::Model::read(&mut reader)?)
     }
 
+    /*
     pub fn load_smf(&self, path: &Path) -> Result<Arc<smf::Model>, AssetError> {
         self.load_cached(path, |_, path| {
             // We convert the .smf to our own model data, so we can just throw it away and not
@@ -86,6 +87,7 @@ impl AssetLoader {
                 .map_err(|err| AssetError::FileSystemError(FileSystemError::Io(err)))
         })
     }
+    */
 
     pub fn load_raw(&self, path: &Path) -> Result<Vec<u8>, AssetError> {
         Ok(self.file_system.load(path)?)

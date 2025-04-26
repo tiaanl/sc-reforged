@@ -1,19 +1,19 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use glam::Vec4;
 use shadow_company_tools::{bmf, smf};
 use wgpu::util::DeviceExt;
 
+use crate::engine::assets::AssetError;
 use crate::engine::gizmos::{GizmoVertex, GizmosRenderer};
 use crate::engine::prelude::*;
 use crate::game::animation::Track;
-use crate::game::asset_loader::{AssetError, AssetLoader};
+use crate::game::assets::DataDir;
 use crate::game::camera;
 
 pub struct ModelViewer {
-    asset_loader: Arc<AssetLoader>,
+    data_dir: DataDir,
 
     model: Option<Model>,
     animation: Option<Animation>,
@@ -41,7 +41,7 @@ pub struct ModelViewer {
 }
 
 impl ModelViewer {
-    pub fn new(renderer: &Renderer, asset_loader: Arc<AssetLoader>) -> Result<Self, AssetError> {
+    pub fn new(renderer: &Renderer, data_dir: DataDir) -> Result<Self, AssetError> {
         let node_data_bind_group_layout =
             renderer
                 .device
@@ -194,18 +194,18 @@ impl ModelViewer {
             });
 
         let mut models = DirNode::default();
-        for path in asset_loader
-            .enum_dir(&PathBuf::from("models"))?
-            .iter()
+        for path in data_dir
+            .assets()
+            .dir(&PathBuf::from("models"))?
             .filter(|p| p.extension().map(|e| e == "smf").unwrap_or(false))
         {
             models.insert(path.clone());
         }
 
         let mut animations = DirNode::default();
-        for path in asset_loader
-            .enum_dir(&PathBuf::from("motions"))?
-            .iter()
+        for path in data_dir
+            .assets()
+            .dir(&PathBuf::from("motions"))?
             .filter(|p| p.extension().map(|e| e == "bmf").unwrap_or(false))
         {
             animations.insert(path.clone());
@@ -214,12 +214,9 @@ impl ModelViewer {
         let gizmos_renderer = GizmosRenderer::new(renderer, &gpu_camera.bind_group_layout);
 
         let model = {
-            let path = PathBuf::from("models")
-                .join("alvhqd-hummer")
-                .join("alvhqd-hummer.smf");
-            let smf = asset_loader.load_smf_direct(&path)?;
+            let smf = data_dir.load_object_model("alvhqd-hummer")?;
 
-            Model::from_smf(renderer, &asset_loader, &node_data_bind_group_layout, &smf)
+            Model::from_smf(renderer, &data_dir, &node_data_bind_group_layout, &smf)
                 .expect("Could not load model.")
         };
 
@@ -246,7 +243,7 @@ impl ModelViewer {
         // };
 
         Ok(Self {
-            asset_loader,
+            data_dir,
 
             model: Some(model),
             animation,
@@ -275,11 +272,11 @@ impl ModelViewer {
     }
 
     fn load_model(&mut self, renderer: &Renderer, path: &Path) -> Result<Model, AssetError> {
-        let smf = self.asset_loader.load_smf_direct(path)?;
+        let smf = self.data_dir.load_model_by_path(path)?;
 
         Model::from_smf(
             renderer,
-            &self.asset_loader,
+            &self.data_dir,
             &self.node_data_bind_group_layout,
             &smf,
         )
@@ -290,7 +287,7 @@ impl ModelViewer {
         _renderer: &Renderer,
         path: &Path,
     ) -> Result<Animation, AssetError> {
-        let bmf = self.asset_loader.load_bmf_direct(path)?;
+        let bmf = self.data_dir.load_motion(path)?;
 
         Animation::from_bmf(&bmf)
     }
@@ -596,7 +593,7 @@ struct Model {
 impl Model {
     fn from_smf(
         renderer: &Renderer,
-        asset_loader: &AssetLoader,
+        data_dir: &DataDir,
         node_data_bind_group_layout: &wgpu::BindGroupLayout,
         smf: &smf::Model,
     ) -> Result<Self, AssetError> {
@@ -619,8 +616,8 @@ impl Model {
             let node_index = nodes.len();
             for smf_mesh in smf_node.meshes.iter() {
                 // Create a [wgpu::TextureView] for the texture.
-                let image = asset_loader.load_bmp_direct(
-                    &PathBuf::from("textures")
+                let image = data_dir.load_image(
+                    PathBuf::from("textures")
                         .join("shared")
                         .join(&smf_mesh.texture_name),
                 )?;
@@ -749,7 +746,7 @@ struct Mesh {
 impl Mesh {
     fn from_smf_mesh(
         renderer: &Renderer,
-        asset_loader: &AssetLoader,
+        data_dir: DataDir,
         material_bind_group_layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
         smf_mesh: &smf::Mesh,
@@ -774,16 +771,15 @@ impl Mesh {
             let path = PathBuf::from("textures")
                 .join("shared")
                 .join(&smf_mesh.texture_name);
-            let image = match asset_loader.load_bmp_direct(&path) {
+            let image = match data_dir.load_image(&path) {
                 Ok(image) => image,
                 Err(_) => {
                     tracing::warn!(
                         "Could not load {}. Loading error.bmp instead.",
                         path.display()
                     );
-                    asset_loader.load_bmp_direct(
-                        &PathBuf::from("textures").join("object").join("error.bmp"),
-                    )?
+                    data_dir
+                        .load_image(PathBuf::from("textures").join("object").join("error.bmp"))?
                 }
             };
             let texture = renderer

@@ -1,5 +1,5 @@
 pub mod animation;
-pub mod asset_loader;
+pub mod assets;
 pub mod camera;
 pub mod compositor;
 pub mod file_system;
@@ -9,4 +9,3 @@ pub mod image_packer;
 pub mod model;
 pub mod model_renderer;
 pub mod render;
-pub mod text_file;

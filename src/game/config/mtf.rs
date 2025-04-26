@@ -1,6 +1,6 @@
 use glam::{Vec3, Vec4};
 
-use crate::game::{asset_loader::AssetError, config::ConfigFile};
+use crate::game::{assets::Config, config::ConfigFile};
 
 #[derive(Debug)]
 pub struct Object {
@@ -65,11 +65,9 @@ pub struct Mtf {
     pub objects: Vec<Object>,
 }
 
-impl TryFrom<String> for Mtf {
-    type Error = AssetError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let mut config = ConfigFile::new(&value);
+impl Config for Mtf {
+    fn from_string(str: &str) -> Result<Self, crate::engine::assets::AssetError> {
+        let mut config = ConfigFile::new(str);
 
         #[derive(Debug)]
         enum State {

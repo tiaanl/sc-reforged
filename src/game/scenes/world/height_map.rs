@@ -1,5 +1,7 @@
 use glam::{IVec2, UVec2, Vec3};
 
+use crate::engine::assets::{AssetError, AssetLoadContext, AssetType};
+
 /// Represents a rectangular grid of evenly spaced vertices, each with a variable elevation.
 ///
 /// Nodes are the vertices of the grid and cells are the rectangular areas between adjacent nodes.
@@ -60,6 +62,49 @@ impl HeightMap {
             pos.y as f32 * self.nominal_edge_size,
             elevation,
         )
+    }
+}
+
+pub struct HeightMapOptions {
+    pub nominal_edge_size: f32,
+    pub elevation_base: f32,
+}
+
+impl Default for HeightMapOptions {
+    fn default() -> Self {
+        Self {
+            nominal_edge_size: 200.0,
+            elevation_base: 10.0,
+        }
+    }
+}
+
+impl AssetType for HeightMap {
+    type Options = HeightMapOptions;
+
+    fn from_raw_with_options(
+        raw: &[u8],
+        options: Self::Options,
+        context: &AssetLoadContext,
+    ) -> Result<Self, AssetError> {
+        let mut reader = std::io::Cursor::new(raw);
+
+        let pcx::PcxData {
+            width,
+            height,
+            data: elevations,
+        } = pcx::load_height_map(&mut reader)
+            .map_err(|err| AssetError::from_io_error(err, context.path))?;
+
+        Ok(Self {
+            nominal_edge_size: options.nominal_edge_size,
+            elevation_base: options.elevation_base,
+            size: UVec2 {
+                x: width,
+                y: height,
+            },
+            elevations,
+        })
     }
 }
 

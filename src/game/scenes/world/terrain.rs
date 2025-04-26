@@ -6,13 +6,15 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     engine::{
+        assets::{Asset, AssetError},
         gizmos::{GizmoVertex, GizmosRenderer},
         prelude::*,
     },
     game::{
-        asset_loader::{AssetError, AssetLoader},
+        assets::DataDir,
         config::{CampaignDef, TerrainMapping},
         geometry_buffers::GeometryBuffers,
+        scenes::world::height_map::HeightMapOptions,
     },
 };
 
@@ -97,7 +99,7 @@ struct TerrainData {
 
 pub struct Terrain {
     /// Height data for the terrain.
-    height_map: HeightMap,
+    height_map: Asset<HeightMap>,
 
     /// The total amount of chunks of the terrain.
     total_chunks: u32,
@@ -218,48 +220,37 @@ impl Terrain {
     pub const VERTICES_PER_CHUNK: u32 = Self::CELLS_PER_CHUNK + 1;
 
     pub fn new(
-        asset_loader: &AssetLoader,
+        data_dir: DataDir,
         renderer: &Renderer,
         shaders: &mut Shaders,
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
-        let TerrainMapping {
-            altitude_map_height_base,
-            map_dx,
-            map_dy,
-            nominal_edge_size,
-            texture_map_base_name,
-            water_level,
-
-            water_trans_depth,
-            water_trans_high,
-            water_trans_low,
-            ..
-        } = {
+        let terrain_mapping = {
             let path = PathBuf::from("textures")
                 .join("terrain")
                 .join(&campaign_def.base_name)
                 .join("terrain_mapping.txt");
             info!("Loading terrain mapping: {}", path.display());
-            asset_loader.load_config::<TerrainMapping>(&path)?
+            data_dir.load_config::<TerrainMapping>(&path)?
         };
 
-        let water_level = water_level * altitude_map_height_base;
+        let water_level = terrain_mapping.water_level * terrain_mapping.altitude_map_height_base;
 
         shaders.add_module(include_str!("terrain_data.wgsl"), "terrain_data.wgsl");
 
         let terrain_texture_view = {
-            let path = PathBuf::from("trnhigh").join(format!("{}.jpg", texture_map_base_name));
+            let path = PathBuf::from("trnhigh")
+                .join(format!("{}.jpg", terrain_mapping.texture_map_base_name));
             info!("Loading high detail terrain texture: {}", path.display());
 
-            let image = asset_loader.load_jpeg(&path)?;
+            let image = data_dir.load_image(&path)?;
             renderer.create_texture_view("terrain_texture", &image.data)
         };
 
         let water_texture_view = {
-            let image = asset_loader.load_bmp(
-                &PathBuf::from("textures")
+            let image = data_dir.load_image(
+                PathBuf::from("textures")
                     .join("image_processor")
                     .join("water2.bmp"),
             )?;
@@ -271,10 +262,14 @@ impl Terrain {
 
             let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
             info!("Loading terrain height map: {}", path.display());
-            let data = asset_loader.load_raw(&path)?;
-            let mut reader = std::io::Cursor::new(data);
-            HeightMap::from_pcx(nominal_edge_size, altitude_map_height_base, &mut reader)
-                .map_err(|_| AssetError::Custom("Could not load height map data.".to_string()))?
+
+            data_dir.assets().load_with_options::<HeightMap>(
+                &path,
+                HeightMapOptions {
+                    nominal_edge_size: terrain_mapping.nominal_edge_size,
+                    elevation_base: terrain_mapping.altitude_map_height_base,
+                },
+            )?
         };
 
         let normals_lookup = Self::generate_normals_lookup_table();
@@ -353,7 +348,7 @@ impl Terrain {
 
         info!(
             "terrain size: {} x {}, terrain heightmap size: {} x {}",
-            map_dx, map_dy, height_map.size.x, height_map.size.y,
+            terrain_mapping.map_dx, terrain_mapping.map_dy, height_map.size.x, height_map.size.y,
         );
 
         let (height_map_buffer, nodes) = {
@@ -383,12 +378,12 @@ impl Terrain {
 
         let terrain_data = TerrainData {
             size: height_map.size,
-            nominal_edge_size,
+            nominal_edge_size: terrain_mapping.nominal_edge_size,
             water_level,
 
-            water_trans_depth,
-            water_trans_low: water_trans_low as f32 / 512.0,
-            water_trans_high: water_trans_high as f32 / 512.0,
+            water_trans_depth: terrain_mapping.water_trans_depth,
+            water_trans_low: terrain_mapping.water_trans_low as f32 / 512.0,
+            water_trans_high: terrain_mapping.water_trans_high as f32 / 512.0,
 
             _padding: 0.0,
         };
@@ -597,7 +592,7 @@ impl Terrain {
         let water_draw_args_buffer = renderer.device.create_buffer(&draw_args_descriptor);
 
         let strata = Strata::new(
-            asset_loader,
+            data_dir,
             renderer,
             shaders,
             height_map.size,
