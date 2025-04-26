@@ -6,7 +6,6 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     engine::{
-        assets::{Asset, AssetError},
         gizmos::{GizmoVertex, GizmosRenderer},
         prelude::*,
     },

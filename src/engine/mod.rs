@@ -14,6 +14,7 @@ pub mod tracked;
 pub mod transform;
 
 pub mod prelude {
+    pub use super::assets::*;
     pub use super::depth_buffer::*;
     pub use super::dirty::*;
     pub use super::input::*;
@@ -21,9 +22,10 @@ pub mod prelude {
     pub use super::renderer::*;
     pub use super::scene::*;
     pub use super::shaders::*;
+    pub use super::storage::*;
     pub use super::tracked::*;
     pub use super::transform::*;
-    pub use glam::{Mat4, Quat, Vec2, Vec3};
+    pub use glam::{Mat4, Quat, UVec2, Vec2, Vec3, Vec4};
 }
 
 mod mip_maps;

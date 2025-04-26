@@ -2,11 +2,7 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
 use egui::Widget;
-use engine::{
-    assets::{Assets, PlatformFileSystem},
-    egui_integration::EguiIntegration,
-    prelude::*,
-};
+use engine::{egui_integration::EguiIntegration, prelude::*};
 use game::{
     assets::DataDir,
     scenes::{model_viewer::ModelViewer, world::WorldScene},

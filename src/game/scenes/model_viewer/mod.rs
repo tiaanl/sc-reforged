@@ -5,9 +5,10 @@ use glam::Vec4;
 use shadow_company_tools::{bmf, smf};
 use wgpu::util::DeviceExt;
 
-use crate::engine::assets::AssetError;
-use crate::engine::gizmos::{GizmoVertex, GizmosRenderer};
-use crate::engine::prelude::*;
+use crate::engine::{
+    gizmos::{GizmoVertex, GizmosRenderer},
+    prelude::*,
+};
 use crate::game::animation::Track;
 use crate::game::assets::DataDir;
 use crate::game::camera;
