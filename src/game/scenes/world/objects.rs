@@ -35,6 +35,8 @@ impl Object {
 
 pub struct Objects {
     pub models: Storage<Model>,
+    pub textures: Storage<RenderTexture>,
+
     pub model_renderer: ModelRenderer,
 
     render_bounding_boxes: bool,
@@ -53,12 +55,14 @@ impl Objects {
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let models = Storage::default();
+        let textures = Storage::default();
         let model_renderer = ModelRenderer::new(renderer, shaders, camera_bind_group_layout);
 
         let bounding_box_renderer = BoundingBoxRenderer::new(renderer, camera_bind_group_layout);
 
         Self {
             models,
+            textures,
             model_renderer,
             render_bounding_boxes: false,
             bounding_box_renderer,

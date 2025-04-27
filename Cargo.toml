@@ -6,7 +6,6 @@ edition = "2024"
 [dependencies]
 shadow_company_tools = { path = "../shadow_company_tools" }
 
-bevy_ecs = { version = "0.16", default-features = false, features = ["trace"] }
 bytemuck = { version = "1.18.0", default-features = false, features = ["derive"] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 clap = { version = "4.5", features = ["derive"] }

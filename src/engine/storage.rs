@@ -41,7 +41,6 @@ impl<T> std::fmt::Debug for Handle<T> {
     }
 }
 
-#[derive(bevy_ecs::resource::Resource)]
 pub struct Storage<T> {
     items: slab::Slab<T>,
 }

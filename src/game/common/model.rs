@@ -1,6 +1,5 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use bevy_ecs::component::Component;
 use shadow_company_tools::smf;
 
 use crate::engine::prelude::*;
@@ -12,7 +11,7 @@ pub type NodeIndex = usize;
 type NameLookup = HashMap<String, NodeIndex>;
 
 /// Model instance data held by each enitty.
-#[derive(Component, Debug)]
+#[derive(Debug)]
 pub struct Model {
     /// A list of [Node]s contained in this [Model]. Parent nodes are guarranteed to be before its
     /// child nodes. Hierarchy is based on indices.
