@@ -16,7 +16,6 @@ use crate::{
         compositor::Compositor,
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
         geometry_buffers::{GeometryBuffers, GeometryData},
-        model::smf_to_model,
     },
 };
 
@@ -263,6 +262,7 @@ impl WorldScene {
         )?;
 
         let mut objects = objects::Objects::new(
+            data_dir.clone(),
             renderer,
             &mut shaders,
             &main_camera.gpu_camera.bind_group_layout,
@@ -271,41 +271,15 @@ impl WorldScene {
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir.load_config::<config::Mtf>(&PathBuf::from("maps").join(mtf_name))?;
 
-            let mut to_spawn = mtf
-                .objects
-                .iter()
-                .flat_map(|object| {
-                    let model_name = if let Some(defs) = lod_model_definitions.get(&object.name) {
-                        defs[0].sub_model_model.as_str()
-                    } else {
-                        object.name.as_str()
-                    };
-
-                    let smf = if object.typ == "Bipedal" {
-                        data_dir.load_bipedal_model(model_name)
-                    } else {
-                        data_dir.load_object_model(model_name)
-                    }
-                    .inspect_err(|err| {
-                        tracing::error!("Could not load model ({model_name}) ({err})");
-                    })?;
-
-                    // Because we're using a left handed coordinate system, the z rotations have
-                    // to be reversed.  (Why though!???)
-                    let rotation =
-                        Vec3::new(object.rotation.x, object.rotation.y, -object.rotation.z);
-
-                    let model_handle = objects.models.insert(
-                        smf_to_model(&smf, renderer, &data_dir, &mut objects.textures).unwrap(),
-                    );
-                    let object = objects::Object::new(object.position, rotation, model_handle);
-
-                    Ok::<_, AssetError>(object)
-                })
-                .collect::<Vec<_>>();
-
-            for object in to_spawn.drain(..) {
-                objects.spawn(object);
+            for object in mtf.objects.iter() {
+                if let Err(err) = objects.spawn(
+                    renderer,
+                    object.position,
+                    Vec3::new(object.rotation.x, object.rotation.y, -object.rotation.z),
+                    &object.name,
+                ) {
+                    tracing::error!("Could not load model: {}", err);
+                }
             }
         }
 
@@ -486,12 +460,8 @@ impl Scene for WorldScene {
             camera_bind_group,
             &self.main_camera.gpu_camera.bind_group, // Always the main camera.
         );
-        self.objects.render_objects(
-            frame,
-            &self.geometry_buffers,
-            camera_bind_group,
-            &self.objects.textures,
-        );
+        self.objects
+            .render_objects(frame, &self.geometry_buffers, camera_bind_group);
 
         // Now render alpha geoometry.
         self.terrain.render_water(frame, camera_bind_group);

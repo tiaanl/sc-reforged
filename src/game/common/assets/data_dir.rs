@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
-use shadow_company_tools::{bmf, smf};
+use shadow_company_tools::bmf;
 
 use crate::{
     engine::assets::{Asset, AssetError, Assets},
-    game::{config, image::Image},
+    game::{config, image::Image, model::Model},
 };
 
 use super::Config;
@@ -47,14 +47,11 @@ impl DataDir {
         self.assets.load(path)
     }
 
-    pub fn load_model_by_path(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> Result<Asset<smf::Model>, AssetError> {
+    pub fn load_model_by_path(&self, path: impl AsRef<Path>) -> Result<Asset<Image>, AssetError> {
         self.assets.load(path)
     }
 
-    pub fn load_object_model(&self, name: &str) -> Result<Asset<smf::Model>, AssetError> {
+    pub fn load_object_model(&self, name: &str) -> Result<Asset<Model>, AssetError> {
         let path = PathBuf::from("models")
             .join(name)
             .join(name)
@@ -62,7 +59,7 @@ impl DataDir {
         self.assets.load(path)
     }
 
-    pub fn load_bipedal_model(&self, name: &str) -> Result<Asset<smf::Model>, AssetError> {
+    pub fn load_bipedal_model(&self, name: &str) -> Result<Asset<Model>, AssetError> {
         let path = PathBuf::from("models")
             .join("people")
             .join("bodies")

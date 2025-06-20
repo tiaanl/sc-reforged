@@ -127,18 +127,18 @@ impl ModelRenderer {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, camera_bind_group, &[]);
 
-        for model in models.iter() {
-            for mesh in model.meshes.iter() {
-                let Some(texture) = texture_storage.get(mesh.texture) else {
-                    continue;
-                };
+        // for model in models.iter() {
+        //     for mesh in model.meshes.iter() {
+        //         let Some(texture) = texture_storage.get(mesh.texture) else {
+        //             continue;
+        //         };
 
-                render_pass.set_bind_group(1, &texture.bind_group, &[]);
-                render_pass.set_vertex_buffer(0, mesh.mesh.vertex_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(mesh.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..mesh.mesh.index_count, 0, 0..1);
-            }
-        }
+        //         render_pass.set_bind_group(1, &texture.bind_group, &[]);
+        //         render_pass.set_vertex_buffer(0, mesh.mesh.vertex_buffer.slice(..));
+        //         render_pass
+        //             .set_index_buffer(mesh.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        //         render_pass.draw_indexed(0..mesh.mesh.index_count, 0, 0..1);
+        //     }
+        // }
     }
 }

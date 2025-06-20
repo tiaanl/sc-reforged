@@ -4,23 +4,23 @@ use shadow_company_tools::smf;
 
 use crate::engine::prelude::*;
 
-use super::{assets::DataDir, render::RenderTexture};
-
-pub type NodeIndex = usize;
+pub type NodeIndex = u32;
 
 type NameLookup = HashMap<String, NodeIndex>;
 
 /// Model instance data held by each enitty.
 #[derive(Debug)]
 pub struct Model {
-    /// A list of [Node]s contained in this [Model]. Parent nodes are guarranteed to be before its
-    /// child nodes. Hierarchy is based on indices.
+    /// A list of [ModelNode]s that define the hierarchy of this [Model]. Each node's parent is
+    /// guaranteed to appear earlier in the list than the node itself, ensuring a top-down order for
+    /// traversal.
     pub nodes: Vec<ModelNode>,
-    /// A list of meshes for the [Model].
+    /// Meshes are combined based on their texture name, but each vertex still has a link to it's
+    /// original node.
     pub meshes: Vec<ModelMesh>,
-    /// A list of [BoundingBox]es contained in this [Model].
-    pub bounding_boxes: Vec<ModelBoundingBox>,
-    /// A map of node names to their indices in `nodes`.
+    /// A collection of collision boxes in the model, each associated with a specific node.
+    pub collision_boxes: Vec<ModelCollisionBox>,
+    /// Look up node indices according to original node names.
     names: NameLookup,
 }
 
@@ -30,7 +30,7 @@ impl Model {
         let mut transform = Mat4::IDENTITY;
         let mut current = node_index;
         while current != NodeIndex::MAX {
-            let node = &self.nodes[current];
+            let node = &self.nodes[current as usize];
             transform *= node.transform.to_mat4();
             current = node.parent;
         }
@@ -48,8 +48,8 @@ pub struct ModelNode {
 
 #[derive(Debug)]
 pub struct ModelMesh {
-    pub texture: Handle<RenderTexture>,
-    pub mesh: GpuIndexedMesh,
+    pub texture_name: String,
+    pub mesh: IndexedMesh<ModelVertex>,
 }
 
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
@@ -79,28 +79,16 @@ impl BufferLayout for ModelVertex {
 }
 
 #[derive(Debug)]
-pub struct ModelBoundingBox {
+pub struct ModelCollisionBox {
     /// An index to the [ModelNode] this mesh is attached to.
     pub node_index: NodeIndex,
     /// Minimum values for the bounding box.
     pub min: Vec3,
     /// Maximum values for the bounding box.
     pub max: Vec3,
-    // Precalculated model transform.
-    pub model_transform: Mat4,
 }
 
-struct MeshCollection {
-    texture: Handle<RenderTexture>,
-    mesh: IndexedMesh<ModelVertex>,
-}
-
-pub fn smf_to_model(
-    smf: &smf::Model,
-    renderer: &Renderer,
-    data_dir: &DataDir,
-    texture_storage: &mut Storage<RenderTexture>,
-) -> Result<Model, AssetError> {
+fn smf_to_model(smf: smf::Model) -> Result<Model, AssetError> {
     fn smf_mesh_to_mesh(smf_mesh: &smf::Mesh, node_index: u32) -> IndexedMesh<ModelVertex> {
         let vertices = smf_mesh
             .vertices
@@ -119,12 +107,12 @@ pub fn smf_to_model(
     }
 
     let mut nodes = Vec::with_capacity(smf.nodes.len());
-    let mut mesh_lookup: HashMap<PathBuf, IndexedMesh<ModelVertex>> = HashMap::default();
-    let mut bounding_boxes = Vec::new();
+    let mut mesh_lookup: HashMap<String, IndexedMesh<ModelVertex>> = HashMap::default();
+    let mut collision_boxes = Vec::new();
     let mut names = NameLookup::default();
 
     for (node_index, smf_node) in smf.nodes.iter().enumerate() {
-        names.insert(smf_node.name.clone(), node_index);
+        names.insert(smf_node.name.clone(), node_index as u32);
 
         let parent_node_index = if smf_node.parent_name == "<root>" {
             // Use a sentinel for root nodes.
@@ -152,57 +140,46 @@ pub fn smf_to_model(
         });
 
         for smf_mesh in smf_node.meshes.iter() {
-            let texture_path = PathBuf::from("textures")
-                .join("shared")
-                .join(&smf_mesh.texture_name);
-            let mesh = mesh_lookup.entry(texture_path.clone()).or_default();
-            mesh.extend(std::iter::once(smf_mesh_to_mesh(
-                smf_mesh,
-                node_index as u32,
-            )));
+            let mesh = mesh_lookup
+                .entry(smf_mesh.texture_name.clone())
+                .or_default();
+            mesh.extend(&smf_mesh_to_mesh(smf_mesh, node_index as u32));
         }
 
-        for smf_bounding_box in smf_node.bounding_boxes.iter() {
-            bounding_boxes.push(ModelBoundingBox {
-                node_index,
-                min: smf_bounding_box.min,
-                max: smf_bounding_box.max,
-                model_transform: Mat4::IDENTITY,
+        for smf_collision_box in smf_node.bounding_boxes.iter() {
+            collision_boxes.push(ModelCollisionBox {
+                node_index: node_index as u32,
+                min: smf_collision_box.min,
+                max: smf_collision_box.max,
             });
         }
     }
 
-    let sampler = renderer.create_sampler(
-        "model sampler",
-        wgpu::AddressMode::Repeat,
-        wgpu::FilterMode::Nearest,
-        wgpu::FilterMode::Nearest,
-    );
-
     let meshes = mesh_lookup
         .drain()
-        .map(|(texture_path, mesh)| {
-            let image = data_dir
-                .load_image(&texture_path)
-                .unwrap_or_else(|_| panic!("Could not load texture. {}", texture_path.display()));
-            let texture_view = renderer.create_texture_view("object texture", &image.data);
-            let bind_group =
-                renderer.create_texture_bind_group("object texture", &texture_view, &sampler);
-            let texture = texture_storage.insert(RenderTexture {
-                texture_view,
-                bind_group,
-            });
-
-            let mesh = mesh.to_gpu(renderer);
-
-            ModelMesh { texture, mesh }
-        })
+        .map(|(texture_name, mesh)| ModelMesh { texture_name, mesh })
         .collect();
 
     Ok(Model {
         nodes,
         meshes,
-        bounding_boxes,
+        collision_boxes,
         names,
     })
+}
+
+impl AssetType for Model {
+    type Options = ();
+
+    fn from_raw_with_options(
+        raw: &[u8],
+        _options: Self::Options,
+        context: &AssetLoadContext,
+    ) -> Result<Self, AssetError> {
+        // Parse the .smf data.
+        let smf = smf::Model::read(&mut std::io::Cursor::new(raw))
+            .map_err(|err| AssetError::from_io_error(err, context.path))?;
+
+        smf_to_model(smf)
+    }
 }

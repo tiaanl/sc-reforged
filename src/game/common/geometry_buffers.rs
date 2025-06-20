@@ -142,17 +142,12 @@ impl GeometryBuffers {
 
         let normals = Buffer::new(
             &renderer.device,
-            "g_buffer_positions",
+            "g_buffer_normals",
             size,
             Self::NORMALS_FORMAT,
         );
 
-        let ids = Buffer::new(
-            &renderer.device,
-            "g_buffer_positions",
-            size,
-            Self::IDS_FORMAT,
-        );
+        let ids = Buffer::new(&renderer.device, "g_buffer_ids", size, Self::IDS_FORMAT);
 
         let bind_group_layout =
             renderer

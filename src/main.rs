@@ -3,10 +3,7 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 use clap::Parser;
 use egui::Widget;
 use engine::{egui_integration::EguiIntegration, prelude::*};
-use game::{
-    assets::DataDir,
-    scenes::{model_viewer::ModelViewer, world::WorldScene},
-};
+use game::{assets::DataDir, scenes::world::WorldScene};
 use glam::UVec2;
 use tracing::{error, info, warn};
 use winit::{
@@ -89,7 +86,7 @@ impl winit::application::ApplicationHandler for App {
                 let assets = Assets::with_file_system(file_system);
                 let data_dir = DataDir::new(assets.clone());
 
-                let scene: Box<dyn Scene> = if true {
+                let scene: Box<dyn Scene> = {
                     // WorldScene
 
                     let campaign_defs = data_dir.load_campaign_defs().unwrap();
@@ -119,9 +116,10 @@ impl winit::application::ApplicationHandler for App {
                             panic!();
                         }
                     })
-                } else {
-                    Box::new(ModelViewer::new(&renderer, data_dir).unwrap())
                 };
+                //  else {
+                //     Box::new(ModelViewer::new(&renderer, data_dir).unwrap())
+                // };
 
                 info!("Application initialized!");
 

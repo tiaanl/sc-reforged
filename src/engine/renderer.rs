@@ -57,7 +57,7 @@ pub struct Renderer {
     mip_maps: MipMaps,
 }
 
-pub trait BufferLayout: Sized {
+pub trait BufferLayout: Clone {
     fn layout() -> wgpu::VertexBufferLayout<'static>;
 }
 

@@ -6,11 +6,28 @@
 @group(1) @binding(0) var t_texture: texture_2d<f32>;
 @group(1) @binding(1) var s_sampler: sampler;
 
+struct Node {
+    parent: u32,
+    _d0: u32,
+    _d2: u32,
+    _d3: u32,
+    transform: mat4x4<f32>,
+}
+
+@group(2) @binding(0) var<storage> u_nodes: array<Node>;
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) tex_coord: vec2<f32>,
     @location(3) node_index: u32,
+}
+
+struct InstanceInput {
+    @location(4) model0: vec4<f32>,
+    @location(5) model1: vec4<f32>,
+    @location(6) model2: vec4<f32>,
+    @location(7) model3: vec4<f32>,
 }
 
 struct VertexOutput {
@@ -21,13 +38,27 @@ struct VertexOutput {
 }
 
 @vertex
-fn vertex_main(vertex: VertexInput) -> VertexOutput {
-    let world_position = vertex.position;
+fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
+    let model_mat = mat4x4<f32>(
+        instance.model0,
+        instance.model1,
+        instance.model2,
+        instance.model3,
+    );
+
+    var transform = model_mat;
+    var node_index = vertex.node_index;
+    while node_index != 0xFFFFFFFF {
+        let node = u_nodes[node_index];
+        node_index = node.parent;
+        transform *= node.transform;
+    }
+
+    let world_position = (transform * vec4(vertex.position, 1.0)).xyz;
     let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
 
     // We don't scale objects, so the model matrix without translation is good for now.
-    // let world_normal = (model * vec4<f32>(vertex.normal, 0.0)).xyz;
-    let world_normal = vertex.normal;
+    let world_normal = (model_mat * vec4<f32>(vertex.normal, 0.0)).xyz;
 
     return VertexOutput(
         clip_position,

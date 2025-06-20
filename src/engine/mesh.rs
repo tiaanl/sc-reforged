@@ -33,13 +33,24 @@ pub struct IndexedMesh<V: BufferLayout> {
 }
 
 impl<V: BufferLayout> IndexedMesh<V> {
-    pub fn extend<I: IntoIterator<Item = Self>>(&mut self, iter: I) {
-        for mesh in iter.into_iter() {
-            let start_index = self.indices.len() as u32;
-            self.indices
-                .extend(mesh.indices.iter().map(|i| i + start_index));
-            self.vertices.extend(mesh.vertices);
-        }
+    pub fn extend(&mut self, mesh: &Self) -> std::ops::Range<u32> {
+        let vertex_offset = self.vertices.len() as u32;
+
+        self.vertices.reserve(mesh.vertices.len());
+        mesh.vertices
+            .iter()
+            .for_each(|v| self.vertices.push(v.clone()));
+
+        let first_index = self.indices.len() as u32;
+
+        self.indices.reserve(mesh.indices.len());
+        mesh.indices
+            .iter()
+            .for_each(|i| self.indices.push(i + vertex_offset));
+
+        let last_index = self.indices.len() as u32;
+
+        first_index..last_index
     }
 }
 
