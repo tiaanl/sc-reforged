@@ -8,14 +8,13 @@ pub struct LoadingScene {
 }
 
 impl LoadingScene {
-    pub fn new(data_dir: DataDir, renderer: &Renderer) -> Self {
-        let image = data_dir
-            .load_image(
-                PathBuf::from("textures")
-                    .join("interface")
-                    .join("loadscr2.jpg"),
-            )
-            .unwrap();
+    pub fn new(renderer: &Renderer) -> Self {
+        let image = DataDir::load_image(
+            PathBuf::from("textures")
+                .join("interface")
+                .join("loadscr2.jpg"),
+        )
+        .unwrap();
         let texture_view =
             renderer.create_texture_view("texture: textures/interface/loadscr2.jpg", &image.data);
 

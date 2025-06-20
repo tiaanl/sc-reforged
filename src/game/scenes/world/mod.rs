@@ -106,22 +106,17 @@ enum UnderMouse {
 }
 
 impl WorldScene {
-    pub fn new(
-        data_dir: DataDir,
-        renderer: &Renderer,
-        campaign_def: CampaignDef,
-    ) -> Result<Self, AssetError> {
+    pub fn new(renderer: &Renderer, campaign_def: CampaignDef) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let lod_model_definitions = {
             let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
-            for ref lod_path in data_dir
-                .assets()
+            for ref lod_path in assets()
                 .dir(&PathBuf::from("config").join("lod_model_profiles"))?
                 .filter(|e| e.as_path().extension().unwrap() == "txt")
             {
-                let profile = data_dir.load_config::<LodModelProfileDefinition>(lod_path)?;
+                let profile = DataDir::load_config::<LodModelProfileDefinition>(lod_path)?;
                 lod_definitions.insert(
                     profile.lod_model_name.clone(),
                     profile.sub_model_definitions.clone(),
@@ -131,7 +126,7 @@ impl WorldScene {
             lod_definitions
         };
 
-        let campaign = data_dir.load_config::<config::Campaign>(
+        let campaign = DataDir::load_config::<config::Campaign>(
             PathBuf::from("campaign")
                 .join(&campaign_def.base_name)
                 .join(&campaign_def.base_name)
@@ -254,7 +249,6 @@ impl WorldScene {
                 });
 
         let terrain = Terrain::new(
-            data_dir.clone(),
             renderer,
             &mut shaders,
             &campaign_def,
@@ -262,14 +256,13 @@ impl WorldScene {
         )?;
 
         let mut objects = objects::Objects::new(
-            data_dir.clone(),
             renderer,
             &mut shaders,
             &main_camera.gpu_camera.bind_group_layout,
         );
 
         if let Some(ref mtf_name) = campaign.mtf_name {
-            let mtf = data_dir.load_config::<config::Mtf>(&PathBuf::from("maps").join(mtf_name))?;
+            let mtf = DataDir::load_config::<config::Mtf>(&PathBuf::from("maps").join(mtf_name))?;
 
             for object in mtf.objects.iter() {
                 if let Err(err) = objects.spawn(

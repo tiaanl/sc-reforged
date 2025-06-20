@@ -84,12 +84,12 @@ impl winit::application::ApplicationHandler for App {
 
                 let file_system = Arc::new(PlatformFileSystem::new(opts.path.clone()));
                 let assets = Assets::with_file_system(file_system);
-                let data_dir = DataDir::new(assets.clone());
+                init_assets(assets);
 
                 let scene: Box<dyn Scene> = {
                     // WorldScene
 
-                    let campaign_defs = data_dir.load_campaign_defs().unwrap();
+                    let campaign_defs = DataDir::load_campaign_defs().unwrap();
 
                     // Campaigns and total texture count.
 
@@ -109,7 +109,7 @@ impl winit::application::ApplicationHandler for App {
                         .cloned()
                         .unwrap();
 
-                    Box::new(match WorldScene::new(data_dir, &renderer, campaign_def) {
+                    Box::new(match WorldScene::new(&renderer, campaign_def) {
                         Ok(scene) => scene,
                         Err(err) => {
                             error!("Could not create world scene! - {}", err);

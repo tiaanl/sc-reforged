@@ -219,7 +219,6 @@ impl Terrain {
     pub const VERTICES_PER_CHUNK: u32 = Self::CELLS_PER_CHUNK + 1;
 
     pub fn new(
-        data_dir: DataDir,
         renderer: &Renderer,
         shaders: &mut Shaders,
         campaign_def: &CampaignDef,
@@ -231,7 +230,7 @@ impl Terrain {
                 .join(&campaign_def.base_name)
                 .join("terrain_mapping.txt");
             info!("Loading terrain mapping: {}", path.display());
-            data_dir.load_config::<TerrainMapping>(&path)?
+            DataDir::load_config::<TerrainMapping>(&path)?
         };
 
         let water_level = terrain_mapping.water_level * terrain_mapping.altitude_map_height_base;
@@ -243,12 +242,12 @@ impl Terrain {
                 .join(format!("{}.jpg", terrain_mapping.texture_map_base_name));
             info!("Loading high detail terrain texture: {}", path.display());
 
-            let image = data_dir.load_image(&path)?;
+            let image = DataDir::load_image(&path)?;
             renderer.create_texture_view("terrain_texture", &image.data)
         };
 
         let water_texture_view = {
-            let image = data_dir.load_image(
+            let image = DataDir::load_image(
                 PathBuf::from("textures")
                     .join("image_processor")
                     .join("water2.bmp"),
@@ -262,7 +261,7 @@ impl Terrain {
             let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
             info!("Loading terrain height map: {}", path.display());
 
-            data_dir.assets().load_with_options::<HeightMap>(
+            assets().load_with_options::<HeightMap>(
                 &path,
                 HeightMapOptions {
                     nominal_edge_size: terrain_mapping.nominal_edge_size,
@@ -591,7 +590,6 @@ impl Terrain {
         let water_draw_args_buffer = renderer.device.create_buffer(&draw_args_descriptor);
 
         let strata = Strata::new(
-            data_dir,
             renderer,
             shaders,
             height_map.size,

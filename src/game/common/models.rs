@@ -19,8 +19,6 @@ use super::{
 
 /// Contains all loaded models and their GPU counterparts.
 pub struct ModelManager {
-    /// Used to load model and texture assets.
-    data_dir: DataDir,
     /// Store all loaded models.
     models: Storage<RenderModel>,
     /// Store all textures used by the models.
@@ -36,7 +34,6 @@ pub struct ModelManager {
 impl ModelManager {
     /// Create a new manager for models with the given [DataDir] for loading models.
     pub fn new(
-        data_dir: DataDir,
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
@@ -71,7 +68,6 @@ impl ModelManager {
         );
 
         Self {
-            data_dir,
             models,
             textures,
             models_cache,
@@ -89,7 +85,7 @@ impl ModelManager {
             return Ok(*model);
         }
 
-        let model = self.data_dir.load_object_model(name)?;
+        let model = DataDir::load_object_model(name)?;
 
         // Build a single mesh and generate a list of draw commands per texture.
         let mut indexed_mesh = IndexedMesh::default();
@@ -169,7 +165,7 @@ impl ModelManager {
         name: &str,
     ) -> Result<Handle<RenderTexture>, AssetError> {
         let texture_path = PathBuf::from("textures").join("shared").join(name);
-        let image = self.data_dir.load_image(&texture_path)?;
+        let image = DataDir::load_image(&texture_path)?;
 
         let label = &texture_path.display().to_string();
 

@@ -6,6 +6,24 @@ use std::{
 
 use thiserror::Error;
 
+static mut ASSETS: *const Assets = std::ptr::null();
+
+pub fn init_assets(assets: Assets) {
+    let b = Box::leak(Box::new(assets)) as &'static Assets;
+    unsafe {
+        ASSETS = b as *const Assets;
+    }
+}
+
+pub fn assets() -> &'static Assets {
+    unsafe {
+        // if ASSETS.is_null() {
+        //     panic!("Assets have not been initialized!");
+        // }
+        &*ASSETS
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum AssetError {
     #[error("File not found ({0})")]

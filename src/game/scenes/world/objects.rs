@@ -1,7 +1,6 @@
 use crate::{
     engine::{gizmos::GizmosRenderer, prelude::*},
     game::{
-        assets::DataDir,
         camera::Camera,
         geometry_buffers::GeometryBuffers,
         models::{ModelManager, RenderModel},
@@ -39,17 +38,11 @@ pub struct Objects {
 
 impl Objects {
     pub fn new(
-        data_dir: DataDir,
         renderer: &Renderer,
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let models = ModelManager::new(
-            data_dir.clone(),
-            renderer,
-            shaders,
-            camera_bind_group_layout,
-        );
+        let models = ModelManager::new(renderer, shaders, camera_bind_group_layout);
 
         Self {
             models,
