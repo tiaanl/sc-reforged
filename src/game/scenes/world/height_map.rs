@@ -226,7 +226,7 @@ mod pcx {
             if byte & 0xC0 == 0xC0 {
                 let count = (byte & 0x3F) as usize;
                 let byte = reader.read_u8()?;
-                data.extend(std::iter::repeat(0xFF - byte).take(count));
+                data.extend(std::iter::repeat_n(0xFF - byte, count));
                 i += count;
             } else {
                 data.push(0xFF - byte);

@@ -301,7 +301,7 @@ impl Config for ImageDefs {
                         | State::AnimSprite3d(AnimSprite3d { ref mut frames, .. }) => {
                             frames.push(sprite_frame);
                         }
-                        _ => panic!("Found SPRITEFRAME, but not in correct state! {:?}", state),
+                        _ => panic!("Found SPRITEFRAME, but not in correct state! {state:?}"),
                     }
                 }
 
@@ -313,7 +313,7 @@ impl Config for ImageDefs {
                         State::AnimSprite3d(anim_sprite_3d) => {
                             image_defs.anim_sprite_3d.push(anim_sprite_3d)
                         }
-                        _ => panic!("Found ENDDEF, but not in correct state! {:?}", state),
+                        _ => panic!("Found ENDDEF, but not in correct state! {state:?}"),
                     }
                 }
 
@@ -332,10 +332,7 @@ impl Config for ImageDefs {
                         State::AnimSprite3d(ref mut anim_sprite_3d) => {
                             anim_sprite_3d.frame_descriptor = frame_descriptor;
                         }
-                        _ => panic!(
-                            "Found FRAMEDESCRIPTOR, but not in correct state! {:?}",
-                            state
-                        ),
+                        _ => panic!("Found FRAMEDESCRIPTOR, but not in correct state! {state:?}"),
                     }
                 }
 
@@ -345,10 +342,7 @@ impl Config for ImageDefs {
                         State::AnimSprite3d(ref mut anim_sprite_3d) => {
                             anim_sprite_3d.frame_order = frame_order;
                         }
-                        _ => panic!(
-                            "Found FRAMEDESCRIPTOR, but not in correct state! {:?}",
-                            state
-                        ),
+                        _ => panic!("Found FRAMEDESCRIPTOR, but not in correct state! {state:?}"),
                     }
                 }
 

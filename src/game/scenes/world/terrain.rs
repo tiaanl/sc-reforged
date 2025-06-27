@@ -952,7 +952,7 @@ impl Terrain {
             compute_pass.set_pipeline(&self.process_chunks_pipeline);
             compute_pass.set_bind_group(0, camera_bind_group, &[]);
             compute_pass.set_bind_group(1, &self.process_chunks_bind_group, &[]);
-            compute_pass.dispatch_workgroups((self.total_chunks + 63) / 64, 1, 1);
+            compute_pass.dispatch_workgroups(self.total_chunks.div_ceil(64), 1, 1);
         }
 
         queue.submit(std::iter::once(encoder.finish()));

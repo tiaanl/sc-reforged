@@ -208,7 +208,7 @@ impl Renderer {
     }
 
     pub fn create_shader_module(&self, label: &str, source: &str) -> wgpu::ShaderModule {
-        let shader_module_label = format!("{}_shader_module", label);
+        let shader_module_label = format!("{label}_shader_module");
         self.device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some(&shader_module_label),

@@ -3,46 +3,49 @@ pub struct ConfigFile<'a> {
     current: Option<Vec<&'a str>>,
 }
 
-/// Split the line on whitespace, but also respect strings enclosed in ".
+/// Splits a line into tokens. Quoted strings are treated as a single token (without quotes).
+/// Non-whitespace sequences are considered tokens outside of strings.
 fn split_line(line: &str) -> Vec<&str> {
-    let mut result = vec![];
-
-    let mut string_start = None;
+    let mut result = Vec::new();
     let mut in_string = false;
+    let mut token_start: Option<usize> = None;
 
-    for (i, ch) in line.chars().enumerate() {
+    for (i, ch) in line.char_indices() {
         match ch {
             '"' => {
-                if let Some(start) = string_start {
+                if in_string {
+                    // End of quoted string
+                    if let Some(start) = token_start {
+                        result.push(&line[start..i]);
+                        token_start = None;
+                    }
                     in_string = false;
-                    result.push(&line[start..i]);
-                    string_start = None;
                 } else {
+                    // Start of quoted string (skip quote)
                     in_string = true;
-                    string_start = Some(i + 1); // Skip the ".
+                    token_start = Some(i + 1);
                 }
             }
 
             ch if ch.is_whitespace() => {
                 if !in_string {
-                    if let Some(start) = string_start {
+                    if let Some(start) = token_start {
                         result.push(&line[start..i]);
-                        string_start = None;
+                        token_start = None;
                     }
                 }
             }
 
-            ch if !ch.is_whitespace() => {
-                if string_start.is_none() {
-                    string_start = Some(i);
+            _ => {
+                if token_start.is_none() {
+                    token_start = Some(i);
                 }
             }
-
-            _ => panic!(),
         }
     }
 
-    if let Some(start) = string_start {
+    // Handle final token
+    if let Some(start) = token_start {
         result.push(&line[start..]);
     }
 

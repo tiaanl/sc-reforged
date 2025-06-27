@@ -153,7 +153,7 @@ impl Config for TerrainMapping {
                     //       happens to be the only campaign without water...
                 }
 
-                e => panic!("Unexpected parameter {}", e),
+                e => panic!("Unexpected parameter {e}"),
             }
             config.next();
         }

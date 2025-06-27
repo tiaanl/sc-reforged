@@ -130,20 +130,20 @@ pub fn read_window_base_file(data: &str) -> WindowBase {
         fn with_window_base(&mut self) -> &mut WindowBase {
             match self {
                 Self::WindowBase(window_base) => window_base,
-                _ => panic!("Required state WindowBase, but found {:?}", self),
+                _ => panic!("Required state WindowBase, but found {self:?}"),
             }
         }
 
         fn with_geometry(&mut self) -> &mut Geometry {
             match self {
                 Self::Geometry(_, geometry) => geometry,
-                _ => panic!("Required state Geometry, but found {:?}", self),
+                _ => panic!("Required state Geometry, but found {self:?}"),
             }
         }
 
         fn pop_geometry(self) -> WindowBase {
             let Self::Geometry(mut window_base, geometry) = self else {
-                panic!("Trying to pop geometry in wrong state. {:?}", self);
+                panic!("Trying to pop geometry in wrong state. {self:?}");
             };
 
             window_base.geometries.push(geometry);
@@ -153,13 +153,13 @@ pub fn read_window_base_file(data: &str) -> WindowBase {
         fn with_geometry_tiled(&mut self) -> &mut GeometryTiled {
             match self {
                 Self::GeometryTiled(_, geometry_tiled) => geometry_tiled,
-                _ => panic!("Required state GeometryTiled, but found {:?}", self),
+                _ => panic!("Required state GeometryTiled, but found {self:?}"),
             }
         }
 
         fn pop_geometry_tiled(self) -> WindowBase {
             let Self::GeometryTiled(mut window_base, geometry_tiled) = self else {
-                panic!("Trying to pop geometry_tiled in wrong state. {:?}", self);
+                panic!("Trying to pop geometry_tiled in wrong state. {self:?}");
             };
 
             window_base.geometries_tiled.push(geometry_tiled);
@@ -256,7 +256,7 @@ pub fn read_window_base_file(data: &str) -> WindowBase {
                 state.with_geometry_tiled().chunk_dimensions =
                     [current[1].parse().unwrap(), current[2].parse().unwrap()]
             }
-            _ => panic!("Invalid config line. {:?}", current),
+            _ => panic!("Invalid config line. {current:?}"),
         }
         config.next();
     }

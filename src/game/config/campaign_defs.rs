@@ -141,7 +141,7 @@ impl Action {
             "PLAYER_REMOVE_EXPLICIT" => Self::PlayerRemoveExplicit {
                 object_name: params[1].to_string(),
             },
-            _ => panic!("Invalid action! {:?}", params),
+            _ => panic!("Invalid action! {params:?}"),
         }
     }
 }
@@ -163,7 +163,7 @@ impl PreconditionType {
                 help_id_on_failure: params[2].to_string(),
                 help_id_on_failure_in_multiplayer: params[3].to_string(),
             },
-            _ => panic!("Invalid precondition type. {:?}", params),
+            _ => panic!("Invalid precondition type. {params:?}"),
         }
     }
 }
@@ -282,7 +282,7 @@ pub fn read_compaign_defs(data: &str) -> Vec<CampaignDef> {
                 .precondition
                 .push(Precondition::from_params(&current[1..])),
 
-            _ => panic!("Invalid config line. {:?}", current),
+            _ => panic!("Invalid config line. {current:?}"),
         }
 
         config.next();
@@ -378,7 +378,7 @@ impl Config for CampaignDefs {
                     .precondition
                     .push(Precondition::from_params(&current[1..])),
 
-                _ => panic!("Invalid config line. {:?}", current),
+                _ => panic!("Invalid config line. {current:?}"),
             }
 
             config.next();
