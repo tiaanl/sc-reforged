@@ -12,6 +12,8 @@ use winit::{
     keyboard::PhysicalKey,
 };
 
+use crate::{engine::ui, game::scenes::ui_test::UiTestScene};
+
 mod engine;
 mod game;
 
@@ -86,7 +88,7 @@ impl winit::application::ApplicationHandler for App {
                 let assets = Assets::with_file_system(file_system);
                 init_assets(assets);
 
-                let scene: Box<dyn Scene> = {
+                let scene: Box<dyn Scene> = if false {
                     // WorldScene
 
                     let campaign_defs = DataDir::load_campaign_defs().unwrap();
@@ -116,6 +118,14 @@ impl winit::application::ApplicationHandler for App {
                             panic!();
                         }
                     })
+                } else {
+                    Box::new(UiTestScene::new(
+                        &renderer,
+                        ui::Size {
+                            width: screen_size.width,
+                            height: screen_size.height,
+                        },
+                    ))
                 };
                 //  else {
                 //     Box::new(ModelViewer::new(&renderer, data_dir).unwrap())
