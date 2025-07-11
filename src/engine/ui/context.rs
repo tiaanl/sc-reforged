@@ -1,9 +1,9 @@
 use crate::engine::ui::{
-    RenderContext,
+    Color, RenderContext, UI_PIXEL_SCALE,
     geometry::{Pos, Rect, Size},
     layout::LayoutContext,
     root_widget::RootWidget,
-    widget::Widget,
+    widget::{DynWidget, Widget, WidgetContainerExt},
 };
 
 pub struct Context {
@@ -12,18 +12,27 @@ pub struct Context {
 
 impl Context {
     pub fn new(screen_size: Size) -> Self {
-        let root_widget = RootWidget::new(screen_size);
+        let mut root_widget = RootWidget::new(screen_size);
+        root_widget.style.background_color = Color::from_rgba(40, 40, 40, 255);
 
         Self { root_widget }
     }
 
+    pub fn add_to_root(&mut self, child: DynWidget) {
+        self.root_widget.add_child(child);
+    }
+
     pub fn layout(&mut self, screen_size: Size) {
-        let layout_context = LayoutContext { screen_size };
-        let parent_rect = Rect {
-            pos: Pos::ZERO,
-            size: screen_size,
+        let layout_context = LayoutContext {
+            screen_size: screen_size * UI_PIXEL_SCALE,
         };
-        self.root_widget.layout(parent_rect, &layout_context);
+        self.root_widget.layout(
+            Rect {
+                pos: Pos::ZERO,
+                size: layout_context.screen_size,
+            },
+            &layout_context,
+        );
     }
 
     pub fn render(&self, render_context: &mut RenderContext) {

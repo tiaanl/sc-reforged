@@ -188,7 +188,7 @@ impl Renderer {
 
     pub fn create_vertex_buffer<B>(&self, label: &str, buffer: &[B]) -> wgpu::Buffer
     where
-        B: BufferLayout + bytemuck::NoUninit,
+        B: bytemuck::NoUninit,
     {
         self.device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -334,7 +334,7 @@ impl Renderer {
 }
 
 /// A single object passed around during the rendering of a single frame.
-pub struct Frame {
+pub struct Frame<'r> {
     pub device: RenderDevice,
     pub queue: RenderQueue,
 
@@ -345,9 +345,12 @@ pub struct Frame {
 
     /// The window surface.
     pub surface: wgpu::TextureView,
+
+    /// The [Renderer] we belong to.
+    pub renderer: &'r Renderer,
 }
 
-impl Frame {
+impl<'r> Frame<'r> {
     pub fn _clear_color_and_depth(&mut self, color: wgpu::Color, depth: f32) {
         // Creating and dropping the render pass will clear the buffers.
         self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

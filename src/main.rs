@@ -122,8 +122,8 @@ impl winit::application::ApplicationHandler for App {
                     Box::new(UiTestScene::new(
                         &renderer,
                         ui::Size {
-                            width: screen_size.width,
-                            height: screen_size.height,
+                            width: screen_size.width as i32,
+                            height: screen_size.height as i32,
                         },
                     ))
                 };
@@ -218,6 +218,7 @@ impl winit::application::ApplicationHandler for App {
                             depth_buffer: renderer.depth_buffer.clone(),
                             encoder,
                             surface,
+                            renderer,
                         };
 
                         {

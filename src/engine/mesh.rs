@@ -27,12 +27,12 @@ impl BufferLayout for Vertex {
 }
 
 #[derive(Debug)]
-pub struct IndexedMesh<V: BufferLayout> {
+pub struct IndexedMesh<V> {
     pub vertices: Vec<V>,
     pub indices: Vec<u32>,
 }
 
-impl<V: BufferLayout> IndexedMesh<V> {
+impl<V: Clone> IndexedMesh<V> {
     pub fn extend(&mut self, mesh: &Self) -> std::ops::Range<u32> {
         let vertex_offset = self.vertices.len() as u32;
 
@@ -54,7 +54,7 @@ impl<V: BufferLayout> IndexedMesh<V> {
     }
 }
 
-impl<V: BufferLayout> Default for IndexedMesh<V> {
+impl<V> Default for IndexedMesh<V> {
     fn default() -> Self {
         Self {
             vertices: Vec::default(),
@@ -79,7 +79,7 @@ impl std::fmt::Debug for GpuIndexedMesh {
     }
 }
 
-impl<V: BufferLayout + bytemuck::NoUninit> IndexedMesh<V> {
+impl<V: bytemuck::NoUninit> IndexedMesh<V> {
     pub fn to_gpu(&self, renderer: &Renderer) -> GpuIndexedMesh {
         debug_assert!(!self.vertices.is_empty(), "Uploading empty vertex buffer.");
         debug_assert!(!self.indices.is_empty(), "Uploading empty index buffer.");
