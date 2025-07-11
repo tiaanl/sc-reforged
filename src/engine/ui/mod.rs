@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 mod context;
 mod geometry;
 mod layout;

@@ -28,5 +28,3 @@ pub mod prelude {
     pub use super::transform::*;
     pub use glam::{Mat4, Quat, UVec2, Vec2, Vec3, Vec4};
 }
-
-mod mip_maps;

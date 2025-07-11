@@ -71,8 +71,8 @@ impl ModelRenderer {
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
-        models: &[&Model],
-        texture_storage: &Storage<RenderTexture>,
+        _models: &[&Model],
+        _texture_storage: &Storage<RenderTexture>,
     ) {
         let mut render_pass = frame
             .encoder
