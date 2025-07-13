@@ -7,8 +7,11 @@ pub struct LayoutContext {
     pub screen_size: Size,
 }
 
-pub fn layout_in_rect(style: &Style, rect: &Rect) -> Rect {
-    *rect
+pub fn layout_in_rect(min_size: Size, style: &Style, in_rect: Rect) -> Rect {
+    Rect {
+        pos: in_rect.pos,
+        size: min_size,
+    }
 }
 
 pub fn layout_stacked<'c>(
@@ -17,6 +20,7 @@ pub fn layout_stacked<'c>(
     context: &LayoutContext,
 ) {
     for child in children {
+        let constraint = layout_in_rect(child.min_size(), child.style(), constraint);
         child.layout(constraint, context);
     }
 }
@@ -29,7 +33,10 @@ pub fn layout_horizontal<'c>(
     let mut left = 0;
     for child in children {
         let min_size = child.min_size();
-        child.layout(
+
+        let constraint = layout_in_rect(
+            min_size,
+            child.style(),
             Rect {
                 pos: Pos {
                     left,
@@ -37,8 +44,9 @@ pub fn layout_horizontal<'c>(
                 },
                 size: min_size,
             },
-            context,
         );
+
+        child.layout(constraint, context);
         left += min_size.width;
     }
 }

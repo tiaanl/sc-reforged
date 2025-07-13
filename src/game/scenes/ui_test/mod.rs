@@ -1,10 +1,12 @@
 use crate::engine::prelude::*;
 use crate::engine::ui;
 use crate::engine::ui::Color;
+use crate::engine::ui::ImageWidget;
 use crate::engine::ui::Length;
 use crate::engine::ui::PanelWidget;
 use crate::engine::ui::Style;
 use crate::engine::ui::UI_PIXEL_SCALE;
+use crate::engine::ui::WidgetContainerExt;
 
 pub struct UiTestScene {
     ui: ui::Context,
@@ -23,12 +25,17 @@ impl UiTestScene {
             ..Default::default()
         })));
 
-        ui.add_to_root(Box::new(PanelWidget::default().with_style(Style {
-            width: Length::Pixels(200),
-            height: Length::Pixels(200),
-            background_color: Color::RED,
-            ..Default::default()
-        })));
+        ui.add_to_root(Box::new({
+            let mut panel = PanelWidget::default().with_style(Style {
+                width: Length::Pixels(200),
+                height: Length::Pixels(200),
+                background_color: Color::RED,
+                ..Default::default()
+            });
+            panel.add_child(Box::new(ImageWidget::default()));
+            panel.style.background_color = Color::from_rgba(10, 50, 90, 255);
+            panel
+        }));
 
         Self {
             ui,

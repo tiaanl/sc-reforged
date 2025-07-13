@@ -1,6 +1,7 @@
-use crate::engine::ui::{Rect, RenderContext, Size, layout::LayoutContext};
+use crate::engine::ui::*;
 
 pub trait Widget {
+    fn style(&self) -> &Style;
     fn min_size(&self) -> Size;
     fn layout(&mut self, constraint: Rect, context: &LayoutContext);
     fn render(&self, render_context: &mut RenderContext);

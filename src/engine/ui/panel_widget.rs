@@ -1,11 +1,6 @@
 use glam::Vec4;
 
-use crate::engine::ui::{
-    Pos, Rect, Size, Style, UI_PIXEL_SCALE,
-    geometry::Color,
-    style::Length,
-    widget::{Widget, WidgetContainer},
-};
+use crate::engine::ui::*;
 
 use super::{RenderContext, layout::LayoutContext};
 
@@ -24,6 +19,10 @@ impl PanelWidget {
 }
 
 impl Widget for PanelWidget {
+    fn style(&self) -> &Style {
+        &self.style
+    }
+
     fn min_size(&self) -> Size {
         Size {
             width: match self.style.width {
@@ -43,5 +42,11 @@ impl Widget for PanelWidget {
 
     fn render(&self, render_context: &mut RenderContext) {
         render_context.render_color(self.rect, self.style.background_color.into());
+    }
+}
+
+impl WidgetContainerExt for PanelWidget {
+    fn add_child(&mut self, child: DynWidget) {
+        self.children.add_child(child)
     }
 }

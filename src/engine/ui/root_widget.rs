@@ -25,6 +25,10 @@ impl RootWidget {
 }
 
 impl Widget for RootWidget {
+    fn style(&self) -> &Style {
+        &self.style
+    }
+
     fn min_size(&self) -> Size {
         self.size
     }
