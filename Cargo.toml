@@ -3,16 +3,20 @@ name = "sc-reforged"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "dep:epaint"]
+
 [dependencies]
 shadow_company_tools = { path = "../shadow_company_tools" }
 
 bytemuck = { version = "1.18.0", default-features = false, features = ["derive"] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 clap = { version = "4.5", features = ["derive"] }
-egui = { version = "0.31", default-features = false }
-egui-wgpu = { version = "0.31", default-features = false }
-egui-winit = { version = "0.31", default-features = false }
-epaint = { version = "0.31", default-features = false, features = ["default_fonts"] }
+egui = { version = "0.31", optional = true, default-features = false }
+egui-wgpu = { version = "0.31", optional = true, default-features = false }
+egui-winit = { version = "0.31", optional = true, default-features = false }
+epaint = { version = "0.31", optional = true, default-features = false, features = ["default_fonts"] }
 glam = { version = "0.30", default-features = false, features = ["bytemuck", "std"] }
 half = { version = "2.5.0", features = ["bytemuck"] }
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg"] }

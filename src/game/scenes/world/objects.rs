@@ -151,5 +151,6 @@ impl Objects {
     ) {
     }
 
+    #[cfg(feature = "egui")]
     pub fn debug_panel(&mut self, _ui: &mut egui::Ui) {}
 }

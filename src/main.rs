@@ -1,8 +1,7 @@
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
-use egui::Widget;
-use engine::{egui_integration::EguiIntegration, prelude::*};
+use engine::prelude::*;
 use game::{assets::DataDir, scenes::world::WorldScene};
 use glam::UVec2;
 use tracing::{error, info, warn};
@@ -34,6 +33,7 @@ enum App {
         /// The renderer.
         renderer: Renderer,
         /// egui integration.
+        #[cfg(feature = "egui")]
         egui_integration: engine::egui_integration::EguiIntegration,
         /// The current input state of the engine.
         input: InputState,
@@ -82,13 +82,15 @@ impl winit::application::ApplicationHandler for App {
 
                 let renderer = Renderer::new(Arc::clone(&window));
 
-                let egui_integration = EguiIntegration::new(event_loop, &renderer);
+                #[cfg(feature = "egui")]
+                let egui_integration =
+                    engine::egui_integration::EguiIntegration::new(event_loop, &renderer);
 
                 let file_system = Arc::new(PlatformFileSystem::new(opts.path.clone()));
                 let assets = Assets::with_file_system(file_system);
                 init_assets(assets);
 
-                let scene: Box<dyn Scene> = if false {
+                let scene: Box<dyn Scene> = if true {
                     // WorldScene
 
                     let campaign_defs = DataDir::load_campaign_defs().unwrap();
@@ -136,6 +138,7 @@ impl winit::application::ApplicationHandler for App {
                 *self = App::Initialized {
                     window,
                     renderer,
+                    #[cfg(feature = "egui")]
                     egui_integration,
                     input: InputState::default(),
                     last_mouse_position: None,
@@ -164,6 +167,7 @@ impl winit::application::ApplicationHandler for App {
             App::Initialized {
                 window,
                 renderer,
+                #[cfg(feature = "egui")]
                 egui_integration,
                 input,
                 last_mouse_position,
@@ -175,11 +179,15 @@ impl winit::application::ApplicationHandler for App {
                     return;
                 }
 
-                let egui_winit::EventResponse { consumed, repaint } =
-                    egui_integration.window_event(window.as_ref(), &event);
-                if consumed {
-                    return;
-                }
+                #[cfg(feature = "egui")]
+                let repaint = {
+                    let egui_winit::EventResponse { consumed, repaint } =
+                        egui_integration.window_event(window.as_ref(), &event);
+                    if consumed {
+                        return;
+                    }
+                    repaint
+                };
 
                 match event {
                     WindowEvent::CloseRequested => {
@@ -227,6 +235,7 @@ impl winit::application::ApplicationHandler for App {
                         }
 
                         // Render egui if it requires a repaint.
+                        #[cfg(feature = "egui")]
                         if repaint {
                             egui_integration.render(
                                 window,
@@ -251,6 +260,8 @@ impl winit::application::ApplicationHandler for App {
                                             egui::Label::new(text.color(epaint::Color32::WHITE))
                                                 .wrap_mode(egui::TextWrapMode::Extend)
                                         };
+
+                                        use egui::Widget;
 
                                         fps_label.ui(ui);
                                     });

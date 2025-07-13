@@ -46,5 +46,6 @@ pub trait Scene {
     fn render(&mut self, frame: &mut Frame);
 
     /// Called to allow debug panels to be added to the window.
+    #[cfg(feature = "egui")]
     fn debug_panel(&mut self, egui: &egui::Context, renderer: &Renderer) {}
 }

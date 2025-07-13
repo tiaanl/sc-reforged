@@ -874,6 +874,7 @@ impl Terrain {
         }
     }
 
+    #[cfg(feature = "egui")]
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
         use egui::widgets::DragValue;
         ui.checkbox(&mut self.draw_wireframe, "Draw wireframe");

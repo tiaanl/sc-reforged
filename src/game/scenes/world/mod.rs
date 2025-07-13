@@ -532,6 +532,7 @@ impl Scene for WorldScene {
         }
     }
 
+    #[cfg(feature = "egui")]
     fn debug_panel(&mut self, egui: &egui::Context, _renderer: &Renderer) {
         use egui::widgets::Slider;
 

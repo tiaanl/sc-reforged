@@ -1,6 +1,5 @@
 pub mod assets;
 pub mod depth_buffer;
-pub mod egui_integration;
 pub mod gizmos;
 pub mod input;
 pub mod mesh;
@@ -28,3 +27,6 @@ pub mod prelude {
     pub use super::transform::*;
     pub use glam::{Mat4, Quat, UVec2, Vec2, Vec3, Vec4};
 }
+
+#[cfg(feature = "egui")]
+pub mod egui_integration;
