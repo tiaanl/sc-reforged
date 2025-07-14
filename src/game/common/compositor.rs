@@ -1,4 +1,4 @@
-use crate::engine::{prelude::Frame, renderer::Renderer, shaders::Shaders};
+use crate::engine::prelude::*;
 
 use super::geometry_buffers::GeometryBuffers;
 

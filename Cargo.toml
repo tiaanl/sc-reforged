@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = []
+default = ["egui"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "dep:epaint"]
 
 [dependencies]

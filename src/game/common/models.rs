@@ -174,8 +174,8 @@ impl ModelManager {
         let sampler = renderer.create_sampler(
             label,
             wgpu::AddressMode::Repeat,
-            wgpu::FilterMode::Nearest,
-            wgpu::FilterMode::Nearest,
+            wgpu::FilterMode::Linear,
+            wgpu::FilterMode::Linear,
         );
 
         let bind_group = renderer.create_texture_bind_group(label, &texture_view, &sampler);
