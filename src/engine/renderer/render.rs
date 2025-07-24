@@ -106,6 +106,7 @@ impl Renderer {
                     max_bind_groups: 5,
                     max_push_constant_size: 16,
                     max_vertex_attributes: 24,
+                    max_color_attachment_bytes_per_sample: 40,
                     ..Default::default()
                 },
                 ..Default::default()

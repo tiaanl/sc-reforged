@@ -98,6 +98,8 @@ pub struct GeometryBuffers {
     pub colors: Buffer,
     pub positions: Buffer,
     pub normals: Buffer,
+    pub alpha_accumulation: Buffer,
+    pub alpha_revealage: Buffer,
     pub ids: Buffer,
 
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -116,6 +118,8 @@ impl GeometryBuffers {
     const COLORS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     const POSITIONS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
     const NORMALS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+    const ALPHA_ACCUMULATION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+    const ALPHA_REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
     const IDS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
 
     pub fn new(renderer: &Renderer) -> Self {
@@ -145,6 +149,20 @@ impl GeometryBuffers {
             "g_buffer_normals",
             size,
             Self::NORMALS_FORMAT,
+        );
+
+        let alpha_accumulation = Buffer::new(
+            &renderer.device,
+            "g_buffer_alpha_accumulation",
+            size,
+            Self::ALPHA_ACCUMULATION_FORMAT,
+        );
+
+        let alpha_revealage = Buffer::new(
+            &renderer.device,
+            "g_buffer_alpha_revealabe",
+            size,
+            Self::ALPHA_REVEALAGE_FORMAT,
         );
 
         let ids = Buffer::new(&renderer.device, "g_buffer_ids", size, Self::IDS_FORMAT);
@@ -188,9 +206,31 @@ impl GeometryBuffers {
                             },
                             count: None,
                         },
-                        // t_entity_ids
+                        // t_alpha_accumulation
                         wgpu::BindGroupLayoutEntry {
                             binding: 3,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        // t_alpha_revealage
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 4,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        // t_entity_ids
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 5,
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Texture {
                                 sample_type: wgpu::TextureSampleType::Uint,
@@ -222,6 +262,14 @@ impl GeometryBuffers {
                     },
                     wgpu::BindGroupEntry {
                         binding: 3,
+                        resource: wgpu::BindingResource::TextureView(&alpha_accumulation.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::TextureView(&alpha_revealage.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
                         resource: wgpu::BindingResource::TextureView(&ids.view),
                     },
                 ],
@@ -231,6 +279,8 @@ impl GeometryBuffers {
             colors,
             positions,
             normals,
+            alpha_accumulation,
+            alpha_revealage,
             ids,
 
             bind_group_layout,
@@ -288,6 +338,59 @@ impl GeometryBuffers {
         }
     }
 
+    pub fn color_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 6] {
+        [
+            Some(wgpu::RenderPassColorAttachment {
+                view: &self.colors.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            }),
+            Some(wgpu::RenderPassColorAttachment {
+                view: &self.positions.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            }),
+            Some(wgpu::RenderPassColorAttachment {
+                view: &self.normals.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            }),
+            Some(wgpu::RenderPassColorAttachment {
+                view: &self.alpha_accumulation.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            }),
+            Some(wgpu::RenderPassColorAttachment {
+                view: &self.alpha_revealage.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            }),
+            Some(wgpu::RenderPassColorAttachment {
+                view: &self.ids.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            }),
+        ]
+    }
+
     pub fn targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[
             Some(wgpu::ColorTargetState {
@@ -303,6 +406,34 @@ impl GeometryBuffers {
             Some(wgpu::ColorTargetState {
                 format: Self::NORMALS_FORMAT,
                 blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            }),
+            Some(wgpu::ColorTargetState {
+                format: Self::ALPHA_ACCUMULATION_FORMAT,
+                blend: Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                }),
+                write_mask: wgpu::ColorWrites::ALL,
+            }),
+            Some(wgpu::ColorTargetState {
+                format: Self::ALPHA_REVEALAGE_FORMAT,
+                blend: Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::Zero,
+                        dst_factor: wgpu::BlendFactor::OneMinusSrc,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent::REPLACE,
+                }),
                 write_mask: wgpu::ColorWrites::ALL,
             }),
             Some(wgpu::ColorTargetState {

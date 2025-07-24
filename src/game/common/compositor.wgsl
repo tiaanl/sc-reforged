@@ -20,7 +20,9 @@ fn vertex_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 @group(0) @binding(0) var t_albedo: texture_2d<f32>;
 @group(0) @binding(1) var t_position: texture_2d<f32>;
 @group(0) @binding(2) var t_normal: texture_2d<f32>;
-@group(0) @binding(3) var t_ids: texture_2d<u32>;
+@group(0) @binding(3) var t_alpha_accumulation: texture_2d<f32>;
+@group(0) @binding(4) var t_alpha_revealage: texture_2d<f32>;
+@group(0) @binding(5) var t_ids: texture_2d<u32>;
 
 fn get_frag(texture: texture_2d<f32>, uv: vec2<f32>) -> vec4<f32> {
     let texture_size = vec2<f32>(textureDimensions(texture));
