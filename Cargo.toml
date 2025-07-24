@@ -31,6 +31,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 walkdir = { version = "2.5.0", default-features = false }
 wgpu = { version = "24.0", features = ["naga-ir"] }
 winit = { version = "0.30.5" }
+ahash = "0.8.12"
 
 [profile.dev.package.zune-jpeg]
 opt-level = 3

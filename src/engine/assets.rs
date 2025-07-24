@@ -6,6 +6,8 @@ use std::{
 
 use thiserror::Error;
 
+use crate::game::file_system::{FileSystemError, file_system};
+
 static mut ASSETS: *const Assets = std::ptr::null();
 
 pub fn init_assets(assets: Assets) {
@@ -34,6 +36,9 @@ pub enum AssetError {
 
     #[error("Unsupported asset ({0})")]
     NotSupported(PathBuf),
+
+    #[error("File system error ({0})")]
+    FileSystemError(#[from] FileSystemError),
 
     #[error("Unknown error ({0})")]
     Unknown(PathBuf, String),
@@ -113,7 +118,7 @@ impl Assets {
         path: impl AsRef<Path>,
         options: A::Options,
     ) -> Result<Asset<A>, AssetError> {
-        let data = self.file_system.load(path.as_ref())?;
+        let data = file_system().load(path.as_ref())?;
         let load_context = AssetLoadContext {
             path: path.as_ref(),
             assets: self,

@@ -11,7 +11,10 @@ use winit::{
     keyboard::PhysicalKey,
 };
 
-use crate::{engine::ui, game::scenes::ui_test::UiTestScene};
+use crate::{
+    engine::ui,
+    game::{file_system::scoped_file_system, scenes::ui_test::UiTestScene},
+};
 
 mod engine;
 mod game;
@@ -354,6 +357,8 @@ fn main() {
             return;
         }
     };
+
+    let _file_system = scoped_file_system(|| game::file_system::FileSystem::new(opts.path.clone()));
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
 

@@ -1,6 +1,7 @@
 pub mod assets;
 pub mod depth_buffer;
 pub mod gizmos;
+mod global;
 pub mod input;
 pub mod mesh;
 pub mod renderer;

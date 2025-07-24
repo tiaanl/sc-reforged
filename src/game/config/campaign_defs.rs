@@ -107,42 +107,42 @@ pub enum Action {
 }
 
 impl Action {
-    fn from_params(params: &[&str]) -> Self {
-        match params[0] {
+    fn from_params(params: &[&str]) -> Option<Self> {
+        Some(match params[0] {
             "REWARD" => Self::Reward {
-                amount: params[1].parse().unwrap(),
+                amount: params.get(1)?.parse().unwrap_or_default(),
             },
             "DEALER_STOCK_EXPLICIT" => Self::DealerStockExplicit {
-                object_name: params[1].to_string(),
-                count: params[2].parse().unwrap(),
+                object_name: params.get(1)?.to_string(),
+                count: params.get(2)?.parse().unwrap_or_default(),
             },
             "DEALER_STOCK_RANDOM" => Self::DealerStockRandom {
-                count: params[1].parse().unwrap(),
-                modifier: params[2].parse().unwrap(),
+                count: params.get(1)?.parse().unwrap_or_default(),
+                modifier: params.get(2)?.parse().unwrap_or_default(),
             },
             "ROSTER_MERC" => Self::RosterMerc {
-                merc_name: params[1].to_string(),
+                merc_name: params.get(1)?.to_string(),
             },
             "HIRE_MERC" => Self::HireMerc {
-                merc_name: params[1].to_string(),
+                merc_name: params.get(1)?.to_string(),
             },
             "DEALER_REMOVE_ALL" => Self::DealerRemoveAll,
             "DEALER_SET_MARKUP" => Self::DealerSetMarkup {
-                markup: params[1].parse().unwrap(),
+                markup: params.get(1)?.parse().unwrap_or_default(),
             },
             "PLAYER_STOCK_EXPLICIT" => Self::PlayerStockExplicit {
-                object_name: params[1].to_string(),
-                count: params[2].parse().unwrap(),
+                object_name: params.get(1)?.to_string(),
+                count: params.get(2)?.parse().unwrap_or_default(),
             },
             "MPM_DEALER_STOCK_EXPLICIT" => Self::MultiplayerDealerStockExplicit {
-                object_name: params[1].to_string(),
-                count: params[2].parse().unwrap(),
+                object_name: params.get(1)?.to_string(),
+                count: params.get(2)?.parse().unwrap_or_default(),
             },
             "PLAYER_REMOVE_EXPLICIT" => Self::PlayerRemoveExplicit {
-                object_name: params[1].to_string(),
+                object_name: params.get(1)?.to_string(),
             },
             _ => panic!("Invalid action! {params:?}"),
-        }
+        })
     }
 }
 
@@ -269,14 +269,16 @@ pub fn read_compaign_defs(data: &str) -> Vec<CampaignDef> {
                 .with_campaign()
                 .clothing_infiltration_mod
                 .push(ClothingInfiltrationMod::from_params(&current[1..])),
-            "PRE_ACTION" => state
-                .with_campaign()
-                .pre_actions
-                .push(Action::from_params(&current[1..])),
-            "POST_ACTION" => state
-                .with_campaign()
-                .post_actions
-                .push(Action::from_params(&current[1..])),
+            "PRE_ACTION" => {
+                if let Some(action) = Action::from_params(&current[1..]) {
+                    state.with_campaign().pre_actions.push(action)
+                }
+            }
+            "POST_ACTION" => {
+                if let Some(action) = Action::from_params(&current[1..]) {
+                    state.with_campaign().post_actions.push(action)
+                }
+            }
             "PRECONDITION" => state
                 .with_campaign()
                 .precondition
@@ -365,14 +367,16 @@ impl Config for CampaignDefs {
                     .with_campaign()
                     .clothing_infiltration_mod
                     .push(ClothingInfiltrationMod::from_params(&current[1..])),
-                "PRE_ACTION" => state
-                    .with_campaign()
-                    .pre_actions
-                    .push(Action::from_params(&current[1..])),
-                "POST_ACTION" => state
-                    .with_campaign()
-                    .post_actions
-                    .push(Action::from_params(&current[1..])),
+                "PRE_ACTION" => {
+                    if let Some(action) = Action::from_params(&current[1..]) {
+                        state.with_campaign().pre_actions.push(action)
+                    }
+                }
+                "POST_ACTION" => {
+                    if let Some(action) = Action::from_params(&current[1..]) {
+                        state.with_campaign().post_actions.push(action)
+                    }
+                }
                 "PRECONDITION" => state
                     .with_campaign()
                     .precondition

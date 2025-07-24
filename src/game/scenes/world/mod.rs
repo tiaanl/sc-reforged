@@ -15,6 +15,7 @@ use crate::{
         camera::{self, Controller},
         compositor::Compositor,
         config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
+        file_system::file_system,
         geometry_buffers::{GeometryBuffers, GeometryData},
     },
 };
@@ -112,9 +113,13 @@ impl WorldScene {
         let lod_model_definitions = {
             let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
-            for ref lod_path in assets()
+            for lod_path in file_system()
                 .dir(&PathBuf::from("config").join("lod_model_profiles"))?
-                .filter(|e| e.as_path().extension().unwrap() == "txt")
+                .filter(|path| {
+                    path.extension()
+                        .filter(|ext| ext.eq_ignore_ascii_case("txt"))
+                        .is_some()
+                })
             {
                 let profile = DataDir::load_config::<LodModelProfileDefinition>(lod_path)?;
                 lod_definitions.insert(
