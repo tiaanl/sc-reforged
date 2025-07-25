@@ -7,7 +7,7 @@ use crate::{
     engine::assets::AssetError,
     game::{
         config::{
-            self, LodModelProfileDefinition, SubModelDefinition, TerrainMapping,
+            self, ImageDefs, LodModelProfileDefinition, SubModelDefinition, TerrainMapping,
             parser::ConfigLines,
         },
         file_system::file_system,
@@ -15,17 +15,57 @@ use crate::{
         image::{BlendMode, Image},
         model::Model,
     },
+    global,
 };
 
-#[derive(Clone)]
-pub struct DataDir {}
+pub struct DataDir {
+    image_defs: ImageDefs,
+    model_lod_defs: HashMap<String, Vec<SubModelDefinition>>,
+}
 
 impl DataDir {
-    pub fn load_campaign_defs() -> Result<config::CampaignDefs, AssetError> {
+    pub fn new() -> Self {
+        let image_defs =
+            Self::load_config_new::<ImageDefs>(PathBuf::from("config").join("image_defs.txt"))
+                .expect("Could not load image definitions.");
+
+        let model_lod_defs = {
+            let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
+
+            let profiles_path = PathBuf::from("config").join("lod_model_profiles");
+
+            let files = file_system()
+                .dir(&profiles_path)
+                .expect("Could not load model LOD's.");
+            for lod_path in files.filter(|path| {
+                path.extension()
+                    .filter(|ext| ext.eq_ignore_ascii_case("txt"))
+                    .is_some()
+            }) {
+                let profile = Self::load_config_new::<LodModelProfileDefinition>(lod_path)
+                    .expect("Could not load model LOD definition.");
+                lod_definitions.insert(
+                    profile.lod_model_name.clone(),
+                    profile.sub_model_definitions.clone(),
+                );
+            }
+
+            lod_definitions
+        };
+
+        Self {
+            image_defs,
+            model_lod_defs,
+        }
+    }
+}
+
+impl DataDir {
+    pub fn load_campaign_defs(&self) -> Result<config::CampaignDefs, AssetError> {
         Self::load_config_new(PathBuf::from("config").join("campaign_defs.txt"))
     }
 
-    pub fn load_campaign(campaign: &str) -> Result<config::Campaign, AssetError> {
+    pub fn load_campaign(&self, campaign: &str) -> Result<config::Campaign, AssetError> {
         Self::load_config_new::<config::Campaign>(
             PathBuf::from("campaign")
                 .join(campaign)
@@ -34,7 +74,7 @@ impl DataDir {
         )
     }
 
-    pub fn load_terrain_mapping(campaign: &str) -> Result<TerrainMapping, AssetError> {
+    pub fn load_terrain_mapping(&self, campaign: &str) -> Result<TerrainMapping, AssetError> {
         let path = PathBuf::from("textures")
             .join("terrain")
             .join(campaign)
@@ -45,13 +85,14 @@ impl DataDir {
         Self::load_config_new(path)
     }
 
-    pub fn load_height_map(path: impl AsRef<Path>) -> Result<HeightMap, AssetError> {
+    pub fn load_height_map(&self, path: impl AsRef<Path>) -> Result<HeightMap, AssetError> {
         HeightMap::from_data(file_system().load(path.as_ref())?)
             .map_err(|err| AssetError::from_io_error(err, path.as_ref()))
     }
 
-    pub fn load_lod_model_profiles() -> Result<HashMap<String, Vec<SubModelDefinition>>, AssetError>
-    {
+    pub fn load_lod_model_profiles(
+        &self,
+    ) -> Result<HashMap<String, Vec<SubModelDefinition>>, AssetError> {
         let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
         let profiles_path = PathBuf::from("config").join("lod_model_profiles");
@@ -70,12 +111,12 @@ impl DataDir {
         Ok(lod_definitions)
     }
 
-    pub fn load_mtf(name: &str) -> Result<config::Mtf, AssetError> {
+    pub fn load_mtf(&self, name: &str) -> Result<config::Mtf, AssetError> {
         let path = PathBuf::from("maps").join(name);
         Self::load_config_new::<config::Mtf>(&path)
     }
 
-    pub fn load_image(path: impl AsRef<Path>) -> Result<Image, AssetError> {
+    pub fn load_image(&self, path: impl AsRef<Path>) -> Result<Image, AssetError> {
         fn image_error_to_asset_error(err: image::ImageError, path: PathBuf) -> AssetError {
             match err {
                 image::ImageError::Decoding(_) => AssetError::Decode(path),
@@ -151,7 +192,7 @@ impl DataDir {
         Err(AssetError::NotSupported(path.as_ref().to_path_buf()))
     }
 
-    fn load_model(path: impl AsRef<Path>) -> Result<Model, AssetError> {
+    fn load_model(&self, path: impl AsRef<Path>) -> Result<Model, AssetError> {
         let data = file_system().load(path.as_ref())?;
 
         let smf = shadow_company_tools::smf::Model::read(&mut std::io::Cursor::new(data))
@@ -160,8 +201,19 @@ impl DataDir {
         Model::try_from(smf)
     }
 
-    pub fn load_object_model(name: &str) -> Result<Model, AssetError> {
-        Self::load_model(
+    pub fn load_object_model(&self, name: &str) -> Result<Model, AssetError> {
+        if let Some(lod_def) = self.model_lod_defs.get(name) {
+            if let Some(sub_model) = lod_def.first() {
+                return self.load_model(
+                    PathBuf::from("models")
+                        .join(&sub_model.sub_model_model)
+                        .join(&sub_model.sub_model_model)
+                        .with_extension("smf"),
+                );
+            }
+        }
+
+        self.load_model(
             PathBuf::from("models")
                 .join(name)
                 .join(name)
@@ -169,8 +221,8 @@ impl DataDir {
         )
     }
 
-    pub fn load_bipedal_model(name: &str) -> Result<Model, AssetError> {
-        Self::load_model(
+    pub fn load_bipedal_model(&self, name: &str) -> Result<Model, AssetError> {
+        self.load_model(
             PathBuf::from("models")
                 .join("people")
                 .join("bodies")
@@ -180,7 +232,7 @@ impl DataDir {
         )
     }
 
-    pub fn load_motion(path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
+    pub fn load_motion(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
         let data = file_system().load(path.as_ref())?;
 
         bmf::Motion::read(&mut std::io::Cursor::new(data))
@@ -194,3 +246,5 @@ impl DataDir {
         Ok(C::from(config_lines))
     }
 }
+
+global!(DataDir, scoped_data_dir, data_dir);

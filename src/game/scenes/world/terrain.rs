@@ -10,7 +10,7 @@ use crate::{
         prelude::*,
     },
     game::{
-        config::CampaignDef, data_dir::DataDir, geometry_buffers::GeometryBuffers,
+        config::CampaignDef, data_dir::data_dir, geometry_buffers::GeometryBuffers,
         height_map::HeightMap,
     },
 };
@@ -223,7 +223,7 @@ impl Terrain {
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
-        let terrain_mapping = DataDir::load_terrain_mapping(&campaign_def.base_name)?;
+        let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
 
         let water_level =
             terrain_mapping.water_level as f32 * terrain_mapping.altitude_map_height_base;
@@ -235,12 +235,12 @@ impl Terrain {
                 .join(format!("{}.jpg", terrain_mapping.texture_map_base_name));
             info!("Loading high detail terrain texture: {}", path.display());
 
-            let image = DataDir::load_image(&path)?;
+            let image = data_dir().load_image(&path)?;
             renderer.create_texture_view("terrain_texture", &image.data)
         };
 
         let water_texture_view = {
-            let image = DataDir::load_image(
+            let image = data_dir().load_image(
                 PathBuf::from("textures")
                     .join("image_processor")
                     .join("water2.bmp"),
@@ -251,7 +251,7 @@ impl Terrain {
         let height_map = {
             let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
             info!("Loading terrain height map: {}", path.display());
-            DataDir::load_height_map(path)?
+            data_dir().load_height_map(path)?
         };
 
         let normals_lookup = Self::generate_normals_lookup_table();

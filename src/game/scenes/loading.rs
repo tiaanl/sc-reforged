@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{engine::prelude::*, game::data_dir::DataDir};
+use crate::{engine::prelude::*, game::data_dir::data_dir};
 
 pub struct LoadingScene {
     pipeline: wgpu::RenderPipeline,
@@ -9,12 +9,13 @@ pub struct LoadingScene {
 
 impl LoadingScene {
     pub fn new(renderer: &Renderer) -> Self {
-        let image = DataDir::load_image(
-            PathBuf::from("textures")
-                .join("interface")
-                .join("loadscr2.jpg"),
-        )
-        .unwrap();
+        let image = data_dir()
+            .load_image(
+                PathBuf::from("textures")
+                    .join("interface")
+                    .join("loadscr2.jpg"),
+            )
+            .unwrap();
         let texture_view =
             renderer.create_texture_view("texture: textures/interface/loadscr2.jpg", &image.data);
 

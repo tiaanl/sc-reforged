@@ -4,7 +4,7 @@ use glam::UVec2;
 use wgpu::util::DeviceExt;
 
 use crate::engine::prelude::*;
-use crate::game::data_dir::DataDir;
+use crate::game::data_dir::data_dir;
 use crate::game::geometry_buffers::GeometryBuffers;
 use crate::game::scenes::world::terrain::Terrain;
 
@@ -108,7 +108,7 @@ impl Strata {
             let path = PathBuf::from("textures").join("shared").join("strata.bmp");
             tracing::info!("Loading strata texture: {}", path.display());
 
-            let image = DataDir::load_image(&path)?;
+            let image = data_dir().load_image(&path)?;
             renderer.create_texture_view("terrain_strata", &image.data)
         };
 

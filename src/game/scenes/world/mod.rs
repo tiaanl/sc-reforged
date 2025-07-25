@@ -13,7 +13,7 @@ use crate::{
         camera::{self, Controller},
         compositor::Compositor,
         config::{CampaignDef, SubModelDefinition},
-        data_dir::DataDir,
+        data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData},
     },
 };
@@ -107,9 +107,9 @@ impl WorldScene {
     pub fn new(renderer: &Renderer, campaign_def: CampaignDef) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
-        let lod_model_definitions = DataDir::load_lod_model_profiles()?;
+        let lod_model_definitions = data_dir().load_lod_model_profiles()?;
 
-        let campaign = DataDir::load_campaign(&campaign_def.base_name)?;
+        let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
 
         let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
@@ -240,7 +240,7 @@ impl WorldScene {
         );
 
         if let Some(ref mtf_name) = campaign.mtf_name {
-            let mtf = DataDir::load_mtf(mtf_name)?;
+            let mtf = data_dir().load_mtf(mtf_name)?;
 
             for object in mtf.objects.iter() {
                 if let Err(err) = objects.spawn(

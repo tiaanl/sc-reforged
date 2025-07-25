@@ -13,7 +13,11 @@ use winit::{
 
 use crate::{
     engine::ui,
-    game::{data_dir::DataDir, file_system::scoped_file_system, scenes::ui_test::UiTestScene},
+    game::{
+        data_dir::{DataDir, data_dir, scoped_data_dir},
+        file_system::scoped_file_system,
+        scenes::ui_test::UiTestScene,
+    },
 };
 
 mod engine;
@@ -92,7 +96,7 @@ impl winit::application::ApplicationHandler for App {
                 let scene: Box<dyn Scene> = if true {
                     // WorldScene
 
-                    let campaign_defs = DataDir::load_campaign_defs().unwrap();
+                    let campaign_defs = data_dir().load_campaign_defs().unwrap();
 
                     // Campaigns and total texture count.
 
@@ -355,6 +359,7 @@ fn main() {
     };
 
     let _file_system = scoped_file_system(|| game::file_system::FileSystem::new(opts.path.clone()));
+    let _data_dir = scoped_data_dir(DataDir::new);
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
 

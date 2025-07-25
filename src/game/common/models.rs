@@ -11,7 +11,7 @@ use crate::{
         shaders::Shaders,
         storage::{Handle, Storage},
     },
-    game::data_dir::DataDir,
+    game::data_dir::data_dir,
 };
 
 use super::{
@@ -87,7 +87,7 @@ impl ModelManager {
             return Ok(*model);
         }
 
-        let model = DataDir::load_object_model(name)?;
+        let model = data_dir().load_object_model(name)?;
 
         // Build a single mesh and generate a list of draw commands per texture.
         let mut indexed_mesh = IndexedMesh::default();
@@ -167,7 +167,7 @@ impl ModelManager {
         name: &str,
     ) -> Result<Handle<RenderTexture>, AssetError> {
         let texture_path = PathBuf::from("textures").join("shared").join(name);
-        let image = DataDir::load_image(&texture_path)?;
+        let image = data_dir().load_image(&texture_path)?;
 
         let label = &texture_path.display().to_string();
 
