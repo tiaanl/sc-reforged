@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use crate::game::assets::Config;
+use crate::game::config::parser::ConfigLines;
 
 use super::ConfigFile;
 
@@ -16,10 +14,8 @@ pub struct LodModelProfileDefinition {
     pub sub_model_definitions: Vec<SubModelDefinition>,
 }
 
-impl Config for LodModelProfileDefinition {
-    fn from_string(str: &str) -> Result<Self, crate::engine::assets::AssetError> {
-        let mut config = ConfigFile::new(str);
-
+impl From<ConfigLines> for LodModelProfileDefinition {
+    fn from(value: ConfigLines) -> Self {
         enum State {
             None,
             Def(LodModelProfileDefinition),
@@ -27,8 +23,8 @@ impl Config for LodModelProfileDefinition {
         }
         let mut state = State::None;
 
-        while let Some(current) = config.current() {
-            match current[0] {
+        for line in value.into_iter() {
+            match line.key.as_str() {
                 "LOD_MODEL_PROFILE_DEFINITION" => match state {
                     State::None => state = State::Def(LodModelProfileDefinition::default()),
                     State::Def(..) | State::SubDef(..) => {
@@ -44,7 +40,7 @@ impl Config for LodModelProfileDefinition {
                         panic!("LOD_MODEL_NAME without LOD_MODEL_PROFILE_DEFINITION");
                     }
                     State::Def(ref mut def) | State::SubDef(ref mut def, _) => {
-                        def.lod_model_name = current[1].to_string();
+                        def.lod_model_name = line.param(0);
                     }
                 },
 
@@ -65,7 +61,7 @@ impl Config for LodModelProfileDefinition {
                     State::None => panic!("SUB_MODEL_MODEL without LOD_MODEL_PROFILE_DEFINITION"),
                     State::Def(_) => panic!("SUB_MODEL_MODEL without SUB_MODEL_DEFINITION"),
                     State::SubDef(_, ref mut sub_def) => {
-                        sub_def.sub_model_model = current[1].to_string();
+                        sub_def.sub_model_model = line.param(0);
                     }
                 },
 
@@ -73,13 +69,12 @@ impl Config for LodModelProfileDefinition {
                     State::None => panic!("SUB_MODEL_RANGE without LOD_MODEL_PROFILE_DEFINITION"),
                     State::Def(_) => panic!("SUB_MODEL_RANGE without SUB_MODEL_DEFINITION"),
                     State::SubDef(_, ref mut sub_def) => {
-                        sub_def.sub_model_range = current[1].parse().unwrap();
+                        sub_def.sub_model_range = line.param(0);
                     }
                 },
 
                 _ => {}
             }
-            config.next();
         }
 
         let mut def = match state {
@@ -99,6 +94,6 @@ impl Config for LodModelProfileDefinition {
             }
         });
 
-        Ok(def)
+        def
     }
 }

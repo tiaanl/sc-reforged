@@ -7,6 +7,7 @@ mod config_file;
 mod image_defs;
 mod model_lods;
 mod mtf;
+pub mod parser;
 mod terrain_mapping;
 mod windows;
 

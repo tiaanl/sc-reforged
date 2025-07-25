@@ -2,7 +2,7 @@ use crate::engine::prelude::*;
 
 use super::{
     geometry_buffers::GeometryBuffers,
-    model::{Model, ModelVertex},
+    model::{Model, Vertex},
     render::RenderTexture,
 };
 
@@ -44,7 +44,7 @@ impl ModelRenderer {
                     module: &module,
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[ModelVertex::layout()],
+                    buffers: &[Vertex::layout()],
                 },
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: Some(

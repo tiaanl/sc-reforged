@@ -1,19 +1,18 @@
-use crate::game::{assets::Config, config::ConfigFile};
+use crate::game::config::parser::{ConfigLine, ConfigLines};
 
 #[derive(Debug, Default)]
 pub struct Image {
     pub name: String,
     pub filename: String,
-    pub vid_mem: u32,
+    pub vid_mem: i32,
 }
 
-impl Image {
-    fn from_params(params: &[&str]) -> Self {
-        // IMAGE <NAME> <FILENAME> <vidmem 1=true>
+impl From<ConfigLine> for Image {
+    fn from(value: ConfigLine) -> Self {
         Self {
-            name: params[1].to_string(),
-            filename: params[2].to_string(),
-            vid_mem: params[3].parse().unwrap(),
+            name: value.param(0),
+            filename: value.param(1),
+            vid_mem: value.param(2),
         }
     }
 }
@@ -58,80 +57,42 @@ pub struct SpriteFrame {
     dx: i32,
 }
 
-impl SpriteFrame {
-    fn from_params(params: &[&str]) -> Self {
-        Self {
-            x1: params[0].parse().unwrap(),
-            y1: params[1].parse().unwrap(),
-            x2: params[2].parse().unwrap(),
-            y2: params[3].parse().unwrap(),
-            x_run: 0,
-            dx: 0,
-        }
-    }
-
-    fn from_params_x_run(params: &[&str]) -> Self {
-        Self {
-            x_run: params[4].parse().unwrap(),
-            ..Self::from_params(params)
-        }
-    }
-
-    fn from_params_dx_run(params: &[&str]) -> Self {
-        Self {
-            dx: params[5].parse().unwrap(),
-            ..Self::from_params_x_run(params)
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct Sprite3d {
     name: String,
     texture_name: String,
-    width: u32,
-    height: u32,
+    width: i32,
+    height: i32,
     alpha: Option<f32>,
     color_key_enabled: Option<bool>,
     color_key: Option<ColorKey>,
     frames: Vec<SpriteFrame>,
 }
 
-impl Sprite3d {
-    fn from_params(params: &[&str]) -> Self {
+impl From<ConfigLine> for Sprite3d {
+    fn from(value: ConfigLine) -> Self {
         // SPRITE3D <NAME> <TEXTURENAME> <TXTR_WIDTH> <TXTR_HEIGHT> [<ALPHA>] [<Color Key Enable>] [ <Rl> <Gl> <Bl> <Rh> <Gh> Bh> ]
         //     SPRITEFRAME <x1> <y1> <x2> <y2>
         // ENDDEF
 
-        let name = params[1].to_string();
-        let texture_name = params[2].to_string();
-        let width = params[3].parse().unwrap();
-        let height = params[4].parse().unwrap();
+        let name = value.param(0);
+        let texture_name = value.param(1);
+        let width = value.param(2);
+        let height = value.param(3);
 
-        let alpha = if params.len() > 5 {
-            Some(params[5].parse().unwrap())
-        } else {
-            None
-        };
+        let alpha = value.maybe_param(4);
 
-        let color_key_enabled = if params.len() > 6 {
-            Some(params[6].parse::<i32>().unwrap() != 0)
-        } else {
-            None
-        };
-
-        let color_key = if params.len() > 7 {
-            Some(ColorKey {
-                rl: params[7].parse().unwrap(),
-                gl: params[8].parse().unwrap(),
-                bl: params[9].parse().unwrap(),
-                rh: params[10].parse().unwrap(),
-                gh: params[11].parse().unwrap(),
-                bh: params[12].parse().unwrap(),
+        let color_key_enabled = value.maybe_param::<i32>(5).map(|i| i != 0);
+        let color_key = color_key_enabled.and_then(|e| {
+            e.then(|| ColorKey {
+                rl: value.param::<i32>(6) as u8,
+                gl: value.param::<i32>(7) as u8,
+                bl: value.param::<i32>(8) as u8,
+                rh: value.param::<i32>(9) as u8,
+                gh: value.param::<i32>(10) as u8,
+                bh: value.param::<i32>(11) as u8,
             })
-        } else {
-            None
-        };
+        });
 
         Self {
             name,
@@ -155,16 +116,25 @@ pub struct AnimSprite {
     frames: Vec<SpriteFrame>,
 }
 
-impl AnimSprite {
-    fn from_params(params: &[&str]) -> Self {
+impl From<ConfigLine> for AnimSprite {
+    fn from(value: ConfigLine) -> Self {
         // ANIMSPRITE <NAME> <IMAGENAME> [ <-1> | <Rl> <Gl> <Bl> <Rh> <Gh> Bh> ]
-        let name = params[0].to_string();
-        let image_name = params[1].to_string();
+        let name = value.param(0);
+        let image_name = value.param(1);
 
-        let color_key = if params[2].parse::<i32>().unwrap() == -1 {
+        let first = value.param::<i32>(2);
+
+        let color_key = if first == -1 {
             None
         } else {
-            Some(ColorKey::from_params(&params[2..]))
+            Some(ColorKey {
+                rl: value.param::<i32>(6) as u8,
+                gl: value.param::<i32>(7) as u8,
+                bl: value.param::<i32>(8) as u8,
+                rh: value.param::<i32>(9) as u8,
+                gh: value.param::<i32>(10) as u8,
+                bh: value.param::<i32>(11) as u8,
+            })
         };
 
         Self {
@@ -181,43 +151,39 @@ impl AnimSprite {
 pub struct AnimSprite3d {
     name: String,
     texture_name: String,
-    width: u32,
-    height: u32,
+    width: i32,
+    height: i32,
     alpha: Option<f32>,
-    color_key_enabled: bool,
+    color_key_enabled: Option<bool>,
     color_key: Option<ColorKey>,
 
     frame_descriptor: FrameDescritor,
-    frame_order: Vec<u32>,
+    frame_order: Vec<i32>,
 
     frames: Vec<SpriteFrame>,
 }
 
-impl AnimSprite3d {
-    fn from_params(params: &[&str]) -> Self {
+impl From<ConfigLine> for AnimSprite3d {
+    fn from(value: ConfigLine) -> Self {
         // ANIMSPRITE3D <NAME> <TEXTURENAME> <TXTR_WIDTH> <TXTR_HEIGHT> [<ALPHA>] [<Color Key Enable>] [ Rl> <Gl> <Bl> <Rh> <Gh> Bh> ;]
-        let name = params[0].to_string();
-        let texture_name = params[1].to_string();
-        let width = params[2].parse().unwrap();
-        let height = params[3].parse().unwrap();
+        let name = value.param(0);
+        let texture_name = value.param(1);
+        let width = value.param(2);
+        let height = value.param(3);
 
-        let alpha = if params.len() > 4 {
-            Some(params[4].parse().unwrap())
-        } else {
-            None
-        };
+        let alpha = value.maybe_param(4);
 
-        let color_key_enabled = if params.len() > 5 {
-            params[5].parse::<i32>().unwrap() == 1
-        } else {
-            false
-        };
-
-        let color_key = if params.len() > 6 {
-            Some(ColorKey::from_params(&params[6..]))
-        } else {
-            None
-        };
+        let color_key_enabled = value.maybe_param::<i32>(5).map(|i| i != 0);
+        let color_key = color_key_enabled.and_then(|e| {
+            e.then(|| ColorKey {
+                rl: value.param::<i32>(6) as u8,
+                gl: value.param::<i32>(7) as u8,
+                bl: value.param::<i32>(8) as u8,
+                rh: value.param::<i32>(9) as u8,
+                gh: value.param::<i32>(10) as u8,
+                bh: value.param::<i32>(11) as u8,
+            })
+        });
 
         Self {
             name,
@@ -236,18 +202,18 @@ impl AnimSprite3d {
 
 #[derive(Debug, Default)]
 struct FrameDescritor {
-    num_images: u32,
-    num_frames: u32,
-    frame_rate: u32,
+    num_images: i32,
+    num_frames: i32,
+    frame_rate: i32,
 }
 
-impl FrameDescritor {
-    fn from_params(params: &[&str]) -> Self {
+impl From<ConfigLine> for FrameDescritor {
+    fn from(value: ConfigLine) -> Self {
         // FRAMEDESCRIPTOR <NUM IMAGES> <NUM FRAMES> <FRAME RATE>
         Self {
-            num_images: params[0].parse().unwrap(),
-            num_frames: params[1].parse().unwrap(),
-            frame_rate: params[2].parse().unwrap(),
+            num_images: value.param(0),
+            num_frames: value.param(1),
+            frame_rate: value.param(2),
         }
     }
 }
@@ -260,11 +226,9 @@ pub struct ImageDefs {
     pub anim_sprite_3d: Vec<AnimSprite3d>,
 }
 
-impl Config for ImageDefs {
-    fn from_string(str: &str) -> Result<Self, crate::engine::assets::AssetError> {
+impl From<ConfigLines> for ImageDefs {
+    fn from(value: ConfigLines) -> Self {
         let mut image_defs = ImageDefs::default();
-
-        let mut config = ConfigFile::new(str);
 
         #[derive(Debug)]
         enum State {
@@ -275,24 +239,43 @@ impl Config for ImageDefs {
         }
         let mut state = State::None;
 
-        while let Some(current) = config.current() {
-            match current[0] {
-                s if s.starts_with(';') => {}
-
+        for line in value.into_iter() {
+            match line.key.as_str() {
+                // s if s.starts_with(';') => {}
                 "IMAGE" => {
-                    image_defs.images.push(Image::from_params(current));
+                    image_defs.images.push(line.into());
                 }
 
                 "SPRITE3D" => {
-                    let sprite_3d = Sprite3d::from_params(current);
-                    state = State::Sprite3d(sprite_3d);
+                    state = State::Sprite3d(line.into());
                 }
 
                 s @ "SPRITEFRAME" | s @ "SPRITEFRAME_XRUN" | s @ "SPRITEFRAME_DXRUN" => {
                     let sprite_frame = match s {
-                        "SPRITEFRAME" => SpriteFrame::from_params(&current[1..]),
-                        "SPRITEFRAME_XRUN" => SpriteFrame::from_params_x_run(&current[1..]),
-                        "SPRITEFRAME_DXRUN" => SpriteFrame::from_params_dx_run(&current[1..]),
+                        "SPRITEFRAME" => SpriteFrame {
+                            x1: line.param(0),
+                            y1: line.param(1),
+                            x2: line.param(2),
+                            y2: line.param(3),
+                            x_run: 0,
+                            dx: 0,
+                        },
+                        "SPRITEFRAME_XRUN" => SpriteFrame {
+                            x1: line.param(0),
+                            y1: line.param(1),
+                            x2: line.param(2),
+                            y2: line.param(3),
+                            x_run: line.param(4),
+                            dx: 0,
+                        },
+                        "SPRITEFRAME_DXRUN" => SpriteFrame {
+                            x1: line.param(0),
+                            y1: line.param(1),
+                            x2: line.param(2),
+                            y2: line.param(3),
+                            x_run: line.param(4),
+                            dx: line.param(5),
+                        },
                         _ => unreachable!("already checked"),
                     };
                     match state {
@@ -318,26 +301,34 @@ impl Config for ImageDefs {
                 }
 
                 "ANIMSPRITE3D" => {
-                    let anim_sprite_3d = AnimSprite3d::from_params(&current[1..]);
-                    state = State::AnimSprite3d(anim_sprite_3d);
+                    state = State::AnimSprite3d(line.into());
                 }
 
-                "FRAMEDESCRIPTOR" => {
-                    let frame_descriptor = FrameDescritor::from_params(&current[1..]);
-                    match state {
-                        State::AnimSprite(ref mut anim_sprite) => {
-                            //
-                            anim_sprite.frames_descriptor = frame_descriptor;
-                        }
-                        State::AnimSprite3d(ref mut anim_sprite_3d) => {
-                            anim_sprite_3d.frame_descriptor = frame_descriptor;
-                        }
-                        _ => panic!("Found FRAMEDESCRIPTOR, but not in correct state! {state:?}"),
+                "FRAMEDESCRIPTOR" => match state {
+                    State::AnimSprite(ref mut anim_sprite) => {
+                        anim_sprite.frames_descriptor = line.into();
                     }
-                }
+                    State::AnimSprite3d(ref mut anim_sprite_3d) => {
+                        anim_sprite_3d.frame_descriptor = line.into();
+                    }
+                    _ => panic!("Found FRAMEDESCRIPTOR, but not in correct state! {state:?}"),
+                },
 
                 "FRAMEORDER" => {
-                    let frame_order = current[1..].iter().map(|s| s.parse().unwrap()).collect();
+                    use crate::game::config::parser::ConfigToken;
+
+                    let frame_order = line
+                        .params()
+                        .iter()
+                        .map(|s| match s {
+                            ConfigToken::Number(number) => *number,
+                            _ => {
+                                tracing::warn!("FRAMEORDER has invalid values: {:?}", line);
+                                0
+                            }
+                        })
+                        .collect();
+
                     match state {
                         State::AnimSprite3d(ref mut anim_sprite_3d) => {
                             anim_sprite_3d.frame_order = frame_order;
@@ -346,20 +337,12 @@ impl Config for ImageDefs {
                     }
                 }
 
-                "ANIMSPRITE" => {
-                    let anim_sprite = AnimSprite::from_params(&current[1..]);
-                    state = State::AnimSprite(anim_sprite);
-                }
+                "ANIMSPRITE" => state = State::AnimSprite(line.into()),
 
-                _ => panic!(
-                    "Unexpected config value: {:?}, state: {:?}",
-                    current.join(", "),
-                    state
-                ),
+                _ => panic!("Unexpected config value: {line:?}, state: {state:?}"),
             }
-            config.next();
         }
 
-        Ok(image_defs)
+        image_defs
     }
 }

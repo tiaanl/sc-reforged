@@ -1,15 +1,9 @@
 use glam::{IVec2, UVec2, Vec3};
 
-use crate::engine::assets::{AssetError, AssetLoadContext, AssetType};
-
 /// Represents a rectangular grid of evenly spaced vertices, each with a variable elevation.
 ///
 /// Nodes are the vertices of the grid and cells are the rectangular areas between adjacent nodes.
 pub struct HeightMap {
-    /// Distance between each node.
-    pub nominal_edge_size: f32,
-    /// height between elevation indices.
-    pub elevation_base: f32,
     /// X and Y sizes counted in amount of nodes (not cells!).
     pub size: UVec2,
     /// Elevation index of each node.
@@ -17,24 +11,14 @@ pub struct HeightMap {
 }
 
 impl HeightMap {
-    /// Create a height map from a PCX file.
-    pub fn from_pcx<R>(
-        nominal_edge_size: f32,
-        elevation_base: f32,
-        reader: &mut R,
-    ) -> Result<Self, std::io::Error>
-    where
-        R: std::io::Read,
-    {
+    pub fn from_data(data: Vec<u8>) -> Result<Self, std::io::Error> {
         let pcx::PcxData {
             width,
             height,
             data: elevations,
-        } = pcx::load_height_map(reader)?;
+        } = pcx::load_height_map(&mut std::io::Cursor::new(data))?;
 
         Ok(Self {
-            nominal_edge_size,
-            elevation_base,
             size: UVec2 {
                 x: width,
                 y: height,
@@ -47,19 +31,24 @@ impl HeightMap {
     ///
     /// NOTE: Coordinates outside the height map are clamped to the nearest edge, creating a flat
     /// outer edge to replicate the original behavior.
-    pub fn position_for_vertex(&self, pos: IVec2) -> Vec3 {
+    pub fn position_for_vertex(
+        &self,
+        pos: IVec2,
+        nominal_edge_size: f32,
+        elevation_base: f32,
+    ) -> Vec3 {
         let elevation = {
             let clamped_x = pos.x.clamp(0, self.size.x as i32 - 1);
             let clamped_y = pos.y.clamp(0, self.size.y as i32 - 1);
 
             let index = clamped_y as usize * self.size.x as usize + clamped_x as usize;
 
-            self.elevations[index] as f32 * self.elevation_base
+            self.elevations[index] as f32 * elevation_base
         };
 
         Vec3::new(
-            pos.x as f32 * self.nominal_edge_size,
-            pos.y as f32 * self.nominal_edge_size,
+            pos.x as f32 * nominal_edge_size,
+            pos.y as f32 * nominal_edge_size,
             elevation,
         )
     }
@@ -76,35 +65,6 @@ impl Default for HeightMapOptions {
             nominal_edge_size: 200.0,
             elevation_base: 10.0,
         }
-    }
-}
-
-impl AssetType for HeightMap {
-    type Options = HeightMapOptions;
-
-    fn from_raw_with_options(
-        raw: &[u8],
-        options: Self::Options,
-        context: &AssetLoadContext,
-    ) -> Result<Self, AssetError> {
-        let mut reader = std::io::Cursor::new(raw);
-
-        let pcx::PcxData {
-            width,
-            height,
-            data: elevations,
-        } = pcx::load_height_map(&mut reader)
-            .map_err(|err| AssetError::from_io_error(err, context.path))?;
-
-        Ok(Self {
-            nominal_edge_size: options.nominal_edge_size,
-            elevation_base: options.elevation_base,
-            size: UVec2 {
-                x: width,
-                y: height,
-            },
-            elevations,
-        })
     }
 }
 

@@ -10,14 +10,12 @@ use crate::{
         prelude::*,
     },
     game::{
-        assets::DataDir,
-        config::{CampaignDef, TerrainMapping},
-        geometry_buffers::GeometryBuffers,
-        scenes::world::height_map::HeightMapOptions,
+        config::CampaignDef, data_dir::DataDir, geometry_buffers::GeometryBuffers,
+        height_map::HeightMap,
     },
 };
 
-use super::{height_map::HeightMap, strata::Strata};
+use super::strata::Strata;
 
 struct ChunkMesh {
     vertices_buffer: wgpu::Buffer,
@@ -87,6 +85,7 @@ impl ChunkMesh {
 struct TerrainData {
     size: UVec2,
     nominal_edge_size: f32,
+    altitude_map_height_base: f32,
     water_level: f32,
 
     water_trans_depth: f32,
@@ -98,7 +97,7 @@ struct TerrainData {
 
 pub struct Terrain {
     /// Height data for the terrain.
-    height_map: Asset<HeightMap>,
+    height_map: HeightMap,
 
     /// The total amount of chunks of the terrain.
     total_chunks: u32,
@@ -224,16 +223,10 @@ impl Terrain {
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
-        let terrain_mapping = {
-            let path = PathBuf::from("textures")
-                .join("terrain")
-                .join(&campaign_def.base_name)
-                .join("terrain_mapping.txt");
-            info!("Loading terrain mapping: {}", path.display());
-            DataDir::load_config::<TerrainMapping>(&path)?
-        };
+        let terrain_mapping = DataDir::load_terrain_mapping(&campaign_def.base_name)?;
 
-        let water_level = terrain_mapping.water_level * terrain_mapping.altitude_map_height_base;
+        let water_level =
+            terrain_mapping.water_level as f32 * terrain_mapping.altitude_map_height_base;
 
         shaders.add_module(include_str!("terrain_data.wgsl"), "terrain_data.wgsl");
 
@@ -256,18 +249,9 @@ impl Terrain {
         };
 
         let height_map = {
-            use super::height_map::HeightMap;
-
             let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
             info!("Loading terrain height map: {}", path.display());
-
-            assets().load_with_options::<HeightMap>(
-                &path,
-                HeightMapOptions {
-                    nominal_edge_size: terrain_mapping.nominal_edge_size,
-                    elevation_base: terrain_mapping.altitude_map_height_base,
-                },
-            )?
+            DataDir::load_height_map(path)?
         };
 
         let normals_lookup = Self::generate_normals_lookup_table();
@@ -296,11 +280,30 @@ impl Terrain {
 
         let normals = {
             let mut normals = vec![Vec3::Z; total_nodes as usize];
+
+            let crate::game::config::TerrainMapping {
+                nominal_edge_size,
+                altitude_map_height_base,
+                ..
+            } = terrain_mapping;
+
             for y in 1..nodes_x as i32 {
                 for x in 1..nodes_y as i32 {
-                    let center = height_map.position_for_vertex(IVec2::new(x, y));
-                    let x_pos = height_map.position_for_vertex(IVec2::new(x + 1, y));
-                    let y_pos = height_map.position_for_vertex(IVec2::new(x, y + 1));
+                    let center = height_map.position_for_vertex(
+                        IVec2::new(x, y),
+                        nominal_edge_size,
+                        altitude_map_height_base,
+                    );
+                    let x_pos = height_map.position_for_vertex(
+                        IVec2::new(x + 1, y),
+                        nominal_edge_size,
+                        altitude_map_height_base,
+                    );
+                    let y_pos = height_map.position_for_vertex(
+                        IVec2::new(x, y + 1),
+                        nominal_edge_size,
+                        altitude_map_height_base,
+                    );
 
                     let normal = (x_pos - center).cross(y_pos - center).normalize();
 
@@ -316,33 +319,45 @@ impl Terrain {
 
         info!("chunks: {} x {} ({})", chunks.x, chunks.y, total_chunks);
 
-        // Generate the array of chunks we use for frustum culling.
-        let mut chunk_data = Vec::with_capacity(total_chunks as usize);
-        for chunk_y in 0..chunks.y {
-            for chunk_x in 0..chunks.x {
-                let y_range =
-                    (chunk_y * Self::CELLS_PER_CHUNK)..=((chunk_y + 1) * Self::CELLS_PER_CHUNK);
-                let x_range =
-                    (chunk_x * Self::CELLS_PER_CHUNK)..=((chunk_x + 1) * Self::CELLS_PER_CHUNK);
+        let crate::game::config::TerrainMapping {
+            nominal_edge_size,
+            altitude_map_height_base,
+            ..
+        } = terrain_mapping;
 
-                let mut min = Vec3::INFINITY;
-                let mut max = Vec3::NEG_INFINITY;
-                for y in y_range {
-                    for x in x_range.clone() {
-                        let position =
-                            height_map.position_for_vertex(IVec2::new(x as i32, y as i32));
-                        min = min.min(position);
-                        max = max.max(position);
+        // Generate the array of chunks we use for frustum culling.
+        let chunk_data = {
+            let mut chunk_data = Vec::with_capacity(total_chunks as usize);
+            for chunk_y in 0..chunks.y {
+                for chunk_x in 0..chunks.x {
+                    let y_range =
+                        (chunk_y * Self::CELLS_PER_CHUNK)..=((chunk_y + 1) * Self::CELLS_PER_CHUNK);
+                    let x_range =
+                        (chunk_x * Self::CELLS_PER_CHUNK)..=((chunk_x + 1) * Self::CELLS_PER_CHUNK);
+
+                    let mut min = Vec3::INFINITY;
+                    let mut max = Vec3::NEG_INFINITY;
+                    for y in y_range {
+                        for x in x_range.clone() {
+                            let position = height_map.position_for_vertex(
+                                IVec2::new(x as i32, y as i32),
+                                nominal_edge_size,
+                                altitude_map_height_base,
+                            );
+                            min = min.min(position);
+                            max = max.max(position);
+                        }
                     }
+                    chunk_data.push(ChunkData {
+                        min,
+                        _padding1: 0.0,
+                        max,
+                        _padding2: 0.0,
+                    });
                 }
-                chunk_data.push(ChunkData {
-                    min,
-                    _padding1: 0.0,
-                    max,
-                    _padding2: 0.0,
-                });
             }
-        }
+            chunk_data
+        };
 
         info!(
             "terrain size: {} x {}, terrain heightmap size: {} x {}",
@@ -354,7 +369,11 @@ impl Terrain {
 
             for y in 0..nodes_y {
                 for x in 0..nodes_x {
-                    let position = height_map.position_for_vertex(IVec2::new(x as i32, y as i32));
+                    let position = height_map.position_for_vertex(
+                        IVec2::new(x as i32, y as i32),
+                        nominal_edge_size,
+                        altitude_map_height_base,
+                    );
                     let normal = normals
                         .get(y as usize * (nodes_x as usize) + x as usize)
                         .unwrap_or(&Vec3::Z);
@@ -377,6 +396,7 @@ impl Terrain {
         let terrain_data = TerrainData {
             size: height_map.size,
             nominal_edge_size: terrain_mapping.nominal_edge_size,
+            altitude_map_height_base: terrain_mapping.altitude_map_height_base,
             water_level,
 
             water_trans_depth: terrain_mapping.water_trans_depth,
@@ -846,6 +866,9 @@ impl Terrain {
         }
 
         if false {
+            let nominal_edge_size = self.terrain_data.nominal_edge_size;
+            let altitude_map_height_base = self.terrain_data.altitude_map_height_base;
+
             // Normals
             for y in 0..self.height_map.size.y + 1 {
                 for x in 0..self.height_map.size.x + 1 {
@@ -853,9 +876,11 @@ impl Terrain {
 
                     let index = y as usize * (self.height_map.size.x + 1) as usize + x as usize;
 
-                    let position = self
-                        .height_map
-                        .position_for_vertex(IVec2::new(x as i32, y as i32));
+                    let position = self.height_map.position_for_vertex(
+                        IVec2::new(x as i32, y as i32),
+                        nominal_edge_size,
+                        altitude_map_height_base,
+                    );
                     let normal = if x >= self.height_map.size.x || y >= self.height_map.size.y {
                         Vec3::Z
                     } else {
@@ -1115,14 +1140,34 @@ impl Terrain {
         normals
     }
 
-    fn calculate_node_normals(&mut self) {
+    fn calculate_node_normals(&mut self, nominal_edge_size: f32, altitude_map_height_map: f32) {
         for y in 1..self.height_map.size.y as i32 {
             for x in 1..self.height_map.size.x as i32 {
-                let center = self.height_map.position_for_vertex(IVec2::new(x, y));
-                let x_pos = self.height_map.position_for_vertex(IVec2::new(x + 1, y));
-                let y_pos = self.height_map.position_for_vertex(IVec2::new(x, y + 1));
-                let x_neg = self.height_map.position_for_vertex(IVec2::new(x - 1, y));
-                let y_neg = self.height_map.position_for_vertex(IVec2::new(x, y - 1));
+                let center = self.height_map.position_for_vertex(
+                    IVec2::new(x, y),
+                    nominal_edge_size,
+                    altitude_map_height_map,
+                );
+                let x_pos = self.height_map.position_for_vertex(
+                    IVec2::new(x + 1, y),
+                    nominal_edge_size,
+                    altitude_map_height_map,
+                );
+                let y_pos = self.height_map.position_for_vertex(
+                    IVec2::new(x, y + 1),
+                    nominal_edge_size,
+                    altitude_map_height_map,
+                );
+                let x_neg = self.height_map.position_for_vertex(
+                    IVec2::new(x - 1, y),
+                    nominal_edge_size,
+                    altitude_map_height_map,
+                );
+                let y_neg = self.height_map.position_for_vertex(
+                    IVec2::new(x, y - 1),
+                    nominal_edge_size,
+                    altitude_map_height_map,
+                );
 
                 let v1 = (x_pos - center).cross(y_pos - center);
                 let v2 = (y_pos - center).cross(x_neg - center);

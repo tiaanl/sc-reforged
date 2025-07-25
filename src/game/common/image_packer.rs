@@ -1,8 +1,6 @@
+use ahash::HashMap;
 use glam::{UVec2, Vec2};
 use image::RgbaImage;
-use std::collections::HashMap;
-
-use crate::engine::assets::Asset;
 
 use super::image::Image;
 
@@ -16,7 +14,7 @@ pub struct ImagePacker {
     bin_size: UVec2,
     rects: Vec<(usize, UVec2)>,
     packed: HashMap<usize, PackedRect>,
-    images: HashMap<usize, Asset<Image>>,
+    images: HashMap<usize, Image>,
 }
 
 impl ImagePacker {
@@ -24,12 +22,12 @@ impl ImagePacker {
         Self {
             bin_size: UVec2::new(width, height),
             rects: Vec::new(),
-            packed: HashMap::new(),
-            images: HashMap::new(),
+            packed: HashMap::default(),
+            images: HashMap::default(),
         }
     }
 
-    pub fn add_image(&mut self, id: usize, image: Asset<Image>) -> PackedRect {
+    pub fn add_image(&mut self, id: usize, image: Image) -> PackedRect {
         self.rects.push((id, image.size));
         self.images.insert(id, image);
 
@@ -92,7 +90,7 @@ impl ImagePacker {
     }
 
     fn try_pack(bin_size: UVec2, rects: &[(usize, UVec2)]) -> Option<HashMap<usize, PackedRect>> {
-        let mut result = HashMap::new();
+        let mut result = HashMap::default();
         let mut cursor = UVec2::ZERO;
         let mut max_row_height = 0;
 

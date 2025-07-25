@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{engine::prelude::*, game::assets::DataDir};
+use crate::{engine::prelude::*, game::data_dir::DataDir};
 
 pub struct LoadingScene {
     pipeline: wgpu::RenderPipeline,

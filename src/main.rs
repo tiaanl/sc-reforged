@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
 use engine::prelude::*;
-use game::{assets::DataDir, scenes::world::WorldScene};
+use game::scenes::world::WorldScene;
 use glam::UVec2;
 use tracing::{error, info, warn};
 use winit::{
@@ -13,7 +13,7 @@ use winit::{
 
 use crate::{
     engine::ui,
-    game::{file_system::scoped_file_system, scenes::ui_test::UiTestScene},
+    game::{data_dir::DataDir, file_system::scoped_file_system, scenes::ui_test::UiTestScene},
 };
 
 mod engine;
@@ -52,7 +52,7 @@ enum App {
 impl winit::application::ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         match self {
-            App::Uninitialzed(opts) => {
+            App::Uninitialzed(_opts) => {
                 event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
                 let screen_size = event_loop
@@ -88,10 +88,6 @@ impl winit::application::ApplicationHandler for App {
                 #[cfg(feature = "egui")]
                 let egui_integration =
                     engine::egui_integration::EguiIntegration::new(event_loop, &renderer);
-
-                let file_system = Arc::new(PlatformFileSystem::new(opts.path.clone()));
-                let assets = Assets::with_file_system(file_system);
-                init_assets(assets);
 
                 let scene: Box<dyn Scene> = if true {
                     // WorldScene

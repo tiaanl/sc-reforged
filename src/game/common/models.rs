@@ -3,18 +3,20 @@ use std::{collections::HashMap, ops::Range, path::PathBuf};
 use glam::Mat4;
 use wgpu::util::DeviceExt;
 
-use crate::engine::{
-    assets::{Asset, AssetError},
-    mesh::{GpuIndexedMesh, IndexedMesh},
-    prelude::{BufferLayout, Frame, Renderer},
-    shaders::Shaders,
-    storage::{Handle, Storage},
+use crate::{
+    engine::{
+        assets::AssetError,
+        mesh::{GpuIndexedMesh, IndexedMesh},
+        prelude::{BufferLayout, Frame, Renderer},
+        shaders::Shaders,
+        storage::{Handle, Storage},
+    },
+    game::data_dir::DataDir,
 };
 
 use super::{
-    assets::DataDir,
     geometry_buffers::GeometryBuffers,
-    model::{Model, ModelVertex},
+    model::{Model, Vertex},
 };
 
 /// Contains all loaded models and their GPU counterparts.
@@ -293,7 +295,7 @@ struct DrawCommand {
 
 pub struct RenderModel {
     /// A reference back to the original [Model].
-    model: Asset<Model>,
+    model: Model,
     /// Contains the buffers for all the mesh data for the model.
     mesh: GpuIndexedMesh,
     /// Node data stored in a buffer for rendering.
@@ -338,7 +340,7 @@ fn create_pipeline(
                 entry_point: None,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[
-                    ModelVertex::layout(),
+                    Vertex::layout(),
                     wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<RenderModelInstance>()
                             as wgpu::BufferAddress,

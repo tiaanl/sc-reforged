@@ -1,8 +1,11 @@
 use glam::{Vec3, Vec4};
 
-use crate::game::{assets::Config, config::ConfigFile};
+use crate::game::config::{
+    ConfigFile,
+    parser::{ConfigLine, ConfigLines},
+};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Object {
     // OBJECT Scenery_Strip_Light AlScLt-Runway "AlScLt-Runway"
     pub typ: String,
@@ -17,6 +20,17 @@ pub struct Object {
     pub id: [i32; 2],
     // OBJECT_MTF_CONFIG 1500 900 120 350 100.000000 100.000000 1500.000000 850.000000
     pub config: (i32, i32, i32, i32, f32, f32, f32, f32),
+}
+
+impl From<ConfigLine> for Object {
+    fn from(value: ConfigLine) -> Self {
+        Self {
+            typ: value.param(0),
+            name: value.param(1),
+            title: value.param(2),
+            ..Object::default()
+        }
+    }
 }
 
 impl Object {
@@ -40,6 +54,20 @@ pub struct Fog {
     pub color: Vec3,
 }
 
+impl From<ConfigLine> for Fog {
+    fn from(value: ConfigLine) -> Self {
+        // Defaults are from training_final.mtf
+        // GAME_CONFIG_FOG_ENABLED 0.419306 0.418611 0.437222 0.000000 13300.000000
+        // TODO: There are defaults in the .exe.
+
+        Self {
+            start: value.param(3),
+            end: value.param(4),
+            color: Vec3::new(value.param(0), value.param(1), value.param(2)),
+        }
+    }
+}
+
 impl Fog {
     fn from_params(params: &[&str]) -> Self {
         // Defaults are from training_final.mtf
@@ -59,17 +87,14 @@ impl Fog {
 
 #[derive(Debug, Default)]
 pub struct Mtf {
-    pub time_of_day: [u32; 2],
+    pub time_of_day: [i32; 2],
     pub game_config_fog_enabled: Fog,
     pub inventory: Vec<Object>,
     pub objects: Vec<Object>,
 }
 
-impl Config for Mtf {
-    fn from_string(str: &str) -> Result<Self, crate::engine::assets::AssetError> {
-        let mut config = ConfigFile::new(str);
-
-        #[derive(Debug)]
+impl From<ConfigLines> for Mtf {
+    fn from(value: ConfigLines) -> Self {
         enum State {
             None,
             ObjectInventory(Object),
@@ -79,14 +104,10 @@ impl Config for Mtf {
         let mut mtf = Mtf::default();
         let mut state = State::None;
 
-        while let Some(current) = config.current() {
-            match current[0] {
-                "GAME_STATE_TIME_OF_DAY" => {
-                    mtf.time_of_day = [current[1].parse().unwrap(), current[2].parse().unwrap()];
-                }
-                "GAME_CONFIG_FOG_ENABLED" => {
-                    mtf.game_config_fog_enabled = Fog::from_params(current);
-                }
+        for line in value.into_iter() {
+            match line.key.as_str() {
+                "GAME_STATE_TIME_OF_DAY" => mtf.time_of_day = [line.param(0), line.param(1)],
+                "GAME_CONFIG_FOG_ENABLED" => mtf.game_config_fog_enabled = line.into(),
                 "OBJECT_INVENTORY" => {
                     match state {
                         State::None => {}
@@ -97,7 +118,7 @@ impl Config for Mtf {
                             mtf.objects.push(old);
                         }
                     }
-                    state = State::ObjectInventory(Object::from_params(current));
+                    state = State::ObjectInventory(line.into())
                 }
                 "OBJECT" => {
                     match state {
@@ -109,14 +130,10 @@ impl Config for Mtf {
                             mtf.objects.push(old);
                         }
                     }
-                    state = State::Object(Object::from_params(current));
+                    state = State::Object(line.into())
                 }
                 "OBJECT_POSITION" => {
-                    let position = Vec3::new(
-                        current[1].parse().unwrap_or(0.0),
-                        current[2].parse().unwrap_or(0.0),
-                        current[3].parse().unwrap_or(0.0),
-                    );
+                    let position = Vec3::new(line.param(0), line.param(1), line.param(2));
                     match state {
                         State::None => panic!("No object selected!"),
                         State::ObjectInventory(ref mut obj) => obj.position = position,
@@ -124,11 +141,7 @@ impl Config for Mtf {
                     }
                 }
                 "OBJECT_ROTATION" => {
-                    let rotation = Vec3::new(
-                        current[1].parse().unwrap_or(0.0),
-                        current[2].parse().unwrap_or(0.0),
-                        current[3].parse().unwrap_or(0.0),
-                    );
+                    let rotation = Vec3::new(line.param(0), line.param(1), line.param(2));
                     match state {
                         State::None => panic!("No object selected!"),
                         State::ObjectInventory(ref mut obj) => obj.rotation = rotation,
@@ -136,7 +149,7 @@ impl Config for Mtf {
                     }
                 }
                 "OBJECT_ID" => {
-                    let id = [current[1].parse().unwrap(), current[2].parse().unwrap()];
+                    let id = [line.param(0), line.param(1)];
                     match state {
                         State::None => panic!("No object selected!"),
                         State::ObjectInventory(ref mut obj) => obj.id = id,
@@ -144,11 +157,11 @@ impl Config for Mtf {
                     }
                 }
                 "OBJECT_MTF_CONFIG" => {
-                    // Just skip this for now.
+                    // TODO: Skip this for now.
                 }
-                _ => panic!("Invalid MTF entry: {:?}", config.current()),
+
+                _ => tracing::warn!("Unknown MTF entry: {}", line.key),
             }
-            config.next();
         }
 
         match state {
@@ -157,6 +170,6 @@ impl Config for Mtf {
             State::Object(object) => mtf.objects.push(object),
         }
 
-        Ok(mtf)
+        mtf
     }
 }

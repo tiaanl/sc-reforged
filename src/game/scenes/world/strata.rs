@@ -4,7 +4,7 @@ use glam::UVec2;
 use wgpu::util::DeviceExt;
 
 use crate::engine::prelude::*;
-use crate::game::assets::DataDir;
+use crate::game::data_dir::DataDir;
 use crate::game::geometry_buffers::GeometryBuffers;
 use crate::game::scenes::world::terrain::Terrain;
 

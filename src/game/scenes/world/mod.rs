@@ -1,5 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
-
+use ahash::HashMap;
 use glam::Vec4Swizzles;
 use terrain::Terrain;
 use wgpu::util::DeviceExt;
@@ -11,17 +10,15 @@ use crate::{
     },
     game::{
         animation::Track,
-        assets::DataDir,
         camera::{self, Controller},
         compositor::Compositor,
-        config::{self, CampaignDef, LodModelProfileDefinition, SubModelDefinition},
-        file_system::file_system,
+        config::{CampaignDef, SubModelDefinition},
+        data_dir::DataDir,
         geometry_buffers::{GeometryBuffers, GeometryData},
     },
 };
 
 mod bounding_boxes;
-mod height_map;
 mod objects;
 mod strata;
 mod terrain;
@@ -110,33 +107,9 @@ impl WorldScene {
     pub fn new(renderer: &Renderer, campaign_def: CampaignDef) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
-        let lod_model_definitions = {
-            let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
+        let lod_model_definitions = DataDir::load_lod_model_profiles()?;
 
-            for lod_path in file_system()
-                .dir(&PathBuf::from("config").join("lod_model_profiles"))?
-                .filter(|path| {
-                    path.extension()
-                        .filter(|ext| ext.eq_ignore_ascii_case("txt"))
-                        .is_some()
-                })
-            {
-                let profile = DataDir::load_config::<LodModelProfileDefinition>(lod_path)?;
-                lod_definitions.insert(
-                    profile.lod_model_name.clone(),
-                    profile.sub_model_definitions.clone(),
-                );
-            }
-
-            lod_definitions
-        };
-
-        let campaign = DataDir::load_config::<config::Campaign>(
-            PathBuf::from("campaign")
-                .join(&campaign_def.base_name)
-                .join(&campaign_def.base_name)
-                .with_extension("txt"),
-        )?;
+        let campaign = DataDir::load_campaign(&campaign_def.base_name)?;
 
         let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
@@ -267,7 +240,7 @@ impl WorldScene {
         );
 
         if let Some(ref mtf_name) = campaign.mtf_name {
-            let mtf = DataDir::load_config::<config::Mtf>(&PathBuf::from("maps").join(mtf_name))?;
+            let mtf = DataDir::load_mtf(mtf_name)?;
 
             for object in mtf.objects.iter() {
                 if let Err(err) = objects.spawn(
@@ -311,7 +284,6 @@ impl WorldScene {
             compositor,
             gizmos_renderer,
 
-            // Input handling.
             lod_model_definitions,
 
             time_of_day,
