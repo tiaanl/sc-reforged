@@ -1,9 +1,6 @@
 use crate::{
     engine::assets::AssetError,
-    game::config::{
-        ConfigFile,
-        parser::{ConfigLine, ConfigLines},
-    },
+    game::config::parser::{ConfigLine, ConfigLines},
 };
 
 #[derive(Clone, Debug, Default)]

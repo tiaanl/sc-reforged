@@ -41,9 +41,9 @@ fn get_id(texture: texture_2d<u32>, uv: vec2<f32>) -> u32 {
 fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let id = get_id(t_ids, vertex.uv);
 
-    if (id == 0xFFFFFFFF) {
-        return vec4<f32>(u_environment.fog_color.xyz, 1.0);
-    }
+    // if (id == 0xFFFFFFFF) {
+    //     return vec4<f32>(u_environment.fog_color.xyz, 1.0);
+    // }
 
     let albedo = get_frag(t_albedo, vertex.uv);
     let position = get_frag(t_position, vertex.uv);
@@ -53,5 +53,13 @@ fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     let diffuse = environment::diffuse_with_fog(u_environment, normal.xyz, albedo.xyz, distance);
 
-    return vec4<f32>(diffuse, 1.0);
+    let accum = get_frag(t_alpha_accumulation, vertex.uv);
+    let reveal = get_frag(t_alpha_revealage, vertex.uv).r;
+
+    let trans_rgb = accum.rgb / max(accum.a, 1e-4);
+    let trans_alpha = 1.0 - reveal;
+
+    let final_rgb = diffuse * reveal + trans_rgb * trans_alpha;
+
+    return vec4<f32>(final_rgb, 1.0);
 }

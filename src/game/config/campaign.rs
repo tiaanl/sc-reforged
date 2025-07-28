@@ -5,8 +5,6 @@ use crate::{
     game::config::parser::{ConfigLine, ConfigLines},
 };
 
-use super::ConfigFile;
-
 #[derive(Default)]
 pub struct ViewInitial {
     pub from: Vec2,

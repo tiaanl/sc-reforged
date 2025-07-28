@@ -1,9 +1,6 @@
 use glam::{Vec3, Vec4};
 
-use crate::game::config::{
-    ConfigFile,
-    parser::{ConfigLine, ConfigLines},
-};
+use crate::game::config::parser::{ConfigLine, ConfigLines};
 
 #[derive(Debug, Default)]
 pub struct Object {

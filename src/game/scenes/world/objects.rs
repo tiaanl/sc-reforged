@@ -2,33 +2,33 @@ use crate::{
     engine::{gizmos::GizmosRenderer, prelude::*},
     game::{
         camera::Camera,
+        config::ObjectType,
         geometry_buffers::GeometryBuffers,
-        models::{ModelManager, RenderModel},
+        model_renderer::{ModelInstanceHandle, ModelRenderer},
     },
 };
 
-/// Represents an object inside the game world.
+/// Represents an object inside the game world.a
 #[derive(Debug)]
 pub struct Object {
-    pub translation: Vec3,
-    pub rotation: Vec3,
-    pub model: Handle<RenderModel>,
+    pub transform: Mat4,
+    pub model_instance_handle: ModelInstanceHandle,
     pub visible: bool,
 }
 
 impl Object {
-    pub fn new(translation: Vec3, rotation: Vec3, model: Handle<RenderModel>) -> Self {
+    pub fn new(transform: Mat4, model_instance_handle: ModelInstanceHandle) -> Self {
         Self {
-            translation,
-            rotation,
-            model,
+            transform,
+            model_instance_handle,
             visible: true,
         }
     }
 }
 
 pub struct Objects {
-    models: ModelManager,
+    // models: ModelManager,
+    model_renderer: ModelRenderer,
 
     pub objects: Vec<Object>,
 
@@ -42,10 +42,13 @@ impl Objects {
         shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let models = ModelManager::new(renderer, shaders, camera_bind_group_layout);
+        // let models = ModelManager::new(renderer, shaders, camera_bind_group_layout);
+
+        let model_renderer = ModelRenderer::new(renderer, shaders, camera_bind_group_layout);
 
         Self {
-            models,
+            // models,
+            model_renderer,
             objects: vec![],
             selected_object: None,
         }
@@ -57,13 +60,28 @@ impl Objects {
         translation: Vec3,
         rotation: Vec3,
         model_name: &str,
+        object_type: ObjectType,
     ) -> Result<(), AssetError> {
-        let model = self.models.load_object(renderer, model_name)?;
+        let model_handle =
+            self.model_renderer
+                .add_model(renderer, model_name, object_type.is_bipedal())?;
+
+        // Because we're using a left handed coordinate system, the z rotations have
+        // to be reversed.  (Why though!???)
+        let rotation = Vec3::new(rotation.x, rotation.y, -rotation.z);
+
+        let transform = Mat4::from_rotation_translation(
+            Quat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z),
+            translation,
+        );
+
+        let model_instance_handle =
+            self.model_renderer
+                .add_model_instance(renderer, model_handle, transform);
 
         self.objects.push(Object {
-            translation,
-            rotation,
-            model,
+            transform,
+            model_instance_handle,
             visible: true,
         });
 
@@ -82,65 +100,16 @@ impl Objects {
         self.selected_object = selected;
     }
 
-    pub fn update(&mut self, _camera: &Camera) {
-        // let matrices = camera.calculate_matrices();
-        // let proj_view = matrices.projection * matrices.view;
-        // let frustum = Frustum::from(proj_view);
-
-        // self.objects.iter_mut().for_each(|object| {
-        //     let Some(model) = self.models.get(object.model) else {
-        //         return;
-        //     };
-
-        //     let object_transform = Mat4::from_rotation_translation(
-        //         Quat::from_euler(
-        //             glam::EulerRot::XYZ,
-        //             object.rotation.x,
-        //             object.rotation.y,
-        //             object.rotation.z,
-        //         ),
-        //         object.translation,
-        //     );
-
-        //     object.visible = model.collision_boxes.iter().any(|bounding_box| {
-        //         let transform = object_transform; // * bounding_box.model_transform;
-        //         let bbox = BoundingBox {
-        //             min: (transform * bounding_box.min.extend(1.0)).xyz(),
-        //             max: (transform * bounding_box.max.extend(1.0)).xyz(),
-        //         };
-
-        //         frustum.contains_bounding_box(&bbox)
-        //     });
-        // });
-    }
+    pub fn update(&mut self, _camera: &Camera) {}
 
     pub fn render_objects(
-        &self,
+        &mut self,
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
     ) {
-        let mut set = self.models.new_render_set();
-        for Object {
-            model,
-            translation,
-            rotation,
-            ..
-        } in self.objects.iter()
-        {
-            // Because we're using a left handed coordinate system, the z rotations have
-            // to be reversed.  (Why though!???)
-            let rotation = Vec3::new(rotation.x, rotation.y, -rotation.z);
-
-            let transform = Mat4::from_rotation_translation(
-                Quat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z),
-                *translation,
-            );
-
-            set.push(*model, transform);
-        }
-        self.models
-            .render_model_set(frame, geometry_buffers, camera_bind_group, set);
+        self.model_renderer
+            .render(frame, geometry_buffers, camera_bind_group);
     }
 
     pub fn render_gizmos(

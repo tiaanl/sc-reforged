@@ -57,10 +57,10 @@ pub struct Mesh {
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct Vertex {
-    position: Vec3,
-    normal: Vec3,
-    tex_coord: Vec2,
-    node_index: u32,
+    pub position: Vec3,
+    pub normal: Vec3,
+    pub tex_coord: Vec2,
+    pub node_index: u32,
 }
 
 impl BufferLayout for Vertex {

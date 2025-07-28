@@ -1,7 +1,5 @@
 use crate::game::config::parser::ConfigLines;
 
-use super::ConfigFile;
-
 #[derive(Clone, Debug, Default)]
 pub struct SubModelDefinition {
     pub sub_model_model: String,

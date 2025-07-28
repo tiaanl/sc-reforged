@@ -1,6 +1,6 @@
 use glam::UVec2;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BlendMode {
     /// No blending.
     Opaque,

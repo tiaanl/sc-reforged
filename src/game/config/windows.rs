@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use crate::game::config::ConfigFile;
-
 #[derive(Debug, Default)]
 pub struct ButtonAdvice {
     id: String,
@@ -116,6 +114,7 @@ pub struct WindowBase {
     ivars: HashMap<String, i32>,
 }
 
+/*
 pub fn read_window_base_file(data: &str) -> WindowBase {
     let mut config = ConfigFile::new(data);
 
@@ -273,3 +272,4 @@ pub fn read_window_base_file(data: &str) -> WindowBase {
         }
     }
 }
+*/

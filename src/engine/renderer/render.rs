@@ -103,10 +103,10 @@ impl Renderer {
             &wgpu::DeviceDescriptor {
                 required_features,
                 required_limits: wgpu::Limits {
-                    max_bind_groups: 5,
+                    // max_bind_groups: 5,
                     max_push_constant_size: 16,
-                    max_vertex_attributes: 24,
-                    max_color_attachment_bytes_per_sample: 40,
+                    // max_vertex_attributes: 24,
+                    max_color_attachment_bytes_per_sample: 56,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -508,11 +508,9 @@ where
                     buffers: &[V::layout()],
                 },
                 primitive: self.primitive_state.unwrap_or_default(),
-                depth_stencil: self.depth_compare.map(|comp| {
-                    self.renderer
-                        .depth_buffer
-                        .depth_stencil_state(comp, self.depth_writes)
-                }),
+                depth_stencil: self
+                    .depth_compare
+                    .map(|comp| DepthBuffer::depth_stencil_state(comp, self.depth_writes)),
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: self.module,

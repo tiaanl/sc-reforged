@@ -1,5 +1,6 @@
-use std::{collections::HashMap, ops::Range, path::PathBuf};
+use std::{ops::Range, path::PathBuf};
 
+use ahash::HashMap;
 use glam::Mat4;
 use wgpu::util::DeviceExt;
 
@@ -7,7 +8,7 @@ use crate::{
     engine::{
         assets::AssetError,
         mesh::{GpuIndexedMesh, IndexedMesh},
-        prelude::{BufferLayout, Frame, Renderer},
+        prelude::{BufferLayout, DepthBuffer, Frame, Renderer},
         shaders::Shaders,
         storage::{Handle, Storage},
     },
@@ -82,12 +83,17 @@ impl ModelManager {
         &mut self,
         renderer: &Renderer,
         name: &str,
+        is_bipedal: bool,
     ) -> Result<Handle<RenderModel>, AssetError> {
         if let Some(model) = self.models_cache.get(name) {
             return Ok(*model);
         }
 
-        let model = data_dir().load_object_model(name)?;
+        let model = if is_bipedal {
+            data_dir().load_bipedal_model(name)
+        } else {
+            data_dir().load_object_model(name)
+        }?;
 
         // Build a single mesh and generate a list of draw commands per texture.
         let mut indexed_mesh = IndexedMesh::default();
@@ -203,7 +209,7 @@ impl ModelManager {
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("models_render_pass"),
-                color_attachments: &geometry_buffers.color_attachments(),
+                color_attachments: &geometry_buffers.opaque_color_attachments(),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &frame.depth_buffer.texture_view,
                     depth_ops: Some(wgpu::Operations {
@@ -355,17 +361,16 @@ fn create_pipeline(
                 ],
             },
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: Some(
-                renderer
-                    .depth_buffer
-                    .depth_stencil_state(wgpu::CompareFunction::LessEqual, true),
-            ),
+            depth_stencil: Some(DepthBuffer::depth_stencil_state(
+                wgpu::CompareFunction::LessEqual,
+                true,
+            )),
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &module,
                 entry_point: None,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: GeometryBuffers::targets(),
+                targets: GeometryBuffers::opaque_targets(),
             }),
             multiview: None,
             cache: None,

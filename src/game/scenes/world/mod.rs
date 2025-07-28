@@ -1,4 +1,3 @@
-use ahash::HashMap;
 use glam::Vec4Swizzles;
 use terrain::Terrain;
 use wgpu::util::DeviceExt;
@@ -12,7 +11,7 @@ use crate::{
         animation::Track,
         camera::{self, Controller},
         compositor::Compositor,
-        config::{CampaignDef, SubModelDefinition},
+        config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData},
     },
@@ -82,8 +81,6 @@ pub struct WorldScene {
     compositor: Compositor,
     gizmos_renderer: GizmosRenderer,
 
-    lod_model_definitions: HashMap<String, Vec<SubModelDefinition>>,
-
     time_of_day: f32,
     day_night_cycle: DayNightCycle,
 
@@ -106,8 +103,6 @@ enum UnderMouse {
 impl WorldScene {
     pub fn new(renderer: &Renderer, campaign_def: CampaignDef) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
-
-        let lod_model_definitions = data_dir().load_lod_model_profiles()?;
 
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
 
@@ -243,11 +238,15 @@ impl WorldScene {
             let mtf = data_dir().load_mtf(mtf_name)?;
 
             for object in mtf.objects.iter() {
+                let object_type = ObjectType::from_string(&object.typ)
+                    .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
+
                 if let Err(err) = objects.spawn(
                     renderer,
                     object.position,
-                    Vec3::new(object.rotation.x, object.rotation.y, -object.rotation.z),
+                    Vec3::new(object.rotation.x, object.rotation.y, object.rotation.z),
                     &object.name,
+                    object_type,
                 ) {
                     tracing::error!("Could not load model: {}", err);
                 }
@@ -283,8 +282,6 @@ impl WorldScene {
             geometry_buffers,
             compositor,
             gizmos_renderer,
-
-            lod_model_definitions,
 
             time_of_day,
             day_night_cycle,
@@ -346,7 +343,7 @@ impl Scene for WorldScene {
         const GREEN: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
         const BLUE: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
 
-        self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
+        // self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
         self.environment = self.calculate_environment(self.time_of_day);
 
         // Set the camera far plane to the `max_view_distance`.
@@ -397,19 +394,56 @@ impl Scene for WorldScene {
                 .encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("world_clear_render_pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &self.geometry_buffers.ids.view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: CLEAR_VALUE as f64,
-                                g: 0.0,
-                                b: 0.0,
-                                a: 0.0,
-                            }),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
+                    color_attachments: &[
+                        // Clear the color buffer with the fog color.
+                        Some(wgpu::RenderPassColorAttachment {
+                            view: &self.geometry_buffers.alpha_accumulation.view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: self.environment.fog_color.x as f64,
+                                    g: self.environment.fog_color.y as f64,
+                                    b: self.environment.fog_color.z as f64,
+                                    a: self.environment.fog_color.w as f64,
+                                }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        }),
+                        Some(wgpu::RenderPassColorAttachment {
+                            view: &self.geometry_buffers.alpha_accumulation.view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        }),
+                        Some(wgpu::RenderPassColorAttachment {
+                            view: &self.geometry_buffers.alpha_revealage.view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: 1.0,
+                                    g: 0.0,
+                                    b: 0.0,
+                                    a: 0.0,
+                                }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        }),
+                        Some(wgpu::RenderPassColorAttachment {
+                            view: &self.geometry_buffers.ids.view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: CLEAR_VALUE as f64,
+                                    g: 0.0,
+                                    b: 0.0,
+                                    a: 0.0,
+                                }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        }),
+                    ],
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                         view: &frame.depth_buffer.texture_view,
                         depth_ops: Some(wgpu::Operations {

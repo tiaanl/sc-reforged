@@ -116,8 +116,8 @@ pub struct GeometryData {
 
 impl GeometryBuffers {
     const COLORS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
-    const POSITIONS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
-    const NORMALS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+    const POSITIONS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
+    const NORMALS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
     const ALPHA_ACCUMULATION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
     const ALPHA_REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
     const IDS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
@@ -317,13 +317,13 @@ impl GeometryBuffers {
         });
 
         let position = self.positions.read(device, |data| {
-            let f: [f16; 4] = bytemuck::cast_slice(&data[0..8])[0..4].try_into().unwrap();
-            Vec3::new(f[0].to_f32(), f[1].to_f32(), f[2].to_f32())
+            let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
+            Vec3::new(f[0], f[1], f[2])
         });
 
         let normal = self.normals.read(device, |data| {
-            let f: [f16; 4] = bytemuck::cast_slice(&data[0..8])[0..4].try_into().unwrap();
-            Vec3::new(f[0].to_f32(), f[1].to_f32(), f[2].to_f32())
+            let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
+            Vec3::new(f[0], f[1], f[2])
         });
 
         let id = self.ids.read(device, |data| {
@@ -338,7 +338,9 @@ impl GeometryBuffers {
         }
     }
 
-    pub fn color_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 6] {
+    pub fn opaque_color_attachments<'a>(
+        &'a self,
+    ) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 4] {
         [
             Some(wgpu::RenderPassColorAttachment {
                 view: &self.colors.view,
@@ -364,6 +366,21 @@ impl GeometryBuffers {
                     store: wgpu::StoreOp::Store,
                 },
             }),
+            Some(wgpu::RenderPassColorAttachment {
+                view: &self.ids.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            }),
+        ]
+    }
+
+    pub fn alpha_color_attachments<'a>(
+        &'a self,
+    ) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 3] {
+        [
             Some(wgpu::RenderPassColorAttachment {
                 view: &self.alpha_accumulation.view,
                 resolve_target: None,
@@ -391,7 +408,7 @@ impl GeometryBuffers {
         ]
     }
 
-    pub fn targets() -> &'static [Option<wgpu::ColorTargetState>] {
+    pub fn opaque_targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[
             Some(wgpu::ColorTargetState {
                 format: Self::COLORS_FORMAT,
@@ -409,13 +426,25 @@ impl GeometryBuffers {
                 write_mask: wgpu::ColorWrites::ALL,
             }),
             Some(wgpu::ColorTargetState {
+                format: Self::IDS_FORMAT,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            }),
+        ]
+    }
+
+    pub fn alpha_targets() -> &'static [Option<wgpu::ColorTargetState>] {
+        &[
+            Some(wgpu::ColorTargetState {
                 format: Self::ALPHA_ACCUMULATION_FORMAT,
                 blend: Some(wgpu::BlendState {
+                    // dest = D + S
                     color: wgpu::BlendComponent {
                         src_factor: wgpu::BlendFactor::One,
                         dst_factor: wgpu::BlendFactor::One,
                         operation: wgpu::BlendOperation::Add,
                     },
+                    // dest = D + S
                     alpha: wgpu::BlendComponent {
                         src_factor: wgpu::BlendFactor::One,
                         dst_factor: wgpu::BlendFactor::One,
@@ -427,6 +456,7 @@ impl GeometryBuffers {
             Some(wgpu::ColorTargetState {
                 format: Self::ALPHA_REVEALAGE_FORMAT,
                 blend: Some(wgpu::BlendState {
+                    // dest = D * (1 − as)
                     color: wgpu::BlendComponent {
                         src_factor: wgpu::BlendFactor::Zero,
                         dst_factor: wgpu::BlendFactor::OneMinusSrc,

@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
 
 use ahash::HashMap;
 use shadow_company_tools::bmf;
@@ -111,6 +114,11 @@ impl DataDir {
         Ok(lod_definitions)
     }
 
+    pub fn load_object_templates(&self) -> Result<config::ObjectTemplates, AssetError> {
+        let path = PathBuf::from("config").join("object_templates.txt");
+        Self::load_config_new(&path)
+    }
+
     pub fn load_mtf(&self, name: &str) -> Result<config::Mtf, AssetError> {
         let path = PathBuf::from("maps").join(name);
         Self::load_config_new::<config::Mtf>(&path)
@@ -142,7 +150,13 @@ impl DataDir {
             .filter(|n| n.to_string_lossy().contains("_ck"))
             .is_some();
 
-        let ext = path.as_ref().extension().unwrap().to_ascii_lowercase();
+        let ext = match path.as_ref().extension() {
+            Some(ext) => ext.to_ascii_lowercase(),
+            None => {
+                tracing::warn!("Image path has no extension: {}", path.as_ref().display());
+                OsString::new()
+            }
+        };
 
         if ext == "bmp" {
             let data = file_system().load(path.as_ref())?;

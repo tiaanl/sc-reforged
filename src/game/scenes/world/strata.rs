@@ -231,17 +231,16 @@ impl Strata {
                         cull_mode: Some(wgpu::Face::Back),
                         ..Default::default()
                     },
-                    depth_stencil: Some(
-                        renderer
-                            .depth_buffer
-                            .depth_stencil_state(wgpu::CompareFunction::LessEqual, true),
-                    ),
+                    depth_stencil: Some(DepthBuffer::depth_stencil_state(
+                        wgpu::CompareFunction::LessEqual,
+                        true,
+                    )),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &module,
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: GeometryBuffers::targets(),
+                        targets: GeometryBuffers::opaque_targets(),
                     }),
                     multiview: None,
                     cache: None,
@@ -266,7 +265,7 @@ impl Strata {
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("strata_render_pass"),
-                color_attachments: &geometry_buffers.color_attachments(),
+                color_attachments: &geometry_buffers.opaque_color_attachments(),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &frame.depth_buffer.texture_view,
                     depth_ops: Some(wgpu::Operations {

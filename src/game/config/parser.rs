@@ -73,6 +73,38 @@ impl ConfigLine {
     }
 }
 
+fn parse_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> Option<String> {
+    while chars.peek().is_some_and(|c| c.is_whitespace()) {
+        chars.next(); // Skip leading whitespace
+    }
+
+    let mut result = String::new();
+
+    match chars.peek()? {
+        '"' => {
+            chars.next(); // Skip opening quote
+            while let Some(&ch) = chars.peek() {
+                chars.next();
+                if ch == '"' {
+                    break;
+                }
+                result.push(ch);
+            }
+        }
+        _ => {
+            while let Some(&ch) = chars.peek() {
+                if ch.is_whitespace() {
+                    break;
+                }
+                result.push(ch);
+                chars.next();
+            }
+        }
+    }
+
+    Some(result)
+}
+
 pub fn parse_line(line: &str) -> Option<ConfigLine> {
     let line = line.trim();
     if line.is_empty() || line.starts_with(';') {
@@ -81,50 +113,16 @@ pub fn parse_line(line: &str) -> Option<ConfigLine> {
 
     let mut chars = line.chars().peekable();
 
-    let mut key = String::new();
-    while let Some(&ch) = chars.peek() {
-        if ch.is_whitespace() {
-            chars.next();
-            break;
-        }
-        key.push(ch);
-        chars.next();
-    }
+    let key = parse_string(&mut chars)?;
 
     let mut params = Vec::new();
-    while let Some(&ch) = chars.peek() {
-        if ch.is_whitespace() {
-            chars.next();
-            continue;
-        }
-        if ch == '"' {
-            chars.next();
-            let mut str = String::new();
-            while let Some(&str_ch) = chars.peek() {
-                chars.next();
-                if str_ch == '"' {
-                    break;
-                }
-                str.push(str_ch);
-            }
-            params.push(ConfigToken::String(str));
+    while let Some(param_str) = parse_string(&mut chars) {
+        if let Ok(num) = param_str.parse::<i32>() {
+            params.push(ConfigToken::Number(num));
+        } else if let Ok(num) = param_str.parse::<f32>() {
+            params.push(ConfigToken::Float(num));
         } else {
-            let mut str = String::new();
-            while let Some(&str_ch) = chars.peek() {
-                if str_ch.is_whitespace() {
-                    break;
-                }
-                str.push(str_ch);
-                chars.next();
-            }
-
-            if let Ok(num) = str.parse::<i32>() {
-                params.push(ConfigToken::Number(num));
-            } else if let Ok(num) = str.parse::<f32>() {
-                params.push(ConfigToken::Float(num));
-            } else {
-                params.push(ConfigToken::String(str));
-            }
+            params.push(ConfigToken::String(param_str));
         }
     }
 

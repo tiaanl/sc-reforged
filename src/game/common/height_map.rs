@@ -54,20 +54,6 @@ impl HeightMap {
     }
 }
 
-pub struct HeightMapOptions {
-    pub nominal_edge_size: f32,
-    pub elevation_base: f32,
-}
-
-impl Default for HeightMapOptions {
-    fn default() -> Self {
-        Self {
-            nominal_edge_size: 200.0,
-            elevation_base: 10.0,
-        }
-    }
-}
-
 mod pcx {
     use byteorder::{LittleEndian as LE, ReadBytesExt};
 
