@@ -5,10 +5,7 @@ use tracing::info;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    engine::{
-        gizmos::{GizmoVertex, GizmosRenderer},
-        prelude::*,
-    },
+    engine::{gizmos::GizmoVertex, prelude::*},
     game::{
         config::CampaignDef, data_dir::data_dir, geometry_buffers::GeometryBuffers,
         height_map::HeightMap,
@@ -792,17 +789,10 @@ impl Terrain {
         self.render_terrain(frame, geometry_buffers, camera_bind_group);
     }
 
-    pub fn render_gizmos(
-        &self,
-        frame: &mut Frame,
-        camera_bind_group: &wgpu::BindGroup,
-        gizmos_renderer: &GizmosRenderer,
-    ) {
-        if self.draw_wireframe {
-            self.render_wireframe(frame, camera_bind_group);
-        }
-
-        let mut vertices = vec![];
+    pub fn render_gizmos(&self, vertices: &mut Vec<GizmoVertex>) {
+        // if self.draw_wireframe {
+        //     self.render_wireframe(frame, camera_bind_group);
+        // }
 
         if false {
             let color = Vec4::new(0.0, 1.0, 0.0, 1.0);
@@ -845,7 +835,6 @@ impl Terrain {
                 vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
                 vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
             }
-            gizmos_renderer.render(frame, camera_bind_group, &vertices);
         }
 
         if false {
@@ -893,8 +882,6 @@ impl Terrain {
                     ));
                 }
             }
-
-            gizmos_renderer.render(frame, camera_bind_group, &vertices);
         }
     }
 

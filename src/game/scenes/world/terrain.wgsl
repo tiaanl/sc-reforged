@@ -113,6 +113,8 @@ fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexIn
     );
 }
 
+const TERRAIN_ENTITY_ID: u32 = 1 << 16;
+
 @fragment
 fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
     let base_color = textureSample(t_terrain_texture, s_sampler, vertex.tex_coord);
@@ -121,7 +123,7 @@ fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffer
         base_color,
         vec4<f32>(vertex.world_position, 1.0),
         vec4<f32>(vertex.normal, 1.0),
-        1,
+        TERRAIN_ENTITY_ID,
     );
 }
 
@@ -146,7 +148,7 @@ fn water_fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometry
         base_color,
         vec4<f32>(vertex.world_position, 1.0),
         vec4<f32>(vertex.normal, 1.0),
-        0,
+        TERRAIN_ENTITY_ID + 1,
     );
 }
 

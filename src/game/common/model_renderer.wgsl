@@ -6,6 +6,8 @@
 @group(1) @binding(0) var t_texture: texture_2d<f32>;
 @group(1) @binding(1) var s_sampler: sampler;
 
+var<push_constant> entity_id: u32;
+
 struct Node {
     transform: mat4x4<f32>,
     parent: u32,
@@ -105,7 +107,7 @@ fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuff
         base_color,  // color
         vec4<f32>(vertex.world_position, 1.0),  // world_position
         vec4<f32>(vertex.normal, 1.0),  // normal
-        1,  // id
+        entity_id,
     );
 }
 
@@ -122,5 +124,5 @@ fn fragment_alpha(vertex: VertexOutput) -> geometry_buffers::AlphaGeometryBuffer
     let accumulation = vec4<f32>(base_color.rgb * alpha, alpha) * weight;
     let revealage = alpha;
 
-    return geometry_buffers::AlphaGeometryBuffers(accumulation, revealage, 1);
+    return geometry_buffers::AlphaGeometryBuffers(accumulation, revealage, entity_id);
 }

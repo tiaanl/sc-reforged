@@ -361,7 +361,8 @@ impl Scene for WorldScene {
             .controller
             .update_camera_if_dirty(&mut self.debug_camera.camera);
 
-        self.objects.update(&self.main_camera.camera);
+        self.objects
+            .update(&self.main_camera.camera, input, self.geometry_data.as_ref());
     }
 
     fn render(&mut self, frame: &mut Frame) {
@@ -463,6 +464,8 @@ impl Scene for WorldScene {
             &self.main_camera.gpu_camera.bind_group
         };
 
+        let mut gizmos_vertices = Vec::default();
+
         // Render Opaque geometry first.
         self.terrain.render(
             frame,
@@ -479,10 +482,8 @@ impl Scene for WorldScene {
         //     .render_alpha_objects(frame, &self.geometry_buffers, camera_bind_group);
 
         // Render any kind of debug overlays.
-        self.terrain
-            .render_gizmos(frame, camera_bind_group, &self.gizmos_renderer);
-        self.objects
-            .render_gizmos(frame, camera_bind_group, &self.gizmos_renderer);
+        self.terrain.render_gizmos(&mut gizmos_vertices);
+        self.objects.render_gizmos(&mut gizmos_vertices);
 
         if false {
             // Render the direction of the sun.
@@ -493,15 +494,12 @@ impl Scene for WorldScene {
                     Vec4::new(0.0, 0.0, 1.0, 1.0),
                 ),
             ];
-            self.gizmos_renderer
-                .render(frame, camera_bind_group, &vertices);
+            gizmos_vertices.extend(vertices);
         }
 
         // Render the main camera frustum when we're looking through the debug camera.
         if self.view_debug_camera {
-            let mut v = vec![];
-            camera::render_camera_frustum(&self.main_camera.camera, &mut v);
-            self.gizmos_renderer.render(frame, camera_bind_group, &v);
+            camera::render_camera_frustum(&self.main_camera.camera, &mut gizmos_vertices);
         }
 
         self.compositor.render(
@@ -543,10 +541,13 @@ impl Scene for WorldScene {
             // Translation matrix
             let translation = Mat4::from_translation(data.position);
 
-            let vertices = GizmosRenderer::_create_axis(translation * rotation, 100.0);
+            let vertices = GizmosRenderer::create_axis(translation * rotation, 100.0);
             self.gizmos_renderer
                 .render(frame, camera_bind_group, &vertices);
         }
+
+        self.gizmos_renderer
+            .render(frame, camera_bind_group, &gizmos_vertices);
     }
 
     #[cfg(feature = "egui")]
@@ -589,7 +590,8 @@ impl Scene for WorldScene {
                 }
 
                 ui.heading("Entities");
-                self.objects.debug_panel(ui);
             });
+
+        self.objects.debug_panel(egui);
     }
 }

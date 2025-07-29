@@ -13,14 +13,16 @@ use wgpu::util::DeviceExt;
 struct ModelInstance {
     model_handle: ModelHandle,
     transform: Mat4,
+    entity_id: u32,
 }
 
 struct InstanceBuffer {
     transforms: Vec<Mat4>,
     buffer: wgpu::Buffer,
+    entity_id: u32,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ModelInstanceHandle(usize);
 
 pub struct ModelRenderer {
@@ -64,7 +66,10 @@ impl ModelRenderer {
                     &textures.texture_bind_group_layout,
                     &models.nodes_bind_group_layout,
                 ],
-                push_constant_ranges: &[],
+                push_constant_ranges: &[wgpu::PushConstantRange {
+                    stages: wgpu::ShaderStages::FRAGMENT,
+                    range: 0..4,
+                }],
             });
 
         let opaque_pipeline =
@@ -207,11 +212,13 @@ impl ModelRenderer {
         renderer: &Renderer,
         model_handle: ModelHandle,
         transform: Mat4,
+        entity_id: u32,
     ) -> ModelInstanceHandle {
         let model_instance_handle =
             ModelInstanceHandle(self.model_instances.insert(ModelInstance {
                 transform,
                 model_handle,
+                entity_id,
             }));
 
         // Update the instance buffers.
@@ -227,11 +234,18 @@ impl ModelRenderer {
                     usage: wgpu::BufferUsages::VERTEX,
                     mapped_at_creation: false,
                 }),
+                entity_id,
             });
         instance_buffer.transforms.push(transform);
         self.dirty_instance_buffers.insert(model_handle);
 
         model_instance_handle
+    }
+
+    pub fn get_model(&self, model_instance_handle: ModelInstanceHandle) -> Option<&gpu::Model> {
+        self.model_instances
+            .get(model_instance_handle.0)
+            .and_then(|instance| self.models.get(instance.model_handle))
     }
 
     pub fn render(
@@ -294,7 +308,12 @@ impl ModelRenderer {
 
                     render_pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
 
-                    model.render(&mut render_pass, &self.textures, BlendMode::Opaque);
+                    model.render(
+                        &mut render_pass,
+                        &self.textures,
+                        BlendMode::Opaque,
+                        instance_buffer.entity_id,
+                    );
                 }
             }
 
@@ -330,7 +349,12 @@ impl ModelRenderer {
 
                     render_pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
 
-                    model.render(&mut render_pass, &self.textures, BlendMode::Alpha);
+                    model.render(
+                        &mut render_pass,
+                        &self.textures,
+                        BlendMode::Alpha,
+                        instance_buffer.entity_id,
+                    );
                 }
             }
         }
@@ -394,6 +418,8 @@ mod gpu {
         nodes_bind_group: wgpu::BindGroup,
         /// All the meshes (sets of indices) that the model consists of.
         meshes: Vec<Mesh>,
+
+        pub scale: Vec3,
     }
 
     impl Model {
@@ -402,6 +428,7 @@ mod gpu {
             render_pass: &mut wgpu::RenderPass,
             textures: &Textures,
             blend_mode: BlendMode,
+            entity_id: u32,
         ) {
             for mesh in self.meshes.iter() {
                 let Some(texture) = textures.textures.get(mesh.texture_handle.0) else {
@@ -412,6 +439,12 @@ mod gpu {
                 if texture.blend_mode != blend_mode {
                     continue;
                 }
+
+                render_pass.set_push_constants(
+                    wgpu::ShaderStages::FRAGMENT,
+                    0,
+                    &entity_id.to_le_bytes(),
+                );
 
                 render_pass.set_bind_group(1, &texture.bind_group, &[]);
                 render_pass.set_bind_group(2, &self.nodes_bind_group, &[]);
@@ -709,6 +742,8 @@ mod gpu {
                 node_buffer,
                 nodes_bind_group,
                 meshes,
+
+                scale: model.scale,
             })))
         }
 

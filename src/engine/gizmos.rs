@@ -98,7 +98,7 @@ impl GizmosRenderer {
         render_pass.draw(0..(vertices.len() as u32), 0..1);
     }
 
-    pub fn _create_axis(transform: Mat4, size: f32) -> Vec<GizmoVertex> {
+    pub fn create_axis(transform: Mat4, size: f32) -> Vec<GizmoVertex> {
         let zero = transform.project_point3(Vec3::ZERO);
         vec![
             GizmoVertex::new(zero, Vec4::new(1.0, 0.0, 0.0, 1.0)),
@@ -117,5 +117,33 @@ impl GizmosRenderer {
                 Vec4::new(0.0, 0.0, 1.0, 1.0),
             ),
         ]
+    }
+
+    pub fn create_iso_sphere(transform: Mat4, radius: f32, resolution: i32) -> Vec<GizmoVertex> {
+        let mut vertices = Vec::new();
+        let res = resolution.max(3);
+
+        // Each axis defines the normal of the circle's plane.
+        // For each axis, we need to pick two orthogonal vectors to define the circle.
+        let axes = [
+            (Vec3::Y, Vec3::Z, Vec4::new(1.0, 0.0, 0.0, 1.0)), // X: YZ plane (red)
+            (Vec3::Z, Vec3::X, Vec4::new(0.0, 1.0, 0.0, 1.0)), // Y: ZX plane (green)
+            (Vec3::X, Vec3::Y, Vec4::new(0.0, 0.5, 1.0, 1.0)), // Z: XY plane (blue)
+        ];
+
+        for (u, v, color) in axes {
+            for i in 0..res {
+                let theta0 = (i as f32) * std::f32::consts::TAU / (res as f32);
+                let theta1 = ((i + 1) as f32) * std::f32::consts::TAU / (res as f32);
+
+                let p0 = transform.project_point3((u * theta0.cos() + v * theta0.sin()) * radius);
+                let p1 = transform.project_point3((u * theta1.cos() + v * theta1.sin()) * radius);
+
+                vertices.push(GizmoVertex::new(p0, color));
+                vertices.push(GizmoVertex::new(p1, color));
+            }
+        }
+
+        vertices
     }
 }

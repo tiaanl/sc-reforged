@@ -23,6 +23,8 @@ pub struct Model {
     pub collision_boxes: Vec<CollisionBox>,
     /// Look up node indices according to original node names.
     names: NameLookup,
+
+    pub scale: Vec3,
 }
 
 impl Model {
@@ -165,11 +167,14 @@ impl TryFrom<smf::Model> for Model {
             .map(|(texture_name, mesh)| Mesh { texture_name, mesh })
             .collect();
 
+        let scale = value.scale;
+
         Ok(Model {
             nodes,
             meshes,
             collision_boxes,
             names,
+            scale,
         })
     }
 }

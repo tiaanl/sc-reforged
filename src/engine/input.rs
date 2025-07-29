@@ -13,6 +13,7 @@ pub use winit::keyboard::KeyCode;
 pub struct InputState {
     key_pressed: HashSet<KeyCode>,
     mouse_pressed: HashSet<MouseButton>,
+    mouse_just_pressed: HashSet<MouseButton>,
     last_mouse_position: Option<Vec2>,
     mouse_delta: Option<Vec2>,
     wheel_delta: f32,
@@ -36,8 +37,10 @@ impl InputState {
             WindowEvent::MouseInput { state, button, .. } => {
                 if state.is_pressed() {
                     self.mouse_pressed.insert(button);
+                    self.mouse_just_pressed.insert(button);
                 } else {
                     self.mouse_pressed.remove(&button);
+                    self.mouse_just_pressed.remove(&button);
                 }
             }
 
@@ -64,6 +67,7 @@ impl InputState {
 
     /// Reset data being tracked per frame.
     pub(crate) fn reset_current_frame(&mut self) {
+        self.mouse_just_pressed.clear();
         self.mouse_delta = None;
         self.wheel_delta = 0.0;
     }
@@ -81,6 +85,10 @@ impl InputState {
 
     pub fn mouse_pressed(&self, button: MouseButton) -> bool {
         self.mouse_pressed.contains(&button)
+    }
+
+    pub fn mouse_just_pressed(&self, button: MouseButton) -> bool {
+        self.mouse_just_pressed.contains(&button)
     }
 
     pub fn mouse_delta(&self) -> Option<Vec2> {
