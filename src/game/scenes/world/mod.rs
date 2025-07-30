@@ -246,6 +246,7 @@ impl WorldScene {
                     object.position,
                     Vec3::new(object.rotation.x, object.rotation.y, object.rotation.z),
                     &object.name,
+                    &object.title,
                     object_type,
                 ) {
                     tracing::error!("Could not load model: {}", err);

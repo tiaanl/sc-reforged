@@ -4,7 +4,7 @@ macro_rules! global {
         mod global {
             use super::*;
 
-            static mut GLOBAL: *const $ty = std::ptr::null();
+            static mut GLOBAL: *mut $ty = std::ptr::null_mut();
 
             pub struct ScopedGlobal {
                 _box: Box<$ty>,
@@ -12,25 +12,25 @@ macro_rules! global {
             impl Drop for ScopedGlobal {
                 fn drop(&mut self) {
                     unsafe {
-                        GLOBAL = std::ptr::null();
+                        GLOBAL = std::ptr::null_mut();
                     }
                 }
             }
 
             #[must_use]
             pub fn scoped_global(init: impl FnOnce() -> $ty) -> ScopedGlobal {
-                unsafe { debug_assert!(GLOBAL.is_null()) };
-                let b = Box::new(init());
+                debug_assert!(unsafe { GLOBAL.is_null() });
+                let mut b = Box::new(init());
                 unsafe {
-                    GLOBAL = &*b as *const $ty;
+                    GLOBAL = &mut *b as *mut $ty;
                 }
                 ScopedGlobal { _box: b }
             }
 
-            pub fn get() -> &'static $ty {
+            pub fn get() -> &'static mut $ty {
                 unsafe {
                     debug_assert!(!GLOBAL.is_null(), "Global not initialized");
-                    &*GLOBAL
+                    &mut *GLOBAL
                 }
             }
         }

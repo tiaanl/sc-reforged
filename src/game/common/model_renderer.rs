@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::{
-    engine::prelude::*,
-    game::{geometry_buffers::GeometryBuffers, image::BlendMode},
+    engine::{prelude::*, storage::Handle},
+    game::{geometry_buffers::GeometryBuffers, image::BlendMode, model},
 };
 
 use ahash::{HashMap, HashSet};
@@ -200,20 +200,23 @@ impl ModelRenderer {
     pub fn add_model(
         &mut self,
         renderer: &Renderer,
-        name: &str,
-        is_bipedal: bool,
+        model_handle: Handle<model::Model>,
     ) -> Result<ModelHandle, AssetError> {
         self.models
-            .add_model(renderer, &mut self.textures, name, is_bipedal)
+            .add_model(renderer, &mut self.textures, model_handle)
     }
 
     pub fn add_model_instance(
         &mut self,
         renderer: &Renderer,
-        model_handle: ModelHandle,
+        model_handle: Handle<model::Model>,
         transform: Mat4,
         entity_id: u32,
-    ) -> ModelInstanceHandle {
+    ) -> Result<ModelInstanceHandle, AssetError> {
+        let model_handle = self
+            .models
+            .add_model(renderer, &mut self.textures, model_handle)?;
+
         let model_instance_handle =
             ModelInstanceHandle(self.model_instances.insert(ModelInstance {
                 transform,
@@ -239,7 +242,7 @@ impl ModelRenderer {
         instance_buffer.transforms.push(transform);
         self.dirty_instance_buffers.insert(model_handle);
 
-        model_instance_handle
+        Ok(model_instance_handle)
     }
 
     pub fn get_model(&self, model_instance_handle: ModelInstanceHandle) -> Option<&gpu::Model> {
@@ -370,7 +373,10 @@ mod gpu {
     use glam::{Mat4, Vec2, Vec3};
     use wgpu::util::DeviceExt;
 
-    use crate::{engine::assets::AssetError, game::data_dir::data_dir};
+    use crate::{
+        engine::assets::AssetError,
+        game::{data_dir::data_dir, models::models},
+    };
 
     type NodeIndex = u32;
 
@@ -630,14 +636,11 @@ mod gpu {
             &mut self,
             renderer: &Renderer,
             textures: &mut Textures,
-            name: &str,
-            is_bipedal: bool,
+            model_handle: Handle<model::Model>,
         ) -> Result<ModelHandle, AssetError> {
-            let model = if is_bipedal {
-                data_dir().load_bipedal_model(name)
-            } else {
-                data_dir().load_object_model(name)
-            }?;
+            let model = models()
+                .get(model_handle)
+                .expect("Model should have been loaded byt his time.");
 
             let mut meshes = Vec::default();
 

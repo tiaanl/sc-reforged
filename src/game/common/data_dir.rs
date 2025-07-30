@@ -16,14 +16,12 @@ use crate::{
         file_system::file_system,
         height_map::HeightMap,
         image::{BlendMode, Image},
-        model::Model,
     },
     global,
 };
 
 pub struct DataDir {
     image_defs: ImageDefs,
-    model_lod_defs: HashMap<String, Vec<SubModelDefinition>>,
 }
 
 impl DataDir {
@@ -32,34 +30,7 @@ impl DataDir {
             Self::load_config_new::<ImageDefs>(PathBuf::from("config").join("image_defs.txt"))
                 .expect("Could not load image definitions.");
 
-        let model_lod_defs = {
-            let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
-
-            let profiles_path = PathBuf::from("config").join("lod_model_profiles");
-
-            let files = file_system()
-                .dir(&profiles_path)
-                .expect("Could not load model LOD's.");
-            for lod_path in files.filter(|path| {
-                path.extension()
-                    .filter(|ext| ext.eq_ignore_ascii_case("txt"))
-                    .is_some()
-            }) {
-                let profile = Self::load_config_new::<LodModelProfileDefinition>(lod_path)
-                    .expect("Could not load model LOD definition.");
-                lod_definitions.insert(
-                    profile.lod_model_name.clone(),
-                    profile.sub_model_definitions.clone(),
-                );
-            }
-
-            lod_definitions
-        };
-
-        Self {
-            image_defs,
-            model_lod_defs,
-        }
+        Self { image_defs }
     }
 }
 
@@ -122,6 +93,10 @@ impl DataDir {
     pub fn load_mtf(&self, name: &str) -> Result<config::Mtf, AssetError> {
         let path = PathBuf::from("maps").join(name);
         Self::load_config_new::<config::Mtf>(&path)
+    }
+
+    pub fn load_image_defs(&self) -> Result<ImageDefs, AssetError> {
+        Self::load_config_new::<ImageDefs>(PathBuf::from("config").join("image_defs.txt"))
     }
 
     pub fn load_image(&self, path: impl AsRef<Path>) -> Result<Image, AssetError> {
@@ -206,44 +181,28 @@ impl DataDir {
         Err(AssetError::NotSupported(path.as_ref().to_path_buf()))
     }
 
-    fn load_model(&self, path: impl AsRef<Path>) -> Result<Model, AssetError> {
-        let data = file_system().load(path.as_ref())?;
+    fn load_model_defs(&self) -> Result<HashMap<String, Vec<SubModelDefinition>>, AssetError> {
+        let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
-        let smf = shadow_company_tools::smf::Model::read(&mut std::io::Cursor::new(data))
-            .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
+        let profiles_path = PathBuf::from("config").join("lod_model_profiles");
 
-        Model::try_from(smf)
-    }
-
-    pub fn load_object_model(&self, name: &str) -> Result<Model, AssetError> {
-        if let Some(lod_def) = self.model_lod_defs.get(name) {
-            if let Some(sub_model) = lod_def.first() {
-                return self.load_model(
-                    PathBuf::from("models")
-                        .join(&sub_model.sub_model_model)
-                        .join(&sub_model.sub_model_model)
-                        .with_extension("smf"),
-                );
-            }
+        let files = file_system()
+            .dir(&profiles_path)
+            .expect("Could not load model LOD's.");
+        for lod_path in files.filter(|path| {
+            path.extension()
+                .filter(|ext| ext.eq_ignore_ascii_case("txt"))
+                .is_some()
+        }) {
+            let profile = Self::load_config_new::<LodModelProfileDefinition>(lod_path)
+                .expect("Could not load model LOD definition.");
+            lod_definitions.insert(
+                profile.lod_model_name.clone(),
+                profile.sub_model_definitions.clone(),
+            );
         }
 
-        self.load_model(
-            PathBuf::from("models")
-                .join(name)
-                .join(name)
-                .with_extension("smf"),
-        )
-    }
-
-    pub fn load_bipedal_model(&self, name: &str) -> Result<Model, AssetError> {
-        self.load_model(
-            PathBuf::from("models")
-                .join("people")
-                .join("bodies")
-                .join(name)
-                .join(name)
-                .with_extension("smf"),
-        )
+        Ok(lod_definitions)
     }
 
     pub fn load_motion(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {

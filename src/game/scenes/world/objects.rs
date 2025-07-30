@@ -1,28 +1,27 @@
-use slab::Slab;
-
 use crate::{
     engine::{
         gizmos::{GizmoVertex, GizmosRenderer},
         prelude::*,
+        storage::Handle,
     },
     game::{
         camera::Camera,
         config::ObjectType,
-        data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData},
         model::Model,
         model_renderer::{ModelInstanceHandle, ModelRenderer},
+        models::models,
     },
 };
 
 /// Represents an object inside the game world.a
 #[derive(Debug)]
 pub struct Object {
+    pub title: String,
     pub object_type: ObjectType,
     pub transform: Mat4,
+    pub model_handle: Handle<Model>,
     pub model_instance_handle: ModelInstanceHandle,
-    /// Slab id for the [Model] stored in [Objects::models].
-    pub model_index: usize,
     pub visible: bool,
 
     /// Whether to draw the bones of the skeleton.
@@ -31,9 +30,6 @@ pub struct Object {
 
 pub struct Objects {
     model_renderer: ModelRenderer,
-
-    /// Keep a local cache of models we loaded and added to the [ModelRenderer].
-    models: Slab<Model>,
 
     pub objects: Vec<Object>,
 
@@ -50,9 +46,7 @@ impl Objects {
         let model_renderer = ModelRenderer::new(renderer, shaders, camera_bind_group_layout);
 
         Self {
-            // models,
             model_renderer,
-            models: Slab::default(),
             objects: vec![],
             selected_object: None,
         }
@@ -64,18 +58,14 @@ impl Objects {
         translation: Vec3,
         rotation: Vec3,
         model_name: &str,
+        title: &str,
         object_type: ObjectType,
     ) -> Result<(), AssetError> {
-        let model_handle =
-            self.model_renderer
-                .add_model(renderer, model_name, object_type.is_bipedal())?;
-
-        let model = if object_type.is_bipedal() {
-            data_dir().load_bipedal_model(model_name)
+        let model_handle = if object_type.is_bipedal() {
+            models().load_bipedal_model(model_name)
         } else {
-            data_dir().load_object_model(model_name)
+            models().load_object_model(model_name)
         }?;
-        let model_index = self.models.insert(model);
 
         // Because we're using a left handed coordinate system, the z rotations have
         // to be reversed.  (Why though!???)
@@ -91,13 +81,14 @@ impl Objects {
             model_handle,
             transform,
             self.objects.len() as u32,
-        );
+        )?;
 
         self.objects.push(Object {
+            title: title.to_string(),
             object_type,
             transform,
+            model_handle,
             model_instance_handle,
-            model_index,
             visible: true,
 
             draw_debug_bones: false,
@@ -165,7 +156,7 @@ impl Objects {
                 ));
             }
 
-            let Some(model) = self.models.get(object.model_index) else {
+            let Some(model) = models().get(object.model_handle) else {
                 continue;
             };
             if object.draw_debug_bones {
@@ -225,10 +216,11 @@ impl Objects {
         if let Some(selected_object) = self.selected_object {
             if let Some(object) = self.objects.get_mut(selected_object as usize) {
                 egui::Window::new("Object")
-                    .default_open(false)
+                    .collapsible(false)
+                    .resizable(false)
                     .show(egui, |ui| {
-                        ui.label(format!("{:?}", object.object_type));
-
+                        ui.set_width(300.0);
+                        ui.label(format!("{} ({:?})", object.title, object.object_type));
                         ui.checkbox(&mut object.draw_debug_bones, "Draw debug bones");
                     });
             }
