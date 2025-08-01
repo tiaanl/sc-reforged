@@ -60,33 +60,35 @@ impl winit::application::ApplicationHandler for App {
             App::Uninitialzed(_opts) => {
                 event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-                let screen_size = event_loop
-                    .primary_monitor()
-                    .expect("get primary monitor info")
-                    .size();
-
-                let position = winit::dpi::Position::Physical(PhysicalPosition::new(
-                    screen_size.width as i32 / 4,
-                    screen_size.height as i32 / 4,
-                ));
-
-                let attributes = winit::window::WindowAttributes::default()
+                let mut attributes = winit::window::WindowAttributes::default()
                     .with_title("Shadow Company - Reforged")
                     // .with_inner_size(winit::dpi::LogicalSize::new(640, 480))
-                    .with_inner_size(winit::dpi::LogicalSize::new(1280, 800))
-                    .with_position(position)
-                    // .with_resizable(false)
-                    // .with_enabled_buttons(
-                    //     winit::window::WindowButtons::MINIMIZE
-                    //         | winit::window::WindowButtons::CLOSE,
-                    // )
-                    //.with_system_backdrop(winit::platform::windows::BackdropType::None)
-                    ;
+                    .with_inner_size(winit::dpi::LogicalSize::new(1280, 800));
+
+                // No resizing?
+                if false {
+                    attributes = attributes.with_resizable(false).with_enabled_buttons(
+                        winit::window::WindowButtons::MINIMIZE
+                            | winit::window::WindowButtons::CLOSE,
+                    )
+                }
+
+                if let Some(screen_size) =
+                    event_loop.primary_monitor().map(|monitor| monitor.size())
+                {
+                    let position = winit::dpi::Position::Physical(PhysicalPosition::new(
+                        screen_size.width as i32 / 4,
+                        screen_size.height as i32 / 4,
+                    ));
+                    attributes = attributes.with_position(position);
+                }
+
                 let window = Arc::new(
                     event_loop
                         .create_window(attributes)
                         .expect("create main window"),
                 );
+                let inner_size = window.inner_size();
 
                 let renderer = Renderer::new(Arc::clone(&window));
 
@@ -128,8 +130,8 @@ impl winit::application::ApplicationHandler for App {
                     Box::new(UiTestScene::new(
                         &renderer,
                         ui::Size {
-                            width: screen_size.width as i32,
-                            height: screen_size.height as i32,
+                            width: inner_size.width as i32,
+                            height: inner_size.height as i32,
                         },
                     ))
                 };
