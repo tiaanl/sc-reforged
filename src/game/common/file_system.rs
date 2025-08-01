@@ -21,12 +21,12 @@ pub enum FileSystemError {
 #[derive(Default)]
 pub struct FileSystem {
     root_dir: PathBuf,
-    gut_files: HashMap<PathBuf, GutFile>,
+    gut_files: HashMap<String, GutFile>,
 }
 
 struct GutFile {
     path: PathBuf,
-    entries: HashMap<PathBuf, GutEntry>,
+    entries: HashMap<String, GutEntry>,
 }
 
 impl GutFile {
@@ -43,11 +43,11 @@ impl GutFile {
             },
         };
 
-        let mut entries: HashMap<PathBuf, GutEntry> = HashMap::default();
+        let mut entries: HashMap<String, GutEntry> = HashMap::default();
         gut_file.entries().for_each(|entry| {
             // Although the rule is that all paths in a .gut file are lower case, we enforce it.
             entries.insert(
-                PathBuf::from(&entry.name.to_ascii_lowercase()),
+                entry.name.to_ascii_lowercase().to_string(),
                 GutEntry {
                     offset: entry.offset,
                     size: entry.size,
@@ -64,12 +64,12 @@ impl GutFile {
 
     fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         // Paths in a .gut file are all lower case and use the `\`` separator.
-        let lower_path = PathBuf::from(
-            path.as_ref()
-                .to_string_lossy()
-                .to_ascii_lowercase()
-                .replace(std::path::MAIN_SEPARATOR, "\\"),
-        );
+        let lower_path = path
+            .as_ref()
+            .to_string_lossy()
+            .to_ascii_lowercase()
+            .replace(std::path::MAIN_SEPARATOR, "\\")
+            .to_string();
 
         let Some(entry) = self.entries.get(&lower_path) else {
             return Err(FileSystemError::FileNotFound(path.as_ref().to_path_buf()));
@@ -122,7 +122,7 @@ impl FileSystem {
             .for_each(|path| {
                 if let Ok(gut_entry) = GutFile::from_path(&path) {
                     if let Some(name) = path.file_stem() {
-                        gut_files.insert(PathBuf::from(name), gut_entry);
+                        gut_files.insert(name.to_string_lossy().to_string(), gut_entry);
                     }
                 }
             });
@@ -164,9 +164,17 @@ impl FileSystem {
         let mut result: HashSet<PathBuf> = HashSet::default();
 
         if let Some(gut_file) = self.gut_file_for_path(&root) {
-            for path in gut_file.entries.keys() {
-                if path.starts_with(root.as_ref()) {
-                    result.insert(path.clone());
+            let search = root
+                .as_ref()
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .replace(std::path::MAIN_SEPARATOR, "\\");
+            for gut_path in gut_file.entries.keys() {
+                if gut_path.starts_with(&search) {
+                    // Convert the separators to OS separators again.
+                    result.insert(PathBuf::from(
+                        gut_path.replace(r"\", std::path::MAIN_SEPARATOR_STR),
+                    ));
                 }
             }
         }
@@ -194,8 +202,8 @@ impl FileSystem {
     }
 
     fn gut_file_for_path(&self, path: impl AsRef<Path>) -> Option<&GutFile> {
-        let first = PathBuf::from(path.as_ref().components().next()?.as_os_str());
-        self.gut_files.get(&first)
+        let component = path.as_ref().components().next()?;
+        self.gut_files.get(component.as_os_str().to_str()?)
     }
 }
 
