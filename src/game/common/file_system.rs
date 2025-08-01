@@ -63,8 +63,13 @@ impl GutFile {
     }
 
     fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
-        // Paths is a .gut file are all lower case.
-        let lower_path = PathBuf::from(path.as_ref().as_os_str().to_ascii_lowercase());
+        // Paths in a .gut file are all lower case and use the `\`` separator.
+        let lower_path = PathBuf::from(
+            path.as_ref()
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .replace(std::path::MAIN_SEPARATOR, "\\"),
+        );
 
         let Some(entry) = self.entries.get(&lower_path) else {
             return Err(FileSystemError::FileNotFound(path.as_ref().to_path_buf()));
@@ -123,7 +128,10 @@ impl FileSystem {
             });
 
         Self {
-            root_dir: root_dir.as_ref().to_path_buf(),
+            root_dir: root_dir
+                .as_ref()
+                .canonicalize()
+                .expect("Could not canonicalize root path"),
             gut_files,
         }
     }
