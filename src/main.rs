@@ -106,6 +106,7 @@ impl winit::application::ApplicationHandler for App {
                     let campaign_def = campaign_defs
                         .campaigns
                         .iter()
+                        // .find(|c| c.base_name == "test")
                         .find(|c| c.base_name == "training") // 140
                         // .find(|c| c.base_name == "angola_tutorial") // 149
                         // .find(|c| c.base_name == "angola") // 368

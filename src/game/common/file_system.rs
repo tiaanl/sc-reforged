@@ -137,11 +137,13 @@ impl FileSystem {
     }
 
     pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
-        if let Some(gut_file) = self.gut_file_for_path(&path) {
-            return gut_file.load(path);
-        }
-
         let full_path = self.root_dir.join(path.as_ref());
+
+        if !full_path.exists() {
+            if let Some(gut_file) = self.gut_file_for_path(&path) {
+                return gut_file.load(path);
+            }
+        }
 
         let mut file = std::fs::File::open(full_path).map_err(|err| {
             if let ErrorKind::NotFound = err.kind() {

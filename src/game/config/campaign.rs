@@ -36,13 +36,24 @@ TOD_DATA_FOG_G   0.022    0.070    0.111    0.111    0.200    0.350    0.365    
 TOD_DATA_FOG_B   0.022    0.050    0.089    0.089    0.200    0.350    0.320    0.290    0.510    0.470   0.440   0.440   0.440    0.400    0.440   0.400   0.400   0.400   0.400   0.300   0.089   0.089   0.040   0.022
 */
 
-#[derive(Default)]
 pub struct TimeOfDayEntry {
     pub sun_dir: Vec3,
     pub sun_color: Vec3,
     pub fog_distance: f32,
     pub fog_near_fraction: f32,
     pub fog_color: Vec3,
+}
+
+impl Default for TimeOfDayEntry {
+    fn default() -> Self {
+        Self {
+            sun_dir: Vec3::NEG_Z,
+            sun_color: Vec3::new(1.0, 1.0, 1.0),
+            fog_distance: 12_000.0,
+            fog_near_fraction: 0.22,
+            fog_color: Vec3::new(0.5, 0.5, 0.5),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -62,37 +73,81 @@ impl From<ConfigLines> for Campaign {
                 "SPECIFY_VIEW_INITIAL" => campaign.view_initial = line.into(),
                 "SPECIFY_MTF" => campaign.mtf_name = line.maybe_param(0),
                 "TOD_DATA_SUN_X" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].sun_dir.x = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].sun_dir.x = param;
+                        }
+                    }
                 }
                 "TOD_DATA_SUN_Y" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].sun_dir.y = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].sun_dir.y = param;
+                        }
+                    }
                 }
                 "TOD_DATA_SUN_Z" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].sun_dir.z = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].sun_dir.z = param;
+                        }
+                    }
                 }
                 "TOD_DATA_SUN_R" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].sun_color.x = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].sun_color.x = param;
+                        }
+                    }
                 }
                 "TOD_DATA_SUN_G" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].sun_color.y = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].sun_color.y = param;
+                        }
+                    }
                 }
                 "TOD_DATA_SUN_B" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].sun_color.z = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].sun_color.z = param;
+                        }
+                    }
                 }
                 "TOD_DATA_FOG_D" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].fog_distance = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].fog_distance = param;
+                        }
+                    }
                 }
                 "TOD_DATA_FOG_N" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].fog_near_fraction = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].fog_near_fraction = param;
+                        }
+                    }
                 }
                 "TOD_DATA_FOG_R" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].fog_color.x = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].fog_color.x = param;
+                        }
+                    }
                 }
                 "TOD_DATA_FOG_G" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].fog_color.y = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].fog_color.y = param;
+                        }
+                    }
                 }
                 "TOD_DATA_FOG_B" => {
-                    (0..24).for_each(|i| campaign.time_of_day[i].fog_color.z = line.param(i))
+                    for i in 0..24 {
+                        if let Some(param) = line.maybe_param(i) {
+                            campaign.time_of_day[i].fog_color.z = param;
+                        }
+                    }
                 }
 
                 _ => tracing::warn!("Invalid key for Campaign: {}", line.key),

@@ -243,8 +243,8 @@ impl WorldScene {
 
                 if let Err(err) = objects.spawn(
                     renderer,
-                    object.position,
-                    Vec3::new(object.rotation.x, object.rotation.y, object.rotation.z),
+                    Transform::from_translation(object.position)
+                        .with_euler_rotation(object.rotation),
                     &object.name,
                     &object.title,
                     object_type,

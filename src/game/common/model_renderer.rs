@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::hash_map::Entry, path::Path};
 
 use crate::{
     engine::{prelude::*, storage::Handle},
@@ -17,9 +17,7 @@ struct ModelInstance {
 }
 
 struct InstanceBuffer {
-    transforms: Vec<Mat4>,
     buffer: wgpu::Buffer,
-    entity_id: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -224,25 +222,24 @@ impl ModelRenderer {
                 entity_id,
             }));
 
-        // Update the instance buffers.
-        // TODO: We should have a single empty one and reference it here?
-        let instance_buffer = self
-            .instance_buffers
-            .entry(model_handle)
-            .or_insert(InstanceBuffer {
-                transforms: Vec::with_capacity(1), // About to insert at least one.
-                buffer: renderer.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("model_renderer_empty_buffer"),
-                    size: 0,
-                    usage: wgpu::BufferUsages::VERTEX,
-                    mapped_at_creation: false,
-                }),
-                entity_id,
-            });
-        instance_buffer.transforms.push(transform);
         self.dirty_instance_buffers.insert(model_handle);
 
         Ok(model_instance_handle)
+    }
+
+    pub fn set_instance_transform(
+        &mut self,
+        instance_handle: ModelInstanceHandle,
+        transform: Mat4,
+    ) {
+        let Some(instance) = self.model_instances.get_mut(instance_handle.0) else {
+            tracing::warn!("Invalid model instance handle");
+            return;
+        };
+
+        instance.transform = transform;
+        // Make sure the buffer for the model is uploaded before we render again.
+        self.dirty_instance_buffers.insert(instance.model_handle);
     }
 
     pub fn get_model(&self, model_instance_handle: ModelInstanceHandle) -> Option<&gpu::Model> {
@@ -260,21 +257,29 @@ impl ModelRenderer {
         // Make sure all the instance buffers are up to date.
         {
             for model_handle in self.dirty_instance_buffers.drain() {
-                let Some(instance_buffer) = self.instance_buffers.get_mut(&model_handle) else {
-                    tracing::warn!("Missing instance buffer?!");
-                    continue;
-                };
+                // Build all the transforms for the model handle.
+                // TODO: This is n^2?!?!one
+                let transforms = self
+                    .model_instances
+                    .iter()
+                    .filter(|(_, instance)| instance.model_handle == model_handle)
+                    .map(|(_, instance)| instance.transform)
+                    .collect::<Vec<_>>();
 
-                let new_buffer =
-                    frame
-                        .renderer
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("model_renderer_instance_buffer"),
-                            contents: bytemuck::cast_slice(&instance_buffer.transforms),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
-                instance_buffer.buffer = new_buffer;
+                let buffer = frame
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("model_renderer_instance_buffer"),
+                        contents: bytemuck::cast_slice(&transforms),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+
+                if let Some(instance_buffer) = self.instance_buffers.get_mut(&model_handle) {
+                    instance_buffer.buffer = buffer;
+                } else {
+                    self.instance_buffers
+                        .insert(model_handle, InstanceBuffer { buffer });
+                }
             }
         }
 
@@ -311,12 +316,7 @@ impl ModelRenderer {
 
                     render_pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
 
-                    model.render(
-                        &mut render_pass,
-                        &self.textures,
-                        BlendMode::Opaque,
-                        instance_buffer.entity_id,
-                    );
+                    model.render(&mut render_pass, &self.textures, BlendMode::Opaque, 0);
                 }
             }
 
@@ -352,12 +352,7 @@ impl ModelRenderer {
 
                     render_pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
 
-                    model.render(
-                        &mut render_pass,
-                        &self.textures,
-                        BlendMode::Alpha,
-                        instance_buffer.entity_id,
-                    );
+                    model.render(&mut render_pass, &self.textures, BlendMode::Alpha, 0);
                 }
             }
         }

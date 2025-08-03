@@ -153,6 +153,10 @@ impl From<ConfigLines> for TerrainMapping {
                 "SET_WATER_WAVELENGTH" => terrain_mapping.water_wavelength = line.param(0),
                 "SET_WATER_AMPLITUDE" => terrain_mapping.water_amplitude = line.param(0),
 
+                "LOAD_TEXTURE" | "SET_WATER_TEXTURE" => {
+                    // TODO: Document why these are ignored.
+                }
+
                 _ => tracing::warn!("Unknown TerrainMapping key: {}", line.key),
             }
         }

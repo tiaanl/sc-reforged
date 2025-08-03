@@ -19,7 +19,7 @@ use crate::{
 pub struct Object {
     pub title: String,
     pub object_type: ObjectType,
-    pub transform: Mat4,
+    pub transform: Transform,
     pub model_handle: Handle<Model>,
     pub model_instance_handle: ModelInstanceHandle,
     pub visible: bool,
@@ -55,8 +55,7 @@ impl Objects {
     pub fn spawn(
         &mut self,
         renderer: &Renderer,
-        translation: Vec3,
-        rotation: Vec3,
+        transform: Transform,
         model_name: &str,
         title: &str,
         object_type: ObjectType,
@@ -69,17 +68,17 @@ impl Objects {
 
         // Because we're using a left handed coordinate system, the z rotations have
         // to be reversed.  (Why though!???)
-        let rotation = Vec3::new(rotation.x, rotation.y, -rotation.z);
+        //let rotation = Vec3::new(rotation.x, rotation.y, -rotation.z);
 
-        let transform = Mat4::from_rotation_translation(
-            Quat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z),
-            translation,
-        );
+        // let transform = Mat4::from_rotation_translation(
+        //     Quat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z),
+        //     translation,
+        // );
 
         let model_instance_handle = self.model_renderer.add_model_instance(
             renderer,
             model_handle,
-            transform,
+            transform.to_mat4(),
             self.objects.len() as u32,
         )?;
 
@@ -145,12 +144,12 @@ impl Objects {
                 // scale.y == weight?  only vehicles seems to have anything other than 1.
 
                 vertices.extend(GizmosRenderer::create_iso_sphere(
-                    object.transform,
+                    object.transform.to_mat4(),
                     model.scale.y,
                     16,
                 ));
                 vertices.extend(GizmosRenderer::create_iso_sphere(
-                    object.transform,
+                    object.transform.to_mat4(),
                     model.scale.z,
                     16,
                 ));
@@ -160,7 +159,7 @@ impl Objects {
                 continue;
             };
             if object.draw_debug_bones {
-                Self::render_skeleton(object.transform, model, vertices);
+                Self::render_skeleton(object.transform.to_mat4(), model, vertices);
                 // Self::render_bone_orientations(object.transform, model, vertices);
             }
         }
@@ -219,9 +218,55 @@ impl Objects {
                     .collapsible(false)
                     .resizable(false)
                     .show(egui, |ui| {
+                        use egui::widgets::DragValue;
+
                         ui.set_width(300.0);
                         ui.label(format!("{} ({:?})", object.title, object.object_type));
                         ui.checkbox(&mut object.draw_debug_bones, "Draw debug bones");
+                        ui.label("Translation");
+
+                        {
+                            let mut drag_value = |value: &mut f32, speed: f32| {
+                                ui.add(DragValue::new(value).speed(speed)).changed()
+                            };
+
+                            let mut changed = false;
+
+                            if drag_value(&mut object.transform.translation.x, 1.0) {
+                                changed = true;
+                            }
+                            if drag_value(&mut object.transform.translation.y, 1.0) {
+                                changed = true;
+                            }
+                            if drag_value(&mut object.transform.translation.z, 1.0) {
+                                changed = true;
+                            }
+
+                            let (mut pitch, mut yaw, mut roll) = object
+                                .transform
+                                .rotation
+                                .to_euler(glam::EulerRot::default());
+
+                            if drag_value(&mut pitch, 0.01) {
+                                changed = true;
+                            }
+                            if drag_value(&mut yaw, 0.01) {
+                                changed = true;
+                            }
+                            if drag_value(&mut roll, 0.01) {
+                                changed = true;
+                            }
+
+                            if changed {
+                                object.transform.rotation =
+                                    Quat::from_euler(glam::EulerRot::default(), pitch, yaw, roll);
+                                let transform = object.transform.to_mat4();
+                                self.model_renderer.set_instance_transform(
+                                    object.model_instance_handle,
+                                    transform,
+                                );
+                            }
+                        }
                     });
             }
         }

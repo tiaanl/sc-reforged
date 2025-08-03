@@ -27,7 +27,7 @@ pub struct DataDir {
 impl DataDir {
     pub fn new() -> Self {
         let image_defs =
-            Self::load_config_new::<ImageDefs>(PathBuf::from("config").join("image_defs.txt"))
+            Self::load_config::<ImageDefs>(PathBuf::from("config").join("image_defs.txt"))
                 .expect("Could not load image definitions.");
 
         Self { image_defs }
@@ -36,11 +36,11 @@ impl DataDir {
 
 impl DataDir {
     pub fn load_campaign_defs(&self) -> Result<config::CampaignDefs, AssetError> {
-        Self::load_config_new(PathBuf::from("config").join("campaign_defs.txt"))
+        Self::load_config(PathBuf::from("config").join("campaign_defs.txt"))
     }
 
     pub fn load_campaign(&self, campaign: &str) -> Result<config::Campaign, AssetError> {
-        Self::load_config_new::<config::Campaign>(
+        Self::load_config::<config::Campaign>(
             PathBuf::from("campaign")
                 .join(campaign)
                 .join(campaign)
@@ -56,7 +56,7 @@ impl DataDir {
 
         tracing::info!("Loading terrain mapping: {}", path.display());
 
-        Self::load_config_new(path)
+        Self::load_config(path)
     }
 
     pub fn load_height_map(&self, path: impl AsRef<Path>) -> Result<HeightMap, AssetError> {
@@ -75,7 +75,7 @@ impl DataDir {
                 .filter(|ext| ext.eq_ignore_ascii_case("txt"))
                 .is_some()
         }) {
-            let profile = Self::load_config_new::<LodModelProfileDefinition>(lod_path)?;
+            let profile = Self::load_config::<LodModelProfileDefinition>(lod_path)?;
             lod_definitions.insert(
                 profile.lod_model_name.clone(),
                 profile.sub_model_definitions.clone(),
@@ -87,16 +87,16 @@ impl DataDir {
 
     pub fn load_object_templates(&self) -> Result<config::ObjectTemplates, AssetError> {
         let path = PathBuf::from("config").join("object_templates.txt");
-        Self::load_config_new(&path)
+        Self::load_config(&path)
     }
 
     pub fn load_mtf(&self, name: &str) -> Result<config::Mtf, AssetError> {
         let path = PathBuf::from("maps").join(name);
-        Self::load_config_new::<config::Mtf>(&path)
+        Self::load_config::<config::Mtf>(&path)
     }
 
     pub fn load_image_defs(&self) -> Result<ImageDefs, AssetError> {
-        Self::load_config_new::<ImageDefs>(PathBuf::from("config").join("image_defs.txt"))
+        Self::load_config::<ImageDefs>(PathBuf::from("config").join("image_defs.txt"))
     }
 
     pub fn load_image(&self, path: impl AsRef<Path>) -> Result<Image, AssetError> {
@@ -194,7 +194,7 @@ impl DataDir {
                 .filter(|ext| ext.eq_ignore_ascii_case("txt"))
                 .is_some()
         }) {
-            let profile = Self::load_config_new::<LodModelProfileDefinition>(lod_path)
+            let profile = Self::load_config::<LodModelProfileDefinition>(lod_path)
                 .expect("Could not load model LOD definition.");
             lod_definitions.insert(
                 profile.lod_model_name.clone(),
@@ -212,7 +212,7 @@ impl DataDir {
             .map_err(|err| AssetError::from_io_error(err, path.as_ref()))
     }
 
-    fn load_config_new<C: From<ConfigLines>>(path: impl AsRef<Path>) -> Result<C, AssetError> {
+    fn load_config<C: From<ConfigLines>>(path: impl AsRef<Path>) -> Result<C, AssetError> {
         let data = file_system().load(path)?;
         let text = String::from_utf8_lossy(&data);
         let config_lines = ConfigLines::parse(&text);
