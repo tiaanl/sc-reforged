@@ -1,57 +1,16 @@
-use std::{
-    ops::{Deref, Range},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use glam::UVec2;
-use wgpu::{PushConstantRange, util::DeviceExt};
 
 use crate::global;
 
 use super::mip_maps::MipMaps;
 
-#[derive(Clone)]
-pub struct RenderDevice(Arc<wgpu::Device>);
-
-impl From<wgpu::Device> for RenderDevice {
-    fn from(value: wgpu::Device) -> Self {
-        Self(Arc::new(value))
-    }
-}
-
-impl Deref for RenderDevice {
-    type Target = wgpu::Device;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
-    }
-}
-
-#[derive(Clone)]
-pub struct RenderQueue(Arc<wgpu::Queue>);
-
-impl From<wgpu::Queue> for RenderQueue {
-    fn from(value: wgpu::Queue) -> Self {
-        Self(Arc::new(value))
-    }
-}
-
-impl Deref for RenderQueue {
-    type Target = wgpu::Queue;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
-    }
-}
-
 pub struct Renderer {
-    pub device: RenderDevice,
-    pub queue: RenderQueue,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
 
     pub surface: super::surface::Surface,
-
-    /// A bind group layout used for all texture bind groups.
-    texture_bind_group_layout: wgpu::BindGroupLayout,
 
     mip_maps: MipMaps,
 }
@@ -162,10 +121,9 @@ impl Renderer {
         let mip_maps = MipMaps::new(&device, &texture_bind_group_layout, Self::TEXTURE_FORMAT);
 
         Self {
-            device: device.into(),
-            queue: queue.into(),
+            device: device.clone(),
+            queue: queue.clone(),
             surface,
-            texture_bind_group_layout,
             mip_maps,
         }
     }
@@ -175,27 +133,6 @@ impl Renderer {
         self.surface.resize(&self.device, size);
     }
 
-    pub fn create_vertex_buffer<B>(&self, label: &str, buffer: &[B]) -> wgpu::Buffer
-    where
-        B: bytemuck::NoUninit,
-    {
-        self.device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(label),
-                contents: bytemuck::cast_slice(buffer),
-                usage: wgpu::BufferUsages::VERTEX,
-            })
-    }
-
-    pub fn create_index_buffer(&self, label: &str, buffer: &[u32]) -> wgpu::Buffer {
-        self.device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(label),
-                contents: bytemuck::cast_slice(buffer),
-                usage: wgpu::BufferUsages::INDEX,
-            })
-    }
-
     pub fn create_shader_module(&self, label: &str, source: &str) -> wgpu::ShaderModule {
         let shader_module_label = format!("{label}_shader_module");
         self.device
@@ -203,32 +140,6 @@ impl Renderer {
                 label: Some(&shader_module_label),
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(source)),
             })
-    }
-
-    #[must_use]
-    pub fn build_render_pipeline<'a, B>(
-        &'a self,
-        label: &'a str,
-        module: &'a wgpu::ShaderModule,
-    ) -> RenderPipelineBuilder<'a, B>
-    where
-        B: BufferLayout,
-    {
-        RenderPipelineBuilder {
-            renderer: self,
-            label,
-            bindings: vec![],
-            push_constants: vec![],
-            module,
-            color_target_format: None,
-            primitive_state: None,
-            depth_compare: None,
-            depth_writes: true,
-            blend: None,
-            vertex_entry: None,
-            fragment_entry: None,
-            _phantom: std::marker::PhantomData,
-        }
     }
 
     pub fn create_texture_view(&self, label: &str, image: &image::RgbaImage) -> wgpu::TextureView {
@@ -277,32 +188,6 @@ impl Renderer {
         texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
-    pub fn texture_bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.texture_bind_group_layout
-    }
-
-    pub fn create_texture_bind_group(
-        &self,
-        label: &str,
-        texture_view: &wgpu::TextureView,
-        sampler: &wgpu::Sampler,
-    ) -> wgpu::BindGroup {
-        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(label),
-            layout: &self.texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(sampler),
-                },
-            ],
-        })
-    }
-
     pub fn create_sampler(
         &self,
         label: &str,
@@ -328,143 +213,9 @@ pub use global::ScopedGlobal as ScopedRendererGlobal;
 
 /// A single object passed around during the rendering of a single frame.
 pub struct Frame {
-    pub device: RenderDevice,
-    pub queue: RenderQueue,
-
     /// The encoder to use for creating render passes.
     pub encoder: wgpu::CommandEncoder,
 
     /// The window surface.
     pub surface: wgpu::TextureView,
-}
-
-pub struct RenderPipelineBuilder<'a, V>
-where
-    V: BufferLayout,
-{
-    renderer: &'a Renderer,
-
-    label: &'a str,
-
-    bindings: Vec<&'a wgpu::BindGroupLayout>,
-
-    push_constants: Vec<PushConstantRange>,
-
-    module: &'a wgpu::ShaderModule,
-    color_target_format: Option<wgpu::TextureFormat>,
-
-    /// A specific primitive state, otherwise use the default.
-    primitive_state: Option<wgpu::PrimitiveState>,
-
-    /// Use depth testing in the pipeline.
-    depth_compare: Option<wgpu::CompareFunction>,
-    depth_writes: bool,
-
-    /// Blend state.
-    blend: Option<wgpu::BlendState>,
-
-    /// Fragment shader entry point.
-    fragment_entry: Option<&'a str>,
-
-    /// Vertex shader entry point.
-    vertex_entry: Option<&'a str>,
-
-    _phantom: std::marker::PhantomData<V>,
-}
-
-impl<'a, V> RenderPipelineBuilder<'a, V>
-where
-    V: BufferLayout,
-{
-    pub fn with_primitive(mut self, primitive_state: wgpu::PrimitiveState) -> Self {
-        self.primitive_state = Some(primitive_state);
-        self
-    }
-
-    pub fn with_depth_compare(mut self, compare: wgpu::CompareFunction) -> Self {
-        self.depth_compare = Some(compare);
-        self
-    }
-
-    #[allow(unused)]
-    pub fn with_depth_writes(mut self, depth_writes: bool) -> Self {
-        self.depth_writes = depth_writes;
-        self
-    }
-
-    pub fn binding(mut self, layout: &'a wgpu::BindGroupLayout) -> Self {
-        self.bindings.push(layout);
-        self
-    }
-
-    pub fn push_constant(mut self, stages: wgpu::ShaderStages, range: Range<u32>) -> Self {
-        self.push_constants
-            .push(wgpu::PushConstantRange { stages, range });
-        self
-    }
-
-    pub fn with_vertex_entry(mut self, entry: &'a str) -> Self {
-        self.vertex_entry = Some(entry);
-        self
-    }
-
-    pub fn with_fragment_entry(mut self, entry: &'a str) -> Self {
-        self.fragment_entry = Some(entry);
-        self
-    }
-
-    pub fn with_blend(mut self, blend: wgpu::BlendState) -> Self {
-        self.blend = Some(blend);
-        self
-    }
-
-    pub fn build(self) -> wgpu::RenderPipeline {
-        let layout = self
-            .renderer
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some(self.label),
-                bind_group_layouts: &self.bindings,
-                push_constant_ranges: &self.push_constants,
-            });
-
-        self.renderer
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(self.label),
-                layout: Some(&layout),
-                vertex: wgpu::VertexState {
-                    module: self.module,
-                    entry_point: self.vertex_entry,
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[V::layout()],
-                },
-                primitive: self.primitive_state.unwrap_or_default(),
-                depth_stencil: self.depth_compare.map(|comp| wgpu::DepthStencilState {
-                    // TODO: Pass in the depth texture format?
-                    format: wgpu::TextureFormat::Depth32Float,
-                    depth_write_enabled: true,
-                    depth_compare: comp,
-                    stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
-                }),
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: self.module,
-                    entry_point: self.fragment_entry,
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        // Use the color target format specified, otherwise use the format of the
-                        // window surface.
-                        format: self
-                            .color_target_format
-                            .unwrap_or(self.renderer.surface.format()),
-                        blend: self.blend,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                multiview: None,
-                cache: None,
-            })
-    }
 }

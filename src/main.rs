@@ -106,7 +106,7 @@ impl winit::application::ApplicationHandler for App {
                         .campaigns
                         .iter()
                         // .find(|c| c.base_name == "test")
-                        .find(|c| c.base_name == "training") // 140
+                        // .find(|c| c.base_name == "training") // 140
                         // .find(|c| c.base_name == "angola_tutorial") // 149
                         // .find(|c| c.base_name == "angola") // 368
                         // .find(|c| c.base_name == "romania") // 289
@@ -114,7 +114,7 @@ impl winit::application::ApplicationHandler for App {
                         // .find(|c| c.base_name == "caribbean") // 279
                         // .find(|c| c.base_name == "kola_2") // 240
                         // .find(|c| c.base_name == "ecuador") // 341
-                        // .find(|c| c.base_name == "peru") // 197
+                        .find(|c| c.base_name == "peru") // 197
                         // .find(|c| c.base_name == "angola_2") // 347
                         .cloned()
                         .unwrap();
@@ -222,12 +222,7 @@ impl winit::application::ApplicationHandler for App {
                             },
                         );
 
-                        let mut frame = Frame {
-                            device: renderer().device.clone(),
-                            queue: renderer().queue.clone(),
-                            encoder,
-                            surface,
-                        };
+                        let mut frame = Frame { encoder, surface };
 
                         {
                             scene.render(&mut frame);

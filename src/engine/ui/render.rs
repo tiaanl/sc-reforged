@@ -214,7 +214,7 @@ impl RenderContext {
     pub fn render(&mut self, frame: &mut Frame) {
         // Update the context data if needed.
         self.context_data.if_changed(|context_data| {
-            frame.queue.write_buffer(
+            renderer().queue.write_buffer(
                 &self.context_data_buffer,
                 0,
                 bytemuck::cast_slice(&[*context_data]),

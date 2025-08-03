@@ -28,7 +28,7 @@ impl Surface {
         self.surface.configure(device, &self.surface_config);
     }
 
-    pub fn resize(&mut self, device: &super::render::RenderDevice, size: glam::UVec2) {
+    pub fn resize(&mut self, device: &wgpu::Device, size: glam::UVec2) {
         self.surface_config.width = size.x;
         self.surface_config.height = size.y;
         self.configure(device);

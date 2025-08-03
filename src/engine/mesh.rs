@@ -1,4 +1,5 @@
 use glam::{Vec2, Vec3};
+use wgpu::util::DeviceExt;
 
 use crate::engine::prelude::renderer;
 
@@ -88,8 +89,20 @@ impl<V: bytemuck::NoUninit> IndexedMesh<V> {
 
         let renderer = renderer();
 
-        let vertex_buffer = renderer.create_vertex_buffer("mesh_vertex_buffer", &self.vertices);
-        let index_buffer = renderer.create_index_buffer("mesh_index_buffer", &self.indices);
+        let vertex_buffer = renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("mesh_vertex_buffer"),
+                contents: bytemuck::cast_slice(&self.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+        let index_buffer = renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("mesh_index_buffer"),
+                contents: bytemuck::cast_slice(&self.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
 
         GpuIndexedMesh {
             vertex_buffer,

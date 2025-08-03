@@ -256,13 +256,14 @@ impl ModelRenderer {
                     .map(|(_, instance)| instance.transform)
                     .collect::<Vec<_>>();
 
-                let buffer = frame
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("model_renderer_instance_buffer"),
-                        contents: bytemuck::cast_slice(&transforms),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    });
+                let buffer =
+                    renderer()
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("model_renderer_instance_buffer"),
+                            contents: bytemuck::cast_slice(&transforms),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
 
                 if let Some(instance_buffer) = self.instance_buffers.get_mut(&model_handle) {
                     instance_buffer.buffer = buffer;

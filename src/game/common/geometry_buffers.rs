@@ -115,7 +115,7 @@ pub struct GeometryData {
 }
 
 impl GeometryBuffers {
-    const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+    pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
     const COLORS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     const POSITIONS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
     const NORMALS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
@@ -289,26 +289,24 @@ impl GeometryBuffers {
         }
     }
 
-    pub fn fetch_data(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        pos: UVec2,
-    ) -> GeometryData {
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("geometry_buffers_pick"),
-        });
+    pub fn fetch_data(&self, pos: UVec2) -> GeometryData {
+        let mut encoder =
+            renderer()
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("geometry_buffers_pick"),
+                });
 
         self.color.fetch(&mut encoder, pos);
         self.position.fetch(&mut encoder, pos);
         self.normal.fetch(&mut encoder, pos);
         self.id.fetch(&mut encoder, pos);
 
-        queue.submit(Some(encoder.finish()));
+        renderer().queue.submit(Some(encoder.finish()));
 
         // -----------------------------------------------------------------------------------------
 
-        let color = self.color.read(device, |data| {
+        let color = self.color.read(&renderer().device, |data| {
             Vec4::new(
                 data[0] as f32 / 255.0,
                 data[1] as f32 / 255.0,
@@ -317,17 +315,17 @@ impl GeometryBuffers {
             )
         });
 
-        let position = self.position.read(device, |data| {
+        let position = self.position.read(&renderer().device, |data| {
             let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
             Vec3::new(f[0], f[1], f[2])
         });
 
-        let normal = self.normal.read(device, |data| {
+        let normal = self.normal.read(&renderer().device, |data| {
             let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
             Vec3::new(f[0], f[1], f[2])
         });
 
-        let id = self.id.read(device, |data| {
+        let id = self.id.read(&renderer().device, |data| {
             u32::from_ne_bytes(data[0..4].try_into().unwrap())
         });
 

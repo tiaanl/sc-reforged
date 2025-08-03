@@ -48,14 +48,44 @@ impl GizmosRenderer {
 
         let module = renderer.create_shader_module("gizmos", include_str!("gizmos.wgsl"));
 
+        let layout = renderer
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("gizmos_pipeline_layout"),
+                bind_group_layouts: &[camera_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
         let pipeline = renderer
-            .build_render_pipeline::<GizmoVertex>("gizmos", &module)
-            .with_primitive(wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::LineList,
-                ..Default::default()
-            })
-            .binding(camera_bind_group_layout)
-            .build();
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("gizmos_render_pipeline"),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: &module,
+                    entry_point: None,
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    buffers: &[GizmoVertex::layout()],
+                },
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::LineList,
+                    ..Default::default()
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &module,
+                    entry_point: None,
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: renderer.surface.format(),
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview: None,
+                cache: None,
+            });
 
         Self { pipeline }
     }
@@ -70,13 +100,14 @@ impl GizmosRenderer {
             return;
         }
 
-        let vertex_buffer = frame
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("gizmos_vertex_buffer"),
-                contents: bytemuck::cast_slice(vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+        let vertex_buffer =
+            renderer()
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("gizmos_vertex_buffer"),
+                    contents: bytemuck::cast_slice(vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
 
         let mut render_pass = frame
             .encoder

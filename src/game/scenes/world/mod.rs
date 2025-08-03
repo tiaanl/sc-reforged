@@ -359,7 +359,7 @@ impl Scene for WorldScene {
             let position = self.main_camera.camera.position;
             self.main_camera
                 .gpu_camera
-                .upload_matrices(&frame.queue, &matrices, position);
+                .upload_matrices(&matrices, position);
         }
 
         {
@@ -367,10 +367,10 @@ impl Scene for WorldScene {
             let position = self.debug_camera.camera.position;
             self.debug_camera
                 .gpu_camera
-                .upload_matrices(&frame.queue, &matrices, position);
+                .upload_matrices(&matrices, position);
         }
 
-        frame.queue.write_buffer(
+        renderer().queue.write_buffer(
             &self.environment_buffer,
             0,
             bytemuck::cast_slice(&[self.environment]),
@@ -498,10 +498,9 @@ impl Scene for WorldScene {
             &self.environment_bind_group,
         );
 
-        self.geometry_data = self.last_mouse_position.map(|position| {
-            self.geometry_buffers
-                .fetch_data(&frame.device, &frame.queue, position)
-        });
+        self.geometry_data = self
+            .last_mouse_position
+            .map(|position| self.geometry_buffers.fetch_data(position));
 
         if let Some(ref data) = self.geometry_data {
             let up = data.normal;

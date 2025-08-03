@@ -35,7 +35,14 @@ impl ChunkMesh {
             }
         }
 
-        let vertices_buffer = renderer.create_vertex_buffer("chunk_vertices", &vertices);
+        let vertices_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("chunk_vertices"),
+                    contents: bytemuck::cast_slice(&vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
 
         // level 0 = 0..384
         // level 1 = 0..96
@@ -67,9 +74,22 @@ impl ChunkMesh {
             }
         }
 
-        let indices_buffer = renderer.create_index_buffer("chunk_indices", &indices);
+        let indices_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("chunk_indices"),
+                    contents: bytemuck::cast_slice(&indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
         let wireframe_indices_buffer =
-            renderer.create_index_buffer("chunk_wireframe_indices", &wireframe_indices);
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("chunk_wireframe_indices"),
+                    contents: bytemuck::cast_slice(&wireframe_indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
 
         Self {
             vertices_buffer,
@@ -111,7 +131,7 @@ pub struct Terrain {
     water_pipeline: wgpu::RenderPipeline,
 
     /// Pipeline to render a wireframe over the terrain.
-    wireframe_pipeline: wgpu::RenderPipeline,
+    // wireframe_pipeline: wgpu::RenderPipeline,
 
     /// Bind group containing all data required for rendering.
     render_bind_group: wgpu::BindGroup,
@@ -559,30 +579,77 @@ impl Terrain {
                     cache: None,
                 });
 
-        let water_pipeline = renderer
-            .build_render_pipeline::<TerrainVertex>("water", &module)
-            .with_vertex_entry("water_vertex_main")
-            .with_fragment_entry("water_fragment_main")
-            .binding(camera_bind_group_layout)
-            .binding(&bind_group_layout)
-            .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
-            .with_depth_compare(wgpu::CompareFunction::LessEqual)
-            // .with_depth_writes(false)
-            .with_blend(wgpu::BlendState::ALPHA_BLENDING)
-            .build();
+        let water_pipeline = {
+            let layout = renderer
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("water_pipeline_layout"),
+                    bind_group_layouts: &[camera_bind_group_layout, &bind_group_layout],
+                    push_constant_ranges: &[wgpu::PushConstantRange {
+                        stages: wgpu::ShaderStages::VERTEX,
+                        range: 0..8,
+                    }],
+                });
 
-        let wireframe_pipeline = renderer
-            .build_render_pipeline::<TerrainVertex>("terrain_wireframe", &module)
-            .with_primitive(wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::LineList,
-                ..Default::default()
-            })
-            .with_vertex_entry("wireframe_vertex_main")
-            .with_fragment_entry("wireframe_fragment_main")
-            .binding(camera_bind_group_layout)
-            .binding(&bind_group_layout)
-            .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
-            .build();
+            renderer
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("water_render_pipeline"),
+                    layout: Some(&layout),
+                    vertex: wgpu::VertexState {
+                        module: &module,
+                        entry_point: Some("water_vertex_main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers: &[TerrainVertex::layout()],
+                    },
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: GeometryBuffers::DEPTH_FORMAT,
+                        depth_write_enabled: false,
+                        depth_compare: wgpu::CompareFunction::LessEqual,
+                        stencil: wgpu::StencilState::default(),
+                        bias: wgpu::DepthBiasState::default(),
+                    }),
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module: &module,
+                        entry_point: Some("water_fragment_main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: renderer.surface.format(),
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    multiview: None,
+                    cache: None,
+                })
+        };
+
+        // let water_pipeline = renderer
+        //     .build_render_pipeline::<TerrainVertex>("water", &module)
+        //     .with_vertex_entry("water_vertex_main")
+        //     .with_fragment_entry("water_fragment_main")
+        //     .binding(camera_bind_group_layout)
+        //     .binding(&bind_group_layout)
+        //     .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
+        //     .with_depth_compare(wgpu::CompareFunction::LessEqual)
+        //     // .with_depth_writes(false)
+        //     .with_blend(wgpu::BlendState::ALPHA_BLENDING)
+        //     .build();
+
+        // let wireframe_pipeline = renderer
+        //     .build_render_pipeline::<TerrainVertex>("terrain_wireframe", &module)
+        //     .with_primitive(wgpu::PrimitiveState {
+        //         topology: wgpu::PrimitiveTopology::LineList,
+        //         ..Default::default()
+        //     })
+        //     .with_vertex_entry("wireframe_vertex_main")
+        //     .with_fragment_entry("wireframe_fragment_main")
+        //     .binding(camera_bind_group_layout)
+        //     .binding(&bind_group_layout)
+        //     .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
+        //     .build();
 
         // Process chunks
 
@@ -738,8 +805,7 @@ impl Terrain {
             max_view_distance: 13_300.0,
             terrain_pipeline,
             water_pipeline,
-            wireframe_pipeline,
-
+            // wireframe_pipeline,
             terrain_data: Tracked::new(terrain_data),
             terrain_data_buffer,
 
@@ -773,7 +839,7 @@ impl Terrain {
     ) {
         // Make sure the terrain data is up to date if it changed.
         self.terrain_data.if_changed(|terrain_data| {
-            frame.queue.write_buffer(
+            renderer().queue.write_buffer(
                 &self.terrain_data_buffer,
                 0,
                 bytemuck::cast_slice(&[*terrain_data]),
@@ -781,7 +847,7 @@ impl Terrain {
         });
 
         // Always use the main camera for frustum culling.
-        self.process_chunks(&frame.device, &frame.queue, frustum_camera_bind_group);
+        self.process_chunks(frustum_camera_bind_group);
 
         self.strata
             .render(frame, geometry_buffers, camera_bind_group);
@@ -945,15 +1011,13 @@ impl Terrain {
 impl Terrain {
     /// Run the process_chunks compute shader to cull chunks not in the camera frustum and to set
     /// the LOD level.
-    pub fn process_chunks(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        camera_bind_group: &wgpu::BindGroup,
-    ) {
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("process_chunks"),
-        });
+    pub fn process_chunks(&self, camera_bind_group: &wgpu::BindGroup) {
+        let mut encoder =
+            renderer()
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("process_chunks"),
+                });
 
         {
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -967,7 +1031,7 @@ impl Terrain {
             compute_pass.dispatch_workgroups(self.total_chunks.div_ceil(64), 1, 1);
         }
 
-        queue.submit(std::iter::once(encoder.finish()));
+        renderer().queue.submit(std::iter::once(encoder.finish()));
     }
 
     #[inline]
@@ -1065,42 +1129,42 @@ impl Terrain {
         render_pass.multi_draw_indexed_indirect(&self.water_draw_args_buffer, 0, self.total_chunks);
     }
 
-    fn render_wireframe(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
-        let levels = [0..512, 512..640, 640..672, 672..680];
+    // fn render_wireframe(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    //     let levels = [0..512, 512..640, 640..672, 672..680];
 
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("terrain_chunks"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+    //     let mut render_pass = frame
+    //         .encoder
+    //         .begin_render_pass(&wgpu::RenderPassDescriptor {
+    //             label: Some("terrain_chunks"),
+    //             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+    //                 view: &frame.surface,
+    //                 resolve_target: None,
+    //                 ops: wgpu::Operations {
+    //                     load: wgpu::LoadOp::Load,
+    //                     store: wgpu::StoreOp::Store,
+    //                 },
+    //             })],
+    //             depth_stencil_attachment: None,
+    //             timestamp_writes: None,
+    //             occlusion_query_set: None,
+    //         });
 
-        render_pass.set_pipeline(&self.wireframe_pipeline);
-        render_pass.set_vertex_buffer(0, self.chunk_mesh.vertices_buffer.slice(..));
-        render_pass.set_index_buffer(
-            self.chunk_mesh.wireframe_indices_buffer.slice(..),
-            wgpu::IndexFormat::Uint32,
-        );
+    //     render_pass.set_pipeline(&self.wireframe_pipeline);
+    //     render_pass.set_vertex_buffer(0, self.chunk_mesh.vertices_buffer.slice(..));
+    //     render_pass.set_index_buffer(
+    //         self.chunk_mesh.wireframe_indices_buffer.slice(..),
+    //         wgpu::IndexFormat::Uint32,
+    //     );
 
-        render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
+    //     render_pass.set_bind_group(0, camera_bind_group, &[]);
+    //     render_pass.set_bind_group(1, &self.render_bind_group, &[]);
 
-        for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
-            for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
-                Self::render_patch(&mut render_pass, x, y, levels[self.lod_level].clone());
-            }
-        }
-    }
+    //     for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
+    //         for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
+    //             Self::render_patch(&mut render_pass, x, y, levels[self.lod_level].clone());
+    //         }
+    //     }
+    // }
 
     fn generate_normals_lookup_table() -> Vec<Vec3> {
         let mut normals = Vec::with_capacity(1024); // 16 x 64 = 1024

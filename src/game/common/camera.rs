@@ -275,7 +275,7 @@ impl GpuCamera {
         }
     }
 
-    pub fn upload_matrices(&self, queue: &wgpu::Queue, matrices: &Matrices, position: Vec3) {
+    pub fn upload_matrices(&self, matrices: &Matrices, position: Vec3) {
         let proj_view = matrices.projection * matrices.view;
 
         let data = CameraBuffer {
@@ -286,7 +286,9 @@ impl GpuCamera {
                 .planes
                 .map(|p| p.normal.extend(p.distance)),
         };
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[data]));
+        renderer()
+            .queue
+            .write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[data]));
     }
 }
 
