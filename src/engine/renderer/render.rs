@@ -6,6 +6,8 @@ use std::{
 use glam::UVec2;
 use wgpu::{PushConstantRange, util::DeviceExt};
 
+use crate::global;
+
 use super::mip_maps::MipMaps;
 
 #[derive(Clone)]
@@ -320,8 +322,12 @@ impl Renderer {
     }
 }
 
+global!(Renderer, scoped_renderer, renderer);
+
+pub use global::ScopedGlobal as ScopedRendererGlobal;
+
 /// A single object passed around during the rendering of a single frame.
-pub struct Frame<'r> {
+pub struct Frame {
     pub device: RenderDevice,
     pub queue: RenderQueue,
 
@@ -330,9 +336,6 @@ pub struct Frame<'r> {
 
     /// The window surface.
     pub surface: wgpu::TextureView,
-
-    /// The [Renderer] we belong to.
-    pub renderer: &'r Renderer,
 }
 
 pub struct RenderPipelineBuilder<'a, V>

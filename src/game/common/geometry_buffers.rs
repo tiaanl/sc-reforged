@@ -1,6 +1,6 @@
 use glam::{UVec2, Vec3, Vec4};
 
-use crate::engine::renderer::Renderer;
+use crate::engine::prelude::renderer;
 
 pub struct Buffer {
     pub texture: wgpu::Texture,
@@ -123,52 +123,52 @@ impl GeometryBuffers {
     const ALPHA_REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
     const IDS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
 
-    pub fn new(renderer: &Renderer) -> Self {
-        let size = renderer.surface.size();
+    pub fn new() -> Self {
+        let size = renderer().surface.size();
 
         tracing::info!("Creating geometry buffers ({}x{})", size.x, size.y);
 
-        let depth = Buffer::new(&renderer.device, "g_depth", size, Self::DEPTH_FORMAT);
+        let depth = Buffer::new(&renderer().device, "g_depth", size, Self::DEPTH_FORMAT);
 
         let color = Buffer::new(
-            &renderer.device,
+            &renderer().device,
             "g_buffer_colors",
             size,
             Self::COLORS_FORMAT,
         );
 
         let position = Buffer::new(
-            &renderer.device,
+            &renderer().device,
             "g_buffer_positions",
             size,
             Self::POSITIONS_FORMAT,
         );
 
         let normal = Buffer::new(
-            &renderer.device,
+            &renderer().device,
             "g_buffer_normals",
             size,
             Self::NORMALS_FORMAT,
         );
 
         let alpha_accumulation = Buffer::new(
-            &renderer.device,
+            &renderer().device,
             "g_buffer_alpha_accumulation",
             size,
             Self::ALPHA_ACCUMULATION_FORMAT,
         );
 
         let alpha_revealage = Buffer::new(
-            &renderer.device,
+            &renderer().device,
             "g_buffer_alpha_revealabe",
             size,
             Self::ALPHA_REVEALAGE_FORMAT,
         );
 
-        let id = Buffer::new(&renderer.device, "g_buffer_ids", size, Self::IDS_FORMAT);
+        let id = Buffer::new(&renderer().device, "g_buffer_ids", size, Self::IDS_FORMAT);
 
         let bind_group_layout =
-            renderer
+            renderer()
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("g_buffer_bind_group_layout"),
@@ -242,7 +242,7 @@ impl GeometryBuffers {
                     ],
                 });
 
-        let bind_group = renderer
+        let bind_group = renderer()
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("g_buffer_bind_group"),
@@ -475,13 +475,8 @@ impl GeometryBuffers {
         ]
     }
 
-    fn create_texture(
-        renderer: &Renderer,
-        label: &str,
-        size: UVec2,
-        format: wgpu::TextureFormat,
-    ) -> wgpu::Texture {
-        renderer.device.create_texture(&wgpu::TextureDescriptor {
+    fn create_texture(label: &str, size: UVec2, format: wgpu::TextureFormat) -> wgpu::Texture {
+        renderer().device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
             size: wgpu::Extent3d {
                 width: size.x,

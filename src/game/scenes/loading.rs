@@ -8,7 +8,7 @@ pub struct LoadingScene {
 }
 
 impl LoadingScene {
-    pub fn new(renderer: &Renderer) -> Self {
+    pub fn new() -> Self {
         let image = data_dir()
             .load_image(
                 PathBuf::from("textures")
@@ -17,9 +17,9 @@ impl LoadingScene {
             )
             .unwrap();
         let texture_view =
-            renderer.create_texture_view("texture: textures/interface/loadscr2.jpg", &image.data);
+            renderer().create_texture_view("texture: textures/interface/loadscr2.jpg", &image.data);
 
-        let sampler = renderer.create_sampler(
+        let sampler = renderer().create_sampler(
             "sampler: textures/interface/loadscr2.jpg",
             wgpu::AddressMode::ClampToEdge,
             wgpu::FilterMode::Linear,
@@ -27,14 +27,14 @@ impl LoadingScene {
         );
 
         let bind_group =
-            renderer.create_texture_bind_group("loading_texture", &texture_view, &sampler);
+            renderer().create_texture_bind_group("loading_texture", &texture_view, &sampler);
 
         let shader_module =
-            renderer.create_shader_module("loading_scene", include_str!("loading.wgsl"));
+            renderer().create_shader_module("loading_scene", include_str!("loading.wgsl"));
 
-        let pipeline = renderer
+        let pipeline = renderer()
             .build_render_pipeline::<()>("loading", &shader_module)
-            .binding(renderer.texture_bind_group_layout())
+            .binding(renderer().texture_bind_group_layout())
             .build();
 
         Self {

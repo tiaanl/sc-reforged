@@ -38,12 +38,8 @@ pub struct Objects {
 }
 
 impl Objects {
-    pub fn new(
-        renderer: &Renderer,
-        shaders: &mut Shaders,
-        camera_bind_group_layout: &wgpu::BindGroupLayout,
-    ) -> Self {
-        let model_renderer = ModelRenderer::new(renderer, shaders, camera_bind_group_layout);
+    pub fn new(shaders: &mut Shaders, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+        let model_renderer = ModelRenderer::new(shaders, camera_bind_group_layout);
 
         Self {
             model_renderer,
@@ -54,7 +50,6 @@ impl Objects {
 
     pub fn spawn(
         &mut self,
-        renderer: &Renderer,
         transform: Transform,
         model_name: &str,
         title: &str,
@@ -76,7 +71,6 @@ impl Objects {
         // );
 
         let model_instance_handle = self.model_renderer.add_model_instance(
-            renderer,
             model_handle,
             transform.to_mat4(),
             self.objects.len() as u32,

@@ -2,4 +2,4 @@ mod mip_maps;
 mod render;
 mod surface;
 
-pub use render::{BufferLayout, Frame, Renderer};
+pub use render::*;

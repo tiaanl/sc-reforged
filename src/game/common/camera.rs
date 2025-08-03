@@ -232,8 +232,8 @@ pub struct GpuCamera {
 }
 
 impl GpuCamera {
-    pub fn new(renderer: &Renderer) -> Self {
-        let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
+    pub fn new() -> Self {
+        let buffer = renderer().device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("camera_buffer"),
             size: std::mem::size_of::<CameraBuffer>() as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -241,7 +241,7 @@ impl GpuCamera {
         });
 
         let bind_group_layout =
-            renderer
+            renderer()
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("camera_bind_group_layout"),
@@ -257,7 +257,7 @@ impl GpuCamera {
                     }],
                 });
 
-        let bind_group = renderer
+        let bind_group = renderer()
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("camera_bind_group"),

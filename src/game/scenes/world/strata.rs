@@ -19,13 +19,14 @@ pub struct Strata {
 impl Strata {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        renderer: &Renderer,
         shaders: &mut Shaders,
         terrain_size: UVec2,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         height_map_buffer: &wgpu::Buffer,
         terrain_buffer: &wgpu::Buffer,
     ) -> Result<Self, AssetError> {
+        let renderer = renderer();
+
         let mesh = {
             let mut mesh = IndexedMesh::default();
 
@@ -77,7 +78,7 @@ impl Strata {
                 }
             }
 
-            mesh.to_gpu(renderer)
+            mesh.to_gpu()
         };
 
         let (instances_buffer, instances_count) = {
@@ -190,7 +191,6 @@ impl Strata {
             });
 
         let module = shaders.create_shader(
-            renderer,
             "strata",
             include_str!("strata.wgsl"),
             "strata.wgsl",

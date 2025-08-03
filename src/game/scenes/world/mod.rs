@@ -50,12 +50,12 @@ struct Camera<C: camera::Controller> {
 }
 
 impl<C: camera::Controller> Camera<C> {
-    fn new(renderer: &Renderer, controller: C) -> Self {
+    fn new(controller: C) -> Self {
         Self {
             controller,
             camera: camera::Camera::default(),
             matrices: Tracked::new(camera::Matrices::default()),
-            gpu_camera: camera::GpuCamera::new(renderer),
+            gpu_camera: camera::GpuCamera::new(),
         }
     }
 }
@@ -98,7 +98,7 @@ enum UnderMouse {
 }
 
 impl WorldScene {
-    pub fn new(renderer: &Renderer, campaign_def: CampaignDef) -> Result<Self, AssetError> {
+    pub fn new(campaign_def: CampaignDef) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
@@ -128,7 +128,7 @@ impl WorldScene {
                 10_000.0,
             );
             let matrices = camera.calculate_matrices().into();
-            let gpu_camera = camera::GpuCamera::new(renderer);
+            let gpu_camera = camera::GpuCamera::new();
 
             Camera {
                 controller,
@@ -149,7 +149,7 @@ impl WorldScene {
                 150_000.0,
             );
             let matrices = camera.calculate_matrices().into();
-            let gpu_camera = camera::GpuCamera::new(renderer);
+            let gpu_camera = camera::GpuCamera::new();
 
             Camera {
                 controller,
@@ -179,7 +179,7 @@ impl WorldScene {
         let environment = Environment::default();
 
         let environment_buffer =
-            renderer
+            renderer()
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("environment_buffer"),
@@ -188,7 +188,7 @@ impl WorldScene {
                 });
 
         let environment_bind_group_layout =
-            renderer
+            renderer()
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("environment_bind_group_layout"),
@@ -205,7 +205,7 @@ impl WorldScene {
                 });
 
         let environment_bind_group =
-            renderer
+            renderer()
                 .device
                 .create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("environment_bind_group_layout"),
@@ -219,17 +219,13 @@ impl WorldScene {
                 });
 
         let terrain = Terrain::new(
-            renderer,
             &mut shaders,
             &campaign_def,
             &main_camera.gpu_camera.bind_group_layout,
         )?;
 
-        let mut objects = objects::Objects::new(
-            renderer,
-            &mut shaders,
-            &main_camera.gpu_camera.bind_group_layout,
-        );
+        let mut objects =
+            objects::Objects::new(&mut shaders, &main_camera.gpu_camera.bind_group_layout);
 
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;
@@ -239,7 +235,6 @@ impl WorldScene {
                     .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
 
                 if let Err(err) = objects.spawn(
-                    renderer,
                     Transform::from_translation(object.position)
                         .with_euler_rotation(object.rotation),
                     &object.name,
@@ -251,17 +246,15 @@ impl WorldScene {
             }
         }
 
-        let geometry_buffers = GeometryBuffers::new(renderer);
+        let geometry_buffers = GeometryBuffers::new();
         let compositor = Compositor::new(
-            renderer,
             &mut shaders,
             &geometry_buffers.bind_group_layout,
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
         );
 
-        let gizmos_renderer =
-            GizmosRenderer::new(renderer, &main_camera.gpu_camera.bind_group_layout);
+        let gizmos_renderer = GizmosRenderer::new(&main_camera.gpu_camera.bind_group_layout);
 
         Ok(Self {
             campaign_def,
@@ -310,11 +303,11 @@ impl WorldScene {
 }
 
 impl Scene for WorldScene {
-    fn resize(&mut self, renderer: &Renderer) {
+    fn resize(&mut self) {
         // Replace the buffers with new ones.
-        self.geometry_buffers = GeometryBuffers::new(renderer);
+        self.geometry_buffers = GeometryBuffers::new();
 
-        let [width, height] = renderer.surface.size().to_array().map(|f| f as f32);
+        let [width, height] = renderer().surface.size().to_array().map(|f| f as f32);
 
         let aspect = width / height.max(1.0);
         self.main_camera.camera.aspect_ratio = aspect;
@@ -331,7 +324,7 @@ impl Scene for WorldScene {
         }
     }
 
-    fn update(&mut self, _renderer: &Renderer, delta_time: f32, input: &InputState) {
+    fn update(&mut self, delta_time: f32, input: &InputState) {
         const GIZMO_SCALE: f32 = 1000.0;
         const CENTER: Vec3 = Vec3::ZERO;
         const RED: Vec4 = Vec4::new(1.0, 0.0, 0.0, 1.0);
@@ -547,7 +540,7 @@ impl Scene for WorldScene {
     }
 
     #[cfg(feature = "egui")]
-    fn debug_panel(&mut self, egui: &egui::Context, _renderer: &Renderer) {
+    fn debug_panel(&mut self, egui: &egui::Context) {
         use egui::widgets::Slider;
 
         egui::Window::new("World")

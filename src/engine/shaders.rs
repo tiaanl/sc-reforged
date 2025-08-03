@@ -5,7 +5,7 @@ use naga_oil::compose::{
 };
 use wgpu::naga::valid::Capabilities;
 
-use super::renderer::Renderer;
+use crate::engine::renderer::renderer;
 
 pub struct Shaders {
     composer: Composer,
@@ -32,7 +32,6 @@ impl Shaders {
 
     pub fn create_shader(
         &mut self,
-        renderer: &Renderer,
         label: &str,
         source: &str,
         file_path: &str,
@@ -52,7 +51,7 @@ impl Shaders {
             }
         };
 
-        renderer
+        renderer()
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some(label),

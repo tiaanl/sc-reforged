@@ -38,8 +38,8 @@ enum App {
         /// The main window the engine is rendering to. This is also the window
         /// that is receiving all the input events.
         window: Arc<winit::window::Window>,
-        /// The renderer.
-        renderer: Renderer,
+        /// The placeholder for the scoped global [Renderer].
+        _global_renderer: ScopedRendererGlobal,
         /// egui integration.
         #[cfg(feature = "egui")]
         egui_integration: engine::egui_integration::EguiIntegration,
@@ -90,11 +90,10 @@ impl winit::application::ApplicationHandler for App {
                 );
                 let inner_size = window.inner_size();
 
-                let renderer = Renderer::new(Arc::clone(&window));
+                let _global_renderer = scoped_renderer(|| Renderer::new(Arc::clone(&window)));
 
                 #[cfg(feature = "egui")]
-                let egui_integration =
-                    engine::egui_integration::EguiIntegration::new(event_loop, &renderer);
+                let egui_integration = engine::egui_integration::EguiIntegration::new(event_loop);
 
                 let scene: Box<dyn Scene> = if true {
                     // WorldScene
@@ -120,7 +119,7 @@ impl winit::application::ApplicationHandler for App {
                         .cloned()
                         .unwrap();
 
-                    Box::new(match WorldScene::new(&renderer, campaign_def) {
+                    Box::new(match WorldScene::new(campaign_def) {
                         Ok(scene) => scene,
                         Err(err) => {
                             error!("Could not create world scene! - {}", err);
@@ -128,13 +127,10 @@ impl winit::application::ApplicationHandler for App {
                         }
                     })
                 } else {
-                    Box::new(UiTestScene::new(
-                        &renderer,
-                        ui::Size {
-                            width: inner_size.width as i32,
-                            height: inner_size.height as i32,
-                        },
-                    ))
+                    Box::new(UiTestScene::new(ui::Size {
+                        width: inner_size.width as i32,
+                        height: inner_size.height as i32,
+                    }))
                 };
                 //  else {
                 //     Box::new(ModelViewer::new(&renderer, data_dir).unwrap())
@@ -144,7 +140,7 @@ impl winit::application::ApplicationHandler for App {
 
                 *self = App::Initialized {
                     window,
-                    renderer,
+                    _global_renderer,
                     #[cfg(feature = "egui")]
                     egui_integration,
                     input: InputState::default(),
@@ -173,7 +169,6 @@ impl winit::application::ApplicationHandler for App {
             }
             App::Initialized {
                 window,
-                renderer,
                 #[cfg(feature = "egui")]
                 egui_integration,
                 input,
@@ -202,8 +197,8 @@ impl winit::application::ApplicationHandler for App {
                     }
 
                     WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
-                        renderer.resize(width, height);
-                        scene.resize(renderer);
+                        renderer().resize(width, height);
+                        scene.resize();
 
                         window.request_redraw();
                     }
@@ -214,25 +209,24 @@ impl winit::application::ApplicationHandler for App {
                         *last_frame_time = now;
 
                         let delta_time = last_frame_duration.as_secs_f32() * 60.0;
-                        scene.update(renderer, delta_time, input);
+                        scene.update(delta_time, input);
 
-                        let output = renderer.surface.get_texture();
+                        let output = renderer().surface.get_texture();
                         let surface = output
                             .texture
                             .create_view(&wgpu::TextureViewDescriptor::default());
 
-                        let encoder = renderer.device.create_command_encoder(
+                        let encoder = renderer().device.create_command_encoder(
                             &wgpu::CommandEncoderDescriptor {
                                 label: Some("main command encoder"),
                             },
                         );
 
                         let mut frame = Frame {
-                            device: renderer.device.clone(),
-                            queue: renderer.queue.clone(),
+                            device: renderer().device.clone(),
+                            queue: renderer().queue.clone(),
                             encoder,
                             surface,
-                            renderer,
                         };
 
                         {
@@ -245,7 +239,6 @@ impl winit::application::ApplicationHandler for App {
                         if repaint {
                             egui_integration.render(
                                 window,
-                                renderer,
                                 &mut frame.encoder,
                                 &frame.surface,
                                 |ctx| {
@@ -273,12 +266,12 @@ impl winit::application::ApplicationHandler for App {
                                     });
 
                                     // Debug stuff from the scene.
-                                    scene.debug_panel(ctx, renderer);
+                                    scene.debug_panel(ctx);
                                 },
                             );
                         }
 
-                        renderer
+                        renderer()
                             .queue
                             .submit(std::iter::once(frame.encoder.finish()));
 

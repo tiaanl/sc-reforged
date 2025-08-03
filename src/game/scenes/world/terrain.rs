@@ -21,7 +21,9 @@ struct ChunkMesh {
 }
 
 impl ChunkMesh {
-    fn new(renderer: &Renderer) -> Self {
+    fn new() -> Self {
+        let renderer = renderer();
+
         let mut vertices = Vec::with_capacity(
             Terrain::VERTICES_PER_CHUNK as usize * Terrain::VERTICES_PER_CHUNK as usize,
         );
@@ -215,11 +217,12 @@ impl Terrain {
     pub const VERTICES_PER_CHUNK: u32 = Self::CELLS_PER_CHUNK + 1;
 
     pub fn new(
-        renderer: &Renderer,
         shaders: &mut Shaders,
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
+        let renderer = renderer();
+
         let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
 
         let water_level =
@@ -513,7 +516,6 @@ impl Terrain {
             });
 
         let module = shaders.create_shader(
-            renderer,
             "terrain",
             include_str!("terrain.wgsl"),
             "terrain.wgsl",
@@ -606,7 +608,6 @@ impl Terrain {
         let water_draw_args_buffer = renderer.device.create_buffer(&draw_args_descriptor);
 
         let strata = Strata::new(
-            renderer,
             shaders,
             height_map.size,
             camera_bind_group_layout,
@@ -668,7 +669,6 @@ impl Terrain {
                 });
 
         let module = shaders.create_shader(
-            renderer,
             "process_chunks",
             include_str!("process_chunks.wgsl"),
             "process_chunks.wgsl",
@@ -729,7 +729,7 @@ impl Terrain {
                     ],
                 });
 
-        let chunk_mesh = ChunkMesh::new(renderer);
+        let chunk_mesh = ChunkMesh::new();
 
         Ok(Self {
             height_map,

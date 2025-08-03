@@ -39,23 +39,18 @@ pub struct ModelRenderer {
 }
 
 impl ModelRenderer {
-    pub fn new(
-        renderer: &Renderer,
-        shaders: &mut Shaders,
-        camera_bind_group_layout: &wgpu::BindGroupLayout,
-    ) -> Self {
-        let textures = gpu::Textures::new(renderer);
-        let models = gpu::Models::new(renderer);
+    pub fn new(shaders: &mut Shaders, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+        let textures = gpu::Textures::new();
+        let models = gpu::Models::new();
 
         let module = shaders.create_shader(
-            renderer,
             "model_renderer",
             include_str!("model_renderer.wgsl"),
             "model_renderer.wgsl",
             Default::default(),
         );
 
-        let layout = renderer
+        let layout = renderer()
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("model_renderer_pipeline_layout"),
@@ -71,7 +66,7 @@ impl ModelRenderer {
             });
 
         let opaque_pipeline =
-            renderer
+            renderer()
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("model_renderer_opaque_render_pipeline"),
@@ -127,7 +122,7 @@ impl ModelRenderer {
                 });
 
         let alpha_pipeline =
-            renderer
+            renderer()
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("model_renderer_alpha_render_pipeline"),
@@ -197,23 +192,18 @@ impl ModelRenderer {
 
     pub fn add_model(
         &mut self,
-        renderer: &Renderer,
         model_handle: Handle<model::Model>,
     ) -> Result<ModelHandle, AssetError> {
-        self.models
-            .add_model(renderer, &mut self.textures, model_handle)
+        self.models.add_model(&mut self.textures, model_handle)
     }
 
     pub fn add_model_instance(
         &mut self,
-        renderer: &Renderer,
         model_handle: Handle<model::Model>,
         transform: Mat4,
         entity_id: u32,
     ) -> Result<ModelInstanceHandle, AssetError> {
-        let model_handle = self
-            .models
-            .add_model(renderer, &mut self.textures, model_handle)?;
+        let model_handle = self.models.add_model(&mut self.textures, model_handle)?;
 
         let model_instance_handle =
             ModelInstanceHandle(self.model_instances.insert(ModelInstance {
@@ -467,9 +457,9 @@ mod gpu {
     }
 
     impl Textures {
-        pub fn new(renderer: &Renderer) -> Self {
+        pub fn new() -> Self {
             let texture_bind_group_layout =
-                renderer
+                renderer()
                     .device
                     .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                         label: Some("model_renderer_texture_bind_group_layout"),
@@ -495,7 +485,7 @@ mod gpu {
                         ],
                     });
 
-            let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
+            let sampler = renderer().device.create_sampler(&wgpu::SamplerDescriptor {
                 label: Some("model_renderer_sampler"),
                 address_mode_u: wgpu::AddressMode::Repeat,
                 address_mode_v: wgpu::AddressMode::Repeat,
@@ -515,7 +505,6 @@ mod gpu {
 
         fn create_from_path(
             &mut self,
-            renderer: &Renderer,
             path: impl AsRef<Path>,
         ) -> Result<TextureHandle, AssetError> {
             // If the path exists, return the existing handle.
@@ -534,7 +523,7 @@ mod gpu {
                 depth_or_array_layers: 1,
             };
 
-            let texture = renderer.device.create_texture(&wgpu::TextureDescriptor {
+            let texture = renderer().device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label.as_str()),
                 size,
                 mip_level_count: 1,
@@ -545,7 +534,7 @@ mod gpu {
                 view_formats: &[],
             });
 
-            renderer.queue.write_texture(
+            renderer().queue.write_texture(
                 wgpu::TexelCopyTextureInfoBase {
                     texture: &texture,
                     mip_level: 0,
@@ -563,7 +552,7 @@ mod gpu {
 
             let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            let bind_group = renderer
+            let bind_group = renderer()
                 .device
                 .create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("model_renderer_bind_group"),
@@ -601,9 +590,9 @@ mod gpu {
     }
 
     impl Models {
-        pub fn new(renderer: &Renderer) -> Self {
+        pub fn new() -> Self {
             let nodes_bind_group_layout =
-                renderer
+                renderer()
                     .device
                     .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                         label: Some("model_renderer_nodes_bind_group_layout"),
@@ -629,7 +618,6 @@ mod gpu {
 
         pub fn add_model(
             &mut self,
-            renderer: &Renderer,
             textures: &mut Textures,
             model_handle: Handle<model::Model>,
         ) -> Result<ModelHandle, AssetError> {
@@ -646,7 +634,6 @@ mod gpu {
 
             for mesh in model.meshes.iter() {
                 let texture_handle = textures.create_from_path(
-                    renderer,
                     PathBuf::from("textures")
                         .join("shared")
                         .join(&mesh.texture_name),
@@ -693,7 +680,7 @@ mod gpu {
                 .collect();
 
             let vertex_buffer =
-                renderer
+                renderer()
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("model_vertex_buffer"),
@@ -702,7 +689,7 @@ mod gpu {
                     });
 
             let index_buffer =
-                renderer
+                renderer()
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("model_index_buffer"),
@@ -711,7 +698,7 @@ mod gpu {
                     });
 
             let node_buffer =
-                renderer
+                renderer()
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("model_node_buffer"),
@@ -719,20 +706,21 @@ mod gpu {
                         usage: wgpu::BufferUsages::STORAGE,
                     });
 
-            let nodes_bind_group = renderer
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("model_renderer_nodes_bind_group"),
-                    layout: &self.nodes_bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &node_buffer,
-                            offset: 0,
-                            size: None,
-                        }),
-                    }],
-                });
+            let nodes_bind_group =
+                renderer()
+                    .device
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("model_renderer_nodes_bind_group"),
+                        layout: &self.nodes_bind_group_layout,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                buffer: &node_buffer,
+                                offset: 0,
+                                size: None,
+                            }),
+                        }],
+                    });
 
             Ok(ModelHandle(self.models.insert(Model {
                 vertex_buffer,

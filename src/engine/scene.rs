@@ -1,8 +1,6 @@
 use glam::UVec2;
 use winit::{event::MouseButton, keyboard::KeyCode};
 
-use crate::Renderer;
-
 use super::{input::InputState, renderer::Frame};
 
 #[allow(unused)]
@@ -33,19 +31,19 @@ pub enum SceneEvent {
 #[allow(unused)]
 pub trait Scene {
     /// Called when the size of the window surface is changed.
-    fn resize(&mut self, renderer: &Renderer) {}
+    fn resize(&mut self) {}
 
     /// Called when an engine event occurs. This includes input events.
     fn event(&mut self, event: SceneEvent) {}
 
     /// Called each frame with the `delta_time` based on the time the last frame took and the state
     /// of all input devices.
-    fn update(&mut self, renderer: &Renderer, delta_time: f32, input: &InputState) {}
+    fn update(&mut self, delta_time: f32, input: &InputState) {}
 
     /// Called to render the the frame to the surface.
     fn render(&mut self, frame: &mut Frame);
 
     /// Called to allow debug panels to be added to the window.
     #[cfg(feature = "egui")]
-    fn debug_panel(&mut self, egui: &egui::Context, renderer: &Renderer) {}
+    fn debug_panel(&mut self, egui: &egui::Context) {}
 }

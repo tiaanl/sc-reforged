@@ -1,6 +1,6 @@
 use winit::event_loop::ActiveEventLoop;
 
-use super::renderer::Renderer;
+use crate::engine::prelude::renderer;
 
 pub struct EguiIntegration {
     egui: egui_winit::State,
@@ -8,7 +8,9 @@ pub struct EguiIntegration {
 }
 
 impl EguiIntegration {
-    pub fn new(event_loop: &ActiveEventLoop, renderer: &Renderer) -> Self {
+    pub fn new(event_loop: &ActiveEventLoop) -> Self {
+        let renderer = renderer();
+
         let egui = egui_winit::State::new(
             egui::Context::default(),
             egui::ViewportId::default(),
@@ -38,11 +40,12 @@ impl EguiIntegration {
     pub fn render(
         &mut self,
         window: &winit::window::Window,
-        renderer: &Renderer,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         run_ui: impl FnMut(&egui::Context),
     ) {
+        let renderer = renderer();
+
         let raw_input = self.egui.take_egui_input(window);
 
         let full_output = self.egui.egui_ctx().run(raw_input, run_ui);

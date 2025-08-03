@@ -15,7 +15,7 @@ pub struct UiTestScene {
 }
 
 impl UiTestScene {
-    pub fn new(renderer: &Renderer, screen_size: ui::Size) -> Self {
+    pub fn new(screen_size: ui::Size) -> Self {
         let mut ui = ui::Context::new(screen_size);
 
         ui.add_to_root(Box::new(PanelWidget::default().with_style(Style {
@@ -39,15 +39,15 @@ impl UiTestScene {
 
         Self {
             ui,
-            ui_render_context: ui::RenderContext::new(renderer, UI_PIXEL_SCALE),
+            ui_render_context: ui::RenderContext::new(UI_PIXEL_SCALE),
             screen_size,
         }
     }
 }
 
 impl Scene for UiTestScene {
-    fn resize(&mut self, renderer: &Renderer) {
-        let surface_size = renderer.surface.size();
+    fn resize(&mut self) {
+        let surface_size = renderer().surface.size();
         self.screen_size = ui::Size {
             width: surface_size.x as i32,
             height: surface_size.y as i32,

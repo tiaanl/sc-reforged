@@ -1,6 +1,8 @@
 use glam::{Vec2, Vec3};
 
-use super::renderer::{BufferLayout, Renderer};
+use crate::engine::prelude::renderer;
+
+use super::renderer::BufferLayout;
 
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]
@@ -80,9 +82,11 @@ impl std::fmt::Debug for GpuIndexedMesh {
 }
 
 impl<V: bytemuck::NoUninit> IndexedMesh<V> {
-    pub fn to_gpu(&self, renderer: &Renderer) -> GpuIndexedMesh {
+    pub fn to_gpu(&self) -> GpuIndexedMesh {
         debug_assert!(!self.vertices.is_empty(), "Uploading empty vertex buffer.");
         debug_assert!(!self.indices.is_empty(), "Uploading empty index buffer.");
+
+        let renderer = renderer();
 
         let vertex_buffer = renderer.create_vertex_buffer("mesh_vertex_buffer", &self.vertices);
         let index_buffer = renderer.create_index_buffer("mesh_index_buffer", &self.indices);

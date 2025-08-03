@@ -47,7 +47,9 @@ pub struct RenderContext {
 }
 
 impl RenderContext {
-    pub fn new(renderer: &Renderer, pixel_size: i32) -> Self {
+    pub fn new(pixel_size: i32) -> Self {
+        let renderer = renderer();
+
         let context_data = ContextData {
             screen_size: IVec2::ONE, // Avoid division by 0.
             pixel_size,
@@ -262,7 +264,7 @@ impl RenderContext {
             }
         });
 
-        let gpu_mesh = mesh.to_gpu(frame.renderer);
+        let gpu_mesh = mesh.to_gpu();
 
         // let mut render_pass = frame.begin_basic_render_pass("ui", false);
         // render_pass.set_pipeline(&self.pipeline);

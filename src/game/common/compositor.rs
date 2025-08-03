@@ -8,14 +8,12 @@ pub struct Compositor {
 
 impl Compositor {
     pub fn new(
-        renderer: &Renderer,
         shaders: &mut Shaders,
         geometry_buffers_bind_group_layout: &wgpu::BindGroupLayout,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let module = shaders.create_shader(
-            renderer,
             "compositor",
             include_str!("compositor.wgsl"),
             "compositor.wgsl",
@@ -23,7 +21,7 @@ impl Compositor {
         );
 
         let pipeline_layout =
-            renderer
+            renderer()
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("compositor_pipeline_layout"),
@@ -36,7 +34,7 @@ impl Compositor {
                 });
 
         let render_pipeline =
-            renderer
+            renderer()
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("compositor_render_pipeline"),
@@ -55,7 +53,7 @@ impl Compositor {
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: &[Some(wgpu::ColorTargetState {
-                            format: renderer.surface.format(),
+                            format: renderer().surface.format(),
                             blend: None,
                             write_mask: wgpu::ColorWrites::ALL,
                         })],
