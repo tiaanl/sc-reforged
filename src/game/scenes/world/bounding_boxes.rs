@@ -207,7 +207,7 @@ impl BoundingBoxRenderer {
                             entry_point: Some($fragment_entry),
                             compilation_options: wgpu::PipelineCompilationOptions::default(),
                             targets: &[Some(wgpu::ColorTargetState {
-                                format: renderer.surface_config.format,
+                                format: renderer.surface.format(),
                                 blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                                 write_mask: wgpu::ColorWrites::ALL,
                             })],

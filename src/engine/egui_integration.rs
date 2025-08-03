@@ -18,13 +18,8 @@ impl EguiIntegration {
             None,
         );
 
-        let egui_renderer = egui_wgpu::Renderer::new(
-            &renderer.device,
-            renderer.surface_config.format,
-            None,
-            1,
-            false,
-        );
+        let egui_renderer =
+            egui_wgpu::Renderer::new(&renderer.device, renderer.surface.format(), None, 1, false);
 
         Self {
             egui,
@@ -61,7 +56,7 @@ impl EguiIntegration {
         } = full_output;
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [renderer.width(), renderer.height()],
+            size_in_pixels: renderer.surface.size().to_array(),
             pixels_per_point,
         };
 

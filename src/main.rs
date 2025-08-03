@@ -216,7 +216,7 @@ impl winit::application::ApplicationHandler for App {
                         let delta_time = last_frame_duration.as_secs_f32() * 60.0;
                         scene.update(renderer, delta_time, input);
 
-                        let output = renderer.surface.get_current_texture().unwrap();
+                        let output = renderer.surface.get_texture();
                         let surface = output
                             .texture
                             .create_view(&wgpu::TextureViewDescriptor::default());

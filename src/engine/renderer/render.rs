@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use glam::UVec2;
 use wgpu::{PushConstantRange, util::DeviceExt};
 
 use crate::DepthBuffer;
@@ -46,8 +47,8 @@ impl Deref for RenderQueue {
 pub struct Renderer {
     pub device: RenderDevice,
     pub queue: RenderQueue,
-    pub surface: wgpu::Surface<'static>,
-    pub surface_config: wgpu::SurfaceConfiguration,
+
+    pub surface: super::surface::Surface,
 
     pub depth_buffer: Arc<DepthBuffer>,
 
@@ -86,18 +87,39 @@ impl Renderer {
 
         let adapter =
             pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptionsBase {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
                 compatible_surface: Some(&surface),
-                ..Default::default()
             }))
             .expect("Could not request an adapter.");
 
         let features = adapter.features();
-        if !features.contains(wgpu::Features::MULTI_DRAW_INDIRECT) {
-            tracing::warn!("wgpu::Features::MULTI_DRAW_INDIRECT not available!");
-        }
 
         let required_features =
             wgpu::Features::MULTI_DRAW_INDIRECT | wgpu::Features::PUSH_CONSTANTS;
+        if !features.contains(required_features) {
+            tracing::warn!("wgpu::Features::MULTI_DRAW_INDIRECT not available!");
+        }
+
+        let surface_caps = surface.get_capabilities(&adapter);
+
+        // Find a sRGB surface format or use the first.
+        let format = surface_caps
+            .formats
+            .iter()
+            .find(|cap| cap.is_srgb())
+            .copied()
+            .unwrap_or(surface_caps.formats[0]);
+
+        let surface_size = UVec2::new(width, height);
+        let mut surface_config = surface
+            .get_default_config(&adapter, width, height)
+            .expect("surface get default configuration");
+        surface_config.format = format;
+        // surface_config.present_mode = wgpu::PresentMode::AutoNoVsync;
+        surface_config.present_mode = wgpu::PresentMode::AutoVsync;
+
+        let surface = super::surface::Surface::new(surface, surface_config);
 
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
@@ -115,26 +137,9 @@ impl Renderer {
         ))
         .expect("request device");
 
-        let surface_caps = surface.get_capabilities(&adapter);
+        surface.configure(&device);
 
-        // Find a sRGB surface format or use the first.
-        let format = surface_caps
-            .formats
-            .iter()
-            .find(|cap| cap.is_srgb())
-            .copied()
-            .unwrap_or(surface_caps.formats[0]);
-
-        let mut surface_config = surface
-            .get_default_config(&adapter, width, height)
-            .expect("surface get default configuration");
-        surface_config.format = format;
-        // surface_config.present_mode = wgpu::PresentMode::AutoNoVsync;
-        surface_config.present_mode = wgpu::PresentMode::AutoVsync;
-
-        surface.configure(&device, &surface_config);
-
-        let depth_texture = Arc::new(DepthBuffer::new(&device, &surface_config));
+        let depth_buffer = Arc::new(DepthBuffer::new(&device, surface_size));
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -165,26 +170,16 @@ impl Renderer {
             device: device.into(),
             queue: queue.into(),
             surface,
-            surface_config,
-            depth_buffer: depth_texture,
+            depth_buffer,
             texture_bind_group_layout,
             mip_maps,
         }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        self.surface_config.width = width;
-        self.surface_config.height = height;
-        self.depth_buffer = Arc::new(DepthBuffer::new(&self.device, &self.surface_config));
-        self.surface.configure(&self.device, &self.surface_config);
-    }
-
-    pub fn width(&self) -> u32 {
-        self.surface_config.width
-    }
-
-    pub fn height(&self) -> u32 {
-        self.surface_config.height
+        let size = UVec2::new(width, height);
+        self.surface.resize(&self.device, size);
+        self.depth_buffer = Arc::new(DepthBuffer::new(&self.device, size));
     }
 
     pub fn create_vertex_buffer<B>(&self, label: &str, buffer: &[B]) -> wgpu::Buffer
@@ -521,7 +516,7 @@ where
                         // window surface.
                         format: self
                             .color_target_format
-                            .unwrap_or(self.renderer.surface_config.format),
+                            .unwrap_or(self.renderer.surface.format()),
                         blend: self.blend,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],

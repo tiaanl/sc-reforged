@@ -319,8 +319,7 @@ impl Scene for WorldScene {
         // Replace the buffers with new ones.
         self.geometry_buffers = GeometryBuffers::new(renderer);
 
-        let width = renderer.surface_config.width;
-        let height = renderer.surface_config.height;
+        let [width, height] = renderer.surface.size().to_array();
 
         self.window_size = Vec2::new(width as f32, height as f32);
         self.main_camera.camera.aspect_ratio = width as f32 / height.max(1) as f32;

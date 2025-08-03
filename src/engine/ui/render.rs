@@ -180,7 +180,7 @@ impl RenderContext {
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: renderer.surface_config.format,
+                        format: renderer.surface.format(),
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],

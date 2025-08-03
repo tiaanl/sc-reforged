@@ -122,10 +122,7 @@ impl GeometryBuffers {
     const IDS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
 
     pub fn new(renderer: &Renderer) -> Self {
-        let size = UVec2::new(
-            renderer.surface_config.width,
-            renderer.surface_config.height,
-        );
+        let size = renderer.surface.size();
 
         tracing::info!("Creating geometry buffers ({}x{})", size.x, size.y);
 

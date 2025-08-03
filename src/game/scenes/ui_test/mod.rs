@@ -47,9 +47,10 @@ impl UiTestScene {
 
 impl Scene for UiTestScene {
     fn resize(&mut self, renderer: &Renderer) {
+        let surface_size = renderer.surface.size();
         self.screen_size = ui::Size {
-            width: renderer.surface_config.width as i32,
-            height: renderer.surface_config.height as i32,
+            width: surface_size.x as i32,
+            height: surface_size.y as i32,
         };
 
         self.ui_render_context.resize(self.screen_size);

@@ -1,3 +1,5 @@
+use glam::UVec2;
+
 #[allow(unused)]
 pub struct DepthBuffer {
     pub texture_view: wgpu::TextureView,
@@ -8,8 +10,8 @@ pub struct DepthBuffer {
 impl DepthBuffer {
     pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-    pub fn new(device: &wgpu::Device, surface_config: &wgpu::SurfaceConfiguration) -> Self {
-        let texture_view = Self::create_texture(device, surface_config);
+    pub fn new(device: &wgpu::Device, size: UVec2) -> Self {
+        let texture_view = Self::create_texture(device, size);
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("depth_buffer"),
@@ -78,16 +80,13 @@ impl DepthBuffer {
         }
     }
 
-    pub fn create_texture(
-        device: &wgpu::Device,
-        surface_config: &wgpu::SurfaceConfiguration,
-    ) -> wgpu::TextureView {
+    pub fn create_texture(device: &wgpu::Device, size: UVec2) -> wgpu::TextureView {
         let texture = device.create_texture(
             &(wgpu::TextureDescriptor {
                 label: Some("depth_texture"),
                 size: wgpu::Extent3d {
-                    width: surface_config.width.max(1),
-                    height: surface_config.height.max(1),
+                    width: size.x.max(1),
+                    height: size.y.max(1),
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
