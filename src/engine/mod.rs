@@ -1,5 +1,4 @@
 pub mod assets;
-pub mod depth_buffer;
 pub mod gizmos;
 mod global;
 pub mod input;
@@ -16,7 +15,6 @@ pub mod transform;
 
 pub mod prelude {
     pub use super::assets::*;
-    pub use super::depth_buffer::*;
     pub use super::dirty::*;
     pub use super::input::*;
     pub use super::mesh::*;

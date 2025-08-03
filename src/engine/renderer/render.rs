@@ -6,8 +6,6 @@ use std::{
 use glam::UVec2;
 use wgpu::{PushConstantRange, util::DeviceExt};
 
-use crate::DepthBuffer;
-
 use super::mip_maps::MipMaps;
 
 #[derive(Clone)]
@@ -49,8 +47,6 @@ pub struct Renderer {
     pub queue: RenderQueue,
 
     pub surface: super::surface::Surface,
-
-    pub depth_buffer: Arc<DepthBuffer>,
 
     /// A bind group layout used for all texture bind groups.
     texture_bind_group_layout: wgpu::BindGroupLayout,
@@ -111,7 +107,6 @@ impl Renderer {
             .copied()
             .unwrap_or(surface_caps.formats[0]);
 
-        let surface_size = UVec2::new(width, height);
         let mut surface_config = surface
             .get_default_config(&adapter, width, height)
             .expect("surface get default configuration");
@@ -138,8 +133,6 @@ impl Renderer {
         .expect("request device");
 
         surface.configure(&device);
-
-        let depth_buffer = Arc::new(DepthBuffer::new(&device, surface_size));
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -170,7 +163,6 @@ impl Renderer {
             device: device.into(),
             queue: queue.into(),
             surface,
-            depth_buffer,
             texture_bind_group_layout,
             mip_maps,
         }
@@ -179,7 +171,6 @@ impl Renderer {
     pub fn resize(&mut self, width: u32, height: u32) {
         let size = UVec2::new(width, height);
         self.surface.resize(&self.device, size);
-        self.depth_buffer = Arc::new(DepthBuffer::new(&self.device, size));
     }
 
     pub fn create_vertex_buffer<B>(&self, label: &str, buffer: &[B]) -> wgpu::Buffer
@@ -334,8 +325,6 @@ pub struct Frame<'r> {
     pub device: RenderDevice,
     pub queue: RenderQueue,
 
-    pub depth_buffer: Arc<DepthBuffer>,
-
     /// The encoder to use for creating render passes.
     pub encoder: wgpu::CommandEncoder,
 
@@ -344,61 +333,6 @@ pub struct Frame<'r> {
 
     /// The [Renderer] we belong to.
     pub renderer: &'r Renderer,
-}
-
-impl<'r> Frame<'r> {
-    pub fn _clear_color_and_depth(&mut self, color: wgpu::Color, depth: f32) {
-        // Creating and dropping the render pass will clear the buffers.
-        self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("world_clear_render_pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.surface,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(color),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth_buffer.texture_view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(depth),
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-    }
-
-    pub fn begin_basic_render_pass(&mut self, label: &str, depth_test: bool) -> wgpu::RenderPass {
-        self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some(label),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.surface,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: if depth_test {
-                Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_buffer.texture_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                })
-            } else {
-                None
-            },
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        })
-    }
 }
 
 pub struct RenderPipelineBuilder<'a, V>
@@ -503,9 +437,14 @@ where
                     buffers: &[V::layout()],
                 },
                 primitive: self.primitive_state.unwrap_or_default(),
-                depth_stencil: self
-                    .depth_compare
-                    .map(|comp| DepthBuffer::depth_stencil_state(comp, self.depth_writes)),
+                depth_stencil: self.depth_compare.map(|comp| wgpu::DepthStencilState {
+                    // TODO: Pass in the depth texture format?
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: comp,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: self.module,

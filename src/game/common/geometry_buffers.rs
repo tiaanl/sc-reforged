@@ -13,8 +13,8 @@ impl Buffer {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
             size: wgpu::Extent3d {
-                width: size.x,
-                height: size.y,
+                width: size.x.max(1),
+                height: size.y.max(1),
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -94,12 +94,13 @@ impl Buffer {
 }
 
 pub struct GeometryBuffers {
-    pub colors: Buffer,
-    pub positions: Buffer,
-    pub normals: Buffer,
+    pub depth: Buffer,
+    pub color: Buffer,
+    pub position: Buffer,
+    pub normal: Buffer,
     pub alpha_accumulation: Buffer,
     pub alpha_revealage: Buffer,
-    pub ids: Buffer,
+    pub id: Buffer,
 
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
@@ -114,6 +115,7 @@ pub struct GeometryData {
 }
 
 impl GeometryBuffers {
+    const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
     const COLORS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     const POSITIONS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
     const NORMALS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
@@ -126,21 +128,23 @@ impl GeometryBuffers {
 
         tracing::info!("Creating geometry buffers ({}x{})", size.x, size.y);
 
-        let colors = Buffer::new(
+        let depth = Buffer::new(&renderer.device, "g_depth", size, Self::DEPTH_FORMAT);
+
+        let color = Buffer::new(
             &renderer.device,
             "g_buffer_colors",
             size,
             Self::COLORS_FORMAT,
         );
 
-        let positions = Buffer::new(
+        let position = Buffer::new(
             &renderer.device,
             "g_buffer_positions",
             size,
             Self::POSITIONS_FORMAT,
         );
 
-        let normals = Buffer::new(
+        let normal = Buffer::new(
             &renderer.device,
             "g_buffer_normals",
             size,
@@ -161,7 +165,7 @@ impl GeometryBuffers {
             Self::ALPHA_REVEALAGE_FORMAT,
         );
 
-        let ids = Buffer::new(&renderer.device, "g_buffer_ids", size, Self::IDS_FORMAT);
+        let id = Buffer::new(&renderer.device, "g_buffer_ids", size, Self::IDS_FORMAT);
 
         let bind_group_layout =
             renderer
@@ -246,15 +250,15 @@ impl GeometryBuffers {
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&colors.view),
+                        resource: wgpu::BindingResource::TextureView(&color.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&positions.view),
+                        resource: wgpu::BindingResource::TextureView(&position.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
-                        resource: wgpu::BindingResource::TextureView(&normals.view),
+                        resource: wgpu::BindingResource::TextureView(&normal.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 3,
@@ -266,18 +270,19 @@ impl GeometryBuffers {
                     },
                     wgpu::BindGroupEntry {
                         binding: 5,
-                        resource: wgpu::BindingResource::TextureView(&ids.view),
+                        resource: wgpu::BindingResource::TextureView(&id.view),
                     },
                 ],
             });
 
         Self {
-            colors,
-            positions,
-            normals,
+            depth,
+            color,
+            position,
+            normal,
             alpha_accumulation,
             alpha_revealage,
-            ids,
+            id,
 
             bind_group_layout,
             bind_group,
@@ -294,16 +299,16 @@ impl GeometryBuffers {
             label: Some("geometry_buffers_pick"),
         });
 
-        self.colors.fetch(&mut encoder, pos);
-        self.positions.fetch(&mut encoder, pos);
-        self.normals.fetch(&mut encoder, pos);
-        self.ids.fetch(&mut encoder, pos);
+        self.color.fetch(&mut encoder, pos);
+        self.position.fetch(&mut encoder, pos);
+        self.normal.fetch(&mut encoder, pos);
+        self.id.fetch(&mut encoder, pos);
 
         queue.submit(Some(encoder.finish()));
 
         // -----------------------------------------------------------------------------------------
 
-        let color = self.colors.read(device, |data| {
+        let color = self.color.read(device, |data| {
             Vec4::new(
                 data[0] as f32 / 255.0,
                 data[1] as f32 / 255.0,
@@ -312,17 +317,17 @@ impl GeometryBuffers {
             )
         });
 
-        let position = self.positions.read(device, |data| {
+        let position = self.position.read(device, |data| {
             let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
             Vec3::new(f[0], f[1], f[2])
         });
 
-        let normal = self.normals.read(device, |data| {
+        let normal = self.normal.read(device, |data| {
             let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
             Vec3::new(f[0], f[1], f[2])
         });
 
-        let id = self.ids.read(device, |data| {
+        let id = self.id.read(device, |data| {
             u32::from_ne_bytes(data[0..4].try_into().unwrap())
         });
 
@@ -339,7 +344,7 @@ impl GeometryBuffers {
     ) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 4] {
         [
             Some(wgpu::RenderPassColorAttachment {
-                view: &self.colors.view,
+                view: &self.color.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -347,7 +352,7 @@ impl GeometryBuffers {
                 },
             }),
             Some(wgpu::RenderPassColorAttachment {
-                view: &self.positions.view,
+                view: &self.position.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -355,7 +360,7 @@ impl GeometryBuffers {
                 },
             }),
             Some(wgpu::RenderPassColorAttachment {
-                view: &self.normals.view,
+                view: &self.normal.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -363,7 +368,7 @@ impl GeometryBuffers {
                 },
             }),
             Some(wgpu::RenderPassColorAttachment {
-                view: &self.ids.view,
+                view: &self.id.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -394,7 +399,7 @@ impl GeometryBuffers {
                 },
             }),
             Some(wgpu::RenderPassColorAttachment {
-                view: &self.ids.view,
+                view: &self.id.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -492,5 +497,18 @@ impl GeometryBuffers {
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         })
+    }
+
+    pub fn depth_stencil_state(
+        depth_compare: wgpu::CompareFunction,
+        depth_write_enabled: bool,
+    ) -> wgpu::DepthStencilState {
+        wgpu::DepthStencilState {
+            format: Self::DEPTH_FORMAT,
+            depth_write_enabled,
+            depth_compare,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }
     }
 }

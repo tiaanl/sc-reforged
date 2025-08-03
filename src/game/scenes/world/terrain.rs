@@ -542,7 +542,7 @@ impl Terrain {
                         buffers: &[TerrainVertex::layout()],
                     },
                     primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: Some(DepthBuffer::depth_stencil_state(
+                    depth_stencil: Some(GeometryBuffers::depth_stencil_state(
                         wgpu::CompareFunction::LessEqual,
                         true,
                     )),
@@ -994,7 +994,7 @@ impl Terrain {
                 label: Some("terrain_chunks"),
                 color_attachments: &geometry_buffers.opaque_color_attachments(),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &frame.depth_buffer.texture_view,
+                    view: &geometry_buffers.depth.view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
@@ -1021,7 +1021,12 @@ impl Terrain {
         );
     }
 
-    pub fn render_water(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+    pub fn render_water(
+        &self,
+        frame: &mut Frame,
+        geometry_buffers: &GeometryBuffers,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1035,7 +1040,7 @@ impl Terrain {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &frame.depth_buffer.texture_view,
+                    view: &geometry_buffers.depth.view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,

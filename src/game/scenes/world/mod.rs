@@ -17,7 +17,6 @@ use crate::{
     },
 };
 
-mod bounding_boxes;
 mod objects;
 mod strata;
 mod terrain;
@@ -70,8 +69,6 @@ pub struct WorldScene {
 
     main_camera: Camera<camera::GameCameraController>,
     debug_camera: Camera<camera::FreeCameraController>,
-
-    window_size: Vec2,
 
     terrain: Terrain,
     objects: objects::Objects,
@@ -275,8 +272,6 @@ impl WorldScene {
             main_camera,
             debug_camera,
 
-            window_size: Vec2::ZERO,
-
             terrain,
             objects,
 
@@ -319,11 +314,11 @@ impl Scene for WorldScene {
         // Replace the buffers with new ones.
         self.geometry_buffers = GeometryBuffers::new(renderer);
 
-        let [width, height] = renderer.surface.size().to_array();
+        let [width, height] = renderer.surface.size().to_array().map(|f| f as f32);
 
-        self.window_size = Vec2::new(width as f32, height as f32);
-        self.main_camera.camera.aspect_ratio = width as f32 / height.max(1) as f32;
-        self.debug_camera.camera.aspect_ratio = width as f32 / height.max(1) as f32;
+        let aspect = width / height.max(1.0);
+        self.main_camera.camera.aspect_ratio = aspect;
+        self.debug_camera.camera.aspect_ratio = aspect;
     }
 
     fn event(&mut self, event: SceneEvent) {
@@ -432,7 +427,7 @@ impl Scene for WorldScene {
                             },
                         }),
                         Some(wgpu::RenderPassColorAttachment {
-                            view: &self.geometry_buffers.ids.view,
+                            view: &self.geometry_buffers.id.view,
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -446,7 +441,7 @@ impl Scene for WorldScene {
                         }),
                     ],
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &frame.depth_buffer.texture_view,
+                        view: &self.geometry_buffers.depth.view,
                         depth_ops: Some(wgpu::Operations {
                             load: wgpu::LoadOp::Clear(1.0),
                             store: wgpu::StoreOp::Store,
@@ -477,7 +472,8 @@ impl Scene for WorldScene {
             .render_objects(frame, &self.geometry_buffers, camera_bind_group);
 
         // Now render alpha geoometry.
-        self.terrain.render_water(frame, camera_bind_group);
+        self.terrain
+            .render_water(frame, &self.geometry_buffers, camera_bind_group);
         // self.objects
         //     .render_alpha_objects(frame, &self.geometry_buffers, camera_bind_group);
 

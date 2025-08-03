@@ -231,7 +231,7 @@ impl Strata {
                         cull_mode: Some(wgpu::Face::Back),
                         ..Default::default()
                     },
-                    depth_stencil: Some(DepthBuffer::depth_stencil_state(
+                    depth_stencil: Some(GeometryBuffers::depth_stencil_state(
                         wgpu::CompareFunction::LessEqual,
                         true,
                     )),
@@ -267,7 +267,7 @@ impl Strata {
                 label: Some("strata_render_pass"),
                 color_attachments: &geometry_buffers.opaque_color_attachments(),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &frame.depth_buffer.texture_view,
+                    view: &geometry_buffers.depth.view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
