@@ -122,7 +122,6 @@ fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffer
     return geometry_buffers::OpaqueGeometryBuffers(
         base_color,
         vec4<f32>(vertex.world_position, 1.0),
-        vec4<f32>(vertex.normal, 1.0),
         TERRAIN_ENTITY_ID,
     );
 }
@@ -147,7 +146,6 @@ fn water_fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometry
     return geometry_buffers::OpaqueGeometryBuffers(
         base_color,
         vec4<f32>(vertex.world_position, 1.0),
-        vec4<f32>(vertex.normal, 1.0),
         TERRAIN_ENTITY_ID + 1,
     );
 }

@@ -387,40 +387,6 @@ impl Scene for WorldScene {
                     color_attachments: &[
                         // Clear the color buffer with the fog color.
                         Some(wgpu::RenderPassColorAttachment {
-                            view: &self.geometry_buffers.alpha_accumulation.view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: self.environment.fog_color.x as f64,
-                                    g: self.environment.fog_color.y as f64,
-                                    b: self.environment.fog_color.z as f64,
-                                    a: self.environment.fog_color.w as f64,
-                                }),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        }),
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.geometry_buffers.alpha_accumulation.view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        }),
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.geometry_buffers.alpha_revealage.view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: 1.0,
-                                    g: 0.0,
-                                    b: 0.0,
-                                    a: 0.0,
-                                }),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        }),
-                        Some(wgpu::RenderPassColorAttachment {
                             view: &self.geometry_buffers.id.view,
                             resolve_target: None,
                             ops: wgpu::Operations {
@@ -504,33 +470,10 @@ impl Scene for WorldScene {
             .map(|position| self.geometry_buffers.fetch_data(position));
 
         if let Some(ref data) = self.geometry_data {
-            let up = data.normal;
-
-            // Define a "forward" vector that lies along the surface
-            // We'll construct an orthonormal basis (right, up, forward)
-            let forward_hint = if data.normal.z.abs() < 0.99 {
-                Vec3::Z
-            } else {
-                Vec3::X
-            };
-
-            // Right = up × forward
-            let right = up.cross(forward_hint).normalize();
-            // Recomputed forward = right × up
-            let forward = right.cross(up).normalize();
-
-            // Rotation matrix from basis
-            let rotation = Mat4::from_cols(
-                right.extend(0.0),
-                up.extend(0.0),
-                forward.extend(0.0),
-                Vec4::W, // placeholder
-            );
-
             // Translation matrix
             let translation = Mat4::from_translation(data.position);
 
-            let vertices = GizmosRenderer::create_axis(translation * rotation, 100.0);
+            let vertices = GizmosRenderer::create_axis(translation, 100.0);
             self.gizmos_renderer
                 .render(frame, camera_bind_group, &vertices);
         }
@@ -572,7 +515,6 @@ impl Scene for WorldScene {
                 if let Some(ref geometry_data) = self.geometry_data {
                     ui.label(format!("color: {:?}", geometry_data.color));
                     ui.label(format!("position: {:?}", geometry_data.position));
-                    ui.label(format!("normal: {:?}", geometry_data.normal));
                     ui.label(format!("id: {:?}", geometry_data.id));
                 } else {
                     ui.label("None");

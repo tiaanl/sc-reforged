@@ -19,10 +19,7 @@ fn vertex_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
 @group(0) @binding(0) var t_albedo: texture_2d<f32>;
 @group(0) @binding(1) var t_position: texture_2d<f32>;
-@group(0) @binding(2) var t_normal: texture_2d<f32>;
-@group(0) @binding(3) var t_alpha_accumulation: texture_2d<f32>;
-@group(0) @binding(4) var t_alpha_revealage: texture_2d<f32>;
-@group(0) @binding(5) var t_ids: texture_2d<u32>;
+@group(0) @binding(2) var t_ids: texture_2d<u32>;
 
 fn get_frag(texture: texture_2d<f32>, uv: vec2<f32>) -> vec4<f32> {
     let texture_size = vec2<f32>(textureDimensions(texture));
@@ -46,20 +43,6 @@ fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     let albedo = get_frag(t_albedo, vertex.uv);
-    let position = get_frag(t_position, vertex.uv);
-    let normal = get_frag(t_normal, vertex.uv);
 
-    let distance = length(position.xyz - u_camera.position);
-
-    let diffuse = environment::diffuse_with_fog(u_environment, normal.xyz, albedo.xyz, distance);
-
-    let accum = get_frag(t_alpha_accumulation, vertex.uv);
-    let reveal = get_frag(t_alpha_revealage, vertex.uv).r;
-
-    let trans_rgb = accum.rgb / max(accum.a, 1e-4);
-    let trans_alpha = 1.0 - reveal;
-
-    let final_rgb = diffuse * reveal + trans_rgb * trans_alpha;
-
-    return vec4<f32>(final_rgb, 1.0);
+    return vec4<f32>(albedo.rgb, 1.0);
 }

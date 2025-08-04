@@ -113,7 +113,6 @@ fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuff
     return geometry_buffers::OpaqueGeometryBuffers(
         base_color,  // color
         vec4<f32>(vertex.world_position, 1.0),  // world_position
-        vec4<f32>(vertex.normal, 1.0),  // normal
         vertex.entity_id,
     );
 }
@@ -132,8 +131,6 @@ fn fragment_alpha(vertex: VertexOutput) -> geometry_buffers::AlphaGeometryBuffer
     let revealage = alpha;
 
     return geometry_buffers::AlphaGeometryBuffers(
-        accumulation,
-        revealage,
         vertex.entity_id,
     );
 }
