@@ -16,8 +16,7 @@ pub struct Model {
     /// guaranteed to appear earlier in the list than the node itself, ensuring a top-down order for
     /// traversal.
     pub nodes: Vec<Node>,
-    /// Meshes are combined based on their texture name, but each vertex still has a link to it's
-    /// original node.
+    /// A list of all the [Mesh]s contained in this model.
     pub meshes: Vec<Mesh>,
     /// A collection of collision boxes in the model, each associated with a specific node.
     pub _collision_boxes: Vec<CollisionBox>,
@@ -28,7 +27,16 @@ pub struct Model {
     pub scale: Vec3,
 }
 
-impl Model {}
+impl Model {
+    pub fn local_transform(&self, node_index: u32) -> Mat4 {
+        let node = &self.nodes[node_index as usize];
+        if node.parent == NodeIndex::MAX {
+            node.transform.to_mat4()
+        } else {
+            self.local_transform(node.parent) * node.transform.to_mat4()
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Node {
@@ -40,8 +48,14 @@ pub struct Node {
 
 #[derive(Debug)]
 pub struct Mesh {
+    /// The node this mesh belongs to.
+    pub node_index: u32,
+    /// Name of the texture to use for the material.
     pub texture_name: String,
+    /// Vertex and index data.
     pub mesh: IndexedMesh<Vertex>,
+    /// A bounding sphere surrounding all the vertices in the mesh as tightly as possible.
+    pub bounding_sphere: BoundingSphere,
 }
 
 // TODO: Don't use this as a bytemuck to write to the GPU.
@@ -81,6 +95,12 @@ pub struct CollisionBox {
     pub _max: Vec3,
 }
 
+#[derive(Debug, Default)]
+pub struct BoundingSphere {
+    pub center: Vec3,
+    pub radius: f32,
+}
+
 impl TryFrom<smf::Model> for Model {
     type Error = AssetError;
 
@@ -103,7 +123,7 @@ impl TryFrom<smf::Model> for Model {
         }
 
         let mut nodes = Vec::with_capacity(value.nodes.len());
-        let mut mesh_lookup: HashMap<String, IndexedMesh<Vertex>> = HashMap::default();
+        let mut meshes = Vec::default();
         let mut collision_boxes = Vec::new();
         let mut names = NameLookup::default();
 
@@ -135,12 +155,31 @@ impl TryFrom<smf::Model> for Model {
                 transform: Transform::new(smf_node.position, Quat::IDENTITY),
             });
 
-            for smf_mesh in smf_node.meshes.iter() {
-                let mesh = mesh_lookup
-                    .entry(smf_mesh.texture_name.clone())
-                    .or_default();
-                mesh.extend(&smf_mesh_to_mesh(smf_mesh, node_index as u32));
-            }
+            meshes.extend(smf_node.meshes.iter().map(|smf_mesh| {
+                let mesh = smf_mesh_to_mesh(smf_mesh, node_index as u32);
+
+                let bounding_sphere = {
+                    let center = mesh
+                        .vertices
+                        .iter()
+                        .fold(Vec3::ZERO, |acc, v| acc + v.position)
+                        / mesh.vertices.len() as f32;
+                    let radius = mesh
+                        .vertices
+                        .iter()
+                        .map(|v| (v.position - center).length())
+                        .fold(0.0, f32::max);
+
+                    BoundingSphere { center, radius }
+                };
+
+                Mesh {
+                    node_index: node_index as u32,
+                    texture_name: smf_mesh.texture_name.clone(),
+                    mesh,
+                    bounding_sphere,
+                }
+            }));
 
             for smf_collision_box in smf_node.bounding_boxes.iter() {
                 collision_boxes.push(CollisionBox {
@@ -150,11 +189,6 @@ impl TryFrom<smf::Model> for Model {
                 });
             }
         }
-
-        let meshes = mesh_lookup
-            .drain()
-            .map(|(texture_name, mesh)| Mesh { texture_name, mesh })
-            .collect();
 
         let scale = value.scale;
 

@@ -25,6 +25,8 @@ pub struct Object {
 
     /// Whether to draw the bones of the skeleton.
     pub draw_debug_bones: bool,
+    /// Whether to draw the bounding sphere for each mesh.
+    pub draw_bounding_spheres: bool,
 }
 
 pub struct Objects {
@@ -91,6 +93,7 @@ impl Objects {
             model_instance_handle,
 
             draw_debug_bones: false,
+            draw_bounding_spheres: false,
         });
 
         Ok(())
@@ -155,9 +158,13 @@ impl Objects {
             let Some(model) = models().get(object.model_handle) else {
                 continue;
             };
+
             if object.draw_debug_bones {
                 Self::render_skeleton(object.transform.to_mat4(), model, vertices);
-                // Self::render_bone_orientations(object.transform, model, vertices);
+            }
+
+            if object.draw_bounding_spheres {
+                Self::render_bounding_spheres(object, model, vertices);
             }
         }
     }
@@ -200,6 +207,20 @@ impl Objects {
         do_node(&model.nodes, transform, 0, vertices);
     }
 
+    fn render_bounding_spheres(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
+        for mesh in model.meshes.iter() {
+            let transform = object.transform.to_mat4()
+                * model.local_transform(mesh.node_index)
+                * Mat4::from_translation(mesh.bounding_sphere.center);
+
+            vertices.extend(GizmosRenderer::create_iso_sphere(
+                transform,
+                mesh.bounding_sphere.radius,
+                32,
+            ));
+        }
+    }
+
     #[cfg(feature = "egui")]
     pub fn debug_panel(&mut self, egui: &egui::Context) {
         if let Some(selected_object) = self.selected_object {
@@ -208,55 +229,68 @@ impl Objects {
                     .collapsible(false)
                     .resizable(false)
                     .show(egui, |ui| {
-                        use egui::widgets::DragValue;
-
                         ui.set_width(300.0);
-                        ui.label(format!("{} ({:?})", object.title, object.object_type));
-                        ui.checkbox(&mut object.draw_debug_bones, "Draw debug bones");
-                        ui.label("Translation");
 
-                        {
-                            let mut drag_value = |value: &mut f32, speed: f32| {
-                                ui.add(DragValue::new(value).speed(speed)).changed()
-                            };
+                        ui.heading(format!("{} ({:?})", object.title, object.object_type));
 
-                            let mut changed = false;
+                        ui.heading("Transform");
 
-                            if drag_value(&mut object.transform.translation.x, 1.0) {
-                                changed = true;
-                            }
-                            if drag_value(&mut object.transform.translation.y, 1.0) {
-                                changed = true;
-                            }
-                            if drag_value(&mut object.transform.translation.z, 1.0) {
-                                changed = true;
-                            }
-
-                            let (mut pitch, mut yaw, mut roll) = object
+                        let mut euler_rot = Vec3::from(
+                            object
                                 .transform
                                 .rotation
-                                .to_euler(glam::EulerRot::default());
+                                .to_euler(glam::EulerRot::default()),
+                        );
 
-                            if drag_value(&mut pitch, 0.01) {
-                                changed = true;
-                            }
-                            if drag_value(&mut yaw, 0.01) {
-                                changed = true;
-                            }
-                            if drag_value(&mut roll, 0.01) {
-                                changed = true;
-                            }
+                        fn drag_vec3(
+                            ui: &mut egui::Ui,
+                            label: &str,
+                            value: &mut glam::Vec3,
+                            speed: f32,
+                        ) -> egui::Response {
+                            ui.horizontal(|ui| {
+                                use egui::DragValue;
 
-                            if changed {
-                                object.transform.rotation =
-                                    Quat::from_euler(glam::EulerRot::default(), pitch, yaw, roll);
-                                let transform = object.transform.to_mat4();
-                                self.model_renderer.set_instance_transform(
-                                    object.model_instance_handle,
-                                    transform,
+                                let box_height = ui.text_style_height(&egui::TextStyle::Body);
+
+                                ui.add_sized([60.0, box_height], egui::Label::new(label));
+
+                                let x = ui.add_sized(
+                                    [60.0, box_height],
+                                    DragValue::new(&mut value.x).speed(speed),
                                 );
-                            }
+                                let y = ui.add_sized(
+                                    [60.0, box_height],
+                                    DragValue::new(&mut value.y).speed(speed),
+                                );
+                                let z = ui.add_sized(
+                                    [60.0, box_height],
+                                    DragValue::new(&mut value.z).speed(speed),
+                                );
+
+                                x | y | z
+                            })
+                            .inner
                         }
+
+                        let a = drag_vec3(ui, "Position", &mut object.transform.translation, 1.0);
+                        let b = drag_vec3(ui, "Rotation", &mut euler_rot, 0.01);
+
+                        if (a | b).changed() {
+                            object.transform.rotation = Quat::from_euler(
+                                glam::EulerRot::default(),
+                                euler_rot.x,
+                                euler_rot.y,
+                                euler_rot.z,
+                            );
+                            let transform = object.transform.to_mat4();
+                            self.model_renderer
+                                .set_instance_transform(object.model_instance_handle, transform);
+                        }
+
+                        ui.heading("Debug");
+                        ui.checkbox(&mut object.draw_debug_bones, "Draw debug bones");
+                        ui.checkbox(&mut object.draw_bounding_spheres, "Draw bounding spheres");
                     });
             }
         }

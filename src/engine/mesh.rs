@@ -9,7 +9,7 @@ pub struct IndexedMesh<V> {
 }
 
 impl<V: Clone> IndexedMesh<V> {
-    pub fn extend(&mut self, mesh: &Self) -> std::ops::Range<u32> {
+    pub fn _extend(&mut self, mesh: &Self) -> std::ops::Range<u32> {
         let vertex_offset = self.vertices.len() as u32;
 
         self.vertices.reserve(mesh.vertices.len());
