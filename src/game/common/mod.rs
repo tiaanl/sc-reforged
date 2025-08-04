@@ -9,4 +9,3 @@ pub mod image;
 pub mod model;
 pub mod model_renderer;
 pub mod models;
-pub mod render;
