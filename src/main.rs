@@ -16,6 +16,7 @@ use crate::{
     game::{
         data_dir::{DataDir, data_dir, scoped_data_dir},
         file_system::scoped_file_system,
+        image::{Images, scoped_images},
         models::{Models, scoped_models},
         scenes::ui_test::UiTestScene,
     },
@@ -350,8 +351,9 @@ fn main() {
     };
 
     let _file_system = scoped_file_system(|| game::file_system::FileSystem::new(opts.path.clone()));
-    let _data_dir = scoped_data_dir(DataDir::new);
+    let _data_dir = scoped_data_dir(|| DataDir);
     let _models = scoped_models(|| Models::new().expect("Could not initialize models."));
+    let _images = scoped_images(|| Images::new().expect("Could not initialize images."));
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
 

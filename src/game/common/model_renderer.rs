@@ -361,7 +361,7 @@ mod gpu {
 
     use crate::{
         engine::assets::AssetError,
-        game::{data_dir::data_dir, models::models},
+        game::{image::images, models::models},
     };
 
     type NodeIndex = u32;
@@ -514,8 +514,7 @@ mod gpu {
             }
 
             // We don't have the path in the cache, load it now.
-
-            let image = data_dir().load_image(path.as_ref())?;
+            let image = images().load_image_direct(path.as_ref())?;
 
             let label = format!("texture_({})", path.as_ref().display());
             let size = wgpu::Extent3d {

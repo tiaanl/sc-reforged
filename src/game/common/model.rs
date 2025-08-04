@@ -24,6 +24,7 @@ pub struct Model {
     /// Look up node indices according to original node names.
     names: NameLookup,
 
+    // Possibly ground radius and weight?
     pub scale: Vec3,
 }
 

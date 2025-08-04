@@ -8,7 +8,7 @@ use crate::{
     engine::{gizmos::GizmoVertex, prelude::*},
     game::{
         config::CampaignDef, data_dir::data_dir, geometry_buffers::GeometryBuffers,
-        height_map::HeightMap,
+        height_map::HeightMap, image::images,
     },
 };
 
@@ -255,12 +255,12 @@ impl Terrain {
                 .join(format!("{}.jpg", terrain_mapping.texture_map_base_name));
             info!("Loading high detail terrain texture: {}", path.display());
 
-            let image = data_dir().load_image(&path)?;
+            let image = images().load_image_direct(&path)?;
             renderer.create_texture_view("terrain_texture", &image.data)
         };
 
         let water_texture_view = {
-            let image = data_dir().load_image(
+            let image = images().load_image_direct(
                 PathBuf::from("textures")
                     .join("image_processor")
                     .join("water2.bmp"),
