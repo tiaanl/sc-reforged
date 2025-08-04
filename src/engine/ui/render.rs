@@ -1,4 +1,4 @@
-use glam::{IVec2, UVec4};
+use glam::IVec2;
 use wgpu::util::DeviceExt;
 
 use crate::engine::prelude::*;
@@ -211,7 +211,7 @@ impl RenderContext {
         self.context_data.screen_size = IVec2::new(screen_size.width, screen_size.height);
     }
 
-    pub fn render(&mut self, frame: &mut Frame) {
+    pub fn render(&mut self, _frame: &mut Frame) {
         // Update the context data if needed.
         self.context_data.if_changed(|context_data| {
             renderer().queue.write_buffer(
@@ -264,7 +264,7 @@ impl RenderContext {
             }
         });
 
-        let gpu_mesh = mesh.to_gpu();
+        let _gpu_mesh = mesh.to_gpu();
 
         // let mut render_pass = frame.begin_basic_render_pass("ui", false);
         // render_pass.set_pipeline(&self.pipeline);

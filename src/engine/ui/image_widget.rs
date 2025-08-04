@@ -18,7 +18,7 @@ impl Widget for ImageWidget {
         Size::ZERO
     }
 
-    fn layout(&mut self, constraint: Rect, context: &layout::LayoutContext) {
+    fn layout(&mut self, constraint: Rect, _context: &layout::LayoutContext) {
         self.rect = constraint;
     }
 

@@ -1,13 +1,10 @@
-use crate::engine::ui::{
-    Pos, Rect, Size, Style,
-    widget::{DynWidget, Widget},
-};
+use crate::engine::ui::{Pos, Rect, Size, Style, widget::DynWidget};
 
 pub struct LayoutContext {
     pub screen_size: Size,
 }
 
-pub fn layout_in_rect(min_size: Size, style: &Style, in_rect: Rect) -> Rect {
+pub fn layout_in_rect(min_size: Size, _style: &Style, in_rect: Rect) -> Rect {
     Rect {
         pos: in_rect.pos,
         size: min_size,

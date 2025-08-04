@@ -1,9 +1,6 @@
 use glam::{Vec2, Vec3};
 
-use crate::{
-    engine::assets::AssetError,
-    game::config::parser::{ConfigLine, ConfigLines},
-};
+use crate::game::config::parser::{ConfigLine, ConfigLines};
 
 #[derive(Default)]
 pub struct ViewInitial {

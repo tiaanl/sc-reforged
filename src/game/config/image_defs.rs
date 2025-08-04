@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::game::config::parser::{ConfigLine, ConfigLines};
 
 #[derive(Debug, Default)]

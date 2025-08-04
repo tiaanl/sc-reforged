@@ -45,25 +45,11 @@ struct Environment {
 struct Camera<C: camera::Controller> {
     controller: C,
     camera: camera::Camera,
-    matrices: Tracked<camera::Matrices>,
     gpu_camera: camera::GpuCamera,
-}
-
-impl<C: camera::Controller> Camera<C> {
-    fn new(controller: C) -> Self {
-        Self {
-            controller,
-            camera: camera::Camera::default(),
-            matrices: Tracked::new(camera::Matrices::default()),
-            gpu_camera: camera::GpuCamera::new(),
-        }
-    }
 }
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
-    campaign_def: CampaignDef,
-
     view_debug_camera: bool,
     control_debug_camera: bool,
 
@@ -84,17 +70,10 @@ pub struct WorldScene {
     environment: Environment,
 
     environment_buffer: wgpu::Buffer,
-    environment_bind_group_layout: wgpu::BindGroupLayout,
     environment_bind_group: wgpu::BindGroup,
 
     last_mouse_position: Option<UVec2>,
     geometry_data: Option<GeometryData>,
-}
-
-#[derive(Debug)]
-enum UnderMouse {
-    Nothing { position: Vec2 },
-    Object { object_index: usize, position: Vec2 },
 }
 
 impl WorldScene {
@@ -127,13 +106,11 @@ impl WorldScene {
                 100.0,
                 10_000.0,
             );
-            let matrices = camera.calculate_matrices().into();
             let gpu_camera = camera::GpuCamera::new();
 
             Camera {
                 controller,
                 camera,
-                matrices,
                 gpu_camera,
             }
         };
@@ -148,13 +125,11 @@ impl WorldScene {
                 100.0,
                 150_000.0,
             );
-            let matrices = camera.calculate_matrices().into();
             let gpu_camera = camera::GpuCamera::new();
 
             Camera {
                 controller,
                 camera,
-                matrices,
                 gpu_camera,
             }
         };
@@ -262,8 +237,6 @@ impl WorldScene {
         let gizmos_renderer = GizmosRenderer::new(&main_camera.gpu_camera.bind_group_layout);
 
         Ok(Self {
-            campaign_def,
-
             view_debug_camera: false,
             control_debug_camera: false,
 
@@ -282,7 +255,6 @@ impl WorldScene {
             environment,
 
             environment_buffer,
-            environment_bind_group_layout,
             environment_bind_group,
 
             last_mouse_position: None,
@@ -330,12 +302,6 @@ impl Scene for WorldScene {
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
-        const GIZMO_SCALE: f32 = 1000.0;
-        const CENTER: Vec3 = Vec3::ZERO;
-        const RED: Vec4 = Vec4::new(1.0, 0.0, 0.0, 1.0);
-        const GREEN: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
-        const BLUE: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
-
         // self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
         self.environment = self.calculate_environment(self.time_of_day);
 

@@ -17,7 +17,6 @@ use super::strata::Strata;
 struct ChunkMesh {
     vertices_buffer: wgpu::Buffer,
     indices_buffer: wgpu::Buffer,
-    wireframe_indices_buffer: wgpu::Buffer,
 }
 
 impl ChunkMesh {
@@ -82,19 +81,10 @@ impl ChunkMesh {
                     contents: bytemuck::cast_slice(&indices),
                     usage: wgpu::BufferUsages::INDEX,
                 });
-        let wireframe_indices_buffer =
-            renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("chunk_wireframe_indices"),
-                    contents: bytemuck::cast_slice(&wireframe_indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
 
         Self {
             vertices_buffer,
             indices_buffer,
-            wireframe_indices_buffer,
         }
     }
 }
@@ -159,7 +149,7 @@ pub struct Terrain {
     nodes: Vec<Vec4>,
 
     draw_wireframe: bool,
-    draw_normals: bool,
+    _draw_normals: bool,
     lod_level: usize,
 
     normals_lookup: Vec<Vec3>,
@@ -201,17 +191,6 @@ impl std::fmt::Debug for ChunkData {
             .field("max", &self.max)
             .finish()
     }
-}
-
-/// Fields copied from [wgpu::util::DrawIndexedIndirectArgs], but wgpu doesn't support bytemuck.
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::NoUninit)]
-struct ChunkDrawCall {
-    index_count: u32,
-    instance_count: u32,
-    first_index: u32,
-    base_vertex: i32,
-    first_instance: u32,
 }
 
 impl Terrain {
@@ -806,7 +785,7 @@ impl Terrain {
 
             render_bind_group,
             draw_wireframe: false,
-            draw_normals: false,
+            _draw_normals: false,
             lod_level: 0,
             normals_lookup,
         })
@@ -1026,18 +1005,6 @@ impl Terrain {
         renderer().queue.submit(std::iter::once(encoder.finish()));
     }
 
-    #[inline]
-    fn render_patch(
-        render_pass: &mut wgpu::RenderPass,
-        x: u32,
-        y: u32,
-        range: std::ops::Range<u32>,
-    ) {
-        render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, &x.to_ne_bytes());
-        render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 4, &y.to_ne_bytes());
-        render_pass.draw_indexed(range, 0, 0..1);
-    }
-
     fn render_terrain(
         &self,
         frame: &mut Frame,
@@ -1154,7 +1121,7 @@ impl Terrain {
         normals
     }
 
-    fn calculate_node_normals(&mut self, nominal_edge_size: f32, altitude_map_height_map: f32) {
+    fn _calculate_node_normals(&mut self, nominal_edge_size: f32, altitude_map_height_map: f32) {
         for y in 1..self.height_map.size.y as i32 {
             for x in 1..self.height_map.size.x as i32 {
                 let center = self.height_map.position_for_vertex(

@@ -20,27 +20,15 @@ pub struct Model {
     /// original node.
     pub meshes: Vec<Mesh>,
     /// A collection of collision boxes in the model, each associated with a specific node.
-    pub collision_boxes: Vec<CollisionBox>,
+    pub _collision_boxes: Vec<CollisionBox>,
     /// Look up node indices according to original node names.
-    names: NameLookup,
+    _names: NameLookup,
 
     // Possibly ground radius and weight?
     pub scale: Vec3,
 }
 
-impl Model {
-    /// Calculate the global transform for the given node.
-    fn global_transform(&self, node_index: NodeIndex) -> Mat4 {
-        let mut transform = Mat4::IDENTITY;
-        let mut current = node_index;
-        while current != NodeIndex::MAX {
-            let node = &self.nodes[current as usize];
-            transform *= node.transform.to_mat4();
-            current = node.parent;
-        }
-        transform
-    }
-}
+impl Model {}
 
 #[derive(Debug)]
 pub struct Node {
@@ -86,11 +74,11 @@ impl BufferLayout for Vertex {
 #[derive(Debug)]
 pub struct CollisionBox {
     /// An index to the [ModelNode] this mesh is attached to.
-    pub node_index: NodeIndex,
+    pub _node_index: NodeIndex,
     /// Minimum values for the bounding box.
-    pub min: Vec3,
+    pub _min: Vec3,
     /// Maximum values for the bounding box.
-    pub max: Vec3,
+    pub _max: Vec3,
 }
 
 impl TryFrom<smf::Model> for Model {
@@ -156,9 +144,9 @@ impl TryFrom<smf::Model> for Model {
 
             for smf_collision_box in smf_node.bounding_boxes.iter() {
                 collision_boxes.push(CollisionBox {
-                    node_index: node_index as u32,
-                    min: smf_collision_box.min,
-                    max: smf_collision_box.max,
+                    _node_index: node_index as u32,
+                    _min: smf_collision_box.min,
+                    _max: smf_collision_box.max,
                 });
             }
         }
@@ -173,8 +161,8 @@ impl TryFrom<smf::Model> for Model {
         Ok(Model {
             nodes,
             meshes,
-            collision_boxes,
-            names,
+            _collision_boxes: collision_boxes,
+            _names: names,
             scale,
         })
     }

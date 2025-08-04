@@ -180,13 +180,6 @@ impl ModelRenderer {
         }
     }
 
-    pub fn add_model(
-        &mut self,
-        model_handle: Handle<model::Model>,
-    ) -> Result<ModelHandle, AssetError> {
-        self.models.add_model(&mut self.textures, model_handle)
-    }
-
     pub fn add_model_instance(
         &mut self,
         model_handle: Handle<model::Model>,
@@ -403,7 +396,7 @@ mod gpu {
         /// Contains the indices for the entire model.
         index_buffer: wgpu::Buffer,
         /// Contains the node data for the entire model.
-        node_buffer: wgpu::Buffer,
+        _node_buffer: wgpu::Buffer,
         /// For binding the nodes to the shader.
         nodes_bind_group: wgpu::BindGroup,
         /// All the meshes (sets of indices) that the model consists of.
@@ -575,7 +568,7 @@ mod gpu {
 
     pub struct Models {
         models: Slab<Model>,
-        lookup: HashMap<PathBuf, ModelHandle>,
+        _lookup: HashMap<PathBuf, ModelHandle>,
 
         pub nodes_bind_group_layout: wgpu::BindGroupLayout,
     }
@@ -601,7 +594,7 @@ mod gpu {
 
             Self {
                 models: Slab::default(),
-                lookup: HashMap::default(),
+                _lookup: HashMap::default(),
 
                 nodes_bind_group_layout,
             }
@@ -688,7 +681,7 @@ mod gpu {
                         usage: wgpu::BufferUsages::INDEX,
                     });
 
-            let node_buffer =
+            let _node_buffer =
                 renderer()
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -706,7 +699,7 @@ mod gpu {
                         entries: &[wgpu::BindGroupEntry {
                             binding: 0,
                             resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: &node_buffer,
+                                buffer: &_node_buffer,
                                 offset: 0,
                                 size: None,
                             }),
@@ -716,7 +709,7 @@ mod gpu {
             Ok(ModelHandle(self.models.insert(Model {
                 vertex_buffer,
                 index_buffer,
-                node_buffer,
+                _node_buffer,
                 nodes_bind_group,
                 meshes,
 

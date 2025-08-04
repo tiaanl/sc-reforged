@@ -127,7 +127,7 @@ impl ObjectType {
 
 #[derive(Debug)]
 pub struct ObjectTemplates {
-    pub templates: HashMap<String, ObjectType>,
+    pub _templates: HashMap<String, ObjectType>,
 }
 
 impl From<ConfigLines> for ObjectTemplates {
@@ -144,6 +144,8 @@ impl From<ConfigLines> for ObjectTemplates {
             }
         }
 
-        ObjectTemplates { templates }
+        ObjectTemplates {
+            _templates: templates,
+        }
     }
 }

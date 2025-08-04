@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod campaign;
 mod campaign_defs;
 mod image_defs;
@@ -14,9 +11,7 @@ mod windows;
 pub use campaign::*;
 pub use campaign_defs::*;
 pub use image_defs::*;
-pub use image_defs::*;
 pub use model_lods::*;
 pub use mtf::*;
 pub use object_templates::*;
 pub use terrain_mapping::*;
-pub use windows::*;

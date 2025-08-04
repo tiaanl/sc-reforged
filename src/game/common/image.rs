@@ -47,7 +47,7 @@ pub struct Images {
     images: Storage<Image>,
     lookup: HashMap<String, Handle<Image>>,
 
-    image_defs: ImageDefs,
+    _image_defs: ImageDefs,
 }
 
 impl Images {
@@ -58,11 +58,11 @@ impl Images {
         Ok(Self {
             images: Storage::default(),
             lookup: HashMap::default(),
-            image_defs,
+            _image_defs: image_defs,
         })
     }
 
-    pub fn get(&self, handle: Handle<Image>) -> Option<&Image> {
+    pub fn _get(&self, handle: Handle<Image>) -> Option<&Image> {
         self.images.get(handle)
     }
 

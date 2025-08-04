@@ -1,4 +1,6 @@
-use glam::{Vec3, Vec4};
+#![allow(dead_code)]
+
+use glam::Vec3;
 
 use crate::game::config::parser::{ConfigLine, ConfigLines};
 

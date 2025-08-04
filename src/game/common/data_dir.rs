@@ -1,15 +1,11 @@
 use std::path::{Path, PathBuf};
 
-use ahash::HashMap;
 use shadow_company_tools::bmf;
 
 use crate::{
     engine::assets::AssetError,
     game::{
-        config::{
-            self, LodModelProfileDefinition, SubModelDefinition, TerrainMapping,
-            parser::ConfigLines,
-        },
+        config::{self, TerrainMapping, parser::ConfigLines},
         file_system::file_system,
         height_map::HeightMap,
     },
@@ -48,7 +44,7 @@ impl DataDir {
             .map_err(|err| AssetError::from_io_error(err, path.as_ref()))
     }
 
-    pub fn load_object_templates(&self) -> Result<config::ObjectTemplates, AssetError> {
+    pub fn _load_object_templates(&self) -> Result<config::ObjectTemplates, AssetError> {
         let path = PathBuf::from("config").join("object_templates.txt");
         self.load_config(&path)
     }
@@ -58,32 +54,7 @@ impl DataDir {
         self.load_config::<config::Mtf>(&path)
     }
 
-    fn load_model_defs(&self) -> Result<HashMap<String, Vec<SubModelDefinition>>, AssetError> {
-        let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
-
-        let profiles_path = PathBuf::from("config").join("lod_model_profiles");
-
-        let files = file_system()
-            .dir(&profiles_path)
-            .expect("Could not load model LOD's.");
-        for lod_path in files.filter(|path| {
-            path.extension()
-                .filter(|ext| ext.eq_ignore_ascii_case("txt"))
-                .is_some()
-        }) {
-            let profile = self
-                .load_config::<LodModelProfileDefinition>(lod_path)
-                .expect("Could not load model LOD definition.");
-            lod_definitions.insert(
-                profile.lod_model_name.clone(),
-                profile.sub_model_definitions.clone(),
-            );
-        }
-
-        Ok(lod_definitions)
-    }
-
-    pub fn load_motion(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
+    pub fn _load_motion(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
         let data = file_system().load(path.as_ref())?;
 
         bmf::Motion::read(&mut std::io::Cursor::new(data))

@@ -1,7 +1,6 @@
-use crate::{
-    engine::assets::AssetError,
-    game::config::parser::{ConfigLine, ConfigLines},
-};
+#![allow(dead_code)]
+
+use crate::game::config::parser::{ConfigLine, ConfigLines};
 
 #[derive(Clone, Debug, Default)]
 pub struct EmitterConfig {

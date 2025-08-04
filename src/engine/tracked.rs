@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::cell::Cell;
 
 pub struct Tracked<T> {
@@ -14,6 +12,7 @@ impl<T> From<T> for Tracked<T> {
 }
 
 /// A value that can track whether it has been changed.
+#[allow(dead_code)]
 impl<T> Tracked<T> {
     /// Create a new value with a changed status.
     pub fn new(value: T) -> Self {

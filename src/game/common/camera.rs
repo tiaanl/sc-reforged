@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::engine::{gizmos::GizmoVertex, prelude::*};
 
 use glam::{FloatExt, Mat4, Quat, Vec2, Vec3, Vec4};
@@ -588,7 +590,7 @@ impl GameCameraController {
         }
     }
 
-    pub fn with_controls(mut self, controls: GameCameraControls) -> Self {
+    pub fn _with_controls(mut self, controls: GameCameraControls) -> Self {
         self.controls = controls;
         self
     }

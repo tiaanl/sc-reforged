@@ -22,7 +22,6 @@ pub struct Object {
     pub transform: Transform,
     pub model_handle: Handle<Model>,
     pub model_instance_handle: ModelInstanceHandle,
-    pub visible: bool,
 
     /// Whether to draw the bones of the skeleton.
     pub draw_debug_bones: bool,
@@ -90,20 +89,11 @@ impl Objects {
             transform,
             model_handle,
             model_instance_handle,
-            visible: true,
 
             draw_debug_bones: false,
         });
 
         Ok(())
-    }
-
-    pub fn get(&self, object_index: usize) -> Option<&Object> {
-        self.objects.get(object_index)
-    }
-
-    pub fn get_mut(&mut self, object_index: usize) -> Option<&mut Object> {
-        self.objects.get_mut(object_index)
     }
 
     pub fn update(
@@ -208,13 +198,6 @@ impl Objects {
         }
 
         do_node(&model.nodes, transform, 0, vertices);
-    }
-
-    fn render_bone_orientations(transform: Mat4, model: &Model, vertices: &mut Vec<GizmoVertex>) {
-        for node in model.nodes.iter() {
-            let t = transform * node.transform.to_mat4();
-            vertices.extend(GizmosRenderer::create_axis(t, 10.0));
-        }
     }
 
     #[cfg(feature = "egui")]
