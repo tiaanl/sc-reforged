@@ -118,7 +118,7 @@ fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexIn
 const TERRAIN_ENTITY_ID: u32 = 1 << 16;
 
 @fragment
-fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
+fn fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let base_color = textureSample(t_terrain_texture, s_sampler, vertex.tex_coord);
 
     let world_position = vertex.world_position;
@@ -133,7 +133,7 @@ fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffer
         distance,
     );
 
-    return geometry_buffers::OpaqueGeometryBuffers(
+    return geometry_buffers::GeometryBuffers(
         vec4<f32>(diffuse.rgb, 1.0),
         vec4<f32>(vertex.world_position, 1.0),
         TERRAIN_ENTITY_ID,
@@ -141,7 +141,7 @@ fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffer
 }
 
 @fragment
-fn water_fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
+fn water_fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let water_depth = u_terrain_data.water_level - vertex.world_position.z;
     if water_depth <= 0.0 {
         discard;
@@ -169,7 +169,7 @@ fn water_fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometry
         distance,
     );
 
-    return geometry_buffers::OpaqueGeometryBuffers(
+    return geometry_buffers::GeometryBuffers(
         vec4<f32>(diffuse.rgb, 1.0),
         vec4<f32>(vertex.world_position, 1.0),
         TERRAIN_ENTITY_ID + 1,

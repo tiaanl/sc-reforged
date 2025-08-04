@@ -277,7 +277,7 @@ impl ModelRenderer {
                         .encoder
                         .begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("model_renderer_render_pass"),
-                            color_attachments: &geometry_buffers.opaque_color_attachments(),
+                            color_attachments: &geometry_buffers.color_attachments(),
                             depth_stencil_attachment: Some(
                                 wgpu::RenderPassDepthStencilAttachment {
                                     view: &geometry_buffers.depth.view,
@@ -314,7 +314,7 @@ impl ModelRenderer {
                         .encoder
                         .begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("model_renderer_render_pass"),
-                            color_attachments: &geometry_buffers.alpha_color_attachments(),
+                            color_attachments: &geometry_buffers.color_attachments(),
                             depth_stencil_attachment: Some(
                                 wgpu::RenderPassDepthStencilAttachment {
                                     view: &geometry_buffers.depth.view,

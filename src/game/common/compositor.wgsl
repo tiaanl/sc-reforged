@@ -38,10 +38,6 @@ fn get_id(texture: texture_2d<u32>, uv: vec2<f32>) -> u32 {
 fn fragment_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let id = get_id(t_ids, vertex.uv);
 
-    if (id == 0xFFFFFFFF) {
-        return vec4<f32>(u_environment.fog_color.xyz, 1.0);
-    }
-
     let albedo = get_frag(t_albedo, vertex.uv);
 
     return vec4<f32>(albedo.rgb, 1.0);

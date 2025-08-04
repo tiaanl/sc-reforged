@@ -254,9 +254,7 @@ impl GeometryBuffers {
         }
     }
 
-    pub fn opaque_color_attachments<'a>(
-        &'a self,
-    ) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 3] {
+    pub fn color_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 3] {
         [
             Some(wgpu::RenderPassColorAttachment {
                 view: &self.color.view,
@@ -285,19 +283,6 @@ impl GeometryBuffers {
         ]
     }
 
-    pub fn alpha_color_attachments<'a>(
-        &'a self,
-    ) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 1] {
-        [Some(wgpu::RenderPassColorAttachment {
-            view: &self.id.view,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Load,
-                store: wgpu::StoreOp::Store,
-            },
-        })]
-    }
-
     pub fn opaque_targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[
             Some(wgpu::ColorTargetState {
@@ -319,11 +304,23 @@ impl GeometryBuffers {
     }
 
     pub fn alpha_targets() -> &'static [Option<wgpu::ColorTargetState>] {
-        &[Some(wgpu::ColorTargetState {
-            format: Self::IDS_FORMAT,
-            blend: None,
-            write_mask: wgpu::ColorWrites::ALL,
-        })]
+        &[
+            Some(wgpu::ColorTargetState {
+                format: Self::COLORS_FORMAT,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            }),
+            Some(wgpu::ColorTargetState {
+                format: Self::POSITIONS_FORMAT,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            }),
+            Some(wgpu::ColorTargetState {
+                format: Self::IDS_FORMAT,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            }),
+        ]
     }
 
     fn create_texture(label: &str, size: UVec2, format: wgpu::TextureFormat) -> wgpu::Texture {

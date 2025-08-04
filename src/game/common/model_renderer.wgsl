@@ -106,7 +106,7 @@ fn vertex(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
 }
 
 @fragment
-fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
+fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
 
     if base_color.a < 1e-4 {
@@ -125,7 +125,7 @@ fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuff
         distance,
     );
 
-    return geometry_buffers::OpaqueGeometryBuffers(
+    return geometry_buffers::GeometryBuffers(
         vec4<f32>(diffuse, 1.0),  // color
         vec4<f32>(world_position, 1.0),  // world_position
         vertex.entity_id,
@@ -133,14 +133,24 @@ fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuff
 }
 
 @fragment
-fn fragment_alpha(vertex: VertexOutput) -> geometry_buffers::AlphaGeometryBuffers {
+fn fragment_alpha(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
 
-    if base_color.a < 1e-4 {
-        discard;
-    }
+    let world_position = vertex.world_position;
+    let world_normal = vertex.normal;
 
-    return geometry_buffers::AlphaGeometryBuffers(
+    let distance = length(world_position - u_camera.position);
+
+    let diffuse = environment::diffuse_with_fog(
+        u_environment,
+        world_normal.xyz,
+        base_color.rgb,
+        distance,
+    );
+
+    return geometry_buffers::GeometryBuffers(
+        vec4<f32>(diffuse, base_color.a),  // color
+        vec4<f32>(world_position, 1.0),  // world_position
         vertex.entity_id,
     );
 }

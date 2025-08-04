@@ -1049,7 +1049,7 @@ impl Terrain {
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("terrain_chunks"),
-                color_attachments: &geometry_buffers.opaque_color_attachments(),
+                color_attachments: &geometry_buffers.color_attachments(),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &geometry_buffers.depth.view,
                     depth_ops: Some(wgpu::Operations {

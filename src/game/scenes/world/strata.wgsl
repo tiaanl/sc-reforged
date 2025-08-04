@@ -68,7 +68,7 @@ fn vertex_main(vertex: VertexInput) -> VertexOutput {
 }
 
 @fragment
-fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
+fn fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
 
     let world_position = vertex.world_position;
@@ -83,7 +83,7 @@ fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffer
         distance,
     );
 
-    return geometry_buffers::OpaqueGeometryBuffers(
+    return geometry_buffers::GeometryBuffers(
         vec4<f32>(diffuse.rgb, 1.0),
         vec4<f32>(vertex.world_position, 1.0),
         0,

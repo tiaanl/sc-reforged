@@ -384,12 +384,27 @@ impl Scene for WorldScene {
         // Clear the buffers.
         {
             const CLEAR_VALUE: u32 = u32::MAX;
+            let fog_clear_color = wgpu::Color {
+                r: self.environment.fog_color.x as f64,
+                g: self.environment.fog_color.y as f64,
+                b: self.environment.fog_color.z as f64,
+                a: 1.0,
+            };
             frame
                 .encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("world_clear_render_pass"),
                     color_attachments: &[
                         // Clear the color buffer with the fog color.
+                        Some(wgpu::RenderPassColorAttachment {
+                            view: &self.geometry_buffers.color.view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(fog_clear_color),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        }),
+                        // Set all the ID's to invalid.
                         Some(wgpu::RenderPassColorAttachment {
                             view: &self.geometry_buffers.id.view,
                             resolve_target: None,

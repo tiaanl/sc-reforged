@@ -45,10 +45,10 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
 }
 
 @fragment
-fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
+fn fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
 
-    return geometry_buffers::OpaqueGeometryBuffers(
+    return geometry_buffers::GeometryBuffers(
         base_color,
         vec4<f32>(vertex.world_position, 1.0),
         vec4<f32>(vertex.normal, 1.0),
@@ -57,13 +57,13 @@ fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffer
 }
 
 @fragment
-fn ck_fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
+fn ck_fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
     if base_color.x == 0.0 && base_color.y == 0.0 && base_color.z == 0.0 {
         discard;
     }
 
-    return geometry_buffers::OpaqueGeometryBuffers(
+    return geometry_buffers::GeometryBuffers(
         base_color,
         vec4<f32>(vertex.world_position, 1.0),
         vec4<f32>(vertex.normal, 1.0),
