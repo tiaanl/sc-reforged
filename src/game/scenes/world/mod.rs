@@ -235,8 +235,9 @@ impl WorldScene {
                     .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
 
                 if let Err(err) = objects.spawn(
+                    // Rotate objects to the left.
                     Transform::from_translation(object.position)
-                        .with_euler_rotation(object.rotation),
+                        .with_euler_rotation(object.rotation * Vec3::new(1.0, 1.0, -1.0)),
                     &object.name,
                     &object.title,
                     object_type,
