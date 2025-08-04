@@ -38,8 +38,16 @@ pub struct Objects {
 }
 
 impl Objects {
-    pub fn new(shaders: &mut Shaders, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
-        let model_renderer = ModelRenderer::new(shaders, camera_bind_group_layout);
+    pub fn new(
+        shaders: &mut Shaders,
+        camera_bind_group_layout: &wgpu::BindGroupLayout,
+        environment_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
+        let model_renderer = ModelRenderer::new(
+            shaders,
+            camera_bind_group_layout,
+            environment_bind_group_layout,
+        );
 
         Self {
             model_renderer,
@@ -121,9 +129,14 @@ impl Objects {
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
     ) {
-        self.model_renderer
-            .render(frame, geometry_buffers, camera_bind_group);
+        self.model_renderer.render(
+            frame,
+            geometry_buffers,
+            camera_bind_group,
+            environment_bind_group,
+        );
     }
 
     pub fn render_gizmos(&self, vertices: &mut Vec<GizmoVertex>) {

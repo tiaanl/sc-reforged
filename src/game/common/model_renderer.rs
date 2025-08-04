@@ -47,7 +47,11 @@ pub struct ModelRenderer {
 }
 
 impl ModelRenderer {
-    pub fn new(shaders: &mut Shaders, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(
+        shaders: &mut Shaders,
+        camera_bind_group_layout: &wgpu::BindGroupLayout,
+        environment_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
         let textures = gpu::Textures::new();
         let models = gpu::Models::new();
 
@@ -64,6 +68,7 @@ impl ModelRenderer {
                 label: Some("model_renderer_pipeline_layout"),
                 bind_group_layouts: &[
                     camera_bind_group_layout,
+                    environment_bind_group_layout,
                     &textures.texture_bind_group_layout,
                     &models.nodes_bind_group_layout,
                 ],
@@ -228,6 +233,7 @@ impl ModelRenderer {
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
     ) {
         // Make sure all the instance buffers are up to date.
         {
@@ -288,6 +294,7 @@ impl ModelRenderer {
 
                 render_pass.set_pipeline(&self.opaque_pipeline);
                 render_pass.set_bind_group(0, camera_bind_group, &[]);
+                render_pass.set_bind_group(1, environment_bind_group, &[]);
 
                 for (model_handle, instance_buffer) in self.instance_buffers.iter() {
                     let Some(model) = self.models.get(*model_handle) else {
@@ -324,6 +331,7 @@ impl ModelRenderer {
 
                 render_pass.set_pipeline(&self.alpha_pipeline);
                 render_pass.set_bind_group(0, camera_bind_group, &[]);
+                render_pass.set_bind_group(1, environment_bind_group, &[]);
 
                 for (model_handle, instance_buffer) in self.instance_buffers.iter() {
                     let Some(model) = self.models.get(*model_handle) else {
@@ -420,8 +428,8 @@ mod gpu {
                     continue;
                 }
 
-                render_pass.set_bind_group(1, &texture.bind_group, &[]);
-                render_pass.set_bind_group(2, &self.nodes_bind_group, &[]);
+                render_pass.set_bind_group(2, &texture.bind_group, &[]);
+                render_pass.set_bind_group(3, &self.nodes_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass
                     .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);

@@ -224,8 +224,11 @@ impl WorldScene {
             &main_camera.gpu_camera.bind_group_layout,
         )?;
 
-        let mut objects =
-            objects::Objects::new(&mut shaders, &main_camera.gpu_camera.bind_group_layout);
+        let mut objects = objects::Objects::new(
+            &mut shaders,
+            &main_camera.gpu_camera.bind_group_layout,
+            &environment_bind_group_layout,
+        );
 
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;
@@ -428,8 +431,12 @@ impl Scene for WorldScene {
             camera_bind_group,
             &self.main_camera.gpu_camera.bind_group, // Always the main camera.
         );
-        self.objects
-            .render_objects(frame, &self.geometry_buffers, camera_bind_group);
+        self.objects.render_objects(
+            frame,
+            &self.geometry_buffers,
+            camera_bind_group,
+            &self.environment_bind_group,
+        );
 
         // Now render alpha geoometry.
         self.terrain

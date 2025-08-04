@@ -1,17 +1,20 @@
 #import world::camera
+#import world::environment
 #import world::geometry_buffers
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
-@group(1) @binding(0) var t_texture: texture_2d<f32>;
-@group(1) @binding(1) var s_sampler: sampler;
+@group(1) @binding(0) var<uniform> u_environment: environment::Environment;
+
+@group(2) @binding(0) var t_texture: texture_2d<f32>;
+@group(2) @binding(1) var s_sampler: sampler;
 
 struct Node {
     transform: mat4x4<f32>,
     parent: u32,
 }
 
-@group(2) @binding(0) var<storage> u_nodes: array<Node>;
+@group(3) @binding(0) var<storage> u_nodes: array<Node>;
 
 struct VertexInput {
     @location(0)
@@ -110,9 +113,21 @@ fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuff
         discard;
     }
 
+    let world_position = vertex.world_position;
+    let world_normal = vertex.normal;
+
+    let distance = length(world_position - u_camera.position);
+
+    let diffuse = environment::diffuse_with_fog(
+        u_environment,
+        world_normal.xyz,
+        base_color.rgb,
+        distance,
+    );
+
     return geometry_buffers::OpaqueGeometryBuffers(
-        base_color,  // color
-        vec4<f32>(vertex.world_position, 1.0),  // world_position
+        vec4<f32>(diffuse, 1.0),  // color
+        vec4<f32>(world_position, 1.0),  // world_position
         vertex.entity_id,
     );
 }
@@ -124,11 +139,6 @@ fn fragment_alpha(vertex: VertexOutput) -> geometry_buffers::AlphaGeometryBuffer
     if base_color.a < 1e-4 {
         discard;
     }
-
-    let alpha = base_color.a;
-    let weight = max(0.01, alpha * 8.0);
-    let accumulation = vec4<f32>(base_color.rgb * alpha, alpha) * weight;
-    let revealage = alpha;
 
     return geometry_buffers::AlphaGeometryBuffers(
         vertex.entity_id,
