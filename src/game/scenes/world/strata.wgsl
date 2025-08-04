@@ -83,9 +83,9 @@ fn fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
         distance,
     );
 
-    return geometry_buffers::GeometryBuffers(
-        vec4<f32>(diffuse.rgb, 1.0),
-        vec4<f32>(vertex.world_position, 1.0),
-        0,
+    return geometry_buffers::to_geometry_buffer(
+        vec4<f32>(diffuse, 1.0),
+        vertex.world_position,
+        0xFFFFFFFF,
     );
 }

@@ -125,9 +125,9 @@ fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
         distance,
     );
 
-    return geometry_buffers::GeometryBuffers(
-        vec4<f32>(diffuse, 1.0),  // color
-        vec4<f32>(world_position, 1.0),  // world_position
+    return geometry_buffers::to_geometry_buffer(
+        vec4<f32>(diffuse, 1.0),
+        world_position,
         vertex.entity_id,
     );
 }
@@ -148,9 +148,9 @@ fn fragment_alpha(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
         distance,
     );
 
-    return geometry_buffers::GeometryBuffers(
-        vec4<f32>(diffuse, base_color.a),  // color
-        vec4<f32>(world_position, 1.0),  // world_position
+    return geometry_buffers::to_geometry_buffer(
+        vec4<f32>(diffuse, base_color.a),
+        world_position,
         vertex.entity_id,
     );
 }

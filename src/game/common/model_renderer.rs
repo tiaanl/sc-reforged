@@ -304,6 +304,7 @@ impl ModelRenderer {
                     render_pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
 
                     model.render(&mut render_pass, &self.textures, BlendMode::Opaque);
+                    model.render(&mut render_pass, &self.textures, BlendMode::ColorKeyed);
                 }
             }
 

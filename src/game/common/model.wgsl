@@ -72,10 +72,9 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
 fn fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
     var base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
 
-    return geometry_buffers::GeometryBuffers(
+    return geometry_buffers::to_geometry_buffer(
         base_color,
-        vec4<f32>(vertex.world_position, 1.0),
-        vec4<f32>(vertex.normal, 1.0),
+        vertex.world_position,
         0,
     );
 }

@@ -96,14 +96,13 @@ impl Buffer {
 pub struct GeometryBuffers {
     pub depth: Buffer,
     pub color: Buffer,
-    pub position: Buffer,
-    pub id: Buffer,
+    pub position_id: Buffer,
 
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct GeometryData {
     pub color: Vec4,
     pub position: Vec3,
@@ -112,9 +111,8 @@ pub struct GeometryData {
 
 impl GeometryBuffers {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-    const COLORS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
-    const POSITIONS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
-    const IDS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
+    const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+    const POSITION_ID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
     pub fn new() -> Self {
         let size = renderer().surface.size();
@@ -127,17 +125,15 @@ impl GeometryBuffers {
             &renderer().device,
             "g_buffer_colors",
             size,
-            Self::COLORS_FORMAT,
+            Self::COLOR_FORMAT,
         );
 
-        let position = Buffer::new(
+        let position_id = Buffer::new(
             &renderer().device,
             "g_buffer_positions",
             size,
-            Self::POSITIONS_FORMAT,
+            Self::POSITION_ID_FORMAT,
         );
-
-        let id = Buffer::new(&renderer().device, "g_buffer_ids", size, Self::IDS_FORMAT);
 
         let bind_group_layout =
             renderer()
@@ -145,34 +141,12 @@ impl GeometryBuffers {
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("g_buffer_bind_group_layout"),
                     entries: &[
-                        // t_colors
+                        // color
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Texture {
                                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        // t_positions
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        // t_entity_ids
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Uint,
                                 view_dimension: wgpu::TextureViewDimension::D2,
                                 multisampled: false,
                             },
@@ -186,27 +160,16 @@ impl GeometryBuffers {
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("g_buffer_bind_group"),
                 layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&color.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&position.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(&id.view),
-                    },
-                ],
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&color.view),
+                }],
             });
 
         Self {
             depth,
             color,
-            position,
-            id,
+            position_id,
 
             bind_group_layout,
             bind_group,
@@ -222,8 +185,7 @@ impl GeometryBuffers {
                 });
 
         self.color.fetch(&mut encoder, pos);
-        self.position.fetch(&mut encoder, pos);
-        self.id.fetch(&mut encoder, pos);
+        self.position_id.fetch(&mut encoder, pos);
 
         renderer().queue.submit(Some(encoder.finish()));
 
@@ -238,13 +200,12 @@ impl GeometryBuffers {
             )
         });
 
-        let position = self.position.read(&renderer().device, |data| {
+        let (position, id) = self.position_id.read(&renderer().device, |data| {
             let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
-            Vec3::new(f[0], f[1], f[2])
-        });
-
-        let id = self.id.read(&renderer().device, |data| {
-            u32::from_ne_bytes(data[0..4].try_into().unwrap())
+            (
+                Vec3::new(f[0], f[1], f[2]),
+                u32::from_le_bytes(f[3].to_le_bytes()),
+            )
         });
 
         GeometryData {
@@ -254,7 +215,7 @@ impl GeometryBuffers {
         }
     }
 
-    pub fn color_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 3] {
+    pub fn color_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
         [
             Some(wgpu::RenderPassColorAttachment {
                 view: &self.color.view,
@@ -265,15 +226,7 @@ impl GeometryBuffers {
                 },
             }),
             Some(wgpu::RenderPassColorAttachment {
-                view: &self.position.view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            }),
-            Some(wgpu::RenderPassColorAttachment {
-                view: &self.id.view,
+                view: &self.position_id.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -286,17 +239,12 @@ impl GeometryBuffers {
     pub fn opaque_targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[
             Some(wgpu::ColorTargetState {
-                format: Self::COLORS_FORMAT,
+                format: Self::COLOR_FORMAT,
                 blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
             }),
             Some(wgpu::ColorTargetState {
-                format: Self::POSITIONS_FORMAT,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            }),
-            Some(wgpu::ColorTargetState {
-                format: Self::IDS_FORMAT,
+                format: Self::POSITION_ID_FORMAT,
                 blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
             }),
@@ -306,17 +254,12 @@ impl GeometryBuffers {
     pub fn alpha_targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[
             Some(wgpu::ColorTargetState {
-                format: Self::COLORS_FORMAT,
+                format: Self::COLOR_FORMAT,
                 blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                 write_mask: wgpu::ColorWrites::ALL,
             }),
             Some(wgpu::ColorTargetState {
-                format: Self::POSITIONS_FORMAT,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            }),
-            Some(wgpu::ColorTargetState {
-                format: Self::IDS_FORMAT,
+                format: Self::POSITION_ID_FORMAT,
                 blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
             }),

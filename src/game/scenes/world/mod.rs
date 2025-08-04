@@ -383,7 +383,13 @@ impl Scene for WorldScene {
 
         // Clear the buffers.
         {
-            const CLEAR_VALUE: u32 = u32::MAX;
+            const INVALID_ID: u32 = 0xFFFF_FFFF;
+            let positions_clear_color = wgpu::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: f32::from_le_bytes(INVALID_ID.to_le_bytes()) as f64,
+            };
             let fog_clear_color = wgpu::Color {
                 r: self.environment.fog_color.x as f64,
                 g: self.environment.fog_color.y as f64,
@@ -404,17 +410,12 @@ impl Scene for WorldScene {
                                 store: wgpu::StoreOp::Store,
                             },
                         }),
-                        // Set all the ID's to invalid.
+                        // Set positions to 0 and ID's to invalid.
                         Some(wgpu::RenderPassColorAttachment {
-                            view: &self.geometry_buffers.id.view,
+                            view: &self.geometry_buffers.position_id.view,
                             resolve_target: None,
                             ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: CLEAR_VALUE as f64,
-                                    g: 0.0,
-                                    b: 0.0,
-                                    a: 0.0,
-                                }),
+                                load: wgpu::LoadOp::Clear(positions_clear_color),
                                 store: wgpu::StoreOp::Store,
                             },
                         }),
