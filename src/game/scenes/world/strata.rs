@@ -22,6 +22,7 @@ impl Strata {
         shaders: &mut Shaders,
         terrain_size: UVec2,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
+        environment_bind_group_layout: &wgpu::BindGroupLayout,
         height_map_buffer: &wgpu::Buffer,
         terrain_buffer: &wgpu::Buffer,
     ) -> Result<Self, AssetError> {
@@ -202,7 +203,11 @@ impl Strata {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("strata_render_pipeline_layout"),
-                    bind_group_layouts: &[camera_bind_group_layout, &bind_group_layout],
+                    bind_group_layouts: &[
+                        camera_bind_group_layout,
+                        environment_bind_group_layout,
+                        &bind_group_layout,
+                    ],
                     push_constant_ranges: &[],
                 });
 
@@ -260,6 +265,7 @@ impl Strata {
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass = frame
             .encoder
@@ -283,7 +289,8 @@ impl Strata {
         render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, self.instances_buffer.slice(..));
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.bind_group, &[]);
+        render_pass.set_bind_group(1, environment_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.bind_group, &[]);
         render_pass.draw_indexed(0..self.mesh.index_count, 0, 0..self.instances_count);
     }
 }

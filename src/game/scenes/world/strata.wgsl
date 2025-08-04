@@ -1,13 +1,16 @@
 #import world::camera
+#import world::environment
 #import world::terrain
 #import world::geometry_buffers
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
-@group(1) @binding(0) var<storage> u_height_map: array<vec4<f32>>;
-@group(1) @binding(1) var<uniform> u_terrain_data: terrain::TerrainData;
-@group(1) @binding(2) var t_texture: texture_2d<f32>;
-@group(1) @binding(3) var s_sampler: sampler;
+@group(1) @binding(0) var<uniform> u_environment: environment::Environment;
+
+@group(2) @binding(0) var<storage> u_height_map: array<vec4<f32>>;
+@group(2) @binding(1) var<uniform> u_terrain_data: terrain::TerrainData;
+@group(2) @binding(2) var t_texture: texture_2d<f32>;
+@group(2) @binding(3) var s_sampler: sampler;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -68,8 +71,20 @@ fn vertex_main(vertex: VertexInput) -> VertexOutput {
 fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
     let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
 
+    let world_position = vertex.world_position;
+    let world_normal = vertex.normal;
+
+    let distance = length(world_position - u_camera.position);
+
+    let diffuse = environment::diffuse_with_fog(
+        u_environment,
+        world_normal.xyz,
+        base_color.rgb,
+        distance,
+    );
+
     return geometry_buffers::OpaqueGeometryBuffers(
-        base_color,
+        vec4<f32>(diffuse.rgb, 1.0),
         vec4<f32>(vertex.world_position, 1.0),
         0,
     );

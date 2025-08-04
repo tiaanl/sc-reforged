@@ -222,6 +222,7 @@ impl WorldScene {
             &mut shaders,
             &campaign_def,
             &main_camera.gpu_camera.bind_group_layout,
+            &environment_bind_group_layout,
         )?;
 
         let mut objects = objects::Objects::new(
@@ -429,6 +430,7 @@ impl Scene for WorldScene {
             frame,
             &self.geometry_buffers,
             camera_bind_group,
+            &self.environment_bind_group,
             &self.main_camera.gpu_camera.bind_group, // Always the main camera.
         );
         self.objects.render_objects(
@@ -439,8 +441,12 @@ impl Scene for WorldScene {
         );
 
         // Now render alpha geoometry.
-        self.terrain
-            .render_water(frame, &self.geometry_buffers, camera_bind_group);
+        self.terrain.render_water(
+            frame,
+            &self.geometry_buffers,
+            camera_bind_group,
+            &self.environment_bind_group,
+        );
         // self.objects
         //     .render_alpha_objects(frame, &self.geometry_buffers, camera_bind_group);
 

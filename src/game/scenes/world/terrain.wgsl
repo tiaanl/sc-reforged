@@ -1,14 +1,16 @@
 #import world::camera
+#import world::environment
 #import world::geometry_buffers
 #import world::terrain
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
+@group(1) @binding(0) var<uniform> u_environment: environment::Environment;
 
-@group(1) @binding(0) var<storage> u_height_map: array<vec4<f32>>;
-@group(1) @binding(1) var<uniform> u_terrain_data: terrain::TerrainData;
-@group(1) @binding(2) var t_terrain_texture: texture_2d<f32>;
-@group(1) @binding(3) var t_water_texture: texture_2d<f32>;
-@group(1) @binding(4) var s_sampler: sampler;
+@group(2) @binding(0) var<storage> u_height_map: array<vec4<f32>>;
+@group(2) @binding(1) var<uniform> u_terrain_data: terrain::TerrainData;
+@group(2) @binding(2) var t_terrain_texture: texture_2d<f32>;
+@group(2) @binding(3) var t_water_texture: texture_2d<f32>;
+@group(2) @binding(4) var s_sampler: sampler;
 
 var<push_constant> u_chunk_index: vec2<u32>;
 
@@ -119,8 +121,20 @@ const TERRAIN_ENTITY_ID: u32 = 1 << 16;
 fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
     let base_color = textureSample(t_terrain_texture, s_sampler, vertex.tex_coord);
 
+    let world_position = vertex.world_position;
+    let world_normal = vertex.normal;
+
+    let distance = length(world_position - u_camera.position);
+
+    let diffuse = environment::diffuse_with_fog(
+        u_environment,
+        world_normal.xyz,
+        base_color.rgb,
+        distance,
+    );
+
     return geometry_buffers::OpaqueGeometryBuffers(
-        base_color,
+        vec4<f32>(diffuse.rgb, 1.0),
         vec4<f32>(vertex.world_position, 1.0),
         TERRAIN_ENTITY_ID,
     );
@@ -143,8 +157,20 @@ fn water_fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometry
     // let alpha = u_terrain_data.water_trans_low + (u_terrain_data.water_trans_high - u_terrain_data.water_trans_low) * n;
     // return vec4<f32>(diffuse, alpha);
 
+    let world_position = vertex.world_position;
+    let world_normal = vertex.normal;
+
+    let distance = length(world_position - u_camera.position);
+
+    let diffuse = environment::diffuse_with_fog(
+        u_environment,
+        world_normal.xyz,
+        base_color.rgb,
+        distance,
+    );
+
     return geometry_buffers::OpaqueGeometryBuffers(
-        base_color,
+        vec4<f32>(diffuse.rgb, 1.0),
         vec4<f32>(vertex.world_position, 1.0),
         TERRAIN_ENTITY_ID + 1,
     );

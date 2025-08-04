@@ -130,9 +130,6 @@ pub struct Terrain {
     /// Pipeline to render the water.
     water_pipeline: wgpu::RenderPipeline,
 
-    /// Pipeline to render a wireframe over the terrain.
-    // wireframe_pipeline: wgpu::RenderPipeline,
-
     /// Bind group containing all data required for rendering.
     render_bind_group: wgpu::BindGroup,
 
@@ -240,6 +237,7 @@ impl Terrain {
         shaders: &mut Shaders,
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
+        environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
         let renderer = renderer();
 
@@ -547,7 +545,11 @@ impl Terrain {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("terrain_pipeline_layout"),
-                    bind_group_layouts: &[camera_bind_group_layout, &bind_group_layout],
+                    bind_group_layouts: &[
+                        camera_bind_group_layout,
+                        environment_bind_group_layout,
+                        &bind_group_layout,
+                    ],
                     push_constant_ranges: &[],
                 });
 
@@ -584,7 +586,11 @@ impl Terrain {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("water_pipeline_layout"),
-                    bind_group_layouts: &[camera_bind_group_layout, &bind_group_layout],
+                    bind_group_layouts: &[
+                        camera_bind_group_layout,
+                        environment_bind_group_layout,
+                        &bind_group_layout,
+                    ],
                     push_constant_ranges: &[wgpu::PushConstantRange {
                         stages: wgpu::ShaderStages::VERTEX,
                         range: 0..8,
@@ -626,31 +632,6 @@ impl Terrain {
                 })
         };
 
-        // let water_pipeline = renderer
-        //     .build_render_pipeline::<TerrainVertex>("water", &module)
-        //     .with_vertex_entry("water_vertex_main")
-        //     .with_fragment_entry("water_fragment_main")
-        //     .binding(camera_bind_group_layout)
-        //     .binding(&bind_group_layout)
-        //     .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
-        //     .with_depth_compare(wgpu::CompareFunction::LessEqual)
-        //     // .with_depth_writes(false)
-        //     .with_blend(wgpu::BlendState::ALPHA_BLENDING)
-        //     .build();
-
-        // let wireframe_pipeline = renderer
-        //     .build_render_pipeline::<TerrainVertex>("terrain_wireframe", &module)
-        //     .with_primitive(wgpu::PrimitiveState {
-        //         topology: wgpu::PrimitiveTopology::LineList,
-        //         ..Default::default()
-        //     })
-        //     .with_vertex_entry("wireframe_vertex_main")
-        //     .with_fragment_entry("wireframe_fragment_main")
-        //     .binding(camera_bind_group_layout)
-        //     .binding(&bind_group_layout)
-        //     .push_constant(wgpu::ShaderStages::VERTEX, 0..8)
-        //     .build();
-
         // Process chunks
 
         let chunk_data_buffer =
@@ -678,6 +659,7 @@ impl Terrain {
             shaders,
             height_map.size,
             camera_bind_group_layout,
+            environment_bind_group_layout,
             &height_map_buffer,
             &terrain_data_buffer,
         )?;
@@ -835,6 +817,7 @@ impl Terrain {
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
         frustum_camera_bind_group: &wgpu::BindGroup,
     ) {
         // Make sure the terrain data is up to date if it changed.
@@ -849,10 +832,19 @@ impl Terrain {
         // Always use the main camera for frustum culling.
         self.process_chunks(frustum_camera_bind_group);
 
-        self.strata
-            .render(frame, geometry_buffers, camera_bind_group);
+        self.strata.render(
+            frame,
+            geometry_buffers,
+            camera_bind_group,
+            environment_bind_group,
+        );
 
-        self.render_terrain(frame, geometry_buffers, camera_bind_group);
+        self.render_terrain(
+            frame,
+            geometry_buffers,
+            camera_bind_group,
+            environment_bind_group,
+        );
     }
 
     pub fn render_gizmos(&self, vertices: &mut Vec<GizmoVertex>) {
@@ -1051,6 +1043,7 @@ impl Terrain {
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass = frame
             .encoder
@@ -1076,7 +1069,8 @@ impl Terrain {
             wgpu::IndexFormat::Uint32,
         );
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
+        render_pass.set_bind_group(1, environment_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.render_bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(
             &self.terrain_draw_args_buffer,
@@ -1090,6 +1084,7 @@ impl Terrain {
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass = frame
             .encoder
@@ -1124,47 +1119,11 @@ impl Terrain {
         );
 
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
+        render_pass.set_bind_group(1, environment_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.render_bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(&self.water_draw_args_buffer, 0, self.total_chunks);
     }
-
-    // fn render_wireframe(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
-    //     let levels = [0..512, 512..640, 640..672, 672..680];
-
-    //     let mut render_pass = frame
-    //         .encoder
-    //         .begin_render_pass(&wgpu::RenderPassDescriptor {
-    //             label: Some("terrain_chunks"),
-    //             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-    //                 view: &frame.surface,
-    //                 resolve_target: None,
-    //                 ops: wgpu::Operations {
-    //                     load: wgpu::LoadOp::Load,
-    //                     store: wgpu::StoreOp::Store,
-    //                 },
-    //             })],
-    //             depth_stencil_attachment: None,
-    //             timestamp_writes: None,
-    //             occlusion_query_set: None,
-    //         });
-
-    //     render_pass.set_pipeline(&self.wireframe_pipeline);
-    //     render_pass.set_vertex_buffer(0, self.chunk_mesh.vertices_buffer.slice(..));
-    //     render_pass.set_index_buffer(
-    //         self.chunk_mesh.wireframe_indices_buffer.slice(..),
-    //         wgpu::IndexFormat::Uint32,
-    //     );
-
-    //     render_pass.set_bind_group(0, camera_bind_group, &[]);
-    //     render_pass.set_bind_group(1, &self.render_bind_group, &[]);
-
-    //     for y in 0..self.height_map.size.y / Terrain::CELLS_PER_CHUNK {
-    //         for x in 0..self.height_map.size.x / Terrain::CELLS_PER_CHUNK {
-    //             Self::render_patch(&mut render_pass, x, y, levels[self.lod_level].clone());
-    //         }
-    //     }
-    // }
 
     fn generate_normals_lookup_table() -> Vec<Vec3> {
         let mut normals = Vec::with_capacity(1024); // 16 x 64 = 1024
