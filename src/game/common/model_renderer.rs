@@ -16,6 +16,14 @@ struct ModelInstance {
     entity_id: u32,
 }
 
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[repr(C)]
+struct Instance {
+    model: Mat4,
+    id: u32,
+    _padding: [u32; 3],
+}
+
 struct InstanceBuffer {
     buffer: wgpu::Buffer,
 }
@@ -59,11 +67,32 @@ impl ModelRenderer {
                     &textures.texture_bind_group_layout,
                     &models.nodes_bind_group_layout,
                 ],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::FRAGMENT,
-                    range: 0..4,
-                }],
+                push_constant_ranges: &[],
             });
+
+        let buffers = &[
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<gpu::Vertex>() as wgpu::BufferAddress,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![
+                    0 => Float32x3,
+                    1 => Float32x3,
+                    2 => Float32x2,
+                    3 => Uint32
+                ],
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<Instance>() as wgpu::BufferAddress,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &wgpu::vertex_attr_array![
+                    4 => Float32x4,
+                    5 => Float32x4,
+                    6 => Float32x4,
+                    7 => Float32x4,
+                    8 => Uint32,
+                ],
+            },
+        ];
 
         let opaque_pipeline =
             renderer()
@@ -75,29 +104,7 @@ impl ModelRenderer {
                         module: &module,
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[
-                            wgpu::VertexBufferLayout {
-                                array_stride: std::mem::size_of::<gpu::Vertex>()
-                                    as wgpu::BufferAddress,
-                                step_mode: wgpu::VertexStepMode::Vertex,
-                                attributes: &wgpu::vertex_attr_array![
-                                    0 => Float32x3,
-                                    1 => Float32x3,
-                                    2 => Float32x2,
-                                    3 => Uint32
-                                ],
-                            },
-                            wgpu::VertexBufferLayout {
-                                array_stride: std::mem::size_of::<Mat4>() as wgpu::BufferAddress,
-                                step_mode: wgpu::VertexStepMode::Instance,
-                                attributes: &wgpu::vertex_attr_array![
-                                    4 => Float32x4,
-                                    5 => Float32x4,
-                                    6 => Float32x4,
-                                    7 => Float32x4,
-                                ],
-                            },
-                        ],
+                        buffers,
                     },
                     primitive: wgpu::PrimitiveState {
                         topology: wgpu::PrimitiveTopology::TriangleList,
@@ -131,29 +138,7 @@ impl ModelRenderer {
                         module: &module,
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[
-                            wgpu::VertexBufferLayout {
-                                array_stride: std::mem::size_of::<gpu::Vertex>()
-                                    as wgpu::BufferAddress,
-                                step_mode: wgpu::VertexStepMode::Vertex,
-                                attributes: &wgpu::vertex_attr_array![
-                                    0 => Float32x3,
-                                    1 => Float32x3,
-                                    2 => Float32x2,
-                                    3 => Uint32
-                                ],
-                            },
-                            wgpu::VertexBufferLayout {
-                                array_stride: std::mem::size_of::<Mat4>() as wgpu::BufferAddress,
-                                step_mode: wgpu::VertexStepMode::Instance,
-                                attributes: &wgpu::vertex_attr_array![
-                                    4 => Float32x4,
-                                    5 => Float32x4,
-                                    6 => Float32x4,
-                                    7 => Float32x4,
-                                ],
-                            },
-                        ],
+                        buffers,
                     },
                     primitive: wgpu::PrimitiveState {
                         topology: wgpu::PrimitiveTopology::TriangleList,
@@ -249,11 +234,15 @@ impl ModelRenderer {
             for model_handle in self.dirty_instance_buffers.drain() {
                 // Build all the transforms for the model handle.
                 // TODO: This is n^2?!?!one
-                let transforms = self
+                let instances = self
                     .model_instances
                     .iter()
                     .filter(|(_, instance)| instance.model_handle == model_handle)
-                    .map(|(_, instance)| instance.transform)
+                    .map(|(_, instance)| Instance {
+                        model: instance.transform,
+                        id: instance.entity_id,
+                        _padding: [0; 3],
+                    })
                     .collect::<Vec<_>>();
 
                 let buffer =
@@ -261,7 +250,7 @@ impl ModelRenderer {
                         .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                             label: Some("model_renderer_instance_buffer"),
-                            contents: bytemuck::cast_slice(&transforms),
+                            contents: bytemuck::cast_slice(&instances),
                             usage: wgpu::BufferUsages::VERTEX,
                         });
 
@@ -307,7 +296,7 @@ impl ModelRenderer {
 
                     render_pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
 
-                    model.render(&mut render_pass, &self.textures, BlendMode::Opaque, 0);
+                    model.render(&mut render_pass, &self.textures, BlendMode::Opaque);
                 }
             }
 
@@ -343,7 +332,7 @@ impl ModelRenderer {
 
                     render_pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
 
-                    model.render(&mut render_pass, &self.textures, BlendMode::Alpha, 0);
+                    model.render(&mut render_pass, &self.textures, BlendMode::Alpha);
                 }
             }
         }
@@ -420,7 +409,6 @@ mod gpu {
             render_pass: &mut wgpu::RenderPass,
             textures: &Textures,
             blend_mode: BlendMode,
-            entity_id: u32,
         ) {
             for mesh in self.meshes.iter() {
                 let Some(texture) = textures.textures.get(mesh.texture_handle.0) else {
@@ -431,12 +419,6 @@ mod gpu {
                 if texture.blend_mode != blend_mode {
                     continue;
                 }
-
-                render_pass.set_push_constants(
-                    wgpu::ShaderStages::FRAGMENT,
-                    0,
-                    &entity_id.to_le_bytes(),
-                );
 
                 render_pass.set_bind_group(1, &texture.bind_group, &[]);
                 render_pass.set_bind_group(2, &self.nodes_bind_group, &[]);

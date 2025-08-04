@@ -6,8 +6,6 @@
 @group(1) @binding(0) var t_texture: texture_2d<f32>;
 @group(1) @binding(1) var s_sampler: sampler;
 
-var<push_constant> entity_id: u32;
-
 struct Node {
     transform: mat4x4<f32>,
     parent: u32,
@@ -41,6 +39,9 @@ struct InstanceInput {
 
     @location(7)
     col3: vec4<f32>,
+
+    @location(8)
+    entity_id: u32,
 }
 
 struct VertexOutput {
@@ -55,6 +56,9 @@ struct VertexOutput {
 
     @location(2)
     normal: vec3<f32>,
+
+    @location(3)
+    entity_id: u32,
 }
 
 const ROOT_NODE: u32 = 0xFFFFFFFF;
@@ -67,6 +71,8 @@ fn vertex(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
         instance.col2,
         instance.col3,
     );
+
+    let entity_id = instance.entity_id;
 
     // Apply the transform of the node tree until we hit the root.
     var node_index = vertex.node_index;
@@ -92,6 +98,7 @@ fn vertex(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
         vertex.tex_coord,
         world_position.xyz,
         world_normal,
+        entity_id,
     );
 }
 
@@ -107,7 +114,7 @@ fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuff
         base_color,  // color
         vec4<f32>(vertex.world_position, 1.0),  // world_position
         vec4<f32>(vertex.normal, 1.0),  // normal
-        entity_id,
+        vertex.entity_id,
     );
 }
 
@@ -124,5 +131,9 @@ fn fragment_alpha(vertex: VertexOutput) -> geometry_buffers::AlphaGeometryBuffer
     let accumulation = vec4<f32>(base_color.rgb * alpha, alpha) * weight;
     let revealage = alpha;
 
-    return geometry_buffers::AlphaGeometryBuffers(accumulation, revealage, entity_id);
+    return geometry_buffers::AlphaGeometryBuffers(
+        accumulation,
+        revealage,
+        vertex.entity_id,
+    );
 }
