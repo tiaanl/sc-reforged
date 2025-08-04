@@ -7,7 +7,6 @@ pub mod renderer;
 pub mod scene;
 pub mod shaders;
 pub mod storage;
-pub mod ui;
 
 pub mod dirty;
 pub mod tracked;

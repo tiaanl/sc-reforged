@@ -11,15 +11,11 @@ use winit::{
     keyboard::PhysicalKey,
 };
 
-use crate::{
-    engine::ui,
-    game::{
-        data_dir::{DataDir, data_dir, scoped_data_dir},
-        file_system::scoped_file_system,
-        image::{Images, scoped_images},
-        models::{Models, scoped_models},
-        scenes::ui_test::UiTestScene,
-    },
+use crate::game::{
+    data_dir::{DataDir, data_dir, scoped_data_dir},
+    file_system::scoped_file_system,
+    image::{Images, scoped_images},
+    models::{Models, scoped_models},
 };
 
 mod engine;
@@ -89,14 +85,13 @@ impl winit::application::ApplicationHandler for App {
                         .create_window(attributes)
                         .expect("create main window"),
                 );
-                let inner_size = window.inner_size();
 
                 let _global_renderer = scoped_renderer(|| Renderer::new(Arc::clone(&window)));
 
                 #[cfg(feature = "egui")]
                 let egui_integration = engine::egui_integration::EguiIntegration::new(event_loop);
 
-                let scene: Box<dyn Scene> = if true {
+                let scene: Box<dyn Scene> = {
                     // WorldScene
 
                     let campaign_defs = data_dir().load_campaign_defs().unwrap();
@@ -106,8 +101,8 @@ impl winit::application::ApplicationHandler for App {
                     let campaign_def = campaign_defs
                         .campaigns
                         .iter()
-                        .find(|c| c.base_name == "test")
-                        // .find(|c| c.base_name == "training") // 140
+                        // .find(|c| c.base_name == "test")
+                        .find(|c| c.base_name == "training") // 140
                         // .find(|c| c.base_name == "angola_tutorial") // 149
                         // .find(|c| c.base_name == "angola") // 368
                         // .find(|c| c.base_name == "romania") // 289
@@ -127,15 +122,7 @@ impl winit::application::ApplicationHandler for App {
                             panic!();
                         }
                     })
-                } else {
-                    Box::new(UiTestScene::new(ui::Size {
-                        width: inner_size.width as i32,
-                        height: inner_size.height as i32,
-                    }))
                 };
-                //  else {
-                //     Box::new(ModelViewer::new(&renderer, data_dir).unwrap())
-                // };
 
                 info!("Application initialized!");
 
