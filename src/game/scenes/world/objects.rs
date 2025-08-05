@@ -288,6 +288,25 @@ impl Objects {
                                 .set_instance_transform(object.model_instance_handle, transform);
                         }
 
+                        if let Some(model) = models().get(object.model_handle) {
+                            use crate::game::model::Node;
+
+                            ui.heading("Skeleton");
+                            fn do_node(ui: &mut egui::Ui, nodes: &[Node], parent_index: u32) {
+                                nodes
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(_, node)| node.parent == parent_index)
+                                    .for_each(|(node_index, node)| {
+                                        ui.label(&node.name);
+
+                                        do_node(ui, nodes, node_index as u32);
+                                    });
+                            }
+
+                            do_node(ui, &model.nodes, 0xFFFF_FFFF);
+                        }
+
                         ui.heading("Debug");
                         ui.checkbox(&mut object.draw_debug_bones, "Draw debug bones");
                         ui.checkbox(&mut object.draw_bounding_spheres, "Draw bounding spheres");

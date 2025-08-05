@@ -92,7 +92,7 @@ impl WorldScene {
         shaders.add_module(include_str!("frustum.wgsl"), "frustum.wgsl");
 
         let main_camera = {
-            let camera_from = campaign.view_initial.from.extend(2500.0);
+            let camera_from = campaign.view_initial.from.extend(1600.0);
             let camera_to = campaign.view_initial.to.extend(0.0);
 
             let mut controller = camera::GameCameraController::new(50.0, 0.2);

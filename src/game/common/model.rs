@@ -44,6 +44,8 @@ pub struct Node {
     pub parent: NodeIndex,
     /// Local transform.
     pub transform: Transform,
+    /// The name of the node.
+    pub name: String,
 }
 
 #[derive(Debug)]
@@ -153,6 +155,7 @@ impl TryFrom<smf::Model> for Model {
             nodes.push(Node {
                 parent: parent_node_index,
                 transform: Transform::new(smf_node.position, Quat::IDENTITY),
+                name: smf_node.name.clone(),
             });
 
             meshes.extend(smf_node.meshes.iter().map(|smf_mesh| {
