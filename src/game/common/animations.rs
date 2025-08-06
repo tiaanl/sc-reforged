@@ -128,6 +128,8 @@ impl Animation {
                     _ => Some(node.transform.rotation),
                 };
 
+                let rotation = rotation.map(|rot| node.transform.rotation * rot);
+
                 Sample { position, rotation }
             })
             .collect()
@@ -156,6 +158,8 @@ pub struct Animations {
 }
 
 impl Animations {
+    pub const ANIMATION_RATE: f32 = 0.3;
+
     pub fn new() -> Self {
         Self {
             animations: Storage::default(),
@@ -192,7 +196,9 @@ impl Animations {
                         .map(|motion_bone| Track {
                             bone_id: motion_bone.bone_id,
                             sample: Sample {
-                                position: motion_bone.position,
+                                position: motion_bone
+                                    .position
+                                    .map(|position| Vec3::new(-position.x, position.y, position.z)),
                                 rotation: motion_bone.rotation.map(|rotation| {
                                     Quat::from_xyzw(
                                         -rotation.x,

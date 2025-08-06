@@ -2,7 +2,13 @@ use std::path::Path;
 
 use crate::{
     engine::{prelude::*, storage::Handle},
-    game::{geometry_buffers::GeometryBuffers, image::BlendMode, model},
+    game::{
+        animations::{Animation, Animations, animations},
+        geometry_buffers::GeometryBuffers,
+        image::BlendMode,
+        model,
+        models::models,
+    },
 };
 
 use ahash::{HashMap, HashSet};
@@ -10,10 +16,18 @@ pub use gpu::ModelHandle;
 use slab::Slab;
 use wgpu::util::DeviceExt;
 
+struct AnimationDescription {
+    handle: Handle<Animation>,
+    time: f32,
+    repeat: bool,
+}
+
 struct ModelInstance {
-    model_handle: ModelHandle,
+    model_handle: Handle<model::Model>,
+    gpu_model_handle: ModelHandle,
     transform: Mat4,
     entity_id: u32,
+    animation_description: Option<AnimationDescription>,
 }
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -24,6 +38,7 @@ struct Instance {
     _padding: [u32; 3],
 }
 
+/// A gpu buffer holding a set of [Instance]'s to render per model.
 struct InstanceBuffer {
     buffer: wgpu::Buffer,
 }
@@ -186,16 +201,18 @@ impl ModelRenderer {
         transform: Mat4,
         entity_id: u32,
     ) -> Result<ModelInstanceHandle, AssetError> {
-        let model_handle = self.models.add_model(&mut self.textures, model_handle)?;
+        let gpu_model_handle = self.models.add_model(&mut self.textures, model_handle)?;
 
         let model_instance_handle =
             ModelInstanceHandle(self.model_instances.insert(ModelInstance {
-                transform,
                 model_handle,
+                transform,
+                gpu_model_handle,
                 entity_id,
+                animation_description: None,
             }));
 
-        self.dirty_instance_buffers.insert(model_handle);
+        self.dirty_instance_buffers.insert(gpu_model_handle);
 
         Ok(model_instance_handle)
     }
@@ -212,13 +229,136 @@ impl ModelRenderer {
 
         instance.transform = transform;
         // Make sure the buffer for the model is uploaded before we render again.
-        self.dirty_instance_buffers.insert(instance.model_handle);
+        self.dirty_instance_buffers
+            .insert(instance.gpu_model_handle);
+    }
+
+    pub fn set_instance_animation(
+        &mut self,
+        instance_handle: ModelInstanceHandle,
+        animation: Handle<Animation>,
+    ) {
+        let Some(instance) = self.model_instances.get_mut(instance_handle.0) else {
+            tracing::warn!("Invalid model instance handle");
+            return;
+        };
+
+        instance.animation_description = Some(AnimationDescription {
+            handle: animation,
+            time: 0.0,
+            repeat: true,
+        });
+
+        // Make sure the buffer for the model is uploaded before we render again.
+        self.dirty_instance_buffers
+            .insert(instance.gpu_model_handle);
+    }
+
+    pub fn clear_instance_animation(&mut self, instance_handle: ModelInstanceHandle) {
+        let Some(instance) = self.model_instances.get_mut(instance_handle.0) else {
+            tracing::warn!("Invalid model instance handle");
+            return;
+        };
+
+        instance.animation_description = None;
+        // Make sure the buffer for the model is uploaded before we render again.
+        self.dirty_instance_buffers
+            .insert(instance.gpu_model_handle);
     }
 
     pub fn get_model(&self, model_instance_handle: ModelInstanceHandle) -> Option<&gpu::Model> {
         self.model_instances
             .get(model_instance_handle.0)
-            .and_then(|instance| self.models.get(instance.model_handle))
+            .and_then(|instance| self.models.get(instance.gpu_model_handle))
+    }
+
+    pub fn update(&mut self, delta_time: f32) {
+        self.model_instances.iter_mut().for_each(|(_, instance)| {
+            if instance.animation_description.is_none() {
+                if let Some(gpu_model) = self.models.get_mut(instance.gpu_model_handle) {
+                    gpu_model.animated_nodes_bind_group = None;
+                }
+                return;
+            }
+
+            let animation_description = instance.animation_description.as_mut().unwrap();
+
+            animation_description.time += delta_time * Animations::ANIMATION_RATE;
+
+            // SAFETY: We can unwrap the animation, because we're filtering the list already.
+            if let Some(animation) = animations().get(animation_description.handle) {
+                if let Some(model) = models().get(instance.model_handle) {
+                    let pose = animation.sample_pose(animation_description.time, &model.nodes);
+
+                    debug_assert!(pose.len() == model.nodes.len());
+
+                    fn local_transform(nodes: &[gpu::Node], node_index: u32) -> Mat4 {
+                        let node = &nodes[node_index as usize];
+                        if node.parent_node_index == u32::MAX {
+                            Mat4::from_cols_array(&node.transform)
+                        } else {
+                            local_transform(nodes, node.parent_node_index)
+                                * Mat4::from_cols_array(&node.transform)
+                        }
+                    }
+
+                    let temp_nodes: Vec<gpu::Node> = pose
+                        .iter()
+                        .enumerate()
+                        .map(|(node_index, sample)| gpu::Node {
+                            transform: Mat4::from_rotation_translation(
+                                sample.rotation.unwrap(),
+                                sample.position.unwrap(),
+                            )
+                            .to_cols_array(),
+                            parent_node_index: model.nodes[node_index].parent,
+                            _padding: [0; 3],
+                        })
+                        .collect();
+
+                    let nodes: Vec<gpu::Node> = temp_nodes
+                        .iter()
+                        .enumerate()
+                        .map(|(node_index, node)| gpu::Node {
+                            transform: local_transform(&temp_nodes, node_index as u32)
+                                .to_cols_array(),
+                            parent_node_index: node.parent_node_index,
+                            _padding: [0; 3],
+                        })
+                        .collect();
+
+                    // Create a new nodes buffer for the instance.
+                    let node_buffer =
+                        renderer()
+                            .device
+                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                label: Some("model_renderer_animated_node_buffer"),
+                                contents: bytemuck::cast_slice(&nodes),
+                                usage: wgpu::BufferUsages::STORAGE,
+                            });
+
+                    let bind_group =
+                        renderer()
+                            .device
+                            .create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("model_renderer_animated_node_buffer_bind_group"),
+                                layout: &self.models.nodes_bind_group_layout,
+                                entries: &[wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                        buffer: &node_buffer,
+                                        offset: 0,
+                                        size: None,
+                                    }),
+                                }],
+                            });
+
+                    if let Some(gpu_model) = self.models.get_mut(instance.gpu_model_handle) {
+                        gpu_model.animated_nodes_bind_group = Some(bind_group);
+                    }
+                }
+            }
+        });
     }
 
     pub fn render(
@@ -236,7 +376,7 @@ impl ModelRenderer {
                 let instances = self
                     .model_instances
                     .iter()
-                    .filter(|(_, instance)| instance.model_handle == model_handle)
+                    .filter(|(_, instance)| instance.gpu_model_handle == model_handle)
                     .map(|(_, instance)| Instance {
                         model: instance.transform,
                         id: instance.entity_id,
@@ -347,7 +487,7 @@ mod gpu {
     use std::{ops::Range, path::PathBuf};
 
     use ahash::HashMap;
-    use glam::{Mat4, Vec2, Vec3};
+    use glam::{Vec2, Vec3};
     use wgpu::util::DeviceExt;
 
     use crate::{
@@ -379,10 +519,10 @@ mod gpu {
 
     #[derive(Clone, Copy, bytemuck::NoUninit)]
     #[repr(C)]
-    struct Node {
-        transform: [f32; 16],
-        parent_node_index: NodeIndex,
-        _padding: [u32; 3],
+    pub struct Node {
+        pub transform: [f32; 16],
+        pub parent_node_index: NodeIndex,
+        pub _padding: [u32; 3],
     }
 
     struct Mesh {
@@ -399,6 +539,9 @@ mod gpu {
         _node_buffer: wgpu::Buffer,
         /// For binding the nodes to the shader.
         nodes_bind_group: wgpu::BindGroup,
+
+        pub animated_nodes_bind_group: Option<wgpu::BindGroup>,
+
         /// All the meshes (sets of indices) that the model consists of.
         meshes: Vec<Mesh>,
 
@@ -423,7 +566,11 @@ mod gpu {
                 }
 
                 render_pass.set_bind_group(2, &texture.bind_group, &[]);
-                render_pass.set_bind_group(3, &self.nodes_bind_group, &[]);
+                if let Some(ref animated_bind_group) = self.animated_nodes_bind_group {
+                    render_pass.set_bind_group(3, animated_bind_group, &[]);
+                } else {
+                    render_pass.set_bind_group(3, &self.nodes_bind_group, &[]);
+                }
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass
                     .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
@@ -655,10 +802,14 @@ mod gpu {
             let nodes: Vec<Node> = model
                 .nodes
                 .iter()
-                .map(|node| Node {
-                    transform: node.transform.to_mat4().to_cols_array(),
-                    parent_node_index: node.parent,
-                    _padding: [0; 3],
+                .enumerate()
+                .map(|(node_index, node)| {
+                    let transform = model.local_transform(node_index as u32);
+                    Node {
+                        transform: transform.to_cols_array(),
+                        parent_node_index: node.parent,
+                        _padding: [0; 3],
+                    }
                 })
                 .collect();
 
@@ -710,6 +861,7 @@ mod gpu {
                 index_buffer,
                 _node_buffer,
                 nodes_bind_group,
+                animated_nodes_bind_group: None,
                 meshes,
 
                 scale: model.scale,
@@ -718,6 +870,10 @@ mod gpu {
 
         pub fn get(&self, model_handle: ModelHandle) -> Option<&Model> {
             self.models.get(model_handle.0)
+        }
+
+        pub fn get_mut(&mut self, model_handle: ModelHandle) -> Option<&mut Model> {
+            self.models.get_mut(model_handle.0)
         }
     }
 }

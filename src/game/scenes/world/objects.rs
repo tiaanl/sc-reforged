@@ -7,8 +7,7 @@ use crate::{
         storage::Handle,
     },
     game::{
-        animations::{Animation, animations},
-        camera::Camera,
+        animations::{Animation, Animations, animations},
         config::ObjectType,
         geometry_buffers::{GeometryBuffers, GeometryData},
         model::{Model, Node},
@@ -40,7 +39,7 @@ pub struct Object {
 impl Object {
     pub fn update(&mut self, delta_time: f32) {
         if self.animation.is_some() {
-            self.animation_time += delta_time * 0.3;
+            self.animation_time += delta_time * Animations::ANIMATION_RATE;
         }
     }
 
@@ -121,7 +120,7 @@ impl Objects {
             animation: None,
             animation_time: 0.0,
 
-            draw_debug_bones: true,
+            draw_debug_bones: false,
             draw_bounding_spheres: false,
             selected_nodes: HashSet::default(),
         });
@@ -138,6 +137,8 @@ impl Objects {
         self.objects.iter_mut().for_each(|object| {
             object.update(delta_time);
         });
+
+        self.model_renderer.update(delta_time);
 
         if input.mouse_just_pressed(MouseButton::Left) {
             if let Some(geometry_data) = geometry_data {
@@ -362,16 +363,24 @@ impl Objects {
                             use crate::game::animations::animations;
                             use std::path::PathBuf;
 
-                            // let animation_name = "bipedal_stand_idle_smoke.bmf";
-                            let animation_name = "bipedal_stand_idle_stretch.bmf";
-                            // let animation_name = "ape_idle_1.bmf";
+                            let animation_name = "bipedal_walk_rifle.bmf";
                             if let Ok(animation) =
                                 animations().load(PathBuf::from("motions").join(animation_name))
                             {
                                 object.set_animation(animation);
+                                self.model_renderer.set_instance_animation(
+                                    object.model_instance_handle,
+                                    animation,
+                                );
                             } else {
                                 tracing::warn!("Could not load test animation!");
                             }
+                        }
+
+                        if ui.button("Clear animation").clicked() {
+                            object.clear_animation();
+                            self.model_renderer
+                                .clear_instance_animation(object.model_instance_handle);
                         }
 
                         if let Some(model) = models().get(object.model_handle) {

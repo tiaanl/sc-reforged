@@ -77,6 +77,7 @@ fn vertex(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
 
     let entity_id = instance.entity_id;
 
+    /*
     // Apply the transform of the node tree until we hit the root.
     var node_index = vertex.node_index;
     var transform = model_mat;
@@ -84,6 +85,9 @@ fn vertex(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
         transform = transform * u_nodes[node_index].transform;
         node_index = u_nodes[node_index].parent;
     }
+    */
+
+    let transform = model_mat * u_nodes[vertex.node_index].transform;
 
     let world_position = transform * vec4<f32>(vertex.position, 1.0);
 
