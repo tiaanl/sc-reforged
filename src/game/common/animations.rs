@@ -36,18 +36,25 @@ pub struct KeyFrame {
 pub struct Animation {
     /// A set of [KeyFrame]s that make up the animation.
     key_frames: Vec<KeyFrame>,
+    /// The total length of the animation.
+    length: f32,
 }
 
 impl Animation {
     pub fn from_key_frames(key_frames: Vec<KeyFrame>) -> Self {
-        Self { key_frames }
+        // Assuming the key frames are sorted by time.
+        let length = key_frames
+            .last()
+            .map_or(0.0, |key_frame| key_frame.time + Animations::TIME_PER_FRAME);
+
+        Self { key_frames, length }
     }
 }
 
 impl Animation {
     /// Samples the pose at the given time for the given nodes (by bone_id order).
     /// Always returns fully populated Samples (no None), falling back to node defaults.
-    pub fn sample_pose(&self, time: f32, nodes: &[Node]) -> Vec<Sample> {
+    pub fn sample_pose(&self, time: f32, nodes: &[Node], looping: bool) -> Vec<Sample> {
         if self.key_frames.is_empty() {
             // Use node defaults if no animation data
             return nodes
@@ -58,6 +65,12 @@ impl Animation {
                 })
                 .collect();
         }
+
+        let time = if looping && self.length > 0.0 {
+            time.rem_euclid(self.length)
+        } else {
+            time
+        };
 
         // Find the two keyframes surrounding the time
         let (left, right) = match self
@@ -158,7 +171,7 @@ pub struct Animations {
 }
 
 impl Animations {
-    pub const ANIMATION_RATE: f32 = 0.3;
+    pub const TIME_PER_FRAME: f32 = 1.0 / 30.0;
 
     pub fn new() -> Self {
         Self {
@@ -189,7 +202,7 @@ impl Animations {
                 .key_frames
                 .iter()
                 .map(|motion_key_frame| KeyFrame {
-                    time: motion_key_frame.time as f32,
+                    time: motion_key_frame.frame as f32 * Animations::TIME_PER_FRAME,
                     tracks: motion_key_frame
                         .bones
                         .iter()

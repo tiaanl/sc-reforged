@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::{
     engine::{prelude::*, storage::Handle},
     game::{
-        animations::{Animation, Animations, animations},
+        animations::{Animation, animations},
         geometry_buffers::GeometryBuffers,
         image::BlendMode,
         model,
@@ -19,7 +19,6 @@ use wgpu::util::DeviceExt;
 struct AnimationDescription {
     handle: Handle<Animation>,
     time: f32,
-    repeat: bool,
 }
 
 struct ModelInstance {
@@ -246,7 +245,6 @@ impl ModelRenderer {
         instance.animation_description = Some(AnimationDescription {
             handle: animation,
             time: 0.0,
-            repeat: true,
         });
 
         // Make sure the buffer for the model is uploaded before we render again.
@@ -283,12 +281,13 @@ impl ModelRenderer {
 
             let animation_description = instance.animation_description.as_mut().unwrap();
 
-            animation_description.time += delta_time * Animations::ANIMATION_RATE;
+            animation_description.time += delta_time;
 
             // SAFETY: We can unwrap the animation, because we're filtering the list already.
             if let Some(animation) = animations().get(animation_description.handle) {
                 if let Some(model) = models().get(instance.model_handle) {
-                    let pose = animation.sample_pose(animation_description.time, &model.nodes);
+                    let pose =
+                        animation.sample_pose(animation_description.time, &model.nodes, true);
 
                     debug_assert!(pose.len() == model.nodes.len());
 
@@ -327,12 +326,8 @@ impl ModelRenderer {
                         })
                         .collect();
 
-                    let nodes_buffer =
-                        gpu::NodesBuffer::from_nodes(&self.models.nodes_bind_group_layout, &nodes);
-
-                    if let Some(gpu_model) = self.models.get_mut(instance.gpu_model_handle) {
-                        gpu_model.animated_nodes = Some(nodes_buffer);
-                    }
+                    self.models
+                        .update_animation_nodes(instance.gpu_model_handle, &nodes);
                 }
             }
         });
@@ -519,7 +514,7 @@ mod gpu {
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("model_renderer_animated_node_buffer"),
                     contents: bytemuck::cast_slice(nodes),
-                    usage: wgpu::BufferUsages::STORAGE,
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 });
 
             let bind_group = renderer()
@@ -541,6 +536,12 @@ mod gpu {
                 _buffer: buffer,
                 bind_group,
             }
+        }
+
+        pub fn update_from_nodes(&self, nodes: &[Node]) {
+            renderer()
+                .queue
+                .write_buffer(&self._buffer, 0, bytemuck::cast_slice(nodes));
         }
     }
 
@@ -856,12 +857,28 @@ mod gpu {
             })))
         }
 
-        pub fn get(&self, model_handle: ModelHandle) -> Option<&Model> {
-            self.models.get(model_handle.0)
+        pub fn update_animation_nodes(&mut self, handle: ModelHandle, nodes: &[Node]) {
+            let Some(model) = self.models.get_mut(handle.0) else {
+                tracing::warn!("Trying to update nodes for a model that does not exist!");
+                return;
+            };
+
+            if let Some(ref mut animated_nodes) = model.animated_nodes {
+                animated_nodes.update_from_nodes(nodes);
+            } else {
+                model.animated_nodes = Some(NodesBuffer::from_nodes(
+                    &self.nodes_bind_group_layout,
+                    nodes,
+                ));
+            }
         }
 
-        pub fn get_mut(&mut self, model_handle: ModelHandle) -> Option<&mut Model> {
-            self.models.get_mut(model_handle.0)
+        pub fn get(&self, handle: ModelHandle) -> Option<&Model> {
+            self.models.get(handle.0)
+        }
+
+        pub fn get_mut(&mut self, handle: ModelHandle) -> Option<&mut Model> {
+            self.models.get_mut(handle.0)
         }
     }
 }

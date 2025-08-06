@@ -7,7 +7,7 @@ use crate::{
         storage::Handle,
     },
     game::{
-        animations::{Animation, Animations, animations},
+        animations::{Animation, animations},
         config::ObjectType,
         geometry_buffers::{GeometryBuffers, GeometryData},
         model::{Model, Node},
@@ -39,7 +39,7 @@ pub struct Object {
 impl Object {
     pub fn update(&mut self, delta_time: f32) {
         if self.animation.is_some() {
-            self.animation_time += delta_time * Animations::ANIMATION_RATE;
+            self.animation_time += delta_time;
         }
     }
 
@@ -134,6 +134,8 @@ impl Objects {
         input: &InputState,
         geometry_data: Option<&GeometryData>,
     ) {
+        let delta_time = delta_time / 100.0;
+
         self.objects.iter_mut().for_each(|object| {
             object.update(delta_time);
         });
@@ -252,7 +254,7 @@ impl Objects {
         }
 
         if let Some(animation) = object.animation.and_then(|handle| animations().get(handle)) {
-            let pose = animation.sample_pose(object.animation_time, &model.nodes);
+            let pose = animation.sample_pose(object.animation_time, &model.nodes, true);
             let nodes = pose
                 .iter()
                 .enumerate()
@@ -265,9 +267,9 @@ impl Objects {
                 .collect::<Vec<_>>();
 
             do_node(&nodes, object.transform.to_mat4(), 0, vertices, 0);
+        } else {
+            do_node(&model.nodes, object.transform.to_mat4(), 0, vertices, 0);
         }
-
-        do_node(&model.nodes, object.transform.to_mat4(), 0, vertices, 0);
     }
 
     fn render_selected_nodes(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
@@ -359,11 +361,24 @@ impl Objects {
                                 .set_instance_transform(object.model_instance_handle, transform);
                         }
 
-                        if ui.button("Set animation").clicked() {
+                        let mut maybe_animation = None;
+                        if ui.button("Walking").clicked() {
+                            maybe_animation = Some("bipedal_walk.bmf");
+                        }
+                        if ui.button("Running").clicked() {
+                            maybe_animation = Some("bipedal_stand_run.bmf");
+                        }
+                        if ui.button("Crouch").clicked() {
+                            maybe_animation = Some("bipedal_crouchwalk_cycle.bmf");
+                        }
+                        if ui.button("Crawl").clicked() {
+                            maybe_animation = Some("bipedal_prone_low_crawl.bmf");
+                        }
+
+                        if let Some(animation_name) = maybe_animation {
                             use crate::game::animations::animations;
                             use std::path::PathBuf;
 
-                            let animation_name = "bipedal_walk_rifle.bmf";
                             if let Ok(animation) =
                                 animations().load(PathBuf::from("motions").join(animation_name))
                             {
