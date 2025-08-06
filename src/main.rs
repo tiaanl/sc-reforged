@@ -12,7 +12,6 @@ use winit::{
 };
 
 use crate::game::{
-    animations::animations,
     data_dir::{DataDir, data_dir, scoped_data_dir},
     file_system::scoped_file_system,
     image::{Images, scoped_images},

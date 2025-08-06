@@ -276,7 +276,7 @@ impl ModelRenderer {
         self.model_instances.iter_mut().for_each(|(_, instance)| {
             if instance.animation_description.is_none() {
                 if let Some(gpu_model) = self.models.get_mut(instance.gpu_model_handle) {
-                    gpu_model.animated_nodes_bind_group = None;
+                    gpu_model.animated_nodes = None;
                 }
                 return;
             }
@@ -327,34 +327,11 @@ impl ModelRenderer {
                         })
                         .collect();
 
-                    // Create a new nodes buffer for the instance.
-                    let node_buffer =
-                        renderer()
-                            .device
-                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                label: Some("model_renderer_animated_node_buffer"),
-                                contents: bytemuck::cast_slice(&nodes),
-                                usage: wgpu::BufferUsages::STORAGE,
-                            });
-
-                    let bind_group =
-                        renderer()
-                            .device
-                            .create_bind_group(&wgpu::BindGroupDescriptor {
-                                label: Some("model_renderer_animated_node_buffer_bind_group"),
-                                layout: &self.models.nodes_bind_group_layout,
-                                entries: &[wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                        buffer: &node_buffer,
-                                        offset: 0,
-                                        size: None,
-                                    }),
-                                }],
-                            });
+                    let nodes_buffer =
+                        gpu::NodesBuffer::from_nodes(&self.models.nodes_bind_group_layout, &nodes);
 
                     if let Some(gpu_model) = self.models.get_mut(instance.gpu_model_handle) {
-                        gpu_model.animated_nodes_bind_group = Some(bind_group);
+                        gpu_model.animated_nodes = Some(nodes_buffer);
                     }
                 }
             }
@@ -530,17 +507,52 @@ mod gpu {
         texture_handle: TextureHandle,
     }
 
+    pub struct NodesBuffer {
+        pub _buffer: wgpu::Buffer,
+        pub bind_group: wgpu::BindGroup,
+    }
+
+    impl NodesBuffer {
+        pub fn from_nodes(nodes_bind_group_layout: &wgpu::BindGroupLayout, nodes: &[Node]) -> Self {
+            let buffer = renderer()
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("model_renderer_animated_node_buffer"),
+                    contents: bytemuck::cast_slice(nodes),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+
+            let bind_group = renderer()
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("model_renderer_animated_node_buffer_bind_group"),
+                    layout: nodes_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &buffer,
+                            offset: 0,
+                            size: None,
+                        }),
+                    }],
+                });
+
+            Self {
+                _buffer: buffer,
+                bind_group,
+            }
+        }
+    }
+
     pub struct Model {
         /// Contains the vertices for the entire model.
         vertex_buffer: wgpu::Buffer,
         /// Contains the indices for the entire model.
         index_buffer: wgpu::Buffer,
-        /// Contains the node data for the entire model.
-        _node_buffer: wgpu::Buffer,
         /// For binding the nodes to the shader.
-        nodes_bind_group: wgpu::BindGroup,
-
-        pub animated_nodes_bind_group: Option<wgpu::BindGroup>,
+        nodes: NodesBuffer,
+        /// For binding the animated nodes to the shader.
+        pub animated_nodes: Option<NodesBuffer>,
 
         /// All the meshes (sets of indices) that the model consists of.
         meshes: Vec<Mesh>,
@@ -566,10 +578,10 @@ mod gpu {
                 }
 
                 render_pass.set_bind_group(2, &texture.bind_group, &[]);
-                if let Some(ref animated_bind_group) = self.animated_nodes_bind_group {
-                    render_pass.set_bind_group(3, animated_bind_group, &[]);
+                if let Some(ref animated_nodes) = self.animated_nodes {
+                    render_pass.set_bind_group(3, &animated_nodes.bind_group, &[]);
                 } else {
-                    render_pass.set_bind_group(3, &self.nodes_bind_group, &[]);
+                    render_pass.set_bind_group(3, &self.nodes.bind_group, &[]);
                 }
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass
@@ -831,37 +843,13 @@ mod gpu {
                         usage: wgpu::BufferUsages::INDEX,
                     });
 
-            let _node_buffer =
-                renderer()
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("model_node_buffer"),
-                        contents: bytemuck::cast_slice(&nodes),
-                        usage: wgpu::BufferUsages::STORAGE,
-                    });
-
-            let nodes_bind_group =
-                renderer()
-                    .device
-                    .create_bind_group(&wgpu::BindGroupDescriptor {
-                        label: Some("model_renderer_nodes_bind_group"),
-                        layout: &self.nodes_bind_group_layout,
-                        entries: &[wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: &_node_buffer,
-                                offset: 0,
-                                size: None,
-                            }),
-                        }],
-                    });
+            let nodes = NodesBuffer::from_nodes(&self.nodes_bind_group_layout, &nodes);
 
             Ok(ModelHandle(self.models.insert(Model {
                 vertex_buffer,
                 index_buffer,
-                _node_buffer,
-                nodes_bind_group,
-                animated_nodes_bind_group: None,
+                nodes,
+                animated_nodes: None,
                 meshes,
 
                 scale: model.scale,
