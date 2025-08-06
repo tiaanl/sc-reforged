@@ -8,7 +8,7 @@ use crate::{
         prelude::*,
     },
     game::{
-        animation::Track,
+        animations::old::Track,
         camera::{self, Controller},
         compositor::Compositor,
         config::{CampaignDef, ObjectType},
@@ -95,7 +95,7 @@ impl WorldScene {
             let camera_from = campaign.view_initial.from.extend(1600.0);
             let camera_to = campaign.view_initial.to.extend(0.0);
 
-            let mut controller = camera::GameCameraController::new(50.0, 0.2);
+            let mut controller = camera::GameCameraController::new(15.0, 0.2);
             controller.move_to_direct(camera_from);
             controller.look_at_direct(camera_to);
             let camera = camera::Camera::new(
@@ -321,7 +321,7 @@ impl Scene for WorldScene {
             .update_camera_if_dirty(&mut self.debug_camera.camera);
 
         self.objects
-            .update(&self.main_camera.camera, input, self.geometry_data.as_ref());
+            .update(delta_time, input, self.geometry_data.as_ref());
     }
 
     fn render(&mut self, frame: &mut Frame) {

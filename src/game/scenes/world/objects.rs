@@ -1,3 +1,5 @@
+use ahash::HashSet;
+
 use crate::{
     engine::{
         gizmos::{GizmoVertex, GizmosRenderer},
@@ -5,10 +7,11 @@ use crate::{
         storage::Handle,
     },
     game::{
+        animations::{Animation, animations},
         camera::Camera,
         config::ObjectType,
         geometry_buffers::{GeometryBuffers, GeometryData},
-        model::Model,
+        model::{Model, Node},
         model_renderer::{ModelInstanceHandle, ModelRenderer},
         models::models,
     },
@@ -23,10 +26,33 @@ pub struct Object {
     pub model_handle: Handle<Model>,
     pub model_instance_handle: ModelInstanceHandle,
 
+    pub animation: Option<Handle<Animation>>,
+    pub animation_time: f32,
+
     /// Whether to draw the bones of the skeleton.
     pub draw_debug_bones: bool,
     /// Whether to draw the bounding sphere for each mesh.
     pub draw_bounding_spheres: bool,
+    /// A list of node indices to draw in debug mode.
+    pub selected_nodes: HashSet<usize>,
+}
+
+impl Object {
+    pub fn update(&mut self, delta_time: f32) {
+        if self.animation.is_some() {
+            self.animation_time += delta_time * 0.3;
+        }
+    }
+
+    pub fn set_animation(&mut self, animation: Handle<Animation>) {
+        self.animation = Some(animation);
+        self.animation_time = 0.0;
+    }
+
+    pub fn clear_animation(&mut self) {
+        self.animation = None;
+        self.animation_time = 0.0;
+    }
 }
 
 pub struct Objects {
@@ -92,8 +118,12 @@ impl Objects {
             model_handle,
             model_instance_handle,
 
-            draw_debug_bones: false,
+            animation: None,
+            animation_time: 0.0,
+
+            draw_debug_bones: true,
             draw_bounding_spheres: false,
+            selected_nodes: HashSet::default(),
         });
 
         Ok(())
@@ -101,10 +131,14 @@ impl Objects {
 
     pub fn update(
         &mut self,
-        _camera: &Camera,
+        delta_time: f32,
         input: &InputState,
         geometry_data: Option<&GeometryData>,
     ) {
+        self.objects.iter_mut().for_each(|object| {
+            object.update(delta_time);
+        });
+
         if input.mouse_just_pressed(MouseButton::Left) {
             if let Some(geometry_data) = geometry_data {
                 if geometry_data.id < 1 << 16 {
@@ -160,7 +194,8 @@ impl Objects {
             };
 
             if object.draw_debug_bones {
-                Self::render_skeleton(object.transform.to_mat4(), model, vertices);
+                Self::render_skeleton(object, model, vertices);
+                Self::render_selected_nodes(object, model, vertices);
             }
 
             if object.draw_bounding_spheres {
@@ -169,12 +204,13 @@ impl Objects {
         }
     }
 
-    fn render_skeleton(transform: Mat4, model: &Model, vertices: &mut Vec<GizmoVertex>) {
+    fn render_skeleton(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
         fn do_node(
-            nodes: &[crate::game::model::Node],
+            nodes: &[Node],
             transform: Mat4,
             node_index: u32,
             vertices: &mut Vec<GizmoVertex>,
+            depth: usize,
         ) {
             const COLORS: &[Vec4] = &[
                 Vec4::new(1.0, 0.0, 0.0, 1.0),
@@ -185,7 +221,7 @@ impl Objects {
                 Vec4::new(1.0, 1.0, 1.0, 1.0),
             ];
 
-            let color = COLORS[node_index as usize % COLORS.len()];
+            let color = COLORS[depth % COLORS.len()];
 
             for (child_index, child_node) in nodes
                 .iter()
@@ -200,11 +236,45 @@ impl Objects {
                 vertices.push(GizmoVertex::new(start_position, color));
                 vertices.push(GizmoVertex::new(end_position, color));
 
-                do_node(nodes, end_transform, child_index as u32, vertices);
+                // if depth == 0 {
+                //     continue;
+                // }
+
+                do_node(
+                    nodes,
+                    end_transform,
+                    child_index as u32,
+                    vertices,
+                    depth + 1,
+                );
             }
         }
 
-        do_node(&model.nodes, transform, 0, vertices);
+        if let Some(animation) = object.animation.and_then(|handle| animations().get(handle)) {
+            let pose = animation.sample_pose(object.animation_time, &model.nodes);
+            let nodes = pose
+                .iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    let mut node = model.nodes[i].clone();
+                    node.transform = Transform::from_rotation(t.rotation.unwrap())
+                        .with_translation(t.position.unwrap());
+                    node
+                })
+                .collect::<Vec<_>>();
+
+            do_node(&nodes, object.transform.to_mat4(), 0, vertices, 0);
+        }
+
+        do_node(&model.nodes, object.transform.to_mat4(), 0, vertices, 0);
+    }
+
+    fn render_selected_nodes(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
+        for node_index in object.selected_nodes.iter() {
+            let transform = object.transform.to_mat4() * model.local_transform(*node_index as u32);
+
+            vertices.extend(GizmosRenderer::create_iso_sphere(transform, 10.0, 8));
+        }
     }
 
     fn render_bounding_spheres(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
@@ -288,23 +358,54 @@ impl Objects {
                                 .set_instance_transform(object.model_instance_handle, transform);
                         }
 
+                        if ui.button("Set animation").clicked() {
+                            use crate::game::animations::animations;
+                            use std::path::PathBuf;
+
+                            // let animation_name = "bipedal_stand_idle_smoke.bmf";
+                            let animation_name = "bipedal_stand_idle_stretch.bmf";
+                            // let animation_name = "ape_idle_1.bmf";
+                            if let Ok(animation) =
+                                animations().load(PathBuf::from("motions").join(animation_name))
+                            {
+                                object.set_animation(animation);
+                            } else {
+                                tracing::warn!("Could not load test animation!");
+                            }
+                        }
+
                         if let Some(model) = models().get(object.model_handle) {
                             use crate::game::model::Node;
 
                             ui.heading("Skeleton");
-                            fn do_node(ui: &mut egui::Ui, nodes: &[Node], parent_index: u32) {
+                            fn do_node(
+                                ui: &mut egui::Ui,
+                                nodes: &[Node],
+                                parent_index: u32,
+                                selected_nodes: &mut HashSet<usize>,
+                            ) {
                                 nodes
                                     .iter()
                                     .enumerate()
                                     .filter(|(_, node)| node.parent == parent_index)
                                     .for_each(|(node_index, node)| {
-                                        ui.label(&node.name);
-
-                                        do_node(ui, nodes, node_index as u32);
+                                        egui::CollapsingHeader::new(&node.name).show(ui, |ui| {
+                                            let mut node_checked =
+                                                selected_nodes.contains(&node_index);
+                                            if ui.checkbox(&mut node_checked, "Highlight").changed()
+                                            {
+                                                if node_checked {
+                                                    selected_nodes.insert(node_index);
+                                                } else {
+                                                    selected_nodes.remove(&node_index);
+                                                }
+                                            }
+                                            do_node(ui, nodes, node_index as u32, selected_nodes);
+                                        });
                                     });
                             }
 
-                            do_node(ui, &model.nodes, 0xFFFF_FFFF);
+                            do_node(ui, &model.nodes, 0xFFFF_FFFF, &mut object.selected_nodes);
                         }
 
                         ui.heading("Debug");

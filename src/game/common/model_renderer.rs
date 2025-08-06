@@ -656,8 +656,7 @@ mod gpu {
                 .nodes
                 .iter()
                 .map(|node| Node {
-                    // TODO: This should include the rotation?
-                    transform: Mat4::from_translation(node.transform.translation).to_cols_array(),
+                    transform: node.transform.to_mat4().to_cols_array(),
                     parent_node_index: node.parent,
                     _padding: [0; 3],
                 })

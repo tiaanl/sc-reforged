@@ -1,7 +1,7 @@
 use glam::{Mat4, Quat, Vec3};
 
 /// A translation and rotation that can be converted into a 4x4 matrix.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Transform {
     pub translation: Vec3,
     pub rotation: Quat,
@@ -24,12 +24,21 @@ impl Transform {
         }
     }
 
-    /// Create a new transform from euler angles as a rotation.
-    pub fn from_euler_rotation(rotation: Vec3) -> Self {
+    pub fn from_rotation(rotation: Quat) -> Self {
         Self {
             translation: Vec3::ZERO,
-            rotation: Quat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z),
+            rotation,
         }
+    }
+
+    /// Create a new transform from euler angles as a rotation.
+    pub fn from_euler_rotation(rotation: Vec3) -> Self {
+        Self::from_rotation(Quat::from_euler(
+            glam::EulerRot::XYZ,
+            rotation.x,
+            rotation.y,
+            rotation.z,
+        ))
     }
 
     pub fn with_translation(mut self, translation: Vec3) -> Self {

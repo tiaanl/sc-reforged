@@ -38,12 +38,14 @@ impl Model {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Node {
     /// An index to the node's parent.
     pub parent: NodeIndex,
     /// Local transform.
     pub transform: Transform,
+    /// The ID of the bone.
+    pub bone_id: u32,
     /// The name of the node.
     pub name: String,
 }
@@ -152,9 +154,12 @@ impl TryFrom<smf::Model> for Model {
                 }
             };
 
+            // TODO: Figure out what this weird rotation on static models are so we don't use
+            //       Mat4::IDENTITY here.
             nodes.push(Node {
                 parent: parent_node_index,
                 transform: Transform::new(smf_node.position, Quat::IDENTITY),
+                bone_id: smf_node.tree_id,
                 name: smf_node.name.clone(),
             });
 
