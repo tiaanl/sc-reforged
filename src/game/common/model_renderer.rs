@@ -45,6 +45,28 @@ struct InstanceBuffer {
 #[derive(Clone, Copy, Debug)]
 pub struct ModelInstanceHandle(usize);
 
+#[derive(Default)]
+pub struct InstanceUpdater {
+    transform: Option<Mat4>,
+    animation: Option<Handle<Animation>>,
+    /// If `true`, the even if an animation was specified, the animation handle will be cleared.
+    clear_animation: bool,
+}
+
+impl InstanceUpdater {
+    pub fn set_transform(&mut self, transform: Mat4) {
+        self.transform = Some(transform);
+    }
+
+    pub fn set_animation(&mut self, animation: Handle<Animation>) {
+        self.animation = Some(animation);
+    }
+
+    pub fn clear_animation(&mut self) {
+        self.clear_animation = true;
+    }
+}
+
 pub struct ModelRenderer {
     textures: gpu::Textures,
     models: gpu::Models,
@@ -216,52 +238,43 @@ impl ModelRenderer {
         Ok(model_instance_handle)
     }
 
-    pub fn set_instance_transform(
+    pub fn update_instance(
         &mut self,
-        instance_handle: ModelInstanceHandle,
-        transform: Mat4,
+        model_instance_handle: ModelInstanceHandle,
+        mut update: impl FnMut(&mut InstanceUpdater),
     ) {
-        let Some(instance) = self.model_instances.get_mut(instance_handle.0) else {
-            tracing::warn!("Invalid model instance handle");
+        let mut updater = InstanceUpdater::default();
+
+        update(&mut updater);
+
+        let Some(instance) = self.model_instances.get_mut(model_instance_handle.0) else {
+            tracing::warn!("Invalid model instance handle to update.");
             return;
         };
 
-        instance.transform = transform;
-        // Make sure the buffer for the model is uploaded before we render again.
-        self.dirty_instance_buffers
-            .insert(instance.gpu_model_handle);
-    }
+        let mut dirty = false;
 
-    pub fn set_instance_animation(
-        &mut self,
-        instance_handle: ModelInstanceHandle,
-        animation: Handle<Animation>,
-    ) {
-        let Some(instance) = self.model_instances.get_mut(instance_handle.0) else {
-            tracing::warn!("Invalid model instance handle");
-            return;
-        };
+        if let Some(transform) = updater.transform {
+            instance.transform = transform;
+            dirty = true;
+        }
 
-        instance.animation_description = Some(AnimationDescription {
-            handle: animation,
-            time: 0.0,
-        });
+        if updater.clear_animation {
+            instance.animation_description = None;
+            dirty = true;
+        } else if let Some(animation) = updater.animation {
+            instance.animation_description = Some(AnimationDescription {
+                handle: animation,
+                time: 0.0,
+            });
+            dirty = true;
+        }
 
-        // Make sure the buffer for the model is uploaded before we render again.
-        self.dirty_instance_buffers
-            .insert(instance.gpu_model_handle);
-    }
-
-    pub fn clear_instance_animation(&mut self, instance_handle: ModelInstanceHandle) {
-        let Some(instance) = self.model_instances.get_mut(instance_handle.0) else {
-            tracing::warn!("Invalid model instance handle");
-            return;
-        };
-
-        instance.animation_description = None;
-        // Make sure the buffer for the model is uploaded before we render again.
-        self.dirty_instance_buffers
-            .insert(instance.gpu_model_handle);
+        if dirty {
+            // Tag the instance for updating.
+            self.dirty_instance_buffers
+                .insert(instance.gpu_model_handle);
+        }
     }
 
     pub fn get_model(&self, model_instance_handle: ModelInstanceHandle) -> Option<&gpu::Model> {

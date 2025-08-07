@@ -356,9 +356,15 @@ impl Objects {
                                 euler_rot.y,
                                 euler_rot.z,
                             );
-                            let transform = object.transform.to_mat4();
-                            self.model_renderer
-                                .set_instance_transform(object.model_instance_handle, transform);
+
+                            // self.model_renderer.set_instance_transform(object.model_instance_handle, transform);
+
+                            self.model_renderer.update_instance(
+                                object.model_instance_handle,
+                                |updater| {
+                                    updater.set_transform(object.transform.to_mat4());
+                                },
+                            );
                         }
 
                         let mut maybe_animation = None;
@@ -383,10 +389,10 @@ impl Objects {
                                 animations().load(PathBuf::from("motions").join(animation_name))
                             {
                                 object.set_animation(animation);
-                                self.model_renderer.set_instance_animation(
-                                    object.model_instance_handle,
-                                    animation,
-                                );
+                                self.model_renderer
+                                    .update_instance(object.model_instance_handle, |updater| {
+                                        updater.set_animation(animation)
+                                    });
                             } else {
                                 tracing::warn!("Could not load test animation!");
                             }
@@ -395,7 +401,9 @@ impl Objects {
                         if ui.button("Clear animation").clicked() {
                             object.clear_animation();
                             self.model_renderer
-                                .clear_instance_animation(object.model_instance_handle);
+                                .update_instance(object.model_instance_handle, |updater| {
+                                    updater.clear_animation()
+                                });
                         }
 
                         if let Some(model) = models().get(object.model_handle) {
