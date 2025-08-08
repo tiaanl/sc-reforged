@@ -13,14 +13,14 @@ pub struct RenderTexture {
 }
 
 /// A store/cache for textures used by the [super::ModelRenderer].
-pub struct Textures {
+pub struct RenderTextures {
     textures: Storage<RenderTexture>,
 
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
 }
 
-impl Textures {
+impl RenderTextures {
     pub fn new() -> Self {
         let texture_bind_group_layout =
             renderer()

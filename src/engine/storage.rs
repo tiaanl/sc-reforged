@@ -62,7 +62,7 @@ impl<T> Storage<T> {
         self.items.get(handle.0)
     }
 
-    pub fn _get_mut(&mut self, handle: Handle<T>) -> Option<&mut T> {
+    pub fn get_mut(&mut self, handle: Handle<T>) -> Option<&mut T> {
         self.items.get_mut(handle.0)
     }
 }

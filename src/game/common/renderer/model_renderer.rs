@@ -6,12 +6,14 @@ use crate::{
         image::BlendMode,
         model,
         models::models,
-        renderer::textures,
+        renderer::{
+            render_models::{RenderModel, RenderModels, RenderNode, RenderVertex},
+            render_textures,
+        },
     },
 };
 
 use ahash::{HashMap, HashSet};
-pub use gpu::ModelHandle;
 use slab::Slab;
 use wgpu::util::DeviceExt;
 
@@ -22,7 +24,7 @@ struct AnimationDescription {
 
 struct ModelInstance {
     model_handle: Handle<model::Model>,
-    gpu_model_handle: ModelHandle,
+    render_model_handle: Handle<RenderModel>,
     transform: Mat4,
     entity_id: u32,
     animation_description: Option<AnimationDescription>,
@@ -67,15 +69,15 @@ impl InstanceUpdater {
 }
 
 pub struct ModelRenderer {
-    textures: textures::Textures,
-    models: gpu::Models,
+    textures: render_textures::RenderTextures,
+    models: RenderModels,
 
     /// Keep a list of each model we have to render.
     model_instances: Slab<ModelInstance>,
     /// Keeps a list of transforms for each model instance to render.
-    instance_buffers: HashMap<ModelHandle, InstanceBuffer>,
+    instance_buffers: HashMap<Handle<RenderModel>, InstanceBuffer>,
     /// A list of changed instance buffers that has to be uploaded before the next render.
-    dirty_instance_buffers: HashSet<ModelHandle>,
+    dirty_instance_buffers: HashSet<Handle<RenderModel>>,
 
     opaque_pipeline: wgpu::RenderPipeline,
     alpha_pipeline: wgpu::RenderPipeline,
@@ -87,8 +89,8 @@ impl ModelRenderer {
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let textures = textures::Textures::new();
-        let models = gpu::Models::new();
+        let textures = render_textures::RenderTextures::new();
+        let models = RenderModels::new();
 
         let module = shaders.create_shader(
             "model_renderer",
@@ -112,7 +114,7 @@ impl ModelRenderer {
 
         let buffers = &[
             wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<gpu::Vertex>() as wgpu::BufferAddress,
+                array_stride: std::mem::size_of::<RenderVertex>() as wgpu::BufferAddress,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3,
@@ -221,18 +223,18 @@ impl ModelRenderer {
         transform: Mat4,
         entity_id: u32,
     ) -> Result<ModelInstanceHandle, AssetError> {
-        let gpu_model_handle = self.models.add_model(&mut self.textures, model_handle)?;
+        let render_model_handle = self.models.add_model(&mut self.textures, model_handle)?;
 
         let model_instance_handle =
             ModelInstanceHandle(self.model_instances.insert(ModelInstance {
                 model_handle,
                 transform,
-                gpu_model_handle,
+                render_model_handle,
                 entity_id,
                 animation_description: None,
             }));
 
-        self.dirty_instance_buffers.insert(gpu_model_handle);
+        self.dirty_instance_buffers.insert(render_model_handle);
 
         Ok(model_instance_handle)
     }
@@ -272,21 +274,21 @@ impl ModelRenderer {
         if dirty {
             // Tag the instance for updating.
             self.dirty_instance_buffers
-                .insert(instance.gpu_model_handle);
+                .insert(instance.render_model_handle);
         }
     }
 
-    pub fn get_model(&self, model_instance_handle: ModelInstanceHandle) -> Option<&gpu::Model> {
+    pub fn get_model(&self, model_instance_handle: ModelInstanceHandle) -> Option<&RenderModel> {
         self.model_instances
             .get(model_instance_handle.0)
-            .and_then(|instance| self.models.get(instance.gpu_model_handle))
+            .and_then(|instance| self.models.get(instance.render_model_handle))
     }
 
     pub fn update(&mut self, delta_time: f32) {
         self.model_instances.iter_mut().for_each(|(_, instance)| {
             if instance.animation_description.is_none() {
-                if let Some(gpu_model) = self.models.get_mut(instance.gpu_model_handle) {
-                    gpu_model.animated_nodes = None;
+                if let Some(render_model) = self.models.get_mut(instance.render_model_handle) {
+                    render_model.animated_nodes = None;
                 }
                 return;
             }
@@ -303,7 +305,7 @@ impl ModelRenderer {
 
                     debug_assert!(pose.len() == model.nodes.len());
 
-                    fn local_transform(nodes: &[gpu::Node], node_index: u32) -> Mat4 {
+                    fn local_transform(nodes: &[RenderNode], node_index: u32) -> Mat4 {
                         let node = &nodes[node_index as usize];
                         if node.parent_node_index == u32::MAX {
                             Mat4::from_cols_array(&node.transform)
@@ -313,20 +315,20 @@ impl ModelRenderer {
                         }
                     }
 
-                    let temp_nodes: Vec<gpu::Node> = pose
+                    let temp_nodes: Vec<RenderNode> = pose
                         .iter()
                         .enumerate()
-                        .map(|(node_index, sample)| gpu::Node {
+                        .map(|(node_index, sample)| RenderNode {
                             transform: sample.to_mat4().to_cols_array(),
                             parent_node_index: model.nodes[node_index].parent,
                             _padding: [0; 3],
                         })
                         .collect();
 
-                    let nodes: Vec<gpu::Node> = temp_nodes
+                    let nodes: Vec<RenderNode> = temp_nodes
                         .iter()
                         .enumerate()
-                        .map(|(node_index, node)| gpu::Node {
+                        .map(|(node_index, node)| RenderNode {
                             transform: local_transform(&temp_nodes, node_index as u32)
                                 .to_cols_array(),
                             parent_node_index: node.parent_node_index,
@@ -335,7 +337,7 @@ impl ModelRenderer {
                         .collect();
 
                     self.models
-                        .update_animation_nodes(instance.gpu_model_handle, &nodes);
+                        .update_animation_nodes(instance.render_model_handle, &nodes);
                 }
             }
         });
@@ -356,7 +358,7 @@ impl ModelRenderer {
                 let instances = self
                     .model_instances
                     .iter()
-                    .filter(|(_, instance)| instance.gpu_model_handle == model_handle)
+                    .filter(|(_, instance)| instance.render_model_handle == model_handle)
                     .map(|(_, instance)| Instance {
                         model: instance.transform,
                         id: instance.entity_id,
@@ -457,289 +459,6 @@ impl ModelRenderer {
                     model.render(&mut render_pass, &self.textures, BlendMode::Alpha);
                 }
             }
-        }
-    }
-}
-
-mod gpu {
-
-    use super::textures;
-
-    use std::ops::Range;
-
-    use glam::{Vec2, Vec3};
-    use slab::Slab;
-    use wgpu::util::DeviceExt;
-
-    use crate::{
-        engine::{assets::AssetError, prelude::renderer, storage::Handle},
-        game::{image::BlendMode, model, models::models},
-    };
-
-    type NodeIndex = u32;
-
-    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-    pub struct ModelHandle(usize);
-
-    #[derive(Clone, Copy, bytemuck::NoUninit)]
-    #[repr(C)]
-    pub struct Vertex {
-        pub position: Vec3,
-        pub normal: Vec3,
-        pub tex_coord: Vec2,
-        pub node_index: NodeIndex,
-    }
-
-    #[derive(Clone, Copy, bytemuck::NoUninit)]
-    #[repr(C)]
-    pub struct Node {
-        pub transform: [f32; 16],
-        pub parent_node_index: NodeIndex,
-        pub _padding: [u32; 3],
-    }
-
-    struct Mesh {
-        indices: Range<u32>,
-        texture_handle: Handle<textures::RenderTexture>,
-    }
-
-    pub struct NodesBuffer {
-        pub _buffer: wgpu::Buffer,
-        pub bind_group: wgpu::BindGroup,
-    }
-
-    impl NodesBuffer {
-        pub fn from_nodes(nodes_bind_group_layout: &wgpu::BindGroupLayout, nodes: &[Node]) -> Self {
-            let buffer = renderer()
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("model_renderer_animated_node_buffer"),
-                    contents: bytemuck::cast_slice(nodes),
-                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                });
-
-            let bind_group = renderer()
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("model_renderer_animated_node_buffer_bind_group"),
-                    layout: nodes_bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &buffer,
-                            offset: 0,
-                            size: None,
-                        }),
-                    }],
-                });
-
-            Self {
-                _buffer: buffer,
-                bind_group,
-            }
-        }
-
-        pub fn update_from_nodes(&self, nodes: &[Node]) {
-            renderer()
-                .queue
-                .write_buffer(&self._buffer, 0, bytemuck::cast_slice(nodes));
-        }
-    }
-
-    pub struct Model {
-        /// Contains the vertices for the entire model.
-        vertex_buffer: wgpu::Buffer,
-        /// Contains the indices for the entire model.
-        index_buffer: wgpu::Buffer,
-        /// For binding the nodes to the shader.
-        nodes: NodesBuffer,
-        /// For binding the animated nodes to the shader.
-        pub animated_nodes: Option<NodesBuffer>,
-
-        /// All the meshes (sets of indices) that the model consists of.
-        meshes: Vec<Mesh>,
-
-        pub scale: Vec3,
-    }
-
-    impl Model {
-        pub fn render(
-            &self,
-            render_pass: &mut wgpu::RenderPass,
-            textures: &textures::Textures,
-            blend_mode: BlendMode,
-        ) {
-            for mesh in self.meshes.iter() {
-                let Some(texture) = textures.get(mesh.texture_handle) else {
-                    tracing::warn!("Texture not in cache");
-                    continue;
-                };
-
-                if texture.blend_mode != blend_mode {
-                    continue;
-                }
-
-                render_pass.set_bind_group(2, &texture.bind_group, &[]);
-                if let Some(ref animated_nodes) = self.animated_nodes {
-                    render_pass.set_bind_group(3, &animated_nodes.bind_group, &[]);
-                } else {
-                    render_pass.set_bind_group(3, &self.nodes.bind_group, &[]);
-                }
-                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(mesh.indices.clone(), 0, 0..1);
-            }
-        }
-    }
-
-    pub struct Models {
-        models: Slab<Model>,
-
-        pub nodes_bind_group_layout: wgpu::BindGroupLayout,
-    }
-
-    impl Models {
-        pub fn new() -> Self {
-            let nodes_bind_group_layout =
-                renderer()
-                    .device
-                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                        label: Some("model_renderer_nodes_bind_group_layout"),
-                        entries: &[wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::VERTEX,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        }],
-                    });
-
-            Self {
-                models: Slab::default(),
-
-                nodes_bind_group_layout,
-            }
-        }
-
-        pub fn add_model(
-            &mut self,
-            textures: &mut textures::Textures,
-            model_handle: Handle<model::Model>,
-        ) -> Result<ModelHandle, AssetError> {
-            let model = models()
-                .get(model_handle)
-                .expect("Model should have been loaded byt his time.");
-
-            let mut meshes = Vec::default();
-
-            let mut vertices = Vec::default();
-            let mut indices = Vec::default();
-
-            let mut first_vertex_index = 0;
-
-            for mesh in model.meshes.iter() {
-                let texture_handle = textures.add(mesh.image);
-
-                mesh.mesh
-                    .vertices
-                    .iter()
-                    .map(|v| Vertex {
-                        position: v.position,
-                        normal: v.normal,
-                        tex_coord: v.tex_coord,
-                        node_index: v.node_index,
-                    })
-                    .for_each(|v| vertices.push(v));
-
-                let first_index = indices.len() as u32;
-
-                mesh.mesh
-                    .indices
-                    .iter()
-                    .map(|index| index + first_vertex_index)
-                    .for_each(|i| indices.push(i));
-
-                let last_index = indices.len() as u32;
-
-                meshes.push(Mesh {
-                    indices: first_index..last_index,
-                    texture_handle,
-                });
-
-                first_vertex_index = vertices.len() as u32;
-            }
-
-            let nodes: Vec<Node> = model
-                .nodes
-                .iter()
-                .enumerate()
-                .map(|(node_index, node)| {
-                    let transform = model.local_transform(node_index as u32);
-                    Node {
-                        transform: transform.to_cols_array(),
-                        parent_node_index: node.parent,
-                        _padding: [0; 3],
-                    }
-                })
-                .collect();
-
-            let vertex_buffer =
-                renderer()
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("model_vertex_buffer"),
-                        contents: bytemuck::cast_slice(&vertices),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    });
-
-            let index_buffer =
-                renderer()
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("model_index_buffer"),
-                        contents: bytemuck::cast_slice(&indices),
-                        usage: wgpu::BufferUsages::INDEX,
-                    });
-
-            let nodes = NodesBuffer::from_nodes(&self.nodes_bind_group_layout, &nodes);
-
-            Ok(ModelHandle(self.models.insert(Model {
-                vertex_buffer,
-                index_buffer,
-                nodes,
-                animated_nodes: None,
-                meshes,
-
-                scale: model.scale,
-            })))
-        }
-
-        pub fn update_animation_nodes(&mut self, handle: ModelHandle, nodes: &[Node]) {
-            let Some(model) = self.models.get_mut(handle.0) else {
-                tracing::warn!("Trying to update nodes for a model that does not exist!");
-                return;
-            };
-
-            if let Some(ref mut animated_nodes) = model.animated_nodes {
-                animated_nodes.update_from_nodes(nodes);
-            } else {
-                model.animated_nodes = Some(NodesBuffer::from_nodes(
-                    &self.nodes_bind_group_layout,
-                    nodes,
-                ));
-            }
-        }
-
-        pub fn get(&self, handle: ModelHandle) -> Option<&Model> {
-            self.models.get(handle.0)
-        }
-
-        pub fn get_mut(&mut self, handle: ModelHandle) -> Option<&mut Model> {
-            self.models.get_mut(handle.0)
         }
     }
 }
