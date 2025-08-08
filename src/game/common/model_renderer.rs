@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::{
     engine::{prelude::*, storage::Handle},
     game::{
@@ -465,15 +463,17 @@ impl ModelRenderer {
 mod gpu {
     use super::*;
 
-    use std::{ops::Range, path::PathBuf};
+    use std::ops::Range;
 
-    use ahash::HashMap;
     use glam::{Vec2, Vec3};
     use wgpu::util::DeviceExt;
 
     use crate::{
         engine::assets::AssetError,
-        game::{image::images, models::models},
+        game::{
+            image::{Image, images},
+            models::models,
+        },
     };
 
     type NodeIndex = u32;
@@ -604,7 +604,6 @@ mod gpu {
     /// A store/cache for textures used by the [super::ModelRenderer].
     pub struct Textures {
         textures: Slab<Texture>,
-        lookup: HashMap<PathBuf, TextureHandle>,
 
         pub texture_bind_group_layout: wgpu::BindGroupLayout,
         sampler: wgpu::Sampler,
@@ -651,25 +650,16 @@ mod gpu {
 
             Self {
                 textures: Slab::default(),
-                lookup: HashMap::default(),
                 texture_bind_group_layout,
                 sampler,
             }
         }
 
-        fn create_from_path(
-            &mut self,
-            path: impl AsRef<Path>,
-        ) -> Result<TextureHandle, AssetError> {
-            // If the path exists, return the existing handle.
-            if let Some(texture_handle) = self.lookup.get(path.as_ref()) {
-                return Ok(*texture_handle);
-            }
+        fn add(&mut self, image_handle: Handle<Image>) -> TextureHandle {
+            let image = images()
+                .get(image_handle)
+                .expect("Adding image that doesn't exist!");
 
-            // We don't have the path in the cache, load it now.
-            let image = images().load_image_direct(path.as_ref())?;
-
-            let label = format!("texture_({})", path.as_ref().display());
             let size = wgpu::Extent3d {
                 width: image.size.x,
                 height: image.size.y,
@@ -677,7 +667,7 @@ mod gpu {
             };
 
             let texture = renderer().device.create_texture(&wgpu::TextureDescriptor {
-                label: Some(label.as_str()),
+                label: Some("texture"),
                 size,
                 mip_level_count: 1,
                 sample_count: 1,
@@ -722,22 +712,16 @@ mod gpu {
                     ],
                 });
 
-            let texture_handle = self.cache_texture(Texture {
+            let texture = Texture {
                 blend_mode: image.blend_mode,
                 bind_group,
-            });
-
-            Ok(texture_handle)
-        }
-
-        fn cache_texture(&mut self, texture: Texture) -> TextureHandle {
+            };
             TextureHandle(self.textures.insert(texture))
         }
     }
 
     pub struct Models {
         models: Slab<Model>,
-        _lookup: HashMap<PathBuf, ModelHandle>,
 
         pub nodes_bind_group_layout: wgpu::BindGroupLayout,
     }
@@ -763,7 +747,6 @@ mod gpu {
 
             Self {
                 models: Slab::default(),
-                _lookup: HashMap::default(),
 
                 nodes_bind_group_layout,
             }
@@ -786,11 +769,7 @@ mod gpu {
             let mut first_vertex_index = 0;
 
             for mesh in model.meshes.iter() {
-                let texture_handle = textures.create_from_path(
-                    PathBuf::from("textures")
-                        .join("shared")
-                        .join(&mesh.texture_name),
-                )?;
+                let texture_handle = textures.add(mesh.image);
 
                 mesh.mesh
                     .vertices

@@ -62,7 +62,7 @@ impl Images {
         })
     }
 
-    pub fn _get(&self, handle: Handle<Image>) -> Option<&Image> {
+    pub fn get(&self, handle: Handle<Image>) -> Option<&Image> {
         self.images.get(handle)
     }
 

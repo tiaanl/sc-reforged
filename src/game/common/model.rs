@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use ahash::HashMap;
 use shadow_company_tools::smf;
 
-use crate::engine::prelude::*;
+use crate::{
+    engine::{prelude::*, storage::Handle},
+    game::image::{Image, images},
+};
 
 pub type NodeIndex = u32;
 
@@ -55,38 +58,19 @@ pub struct Mesh {
     /// The node this mesh belongs to.
     pub node_index: u32,
     /// Name of the texture to use for the material.
-    pub texture_name: String,
+    pub image: Handle<Image>,
     /// Vertex and index data.
     pub mesh: IndexedMesh<Vertex>,
     /// A bounding sphere surrounding all the vertices in the mesh as tightly as possible.
     pub bounding_sphere: BoundingSphere,
 }
 
-// TODO: Don't use this as a bytemuck to write to the GPU.
-#[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
-#[repr(C)]
+#[derive(Clone, Copy, Debug)]
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
     pub tex_coord: Vec2,
     pub node_index: u32,
-}
-
-impl BufferLayout for Vertex {
-    fn layout() -> wgpu::VertexBufferLayout<'static> {
-        const ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
-            0 => Float32x3,
-            1 => Float32x3,
-            2 => Float32x2,
-            3 => Uint32,
-        ];
-
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &ATTRS,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -163,31 +147,46 @@ impl TryFrom<smf::Model> for Model {
                 name: smf_node.name.clone(),
             });
 
-            meshes.extend(smf_node.meshes.iter().map(|smf_mesh| {
-                let mesh = smf_mesh_to_mesh(smf_mesh, node_index as u32);
+            meshes.extend(
+                smf_node
+                    .meshes
+                    .iter()
+                    .map(|smf_mesh| -> Result<Mesh, AssetError> {
+                        let mesh = smf_mesh_to_mesh(smf_mesh, node_index as u32);
 
-                let bounding_sphere = {
-                    let center = mesh
-                        .vertices
-                        .iter()
-                        .fold(Vec3::ZERO, |acc, v| acc + v.position)
-                        / mesh.vertices.len() as f32;
-                    let radius = mesh
-                        .vertices
-                        .iter()
-                        .map(|v| (v.position - center).length())
-                        .fold(0.0, f32::max);
+                        // Bounding sphere
+                        let center = mesh.vertices.iter().map(|v| v.position).sum::<Vec3>()
+                            / mesh.vertices.len() as f32;
 
-                    BoundingSphere { center, radius }
-                };
+                        let radius = mesh
+                            .vertices
+                            .iter()
+                            .map(|v| (v.position - center).length())
+                            .fold(0.0, f32::max);
 
-                Mesh {
-                    node_index: node_index as u32,
-                    texture_name: smf_mesh.texture_name.clone(),
-                    mesh,
-                    bounding_sphere,
-                }
-            }));
+                        let bounding_sphere = BoundingSphere { center, radius };
+
+                        // For now assume we're loading a shared image.
+                        let path = PathBuf::from("textures")
+                            .join("shared")
+                            .join(&smf_mesh.texture_name);
+
+                        let image = images().load_image(path)?;
+
+                        Ok(Mesh {
+                            node_index: node_index as u32,
+                            image,
+                            mesh,
+                            bounding_sphere,
+                        })
+                    })
+                    .filter_map(|mesh| {
+                        mesh.inspect_err(|err| {
+                            tracing::warn!("Could not load mesh: {}", err);
+                        })
+                        .ok()
+                    }),
+            );
 
             for smf_collision_box in smf_node.bounding_boxes.iter() {
                 collision_boxes.push(CollisionBox {

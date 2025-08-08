@@ -8,21 +8,16 @@ pub struct IndexedMesh<V> {
     pub indices: Vec<u32>,
 }
 
-impl<V: Clone> IndexedMesh<V> {
-    pub fn _extend(&mut self, mesh: &Self) -> std::ops::Range<u32> {
+impl<V: Copy> IndexedMesh<V> {
+    pub fn _extend(&mut self, mesh: Self) -> std::ops::Range<u32> {
         let vertex_offset = self.vertices.len() as u32;
 
-        self.vertices.reserve(mesh.vertices.len());
-        mesh.vertices
-            .iter()
-            .for_each(|v| self.vertices.push(v.clone()));
+        self.vertices.extend(mesh.vertices);
 
         let first_index = self.indices.len() as u32;
 
-        self.indices.reserve(mesh.indices.len());
-        mesh.indices
-            .iter()
-            .for_each(|i| self.indices.push(i + vertex_offset));
+        self.indices
+            .extend(mesh.indices.iter().map(|i| i + vertex_offset));
 
         let last_index = self.indices.len() as u32;
 
