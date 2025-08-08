@@ -11,8 +11,8 @@ use crate::{
         config::ObjectType,
         geometry_buffers::{GeometryBuffers, GeometryData},
         model::{Model, Node},
-        model_renderer::{ModelInstanceHandle, ModelRenderer},
         models::models,
+        renderer::{ModelInstanceHandle, ModelRenderer},
     },
 };
 

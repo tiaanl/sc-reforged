@@ -7,5 +7,5 @@ pub mod geometry_buffers;
 pub mod height_map;
 pub mod image;
 pub mod model;
-pub mod model_renderer;
 pub mod models;
+pub mod renderer;

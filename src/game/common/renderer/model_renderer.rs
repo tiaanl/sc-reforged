@@ -6,6 +6,7 @@ use crate::{
         image::BlendMode,
         model,
         models::models,
+        renderer::textures,
     },
 };
 
@@ -66,7 +67,7 @@ impl InstanceUpdater {
 }
 
 pub struct ModelRenderer {
-    textures: gpu::Textures,
+    textures: textures::Textures,
     models: gpu::Models,
 
     /// Keep a list of each model we have to render.
@@ -86,7 +87,7 @@ impl ModelRenderer {
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let textures = gpu::Textures::new();
+        let textures = textures::Textures::new();
         let models = gpu::Models::new();
 
         let module = shaders.create_shader(
@@ -461,33 +462,24 @@ impl ModelRenderer {
 }
 
 mod gpu {
-    use super::*;
+
+    use super::textures;
 
     use std::ops::Range;
 
     use glam::{Vec2, Vec3};
+    use slab::Slab;
     use wgpu::util::DeviceExt;
 
     use crate::{
-        engine::assets::AssetError,
-        game::{
-            image::{Image, images},
-            models::models,
-        },
+        engine::{assets::AssetError, prelude::renderer, storage::Handle},
+        game::{image::BlendMode, model, models::models},
     };
 
     type NodeIndex = u32;
 
-    #[derive(Clone, Copy)]
-    struct TextureHandle(usize);
-
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     pub struct ModelHandle(usize);
-
-    struct Texture {
-        blend_mode: BlendMode,
-        bind_group: wgpu::BindGroup,
-    }
 
     #[derive(Clone, Copy, bytemuck::NoUninit)]
     #[repr(C)]
@@ -508,7 +500,7 @@ mod gpu {
 
     struct Mesh {
         indices: Range<u32>,
-        texture_handle: TextureHandle,
+        texture_handle: Handle<textures::RenderTexture>,
     }
 
     pub struct NodesBuffer {
@@ -574,11 +566,11 @@ mod gpu {
         pub fn render(
             &self,
             render_pass: &mut wgpu::RenderPass,
-            textures: &Textures,
+            textures: &textures::Textures,
             blend_mode: BlendMode,
         ) {
             for mesh in self.meshes.iter() {
-                let Some(texture) = textures.textures.get(mesh.texture_handle.0) else {
+                let Some(texture) = textures.get(mesh.texture_handle) else {
                     tracing::warn!("Texture not in cache");
                     continue;
                 };
@@ -598,125 +590,6 @@ mod gpu {
                     .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
                 render_pass.draw_indexed(mesh.indices.clone(), 0, 0..1);
             }
-        }
-    }
-
-    /// A store/cache for textures used by the [super::ModelRenderer].
-    pub struct Textures {
-        textures: Slab<Texture>,
-
-        pub texture_bind_group_layout: wgpu::BindGroupLayout,
-        sampler: wgpu::Sampler,
-    }
-
-    impl Textures {
-        pub fn new() -> Self {
-            let texture_bind_group_layout =
-                renderer()
-                    .device
-                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                        label: Some("model_renderer_texture_bind_group_layout"),
-                        entries: &[
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 0,
-                                visibility: wgpu::ShaderStages::FRAGMENT,
-                                ty: wgpu::BindingType::Texture {
-                                    sample_type: wgpu::TextureSampleType::Float {
-                                        filterable: true,
-                                    },
-                                    view_dimension: wgpu::TextureViewDimension::D2,
-                                    multisampled: false,
-                                },
-                                count: None,
-                            },
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 1,
-                                visibility: wgpu::ShaderStages::FRAGMENT,
-                                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                                count: None,
-                            },
-                        ],
-                    });
-
-            let sampler = renderer().device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("model_renderer_sampler"),
-                address_mode_u: wgpu::AddressMode::Repeat,
-                address_mode_v: wgpu::AddressMode::Repeat,
-                address_mode_w: wgpu::AddressMode::Repeat,
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                ..Default::default()
-            });
-
-            Self {
-                textures: Slab::default(),
-                texture_bind_group_layout,
-                sampler,
-            }
-        }
-
-        fn add(&mut self, image_handle: Handle<Image>) -> TextureHandle {
-            let image = images()
-                .get(image_handle)
-                .expect("Adding image that doesn't exist!");
-
-            let size = wgpu::Extent3d {
-                width: image.size.x,
-                height: image.size.y,
-                depth_or_array_layers: 1,
-            };
-
-            let texture = renderer().device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("texture"),
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-
-            renderer().queue.write_texture(
-                wgpu::TexelCopyTextureInfoBase {
-                    texture: &texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::default(),
-                    aspect: wgpu::TextureAspect::All,
-                },
-                &image.data,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(image.size.x * 4),
-                    rows_per_image: Some(image.size.y),
-                },
-                size,
-            );
-
-            let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            let bind_group = renderer()
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("model_renderer_bind_group"),
-                    layout: &self.texture_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&texture_view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&self.sampler),
-                        },
-                    ],
-                });
-
-            let texture = Texture {
-                blend_mode: image.blend_mode,
-                bind_group,
-            };
-            TextureHandle(self.textures.insert(texture))
         }
     }
 
@@ -754,7 +627,7 @@ mod gpu {
 
         pub fn add_model(
             &mut self,
-            textures: &mut Textures,
+            textures: &mut textures::Textures,
             model_handle: Handle<model::Model>,
         ) -> Result<ModelHandle, AssetError> {
             let model = models()
