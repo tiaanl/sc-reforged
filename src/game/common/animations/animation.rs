@@ -1,0 +1,113 @@
+use std::path::Path;
+
+use ahash::HashMap;
+use glam::{Quat, Vec3};
+
+use crate::{
+    engine::{
+        assets::AssetError,
+        prelude::Transform,
+        storage::{Handle, Storage},
+    },
+    game::{data_dir::data_dir, model::Node},
+    global,
+};
+
+use super::track::Track;
+
+#[derive(Debug, Default)]
+pub struct Animation {
+    positions: HashMap<u32, Track<Vec3>>,
+    rotations: HashMap<u32, Track<Quat>>,
+}
+
+impl Animation {
+    pub fn sample_pose(&self, time: f32, nodes: &[Node], looping: bool) -> Vec<Transform> {
+        let fps = 30.0; // pick a clip FPS and stick to it
+        let f = time * fps;
+
+        nodes
+            .iter()
+            .map(|node| {
+                let translation = match self.positions.get(&node.bone_id) {
+                    Some(t) => t.sample_sub_frame(f, looping),
+                    None => node.transform.translation,
+                };
+                let rotation = match self.rotations.get(&node.bone_id) {
+                    Some(t) => t.sample_sub_frame(f, looping),
+                    None => node.transform.rotation,
+                };
+
+                Transform {
+                    translation,
+                    rotation,
+                }
+            })
+            .collect()
+    }
+}
+
+pub struct Animations {
+    animations: Storage<Animation>,
+    lookup: HashMap<String, Handle<Animation>>,
+}
+
+impl Animations {
+    // pub const TIME_PER_FRAME: f32 = 1.0 / 30.0;
+
+    pub fn new() -> Self {
+        Self {
+            animations: Storage::default(),
+            lookup: HashMap::default(),
+        }
+    }
+
+    pub fn get(&self, handle: Handle<Animation>) -> Option<&Animation> {
+        self.animations.get(handle)
+    }
+
+    pub fn load(&mut self, path: impl AsRef<Path>) -> Result<Handle<Animation>, AssetError> {
+        let animation = self.load_direct(path.as_ref())?;
+        let handle = self.animations.insert(animation);
+        self.lookup
+            .insert(path.as_ref().to_string_lossy().to_string(), handle);
+        Ok(handle)
+    }
+
+    pub fn load_direct(&self, path: impl AsRef<Path>) -> Result<Animation, AssetError> {
+        let motion = data_dir()._load_motion(path)?;
+
+        fn convert_position(p: Vec3) -> Vec3 {
+            Vec3::new(-p.x, p.y, p.z)
+        }
+        fn convert_rotation(q: Quat) -> Quat {
+            Quat::from_xyzw(-q.x, -q.y, -q.z, q.w)
+        }
+
+        let mut animation = Animation::default();
+
+        for kf in &motion.key_frames {
+            let f = kf.frame;
+            for b in &kf.bones {
+                if let Some(p) = b.position {
+                    animation
+                        .positions
+                        .entry(b.bone_id)
+                        .or_default()
+                        .insert(f, convert_position(p));
+                }
+                if let Some(r) = b.rotation {
+                    animation
+                        .rotations
+                        .entry(b.bone_id)
+                        .or_default()
+                        .insert(f, convert_rotation(r));
+                }
+            }
+        }
+
+        Ok(animation)
+    }
+}
+
+global!(Animations, scoped_animations, animations);

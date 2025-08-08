@@ -231,7 +231,7 @@ impl Objects {
                 .enumerate()
                 .filter(|(_, node)| node.parent == node_index)
             {
-                let start_position = transform.project_point3(Vec3::ZERO);
+                let start_position = transform.transform_point3(Vec3::ZERO);
 
                 let end_transform = transform * child_node.transform.to_mat4();
                 let end_position = end_transform.transform_point3(Vec3::ZERO);
@@ -260,8 +260,7 @@ impl Objects {
                 .enumerate()
                 .map(|(i, t)| {
                     let mut node = model.nodes[i].clone();
-                    node.transform = Transform::from_rotation(t.rotation.unwrap())
-                        .with_translation(t.position.unwrap());
+                    node.transform = t.clone();
                     node
                 })
                 .collect::<Vec<_>>();

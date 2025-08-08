@@ -318,11 +318,7 @@ impl ModelRenderer {
                         .iter()
                         .enumerate()
                         .map(|(node_index, sample)| gpu::Node {
-                            transform: Mat4::from_rotation_translation(
-                                sample.rotation.unwrap(),
-                                sample.position.unwrap(),
-                            )
-                            .to_cols_array(),
+                            transform: sample.to_mat4().to_cols_array(),
                             parent_node_index: model.nodes[node_index].parent,
                             _padding: [0; 3],
                         })

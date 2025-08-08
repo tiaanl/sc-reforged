@@ -8,7 +8,7 @@ use crate::{
         prelude::*,
     },
     game::{
-        animations::old::Track,
+        animations::track::Track,
         camera::{self, Controller},
         compositor::Compositor,
         config::{CampaignDef, ObjectType},
@@ -139,13 +139,14 @@ impl WorldScene {
             let mut e = DayNightCycle::default();
 
             campaign.time_of_day.iter().enumerate().for_each(|(i, t)| {
-                let time = i as f32;
-                e.sun_dir.set_key_frame(time, t.sun_dir);
-                e.sun_color.set_key_frame(time, t.sun_color);
+                let index = i as u32;
 
-                e.fog_distance.set_key_frame(time, t.fog_distance);
-                e.fog_near_fraction.set_key_frame(time, t.fog_near_fraction);
-                e.fog_color.set_key_frame(time, t.fog_color);
+                e.sun_dir.insert(index, t.sun_dir);
+                e.sun_color.insert(index, t.sun_color);
+
+                e.fog_distance.insert(index, t.fog_distance);
+                e.fog_near_fraction.insert(index, t.fog_near_fraction);
+                e.fog_color.insert(index, t.fog_color);
             });
 
             e
@@ -263,12 +264,28 @@ impl WorldScene {
     }
 
     fn calculate_environment(&self, time_of_day: f32) -> Environment {
-        let sun_dir = self.day_night_cycle.sun_dir.get(time_of_day);
-        let sun_color = self.day_night_cycle.sun_color.get(time_of_day);
+        let sun_dir = self
+            .day_night_cycle
+            .sun_dir
+            .sample_sub_frame(time_of_day, true);
+        let sun_color = self
+            .day_night_cycle
+            .sun_color
+            .sample_sub_frame(time_of_day, true);
 
-        let fog_far = self.day_night_cycle.fog_distance.get(time_of_day);
-        let fog_near = fog_far * self.day_night_cycle.fog_near_fraction.get(time_of_day);
-        let fog_color = self.day_night_cycle.fog_color.get(time_of_day);
+        let fog_far = self
+            .day_night_cycle
+            .fog_distance
+            .sample_sub_frame(time_of_day, true);
+        let fog_near = fog_far
+            * self
+                .day_night_cycle
+                .fog_near_fraction
+                .sample_sub_frame(time_of_day, true);
+        let fog_color = self
+            .day_night_cycle
+            .fog_color
+            .sample_sub_frame(time_of_day, true);
 
         Environment {
             sun_dir: sun_dir.extend(0.0),
@@ -491,7 +508,7 @@ impl Scene for WorldScene {
                 ui.heading("Environment");
                 ui.horizontal(|ui| {
                     ui.label("Time of day");
-                    ui.add(Slider::new(&mut self.time_of_day, 0.0..=24.0));
+                    ui.add(Slider::new(&mut self.time_of_day, 0.0..=24.0).drag_value_speed(0.01));
                 });
                 ui.horizontal(|ui| {
                     ui.label("Sun dir");
