@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use ahash::HashSet;
 
 use crate::{
@@ -95,20 +97,23 @@ impl Objects {
             models().load_object_model(model_name)
         }?;
 
-        // Because we're using a left handed coordinate system, the z rotations have
-        // to be reversed.  (Why though!???)
-        //let rotation = Vec3::new(rotation.x, rotation.y, -rotation.z);
-
-        // let transform = Mat4::from_rotation_translation(
-        //     Quat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z),
-        //     translation,
-        // );
+        let animation_handle =
+            animations().load(PathBuf::from("motions").join("bipedal_walk.bmf"))?;
 
         let model_instance_handle = self.model_renderer.add_model_instance(
             model_handle,
             transform.to_mat4(),
             self.objects.len() as u32,
         )?;
+
+        let render_animation_handle = self
+            .model_renderer
+            .add_animation(model_handle, animation_handle);
+
+        self.model_renderer
+            .update_instance(model_instance_handle, |updater| {
+                updater.set_render_animation(render_animation_handle);
+            });
 
         self.objects.push(Object {
             title: title.to_string(),

@@ -7,6 +7,7 @@ use crate::{
         model,
         models::models,
         renderer::{
+            render_animations::{RenderAnimation, RenderAnimations},
             render_models::{RenderModel, RenderModels, RenderNode, RenderVertex},
             render_textures,
         },
@@ -28,6 +29,8 @@ struct ModelInstance {
     transform: Mat4,
     entity_id: u32,
     animation_description: Option<AnimationDescription>,
+
+    render_animation_handle: Option<Handle<RenderAnimation>>,
 }
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -52,6 +55,8 @@ pub struct InstanceUpdater {
     animation: Option<Handle<Animation>>,
     /// If `true`, the even if an animation was specified, the animation handle will be cleared.
     clear_animation: bool,
+
+    render_animation: Option<Handle<RenderAnimation>>,
 }
 
 impl InstanceUpdater {
@@ -66,11 +71,16 @@ impl InstanceUpdater {
     pub fn clear_animation(&mut self) {
         self.clear_animation = true;
     }
+
+    pub fn set_render_animation(&mut self, render_animation: Handle<RenderAnimation>) {
+        self.render_animation = Some(render_animation);
+    }
 }
 
 pub struct ModelRenderer {
     textures: render_textures::RenderTextures,
     models: RenderModels,
+    animations: RenderAnimations,
 
     /// Keep a list of each model we have to render.
     model_instances: Slab<ModelInstance>,
@@ -91,6 +101,7 @@ impl ModelRenderer {
     ) -> Self {
         let textures = render_textures::RenderTextures::new();
         let models = RenderModels::new();
+        let animations = RenderAnimations::default();
 
         let module = shaders.create_shader(
             "model_renderer",
@@ -207,6 +218,7 @@ impl ModelRenderer {
         Self {
             textures,
             models,
+            animations,
 
             model_instances: Slab::default(),
             instance_buffers: HashMap::default(),
@@ -232,11 +244,23 @@ impl ModelRenderer {
                 render_model_handle,
                 entity_id,
                 animation_description: None,
+
+                render_animation_handle: None,
             }));
 
         self.dirty_instance_buffers.insert(render_model_handle);
 
         Ok(model_instance_handle)
+    }
+
+    pub fn add_animation(
+        &mut self,
+        model_handle: Handle<model::Model>,
+        animation_handle: Handle<Animation>,
+    ) -> Handle<RenderAnimation> {
+        let model = models().get(model_handle).expect("Could not get model");
+        let nodes = &model.nodes;
+        self.animations.add(animation_handle, nodes)
     }
 
     pub fn update_instance(
@@ -269,6 +293,10 @@ impl ModelRenderer {
                 time: 0.0,
             });
             dirty = true;
+        }
+
+        if let Some(render_animation) = updater.render_animation {
+            instance.render_animation_handle = Some(render_animation);
         }
 
         if dirty {

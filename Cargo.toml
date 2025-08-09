@@ -31,6 +31,7 @@ walkdir = { version = "2.5.0", default-features = false }
 wgpu = { version = "24.0", features = ["naga-ir"] }
 winit = { version = "0.30.5" }
 ahash = "0.8.12"
+half = { version = "2.6.0", features = ["bytemuck"] }
 
 [profile.dev.package.zune-jpeg]
 opt-level = 3
