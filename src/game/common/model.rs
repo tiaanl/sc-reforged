@@ -5,7 +5,10 @@ use shadow_company_tools::smf;
 
 use crate::{
     engine::{prelude::*, storage::Handle},
-    game::image::{Image, images},
+    game::{
+        image::{Image, images},
+        skeleton::{Bone, Skeleton},
+    },
 };
 
 pub type NodeIndex = u32;
@@ -15,27 +18,14 @@ type NameLookup = HashMap<String, NodeIndex>;
 /// Model instance data held by each enitty.
 #[derive(Debug)]
 pub struct Model {
-    /// A list of [ModelNode]s that define the hierarchy of this [Model]. Each node's parent is
-    /// guaranteed to appear earlier in the list than the node itself, ensuring a top-down order for
-    /// traversal.
-    pub nodes: Vec<Node>,
+    /// The hierarchical bone structure of the model.
+    pub skeleton: Skeleton,
     /// A list of all the [Mesh]s contained in this model.
     pub meshes: Vec<Mesh>,
     /// A collection of collision boxes in the model, each associated with a specific node.
     pub _collision_boxes: Vec<CollisionBox>,
     /// Look up node indices according to original node names.
     _names: NameLookup,
-}
-
-impl Model {
-    pub fn local_transform(&self, node_index: u32) -> Mat4 {
-        let node = &self.nodes[node_index as usize];
-        if node.parent == NodeIndex::MAX {
-            node.transform.to_mat4()
-        } else {
-            self.local_transform(node.parent) * node.transform.to_mat4()
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -194,8 +184,20 @@ impl TryFrom<smf::Model> for Model {
             }
         }
 
+        let skeleton = Skeleton {
+            bones: nodes
+                .iter()
+                .map(|node| Bone {
+                    parent: node.parent,
+                    transform: node.transform.clone(),
+                    id: node.bone_id,
+                    name: node.name.clone(),
+                })
+                .collect(),
+        };
+
         Ok(Model {
-            nodes,
+            skeleton,
             meshes,
             _collision_boxes: collision_boxes,
             _names: names,

@@ -2,12 +2,12 @@ use glam::{Quat, Vec3, Vec4};
 
 use crate::{
     engine::{
-        prelude::{Transform, renderer},
+        prelude::renderer,
         storage::{Handle, Storage},
     },
     game::{
         animations::{Animation, animations},
-        model::Node,
+        skeleton::Skeleton,
     },
 };
 
@@ -68,18 +68,18 @@ impl RenderAnimations {
         &self.animation_bind_group_layout
     }
 
-    pub fn create_rest_pose(&mut self, nodes: &[Node]) -> Handle<RenderAnimation> {
-        let mut positions: Vec<Vec4> = Vec::with_capacity(nodes.len());
-        let mut rotations: Vec<Quat> = Vec::with_capacity(nodes.len());
+    pub fn create_rest_pose(&mut self, skeleton: &Skeleton) -> Handle<RenderAnimation> {
+        let mut positions: Vec<Vec4> = Vec::with_capacity(skeleton.bones.len());
+        let mut rotations: Vec<Quat> = Vec::with_capacity(skeleton.bones.len());
 
-        for (node_index, node) in nodes.iter().enumerate() {
-            if node.parent == u32::MAX {
-                positions.push(node.transform.translation.extend(0.0));
-                rotations.push(node.transform.rotation.normalize());
+        for (bone_index, bone) in skeleton.bones.iter().enumerate() {
+            if bone.parent == u32::MAX {
+                positions.push(bone.transform.translation.extend(0.0));
+                rotations.push(bone.transform.rotation.normalize());
             } else {
-                let parent = node.parent as usize;
+                let parent = bone.parent as usize;
                 assert!(
-                    parent < node_index,
+                    parent < bone_index,
                     "nodes must be topologically ordered: parent before child"
                 );
 
@@ -88,8 +88,8 @@ impl RenderAnimations {
 
                 // Rotate local translation by parent's rotation.
                 let position =
-                    parent_position + (parent_rotation * node.transform.translation).extend(0.0);
-                let rotation = (parent_rotation * node.transform.rotation).normalize();
+                    parent_position + (parent_rotation * bone.transform.translation).extend(0.0);
+                let rotation = (parent_rotation * bone.transform.rotation).normalize();
 
                 positions.push(position);
                 rotations.push(rotation);
@@ -97,15 +97,21 @@ impl RenderAnimations {
         }
 
         let positions_view = {
-            let positions_texture =
-                Self::create_texture(1, nodes.len() as u32, bytemuck::cast_slice(&positions));
+            let positions_texture = Self::create_texture(
+                1,
+                skeleton.bones.len() as u32,
+                bytemuck::cast_slice(&positions),
+            );
 
             positions_texture.create_view(&wgpu::TextureViewDescriptor::default())
         };
 
         let rotations_view = {
-            let rotations_texture =
-                Self::create_texture(1, nodes.len() as u32, bytemuck::cast_slice(&rotations));
+            let rotations_texture = Self::create_texture(
+                1,
+                skeleton.bones.len() as u32,
+                bytemuck::cast_slice(&rotations),
+            );
 
             rotations_texture.create_view(&wgpu::TextureViewDescriptor::default())
         };
@@ -118,7 +124,7 @@ impl RenderAnimations {
     pub fn add(
         &mut self,
         animation_handle: Handle<Animation>,
-        nodes: &[Node],
+        skeleton: &Skeleton,
     ) -> Handle<RenderAnimation> {
         let animation = animations()
             .get(animation_handle)
@@ -127,10 +133,10 @@ impl RenderAnimations {
         // If there is no animation data (sometimes used for an animation that just shows the rest
         // pose), then just use the rest pose.
         if animation.last_key_frame() == 0 {
-            return self.create_rest_pose(nodes);
+            return self.create_rest_pose(skeleton);
         }
 
-        let baked_animation = Self::bake_animation_globals(animation, nodes, 30.0, true);
+        let baked_animation = Self::bake_animation_globals(animation, skeleton, 30.0, true);
 
         let positions_view = {
             let positions_texture = Self::create_texture(
@@ -158,8 +164,8 @@ impl RenderAnimations {
     }
 
     pub fn bake_animation_globals(
-        anim: &Animation, // your pos/rot track split or Transform track
-        nodes: &[Node],   // for hierarchy + bind locals
+        anim: &Animation,
+        skeleton: &Skeleton,
         fps: f32,
         looping: bool,
     ) -> BakedAnimation {
@@ -171,7 +177,7 @@ impl RenderAnimations {
         // Find the biggest key frame.
         let frames = anim.last_key_frame();
 
-        let bones = nodes.len() as u32;
+        let bones = skeleton.bones.len() as u32;
         let texels = (frames * bones) as usize;
 
         let mut positions = vec![Vec4::ZERO; texels];
@@ -184,15 +190,15 @@ impl RenderAnimations {
             let t_sec = f as f32 / fps;
 
             // 1) Sample absolute locals for this frame
-            let locals: Vec<Transform> = anim.sample_pose(t_sec, nodes, looping);
+            let locals = anim.sample_pose(t_sec, skeleton, looping);
 
             // 2) Build globals by walking hierarchy (assumes parent index < child index)
-            let mut g_t = vec![Vec3::ZERO; nodes.len()];
-            let mut g_q = vec![Quat::IDENTITY; nodes.len()];
+            let mut g_t = vec![Vec3::ZERO; skeleton.bones.len()];
+            let mut g_q = vec![Quat::IDENTITY; skeleton.bones.len()];
 
-            for (i, n) in nodes.iter().enumerate() {
-                let lt = locals[i].translation;
-                let lr = locals[i].rotation;
+            for (i, n) in skeleton.bones.iter().enumerate() {
+                let lt = locals.bones[i].transform.translation;
+                let lr = locals.bones[i].transform.rotation;
 
                 if n.parent == u32::MAX {
                     g_t[i] = lt;
@@ -206,7 +212,7 @@ impl RenderAnimations {
             }
 
             // 3) Optional: hemisphere-fix per bone to keep adjacent frames “close”
-            for i in 0..nodes.len() {
+            for i in 0..skeleton.bones.len() {
                 let q = {
                     if let Some(prev) = last_q[i] {
                         let mut q = g_q[i];

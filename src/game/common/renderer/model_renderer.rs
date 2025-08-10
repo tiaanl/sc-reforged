@@ -244,8 +244,7 @@ impl ModelRenderer {
         animation_handle: Handle<Animation>,
     ) -> Handle<RenderAnimation> {
         let model = models().get(model_handle).expect("Could not get model");
-        let nodes = &model.nodes;
-        self.animations.add(animation_handle, nodes)
+        self.animations.add(animation_handle, &model.skeleton)
     }
 
     pub fn update_instance(

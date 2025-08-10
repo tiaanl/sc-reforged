@@ -12,9 +12,10 @@ use crate::{
         animations::{Animation, animations},
         config::ObjectType,
         geometry_buffers::{GeometryBuffers, GeometryData},
-        model::{Model, Node},
+        model::Model,
         models::models,
         renderer::{ModelRenderer, RenderAnimation, RenderInstance},
+        skeleton::Skeleton,
     },
 };
 
@@ -35,7 +36,7 @@ pub struct Object {
     /// Whether to draw the bounding sphere for each mesh.
     pub draw_bounding_spheres: bool,
     /// A list of node indices to draw in debug mode.
-    pub selected_nodes: HashSet<usize>,
+    pub selected_bones: HashSet<usize>,
 }
 
 impl Object {
@@ -153,7 +154,7 @@ impl Objects {
 
             draw_debug_bones: false,
             draw_bounding_spheres: false,
-            selected_nodes: HashSet::default(),
+            selected_bones: HashSet::default(),
         });
 
         Ok(())
@@ -211,7 +212,7 @@ impl Objects {
 
             if object.draw_debug_bones {
                 Self::render_skeleton(object, model, vertices);
-                Self::render_selected_nodes(object, model, vertices);
+                Self::render_selected_bones(object, model, vertices);
             }
 
             if object.draw_bounding_spheres {
@@ -222,9 +223,9 @@ impl Objects {
 
     fn render_skeleton(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
         fn do_node(
-            nodes: &[Node],
+            skeleton: &Skeleton,
             transform: Mat4,
-            node_index: u32,
+            bone_index: u32,
             vertices: &mut Vec<GizmoVertex>,
             depth: usize,
         ) {
@@ -239,10 +240,11 @@ impl Objects {
 
             let color = COLORS[depth % COLORS.len()];
 
-            for (child_index, child_node) in nodes
+            for (child_index, child_node) in skeleton
+                .bones
                 .iter()
                 .enumerate()
-                .filter(|(_, node)| node.parent == node_index)
+                .filter(|(_, bone)| bone.parent == bone_index)
             {
                 let start_position = transform.transform_point3(Vec3::ZERO);
 
@@ -257,7 +259,7 @@ impl Objects {
                 // }
 
                 do_node(
-                    nodes,
+                    skeleton,
                     end_transform,
                     child_index as u32,
                     vertices,
@@ -267,26 +269,17 @@ impl Objects {
         }
 
         if let Some(animation) = object.animation.and_then(|handle| animations().get(handle)) {
-            let pose = animation.sample_pose(object.animation_time, &model.nodes, true);
-            let nodes = pose
-                .iter()
-                .enumerate()
-                .map(|(i, t)| {
-                    let mut node = model.nodes[i].clone();
-                    node.transform = t.clone();
-                    node
-                })
-                .collect::<Vec<_>>();
-
-            do_node(&nodes, object.transform.to_mat4(), 0, vertices, 0);
+            let skeleton = animation.sample_pose(object.animation_time, &model.skeleton, true);
+            do_node(&skeleton, object.transform.to_mat4(), 0, vertices, 0);
         } else {
-            do_node(&model.nodes, object.transform.to_mat4(), 0, vertices, 0);
+            do_node(&model.skeleton, object.transform.to_mat4(), 0, vertices, 0);
         }
     }
 
-    fn render_selected_nodes(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
-        for node_index in object.selected_nodes.iter() {
-            let transform = object.transform.to_mat4() * model.local_transform(*node_index as u32);
+    fn render_selected_bones(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
+        for bone_index in object.selected_bones.iter() {
+            let transform =
+                object.transform.to_mat4() * model.skeleton.local_transform(*bone_index as u32);
 
             vertices.extend(GizmosRenderer::create_iso_sphere(transform, 10.0, 8));
         }
@@ -295,7 +288,7 @@ impl Objects {
     fn render_bounding_spheres(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
         for mesh in model.meshes.iter() {
             let transform = object.transform.to_mat4()
-                * model.local_transform(mesh.node_index)
+                * model.skeleton.local_transform(mesh.node_index)
                 * Mat4::from_translation(mesh.bounding_sphere.center);
 
             vertices.extend(GizmosRenderer::create_iso_sphere(
@@ -424,16 +417,15 @@ impl Objects {
                         }
 
                         if let Some(model) = models().get(object.model_handle) {
-                            use crate::game::model::Node;
-
                             ui.heading("Skeleton");
                             fn do_node(
                                 ui: &mut egui::Ui,
-                                nodes: &[Node],
+                                skeleton: &Skeleton,
                                 parent_index: u32,
                                 selected_nodes: &mut HashSet<usize>,
                             ) {
-                                nodes
+                                skeleton
+                                    .bones
                                     .iter()
                                     .enumerate()
                                     .filter(|(_, node)| node.parent == parent_index)
@@ -449,12 +441,17 @@ impl Objects {
                                                     selected_nodes.remove(&node_index);
                                                 }
                                             }
-                                            do_node(ui, nodes, node_index as u32, selected_nodes);
+                                            do_node(
+                                                ui,
+                                                skeleton,
+                                                node_index as u32,
+                                                selected_nodes,
+                                            );
                                         });
                                     });
                             }
 
-                            do_node(ui, &model.nodes, 0xFFFF_FFFF, &mut object.selected_nodes);
+                            do_node(ui, &model.skeleton, 0xFFFF_FFFF, &mut object.selected_bones);
                         }
 
                         ui.heading("Debug");

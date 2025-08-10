@@ -9,7 +9,7 @@ use crate::{
         prelude::Transform,
         storage::{Handle, Storage},
     },
-    game::{data_dir::data_dir, model::Node},
+    game::{data_dir::data_dir, skeleton::Skeleton},
     global,
 };
 
@@ -28,28 +28,35 @@ impl Animation {
         max_pos.into_iter().chain(max_rot).max().unwrap_or(0)
     }
 
-    pub fn sample_pose(&self, time: f32, nodes: &[Node], looping: bool) -> Vec<Transform> {
-        let fps = 30.0; // pick a clip FPS and stick to it
-        let f = time * fps;
+    pub fn sample_pose(&self, time: f32, skeleton: &Skeleton, looping: bool) -> Skeleton {
+        const FPS: f32 = 30.0;
+        let f = time * FPS;
 
-        nodes
+        let bones = skeleton
+            .bones
             .iter()
-            .map(|node| {
-                let translation = match self.positions.get(&node.bone_id) {
+            .map(|bone| {
+                let mut bone = bone.clone();
+
+                let translation = match self.positions.get(&bone.id) {
                     Some(t) => t.sample_sub_frame(f, looping),
-                    None => node.transform.translation,
+                    None => bone.transform.translation,
                 };
-                let rotation = match self.rotations.get(&node.bone_id) {
+                let rotation = match self.rotations.get(&bone.id) {
                     Some(t) => t.sample_sub_frame(f, looping),
-                    None => node.transform.rotation,
+                    None => bone.transform.rotation,
                 };
 
-                Transform {
+                bone.transform = Transform {
                     translation,
                     rotation,
-                }
+                };
+
+                bone
             })
-            .collect()
+            .collect();
+
+        Skeleton { bones }
     }
 }
 

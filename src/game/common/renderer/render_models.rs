@@ -147,7 +147,7 @@ impl RenderModels {
                     usage: wgpu::BufferUsages::INDEX,
                 });
 
-        let rest_pose = animations.create_rest_pose(&model.nodes);
+        let rest_pose = animations.create_rest_pose(&model.skeleton);
 
         let render_model_handle = self.models.insert(RenderModel {
             vertex_buffer,

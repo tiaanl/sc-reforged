@@ -101,8 +101,8 @@ impl winit::application::ApplicationHandler for App {
                     let campaign_def = campaign_defs
                         .campaigns
                         .iter()
-                        .find(|c| c.base_name == "test")
-                        // .find(|c| c.base_name == "training") // 140
+                        // .find(|c| c.base_name == "test")
+                        .find(|c| c.base_name == "training") // 140
                         // .find(|c| c.base_name == "angola_tutorial") // 149
                         // .find(|c| c.base_name == "angola") // 368
                         // .find(|c| c.base_name == "romania") // 289
@@ -342,11 +342,6 @@ fn main() {
     let _images = scoped_images(|| Images::new().expect("Could not initialize images."));
     let _models = scoped_models(|| Models::new().expect("Could not initialize models."));
     let _animations = game::animations::scoped_animations(game::animations::Animations::new);
-
-    // let animation = animations()
-    //     .load_direct(PathBuf::from("motions").join("crow_walk.bmf"))
-    //     .unwrap();
-    // println!("animation: {animation:#?}");
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
 
