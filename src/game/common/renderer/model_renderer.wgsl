@@ -10,11 +10,6 @@
 @group(2) @binding(0) var t_texture: texture_2d<f32>;
 @group(2) @binding(1) var s_sampler: sampler;
 
-struct AnimationTextures {
-    @binding(0) positions: texture_2d<f32>,
-    @binding(1) rotations: texture_2d<f32>,
-}
-
 @group(3) @binding(0) var t_positions: texture_2d<f32>;
 @group(3) @binding(1) var t_rotations: texture_2d<f32>;
 
