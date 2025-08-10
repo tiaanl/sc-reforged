@@ -2,16 +2,6 @@ use std::marker::PhantomData;
 
 pub struct Handle<T>(usize, PhantomData<T>);
 
-impl<T> Handle<T> {
-    pub fn _from_raw(raw: usize) -> Self {
-        Self(raw, PhantomData)
-    }
-
-    pub fn _as_raw(&self) -> usize {
-        self.0
-    }
-}
-
 impl<T> Clone for Handle<T> {
     fn clone(&self) -> Self {
         *self
@@ -41,28 +31,38 @@ impl<T> std::fmt::Debug for Handle<T> {
     }
 }
 
-pub struct Storage<T> {
-    items: slab::Slab<T>,
-}
+pub struct Storage<T>(slab::Slab<T>);
 
 impl<T> Default for Storage<T> {
+    #[inline]
     fn default() -> Self {
-        Self {
-            items: Default::default(),
-        }
+        Self(slab::Slab::default())
     }
 }
 
 impl<T> Storage<T> {
+    #[inline]
     pub fn insert(&mut self, item: T) -> Handle<T> {
-        Handle(self.items.insert(item), PhantomData)
+        Handle(self.0.insert(item), PhantomData)
     }
 
+    #[inline]
     pub fn get(&self, handle: Handle<T>) -> Option<&T> {
-        self.items.get(handle.0)
+        self.0.get(handle.0)
     }
 
+    #[inline]
     pub fn get_mut(&mut self, handle: Handle<T>) -> Option<&mut T> {
-        self.items.get_mut(handle.0)
+        self.0.get_mut(handle.0)
+    }
+
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
+        self.0.iter().map(|(h, t)| (Handle(h, PhantomData), t))
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (Handle<T>, &mut T)> {
+        self.0.iter_mut().map(|(h, t)| (Handle(h, PhantomData), t))
     }
 }

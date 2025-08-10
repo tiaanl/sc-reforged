@@ -1,62 +1,42 @@
+use ahash::HashMap;
+use wgpu::util::DeviceExt;
+
 use crate::{
-    engine::{prelude::*, storage::Handle},
+    engine::{
+        prelude::*,
+        storage::{Handle, Storage},
+    },
     game::{
-        animations::{Animation, animations},
+        animations::Animation,
         geometry_buffers::GeometryBuffers,
         image::BlendMode,
         model,
         models::models,
         renderer::{
+            instance::{RenderInstance, RenderInstanceAnimation},
             render_animations::{RenderAnimation, RenderAnimations},
-            render_models::{RenderModel, RenderModels, RenderNode, RenderVertex},
+            render_models::{RenderModel, RenderModels, RenderVertex},
             render_textures,
         },
     },
 };
 
-use ahash::{HashMap, HashSet};
-use slab::Slab;
-use wgpu::util::DeviceExt;
-
-struct AnimationDescription {
-    handle: Handle<Animation>,
-    time: f32,
-}
-
-struct ModelInstance {
-    model_handle: Handle<model::Model>,
-    render_model_handle: Handle<RenderModel>,
-    transform: Mat4,
-    entity_id: u32,
-    animation_description: Option<AnimationDescription>,
-
-    render_animation_handle: Option<Handle<RenderAnimation>>,
-}
-
-#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]
-struct Instance {
-    model: Mat4,
+struct GpuInstance {
+    model_matrix: Mat4,
     id: u32,
-    _padding: [u32; 3],
+    animation_time: f32,
+    _padding: [u32; 2],
 }
-
-/// A gpu buffer holding a set of [Instance]'s to render per model.
-struct InstanceBuffer {
-    buffer: wgpu::Buffer,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ModelInstanceHandle(usize);
 
 #[derive(Default)]
 pub struct InstanceUpdater {
     transform: Option<Mat4>,
-    animation: Option<Handle<Animation>>,
+    animation: Option<Handle<RenderAnimation>>,
+    animation_time: Option<f32>,
     /// If `true`, the even if an animation was specified, the animation handle will be cleared.
     clear_animation: bool,
-
-    render_animation: Option<Handle<RenderAnimation>>,
 }
 
 impl InstanceUpdater {
@@ -64,16 +44,34 @@ impl InstanceUpdater {
         self.transform = Some(transform);
     }
 
-    pub fn set_animation(&mut self, animation: Handle<Animation>) {
+    pub fn set_animation(&mut self, animation: Handle<RenderAnimation>) {
         self.animation = Some(animation);
+    }
+
+    pub fn set_animation_time(&mut self, time: f32) {
+        self.animation_time = Some(time);
     }
 
     pub fn clear_animation(&mut self) {
         self.clear_animation = true;
     }
+}
 
-    pub fn set_render_animation(&mut self, render_animation: Handle<RenderAnimation>) {
-        self.render_animation = Some(render_animation);
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub struct InstanceKey {
+    pub render_model: Handle<RenderModel>,
+    pub render_animation: Option<Handle<RenderAnimation>>,
+}
+
+impl InstanceKey {
+    pub fn new(
+        render_model: Handle<RenderModel>,
+        render_animation: Option<Handle<RenderAnimation>>,
+    ) -> Self {
+        Self {
+            render_model,
+            render_animation,
+        }
     }
 }
 
@@ -83,13 +81,11 @@ pub struct ModelRenderer {
     animations: RenderAnimations,
 
     /// Keep a list of each model we have to render.
-    model_instances: Slab<ModelInstance>,
-    /// Keeps a list of transforms for each model instance to render.
-    instance_buffers: HashMap<Handle<RenderModel>, InstanceBuffer>,
-    /// A list of changed instance buffers that has to be uploaded before the next render.
-    dirty_instance_buffers: HashSet<Handle<RenderModel>>,
+    render_instances: Storage<RenderInstance>,
 
+    /// The pipeline to render all opaque models.
     opaque_pipeline: wgpu::RenderPipeline,
+    /// The pipeline to render all models with an alpha channel.
     alpha_pipeline: wgpu::RenderPipeline,
 }
 
@@ -100,7 +96,7 @@ impl ModelRenderer {
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let textures = render_textures::RenderTextures::new();
-        let models = RenderModels::new();
+        let models = RenderModels::default();
         let animations = RenderAnimations::default();
 
         let module = shaders.create_shader(
@@ -118,7 +114,7 @@ impl ModelRenderer {
                     camera_bind_group_layout,
                     environment_bind_group_layout,
                     &textures.texture_bind_group_layout,
-                    &models.nodes_bind_group_layout,
+                    animations.bind_group_layout(),
                 ],
                 push_constant_ranges: &[],
             });
@@ -135,7 +131,7 @@ impl ModelRenderer {
                 ],
             },
             wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<Instance>() as wgpu::BufferAddress,
+                array_stride: std::mem::size_of::<GpuInstance>() as wgpu::BufferAddress,
                 step_mode: wgpu::VertexStepMode::Instance,
                 attributes: &wgpu::vertex_attr_array![
                     4 => Float32x4,
@@ -143,6 +139,7 @@ impl ModelRenderer {
                     6 => Float32x4,
                     7 => Float32x4,
                     8 => Uint32,
+                    9 => Float32,
                 ],
             },
         ];
@@ -220,37 +217,25 @@ impl ModelRenderer {
             models,
             animations,
 
-            model_instances: Slab::default(),
-            instance_buffers: HashMap::default(),
-            dirty_instance_buffers: HashSet::default(),
+            render_instances: Storage::default(),
 
             opaque_pipeline,
             alpha_pipeline,
         }
     }
 
-    pub fn add_model_instance(
+    pub fn add_render_instance(
         &mut self,
         model_handle: Handle<model::Model>,
         transform: Mat4,
         entity_id: u32,
-    ) -> Result<ModelInstanceHandle, AssetError> {
-        let render_model_handle = self.models.add_model(&mut self.textures, model_handle)?;
+    ) -> Result<Handle<RenderInstance>, AssetError> {
+        let instance_key =
+            self.models
+                .add_model(&mut self.textures, &mut self.animations, model_handle)?;
 
-        let model_instance_handle =
-            ModelInstanceHandle(self.model_instances.insert(ModelInstance {
-                model_handle,
-                transform,
-                render_model_handle,
-                entity_id,
-                animation_description: None,
-
-                render_animation_handle: None,
-            }));
-
-        self.dirty_instance_buffers.insert(render_model_handle);
-
-        Ok(model_instance_handle)
+        let render_instance = RenderInstance::new(instance_key.render_model, entity_id, transform);
+        Ok(self.render_instances.insert(render_instance))
     }
 
     pub fn add_animation(
@@ -265,110 +250,35 @@ impl ModelRenderer {
 
     pub fn update_instance(
         &mut self,
-        model_instance_handle: ModelInstanceHandle,
+        render_instance: Handle<RenderInstance>,
         mut update: impl FnMut(&mut InstanceUpdater),
     ) {
         let mut updater = InstanceUpdater::default();
 
         update(&mut updater);
 
-        let Some(instance) = self.model_instances.get_mut(model_instance_handle.0) else {
+        let Some(instance) = self.render_instances.get_mut(render_instance) else {
             tracing::warn!("Invalid model instance handle to update.");
             return;
         };
 
-        let mut dirty = false;
-
         if let Some(transform) = updater.transform {
             instance.transform = transform;
-            dirty = true;
         }
 
         if updater.clear_animation {
-            instance.animation_description = None;
-            dirty = true;
-        } else if let Some(animation) = updater.animation {
-            instance.animation_description = Some(AnimationDescription {
-                handle: animation,
-                time: 0.0,
-            });
-            dirty = true;
-        }
-
-        if let Some(render_animation) = updater.render_animation {
-            instance.render_animation_handle = Some(render_animation);
-        }
-
-        if dirty {
-            // Tag the instance for updating.
-            self.dirty_instance_buffers
-                .insert(instance.render_model_handle);
-        }
-    }
-
-    pub fn get_model(&self, model_instance_handle: ModelInstanceHandle) -> Option<&RenderModel> {
-        self.model_instances
-            .get(model_instance_handle.0)
-            .and_then(|instance| self.models.get(instance.render_model_handle))
-    }
-
-    pub fn update(&mut self, delta_time: f32) {
-        self.model_instances.iter_mut().for_each(|(_, instance)| {
-            if instance.animation_description.is_none() {
-                if let Some(render_model) = self.models.get_mut(instance.render_model_handle) {
-                    render_model.animated_nodes = None;
-                }
-                return;
+            instance.animation = None;
+        } else {
+            if let Some(animation) = updater.animation {
+                instance.animation = Some(RenderInstanceAnimation::from_animation(animation));
             }
 
-            let animation_description = instance.animation_description.as_mut().unwrap();
-
-            animation_description.time += delta_time;
-
-            // SAFETY: We can unwrap the animation, because we're filtering the list already.
-            if let Some(animation) = animations().get(animation_description.handle) {
-                if let Some(model) = models().get(instance.model_handle) {
-                    let pose =
-                        animation.sample_pose(animation_description.time, &model.nodes, true);
-
-                    debug_assert!(pose.len() == model.nodes.len());
-
-                    fn local_transform(nodes: &[RenderNode], node_index: u32) -> Mat4 {
-                        let node = &nodes[node_index as usize];
-                        if node.parent_node_index == u32::MAX {
-                            Mat4::from_cols_array(&node.transform)
-                        } else {
-                            local_transform(nodes, node.parent_node_index)
-                                * Mat4::from_cols_array(&node.transform)
-                        }
-                    }
-
-                    let temp_nodes: Vec<RenderNode> = pose
-                        .iter()
-                        .enumerate()
-                        .map(|(node_index, sample)| RenderNode {
-                            transform: sample.to_mat4().to_cols_array(),
-                            parent_node_index: model.nodes[node_index].parent,
-                            _padding: [0; 3],
-                        })
-                        .collect();
-
-                    let nodes: Vec<RenderNode> = temp_nodes
-                        .iter()
-                        .enumerate()
-                        .map(|(node_index, node)| RenderNode {
-                            transform: local_transform(&temp_nodes, node_index as u32)
-                                .to_cols_array(),
-                            parent_node_index: node.parent_node_index,
-                            _padding: [0; 3],
-                        })
-                        .collect();
-
-                    self.models
-                        .update_animation_nodes(instance.render_model_handle, &nodes);
+            if let Some(animation_time) = updater.animation_time {
+                if let Some(ref mut animation) = instance.animation {
+                    animation.time = animation_time;
                 }
             }
-        });
+        }
     }
 
     pub fn render(
@@ -378,114 +288,166 @@ impl ModelRenderer {
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
     ) {
-        // Make sure all the instance buffers are up to date.
-        {
-            for model_handle in self.dirty_instance_buffers.drain() {
-                // Build all the transforms for the model handle.
-                // TODO: This is n^2?!?!one
-                let instances = self
-                    .model_instances
-                    .iter()
-                    .filter(|(_, instance)| instance.render_model_handle == model_handle)
-                    .map(|(_, instance)| Instance {
-                        model: instance.transform,
-                        id: instance.entity_id,
-                        _padding: [0; 3],
-                    })
-                    .collect::<Vec<_>>();
+        // Build instance maps.
+        #[derive(Debug, Eq, Hash, PartialEq)]
+        struct Key {
+            model: Handle<RenderModel>,
+            animation: Handle<RenderAnimation>,
+        }
 
-                let buffer =
+        let mut opaque_instances: HashMap<Key, Vec<GpuInstance>> = HashMap::default();
+
+        for (_, instance) in self.render_instances.iter() {
+            // Figure out which animation to render.
+            let animation = if let Some(ref animation) = instance.animation {
+                *animation
+            } else {
+                let Some(model) = self.models.get(instance.render_model) else {
+                    tracing::warn!("Missing render model.");
+                    continue;
+                };
+                RenderInstanceAnimation::from_animation(model.rest_pose)
+            };
+
+            opaque_instances
+                .entry(Key {
+                    model: instance.render_model,
+                    animation: animation.handle,
+                })
+                .or_default()
+                .push(GpuInstance {
+                    model_matrix: instance.transform,
+                    id: instance.entity_id,
+                    animation_time: animation.time,
+                    _padding: Default::default(),
+                });
+        }
+
+        // Opaque
+        {
+            let mut render_pass = frame
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("model_renderer_render_pass"),
+                    color_attachments: &geometry_buffers.color_attachments(),
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &geometry_buffers.depth.view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+
+            render_pass.set_pipeline(&self.opaque_pipeline);
+            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(1, environment_bind_group, &[]);
+
+            for (key, gpu_instances) in opaque_instances.iter() {
+                let Some(model) = self.models.get(key.model) else {
+                    tracing::warn!("model lookup failure!");
+                    continue;
+                };
+
+                let Some(animation) = self.animations.get(key.animation) else {
+                    tracing::warn!("animation lookup failure!");
+                    continue;
+                };
+
+                // Create the buffer with instances.
+                let instances_buffer =
                     renderer()
                         .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("model_renderer_instance_buffer"),
-                            contents: bytemuck::cast_slice(&instances),
+                            label: Some("model_renderer_instances"),
+                            contents: bytemuck::cast_slice(gpu_instances),
                             usage: wgpu::BufferUsages::VERTEX,
                         });
 
-                if let Some(instance_buffer) = self.instance_buffers.get_mut(&model_handle) {
-                    instance_buffer.buffer = buffer;
-                } else {
-                    self.instance_buffers
-                        .insert(model_handle, InstanceBuffer { buffer });
-                }
+                render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
+
+                render_pass.set_bind_group(3, &animation.bind_group, &[]);
+
+                model.render(
+                    &mut render_pass,
+                    &self.textures,
+                    &self.animations,
+                    BlendMode::Opaque,
+                );
+
+                model.render(
+                    &mut render_pass,
+                    &self.textures,
+                    &self.animations,
+                    BlendMode::ColorKeyed,
+                );
             }
         }
 
+        // Alpha
         {
-            // Opaque
-            {
-                let mut render_pass =
-                    frame
-                        .encoder
-                        .begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("model_renderer_render_pass"),
-                            color_attachments: &geometry_buffers.color_attachments(),
-                            depth_stencil_attachment: Some(
-                                wgpu::RenderPassDepthStencilAttachment {
-                                    view: &geometry_buffers.depth.view,
-                                    depth_ops: Some(wgpu::Operations {
-                                        load: wgpu::LoadOp::Load,
-                                        store: wgpu::StoreOp::Store,
-                                    }),
-                                    stencil_ops: None,
-                                },
-                            ),
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
+            let mut render_pass = frame
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("model_renderer_render_pass"),
+                    color_attachments: &geometry_buffers.color_attachments(),
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &geometry_buffers.depth.view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Discard,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+
+            render_pass.set_pipeline(&self.alpha_pipeline);
+            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(1, environment_bind_group, &[]);
+
+            for (key, gpu_instances) in opaque_instances.iter() {
+                let Some(model) = self.models.get(key.model) else {
+                    tracing::warn!("model lookup failure!");
+                    continue;
+                };
+
+                let Some(animation) = self.animations.get(key.animation) else {
+                    tracing::warn!("animation lookup failure!");
+                    continue;
+                };
+
+                // Create the buffer with instances.
+                let instances_buffer =
+                    renderer()
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("model_renderer_instances"),
+                            contents: bytemuck::cast_slice(gpu_instances),
+                            usage: wgpu::BufferUsages::VERTEX,
                         });
 
-                render_pass.set_pipeline(&self.opaque_pipeline);
-                render_pass.set_bind_group(0, camera_bind_group, &[]);
-                render_pass.set_bind_group(1, environment_bind_group, &[]);
+                render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
 
-                for (model_handle, instance_buffer) in self.instance_buffers.iter() {
-                    let Some(model) = self.models.get(*model_handle) else {
-                        continue;
-                    };
+                render_pass.set_bind_group(3, &animation.bind_group, &[]);
 
-                    render_pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
+                model.render(
+                    &mut render_pass,
+                    &self.textures,
+                    &self.animations,
+                    BlendMode::Opaque,
+                );
 
-                    model.render(&mut render_pass, &self.textures, BlendMode::Opaque);
-                    model.render(&mut render_pass, &self.textures, BlendMode::ColorKeyed);
-                }
-            }
-
-            // Alpha
-            {
-                let mut render_pass =
-                    frame
-                        .encoder
-                        .begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("model_renderer_render_pass"),
-                            color_attachments: &geometry_buffers.color_attachments(),
-                            depth_stencil_attachment: Some(
-                                wgpu::RenderPassDepthStencilAttachment {
-                                    view: &geometry_buffers.depth.view,
-                                    depth_ops: Some(wgpu::Operations {
-                                        load: wgpu::LoadOp::Load,
-                                        store: wgpu::StoreOp::Discard,
-                                    }),
-                                    stencil_ops: None,
-                                },
-                            ),
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                        });
-
-                render_pass.set_pipeline(&self.alpha_pipeline);
-                render_pass.set_bind_group(0, camera_bind_group, &[]);
-                render_pass.set_bind_group(1, environment_bind_group, &[]);
-
-                for (model_handle, instance_buffer) in self.instance_buffers.iter() {
-                    let Some(model) = self.models.get(*model_handle) else {
-                        continue;
-                    };
-
-                    render_pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
-
-                    model.render(&mut render_pass, &self.textures, BlendMode::Alpha);
-                }
+                model.render(
+                    &mut render_pass,
+                    &self.textures,
+                    &self.animations,
+                    BlendMode::Alpha,
+                );
             }
         }
     }

@@ -14,7 +14,7 @@ use crate::{
         geometry_buffers::{GeometryBuffers, GeometryData},
         model::{Model, Node},
         models::models,
-        renderer::{ModelInstanceHandle, ModelRenderer},
+        renderer::{ModelRenderer, RenderAnimation, RenderInstance},
     },
 };
 
@@ -25,7 +25,7 @@ pub struct Object {
     pub object_type: ObjectType,
     pub transform: Transform,
     pub model_handle: Handle<Model>,
-    pub model_instance_handle: ModelInstanceHandle,
+    pub render_instance: Handle<RenderInstance>,
 
     pub animation: Option<Handle<Animation>>,
     pub animation_time: f32,
@@ -40,9 +40,9 @@ pub struct Object {
 
 impl Object {
     pub fn update(&mut self, delta_time: f32) {
-        if self.animation.is_some() {
-            self.animation_time += delta_time;
-        }
+        // if self.animation.is_some() {
+        self.animation_time += delta_time;
+        // }
     }
 
     pub fn set_animation(&mut self, animation: Handle<Animation>) {
@@ -63,6 +63,11 @@ pub struct Objects {
 
     /// The entity index that the mouse is currently over.
     selected_object: Option<u32>,
+
+    walking_animation: Handle<RenderAnimation>,
+    running_animation: Handle<RenderAnimation>,
+    crouching_animation: Handle<RenderAnimation>,
+    crawling_animation: Handle<RenderAnimation>,
 }
 
 impl Objects {
@@ -71,16 +76,56 @@ impl Objects {
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let model_renderer = ModelRenderer::new(
+        let mut model_renderer = ModelRenderer::new(
             shaders,
             camera_bind_group_layout,
             environment_bind_group_layout,
         );
 
+        let man_skel = models()
+            .load_bipedal_model("man_skel")
+            .expect("Could not load default skeleton");
+
+        let walking_animation = {
+            let anim = animations()
+                .load(PathBuf::from("motions").join("bipedal_walk.bmf"))
+                .expect("Could not load walking animation");
+
+            model_renderer.add_animation(man_skel, anim)
+        };
+
+        let running_animation = {
+            let anim = animations()
+                .load(PathBuf::from("motions").join("bipedal_stand_run.bmf"))
+                .expect("Could not load walking animation");
+
+            model_renderer.add_animation(man_skel, anim)
+        };
+
+        let crouching_animation = {
+            let anim = animations()
+                .load(PathBuf::from("motions").join("bipedal_crouchwalk_cycle.bmf"))
+                .expect("Could not load walking animation");
+
+            model_renderer.add_animation(man_skel, anim)
+        };
+
+        let crawling_animation = {
+            let anim = animations()
+                .load(PathBuf::from("motions").join("bipedal_prone_low_crawl.bmf"))
+                .expect("Could not load walking animation");
+
+            model_renderer.add_animation(man_skel, anim)
+        };
+
         Self {
             model_renderer,
             objects: vec![],
             selected_object: None,
+            walking_animation,
+            running_animation,
+            crouching_animation,
+            crawling_animation,
         }
     }
 
@@ -97,30 +142,18 @@ impl Objects {
             models().load_object_model(model_name)
         }?;
 
-        let animation_handle =
-            animations().load(PathBuf::from("motions").join("bipedal_walk.bmf"))?;
-
-        let model_instance_handle = self.model_renderer.add_model_instance(
+        let model_instance_handle = self.model_renderer.add_render_instance(
             model_handle,
             transform.to_mat4(),
             self.objects.len() as u32,
         )?;
-
-        let render_animation_handle = self
-            .model_renderer
-            .add_animation(model_handle, animation_handle);
-
-        self.model_renderer
-            .update_instance(model_instance_handle, |updater| {
-                updater.set_render_animation(render_animation_handle);
-            });
 
         self.objects.push(Object {
             title: title.to_string(),
             object_type,
             transform,
             model_handle,
-            model_instance_handle,
+            render_instance: model_instance_handle,
 
             animation: None,
             animation_time: 0.0,
@@ -143,9 +176,12 @@ impl Objects {
 
         self.objects.iter_mut().for_each(|object| {
             object.update(delta_time);
-        });
 
-        self.model_renderer.update(delta_time);
+            self.model_renderer
+                .update_instance(object.render_instance, |updater| {
+                    updater.set_animation_time(object.animation_time);
+                });
+        });
 
         if input.mouse_just_pressed(MouseButton::Left) {
             if let Some(geometry_data) = geometry_data {
@@ -176,27 +212,6 @@ impl Objects {
 
     pub fn render_gizmos(&self, vertices: &mut Vec<GizmoVertex>) {
         for object in self.objects.iter() {
-            if false {
-                let Some(model) = self.model_renderer.get_model(object.model_instance_handle)
-                else {
-                    continue;
-                };
-
-                // scale.x == object max radius
-                // scale.y == weight?  only vehicles seems to have anything other than 1.
-
-                vertices.extend(GizmosRenderer::create_iso_sphere(
-                    object.transform.to_mat4(),
-                    model.scale.y,
-                    16,
-                ));
-                vertices.extend(GizmosRenderer::create_iso_sphere(
-                    object.transform.to_mat4(),
-                    model.scale.z,
-                    16,
-                ));
-            }
-
             let Some(model) = models().get(object.model_handle) else {
                 continue;
             };
@@ -364,48 +379,53 @@ impl Objects {
                             // self.model_renderer.set_instance_transform(object.model_instance_handle, transform);
 
                             self.model_renderer.update_instance(
-                                object.model_instance_handle,
+                                object.render_instance,
                                 |updater| {
                                     updater.set_transform(object.transform.to_mat4());
                                 },
                             );
                         }
 
-                        let mut maybe_animation = None;
                         if ui.button("Walking").clicked() {
-                            maybe_animation = Some("bipedal_walk.bmf");
+                            self.model_renderer.update_instance(
+                                object.render_instance,
+                                |updater| {
+                                    updater.set_animation(self.walking_animation);
+                                },
+                            );
                         }
+
                         if ui.button("Running").clicked() {
-                            maybe_animation = Some("bipedal_stand_run.bmf");
-                        }
-                        if ui.button("Crouch").clicked() {
-                            maybe_animation = Some("bipedal_crouchwalk_cycle.bmf");
-                        }
-                        if ui.button("Crawl").clicked() {
-                            maybe_animation = Some("bipedal_prone_low_crawl.bmf");
+                            self.model_renderer.update_instance(
+                                object.render_instance,
+                                |updater| {
+                                    updater.set_animation(self.running_animation);
+                                },
+                            );
                         }
 
-                        if let Some(animation_name) = maybe_animation {
-                            use crate::game::animations::animations;
-                            use std::path::PathBuf;
+                        if ui.button("Crouching").clicked() {
+                            self.model_renderer.update_instance(
+                                object.render_instance,
+                                |updater| {
+                                    updater.set_animation(self.crouching_animation);
+                                },
+                            );
+                        }
 
-                            if let Ok(animation) =
-                                animations().load(PathBuf::from("motions").join(animation_name))
-                            {
-                                object.set_animation(animation);
-                                self.model_renderer
-                                    .update_instance(object.model_instance_handle, |updater| {
-                                        updater.set_animation(animation)
-                                    });
-                            } else {
-                                tracing::warn!("Could not load test animation!");
-                            }
+                        if ui.button("Crawling").clicked() {
+                            self.model_renderer.update_instance(
+                                object.render_instance,
+                                |updater| {
+                                    updater.set_animation(self.crawling_animation);
+                                },
+                            );
                         }
 
                         if ui.button("Clear animation").clicked() {
                             object.clear_animation();
                             self.model_renderer
-                                .update_instance(object.model_instance_handle, |updater| {
+                                .update_instance(object.render_instance, |updater| {
                                     updater.clear_animation()
                                 });
                         }

@@ -10,7 +10,15 @@ use crate::{
         prelude::renderer,
         storage::{Handle, Storage},
     },
-    game::{image::BlendMode, model, models::models},
+    game::{
+        image::BlendMode,
+        model,
+        models::models,
+        renderer::{
+            InstanceKey,
+            render_animations::{RenderAnimation, RenderAnimations},
+        },
+    },
 };
 
 type NodeIndex = u32;
@@ -24,63 +32,9 @@ pub struct RenderVertex {
     pub node_index: NodeIndex,
 }
 
-#[derive(Clone, Copy, bytemuck::NoUninit)]
-#[repr(C)]
-pub struct RenderNode {
-    pub transform: [f32; 16],
-    pub parent_node_index: NodeIndex,
-    pub _padding: [u32; 3],
-}
-
 struct RenderMesh {
     indices: Range<u32>,
     texture_handle: Handle<RenderTexture>,
-}
-
-pub struct RenderNodeBuffer {
-    pub _buffer: wgpu::Buffer,
-    pub bind_group: wgpu::BindGroup,
-}
-
-impl RenderNodeBuffer {
-    pub fn from_nodes(
-        nodes_bind_group_layout: &wgpu::BindGroupLayout,
-        nodes: &[RenderNode],
-    ) -> Self {
-        let buffer = renderer()
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("model_renderer_animated_node_buffer"),
-                contents: bytemuck::cast_slice(nodes),
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            });
-
-        let bind_group = renderer()
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("model_renderer_animated_node_buffer_bind_group"),
-                layout: nodes_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: &buffer,
-                        offset: 0,
-                        size: None,
-                    }),
-                }],
-            });
-
-        Self {
-            _buffer: buffer,
-            bind_group,
-        }
-    }
-
-    pub fn update_from_nodes(&self, nodes: &[RenderNode]) {
-        renderer()
-            .queue
-            .write_buffer(&self._buffer, 0, bytemuck::cast_slice(nodes));
-    }
 }
 
 pub struct RenderModel {
@@ -88,15 +42,10 @@ pub struct RenderModel {
     vertex_buffer: wgpu::Buffer,
     /// Contains the indices for the entire model.
     index_buffer: wgpu::Buffer,
-    /// For binding the nodes to the shader.
-    nodes: RenderNodeBuffer,
-    /// For binding the animated nodes to the shader.
-    pub animated_nodes: Option<RenderNodeBuffer>,
-
     /// All the meshes (sets of indices) that the model consists of.
     meshes: Vec<RenderMesh>,
-
-    pub scale: Vec3,
+    /// A [RenderAnimation] with a single frame that represents the model at rest.
+    pub rest_pose: Handle<RenderAnimation>,
 }
 
 impl RenderModel {
@@ -104,6 +53,7 @@ impl RenderModel {
         &self,
         render_pass: &mut wgpu::RenderPass,
         textures: &RenderTextures,
+        animations: &RenderAnimations,
         blend_mode: BlendMode,
     ) {
         for mesh in self.meshes.iter() {
@@ -117,11 +67,7 @@ impl RenderModel {
             }
 
             render_pass.set_bind_group(2, &texture.bind_group, &[]);
-            if let Some(ref animated_nodes) = self.animated_nodes {
-                render_pass.set_bind_group(3, &animated_nodes.bind_group, &[]);
-            } else {
-                render_pass.set_bind_group(3, &self.nodes.bind_group, &[]);
-            }
+
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(mesh.indices.clone(), 0, 0..1);
@@ -129,43 +75,18 @@ impl RenderModel {
     }
 }
 
+#[derive(Default)]
 pub struct RenderModels {
     models: Storage<RenderModel>,
-
-    pub nodes_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl RenderModels {
-    pub fn new() -> Self {
-        let nodes_bind_group_layout =
-            renderer()
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("model_renderer_nodes_bind_group_layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
-
-        Self {
-            models: Storage::default(),
-
-            nodes_bind_group_layout,
-        }
-    }
-
     pub fn add_model(
         &mut self,
         textures: &mut RenderTextures,
+        animations: &mut RenderAnimations,
         model_handle: Handle<model::Model>,
-    ) -> Result<Handle<RenderModel>, AssetError> {
+    ) -> Result<InstanceKey, AssetError> {
         let model = models()
             .get(model_handle)
             .expect("Model should have been loaded byt his time.");
@@ -209,20 +130,6 @@ impl RenderModels {
             first_vertex_index = vertices.len() as u32;
         }
 
-        let nodes: Vec<RenderNode> = model
-            .nodes
-            .iter()
-            .enumerate()
-            .map(|(node_index, node)| {
-                let transform = model.local_transform(node_index as u32);
-                RenderNode {
-                    transform: transform.to_cols_array(),
-                    parent_node_index: node.parent,
-                    _padding: [0; 3],
-                }
-            })
-            .collect();
-
         let vertex_buffer =
             renderer()
                 .device
@@ -241,33 +148,16 @@ impl RenderModels {
                     usage: wgpu::BufferUsages::INDEX,
                 });
 
-        let nodes = RenderNodeBuffer::from_nodes(&self.nodes_bind_group_layout, &nodes);
+        let rest_pose = animations.create_rest_pose(&model.nodes);
 
-        Ok(self.models.insert(RenderModel {
+        let render_model_handle = self.models.insert(RenderModel {
             vertex_buffer,
             index_buffer,
-            nodes,
-            animated_nodes: None,
             meshes,
+            rest_pose,
+        });
 
-            scale: model.scale,
-        }))
-    }
-
-    pub fn update_animation_nodes(&mut self, handle: Handle<RenderModel>, nodes: &[RenderNode]) {
-        let Some(model) = self.models.get_mut(handle) else {
-            tracing::warn!("Trying to update nodes for a model that does not exist!");
-            return;
-        };
-
-        if let Some(ref mut animated_nodes) = model.animated_nodes {
-            animated_nodes.update_from_nodes(nodes);
-        } else {
-            model.animated_nodes = Some(RenderNodeBuffer::from_nodes(
-                &self.nodes_bind_group_layout,
-                nodes,
-            ));
-        }
+        Ok(InstanceKey::new(render_model_handle, None))
     }
 
     #[inline]

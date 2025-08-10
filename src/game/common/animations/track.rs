@@ -12,6 +12,12 @@ pub struct Track<V: Interpolate> {
 }
 
 impl<V: Interpolate> Track<V> {
+    /// Return the frame number of the last key frame.
+    #[inline]
+    pub fn last_frame(&self) -> Option<u32> {
+        self.keys.last().map(|k| k.frame)
+    }
+
     pub fn insert(&mut self, frame: u32, value: V) {
         match self.keys.binary_search_by_key(&frame, |k| k.frame) {
             Ok(i) => self.keys[i].value = value,                 // last wins

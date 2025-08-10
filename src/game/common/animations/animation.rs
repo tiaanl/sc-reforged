@@ -22,6 +22,12 @@ pub struct Animation {
 }
 
 impl Animation {
+    pub fn last_key_frame(&self) -> u32 {
+        let max_pos = self.positions.values().filter_map(|t| t.last_frame()).max();
+        let max_rot = self.rotations.values().filter_map(|t| t.last_frame()).max();
+        max_pos.into_iter().chain(max_rot).max().unwrap_or(0)
+    }
+
     pub fn sample_pose(&self, time: f32, nodes: &[Node], looping: bool) -> Vec<Transform> {
         let fps = 30.0; // pick a clip FPS and stick to it
         let f = time * fps;
@@ -62,11 +68,22 @@ impl Animations {
         }
     }
 
+    pub fn add(&mut self, animation: Animation) -> Handle<Animation> {
+        self.animations.insert(animation)
+    }
+
     pub fn get(&self, handle: Handle<Animation>) -> Option<&Animation> {
         self.animations.get(handle)
     }
 
     pub fn load(&mut self, path: impl AsRef<Path>) -> Result<Handle<Animation>, AssetError> {
+        if let Some(animation) = self
+            .lookup
+            .get(&path.as_ref().to_string_lossy().to_string())
+        {
+            return Ok(*animation);
+        }
+
         let animation = self.load_direct(path.as_ref())?;
         let handle = self.animations.insert(animation);
         self.lookup
