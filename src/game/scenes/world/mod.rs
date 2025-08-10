@@ -85,6 +85,11 @@ impl WorldScene {
         let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
         shaders.add_module(include_str!("environment.wgsl"), "environment.wgsl");
+        shaders.add_module(include_str!("../../common/renderer/math.wgsl"), "math.wgsl");
+        shaders.add_module(
+            include_str!("../../common/renderer/animation.wgsl"),
+            "animation.wgsl",
+        );
         shaders.add_module(
             include_str!("../../common/geometry_buffers.wgsl"),
             "geometry_buffers.wgsl",
