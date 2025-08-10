@@ -135,7 +135,7 @@ impl RenderAnimations {
         let positions_view = {
             let positions_texture = Self::create_texture(
                 baked_animation.frames,
-                nodes.len() as u32,
+                baked_animation.bones,
                 bytemuck::cast_slice(&baked_animation.positions),
             );
 
@@ -145,7 +145,7 @@ impl RenderAnimations {
         let rotations_view = {
             let rotations_texture = Self::create_texture(
                 baked_animation.frames,
-                nodes.len() as u32,
+                baked_animation.bones,
                 bytemuck::cast_slice(&baked_animation.rotations),
             );
 

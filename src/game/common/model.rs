@@ -25,9 +25,6 @@ pub struct Model {
     pub _collision_boxes: Vec<CollisionBox>,
     /// Look up node indices according to original node names.
     _names: NameLookup,
-
-    // Possibly ground radius and weight?
-    pub scale: Vec3,
 }
 
 impl Model {
@@ -197,14 +194,11 @@ impl TryFrom<smf::Model> for Model {
             }
         }
 
-        let scale = value.scale;
-
         Ok(Model {
             nodes,
             meshes,
             _collision_boxes: collision_boxes,
             _names: names,
-            scale,
         })
     }
 }

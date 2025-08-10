@@ -40,14 +40,7 @@ pub struct Object {
 
 impl Object {
     pub fn update(&mut self, delta_time: f32) {
-        // if self.animation.is_some() {
         self.animation_time += delta_time;
-        // }
-    }
-
-    pub fn set_animation(&mut self, animation: Handle<Animation>) {
-        self.animation = Some(animation);
-        self.animation_time = 0.0;
     }
 
     pub fn clear_animation(&mut self) {

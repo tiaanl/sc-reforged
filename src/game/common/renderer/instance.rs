@@ -15,13 +15,6 @@ pub struct RenderInstanceAnimation {
 }
 
 impl RenderInstanceAnimation {
-    pub fn new(animation: Handle<RenderAnimation>, time: f32) -> Self {
-        Self {
-            handle: animation,
-            time,
-        }
-    }
-
     pub fn from_animation(animation: Handle<RenderAnimation>) -> Self {
         Self {
             handle: animation,

@@ -371,19 +371,9 @@ impl ModelRenderer {
 
                 render_pass.set_bind_group(3, &animation.bind_group, &[]);
 
-                model.render(
-                    &mut render_pass,
-                    &self.textures,
-                    &self.animations,
-                    BlendMode::Opaque,
-                );
+                model.render(&mut render_pass, &self.textures, BlendMode::Opaque);
 
-                model.render(
-                    &mut render_pass,
-                    &self.textures,
-                    &self.animations,
-                    BlendMode::ColorKeyed,
-                );
+                model.render(&mut render_pass, &self.textures, BlendMode::ColorKeyed);
             }
         }
 
@@ -435,19 +425,7 @@ impl ModelRenderer {
 
                 render_pass.set_bind_group(3, &animation.bind_group, &[]);
 
-                model.render(
-                    &mut render_pass,
-                    &self.textures,
-                    &self.animations,
-                    BlendMode::Opaque,
-                );
-
-                model.render(
-                    &mut render_pass,
-                    &self.textures,
-                    &self.animations,
-                    BlendMode::Alpha,
-                );
+                model.render(&mut render_pass, &self.textures, BlendMode::Alpha);
             }
         }
     }

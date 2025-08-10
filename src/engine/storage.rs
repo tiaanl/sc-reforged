@@ -62,7 +62,7 @@ impl<T> Storage<T> {
     }
 
     #[inline]
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (Handle<T>, &mut T)> {
+    pub fn _iter_mut(&mut self) -> impl Iterator<Item = (Handle<T>, &mut T)> {
         self.0.iter_mut().map(|(h, t)| (Handle(h, PhantomData), t))
     }
 }

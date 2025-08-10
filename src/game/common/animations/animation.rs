@@ -59,8 +59,6 @@ pub struct Animations {
 }
 
 impl Animations {
-    // pub const TIME_PER_FRAME: f32 = 1.0 / 30.0;
-
     pub fn new() -> Self {
         Self {
             animations: Storage::default(),
@@ -68,7 +66,7 @@ impl Animations {
         }
     }
 
-    pub fn add(&mut self, animation: Animation) -> Handle<Animation> {
+    pub fn _add(&mut self, animation: Animation) -> Handle<Animation> {
         self.animations.insert(animation)
     }
 

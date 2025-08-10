@@ -53,7 +53,6 @@ impl RenderModel {
         &self,
         render_pass: &mut wgpu::RenderPass,
         textures: &RenderTextures,
-        animations: &RenderAnimations,
         blend_mode: BlendMode,
     ) {
         for mesh in self.meshes.iter() {
@@ -166,7 +165,7 @@ impl RenderModels {
     }
 
     #[inline]
-    pub fn get_mut(&mut self, handle: Handle<RenderModel>) -> Option<&mut RenderModel> {
+    pub fn _get_mut(&mut self, handle: Handle<RenderModel>) -> Option<&mut RenderModel> {
         self.models.get_mut(handle)
     }
 }
