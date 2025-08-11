@@ -8,8 +8,9 @@ use crate::{
     },
     game::{
         animations::Animation,
+        camera::{Camera, Frustum},
         geometry_buffers::GeometryBuffers,
-        model,
+        model::{self, BoundingSphere},
         models::models,
         renderer::{
             render_animations::{RenderAnimation, RenderAnimations},
@@ -265,6 +266,7 @@ impl ModelRenderer {
     pub fn render(
         &mut self,
         frame: &mut Frame,
+        camera: &Camera,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
@@ -276,17 +278,36 @@ impl ModelRenderer {
             animation: Handle<RenderAnimation>,
         }
 
+        let matrices = camera.calculate_matrices();
+        let camera_transform = matrices.projection * matrices.view;
+        let frustum = Frustum::from(camera_transform);
+
         let mut opaque_instances: HashMap<Key, Vec<GpuInstance>> = HashMap::default();
 
         for (_, instance) in self.render_instances.iter() {
+            let Some(model) = self.models.get(instance.render_model) else {
+                tracing::warn!("Missing render model.");
+                continue;
+            };
+
+            let center = instance
+                .transform
+                .transform_point3(model.bounding_sphere.center);
+
+            // Move the bounding sphere to the location of the model.
+            let bounding_sphere = BoundingSphere {
+                center,
+                radius: model.bounding_sphere.radius,
+            };
+
+            if !frustum.intersects_bounding_sphere(&bounding_sphere) {
+                continue;
+            }
+
             // Figure out which animation to render.
             let animation = if let Some(ref animation) = instance.animation {
                 *animation
             } else {
-                let Some(model) = self.models.get(instance.render_model) else {
-                    tracing::warn!("Missing render model.");
-                    continue;
-                };
                 RenderInstanceAnimation::from_animation(model.rest_pose)
             };
 

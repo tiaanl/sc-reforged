@@ -169,8 +169,8 @@ impl GizmosRenderer {
                 let theta0 = (i as f32) * std::f32::consts::TAU / (res as f32);
                 let theta1 = ((i + 1) as f32) * std::f32::consts::TAU / (res as f32);
 
-                let p0 = transform.project_point3((u * theta0.cos() + v * theta0.sin()) * radius);
-                let p1 = transform.project_point3((u * theta1.cos() + v * theta1.sin()) * radius);
+                let p0 = transform.transform_point3((u * theta0.cos() + v * theta0.sin()) * radius);
+                let p1 = transform.transform_point3((u * theta1.cos() + v * theta1.sin()) * radius);
 
                 vertices.push(GizmoVertex::new(p0, color));
                 vertices.push(GizmoVertex::new(p1, color));

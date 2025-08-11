@@ -10,6 +10,7 @@ use crate::{
     },
     game::{
         animations::{Animation, animations},
+        camera::Camera,
         config::ObjectType,
         geometry_buffers::{GeometryBuffers, GeometryData},
         model::Model,
@@ -192,12 +193,14 @@ impl Objects {
     pub fn render_objects(
         &mut self,
         frame: &mut Frame,
+        camera: &Camera,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
     ) {
         self.model_renderer.render(
             frame,
+            camera,
             geometry_buffers,
             camera_bind_group,
             environment_bind_group,
@@ -216,7 +219,7 @@ impl Objects {
             }
 
             if object.draw_bounding_spheres {
-                Self::render_bounding_spheres(object, model, vertices);
+                Self::render_bounding_sphere(object, model, vertices);
             }
         }
     }
@@ -285,18 +288,15 @@ impl Objects {
         }
     }
 
-    fn render_bounding_spheres(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
-        for mesh in model.meshes.iter() {
-            let transform = object.transform.to_mat4()
-                * model.skeleton.local_transform(mesh.node_index)
-                * Mat4::from_translation(mesh.bounding_sphere.center);
+    fn render_bounding_sphere(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
+        let world_position =
+            object.transform.to_mat4() * Mat4::from_translation(model.bounding_sphere.center);
 
-            vertices.extend(GizmosRenderer::create_iso_sphere(
-                transform,
-                mesh.bounding_sphere.radius,
-                32,
-            ));
-        }
+        vertices.extend(GizmosRenderer::create_iso_sphere(
+            world_position,
+            model.bounding_sphere.radius,
+            32,
+        ));
     }
 
     #[cfg(feature = "egui")]

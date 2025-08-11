@@ -439,6 +439,7 @@ impl Scene for WorldScene {
         );
         self.objects.render_objects(
             frame,
+            &self.main_camera.camera,
             &self.geometry_buffers,
             camera_bind_group,
             &self.environment_bind_group,

@@ -11,7 +11,7 @@ use crate::{
     },
     game::{
         image::Image,
-        model::{self, Model},
+        model::{BoundingSphere, Model},
         models::models,
         renderer::{
             render_animations::{RenderAnimation, RenderAnimations},
@@ -39,6 +39,8 @@ pub struct RenderModel {
     pub index_buffer: wgpu::Buffer,
     /// The total number of indices in the mesh.
     pub index_count: u32,
+    /// A [BoundingSphere] that wraps the entire model. Used for culling.
+    pub bounding_sphere: BoundingSphere,
     /// All the textures used by the model.
     pub texture_set: RenderTextureSet,
     /// A [RenderAnimation] with a single frame that represents the model at rest.
@@ -57,7 +59,7 @@ impl RenderModels {
         &mut self,
         render_textures: &mut RenderTextures,
         animations: &mut RenderAnimations,
-        model_handle: Handle<model::Model>,
+        model_handle: Handle<Model>,
     ) -> Result<Handle<RenderModel>, AssetError> {
         if let Some(render_model_handle) = self.model_to_render_model.get(&model_handle) {
             return Ok(*render_model_handle);
@@ -143,6 +145,7 @@ impl RenderModels {
             vertex_buffer,
             index_buffer,
             index_count: indices.len() as u32,
+            bounding_sphere: model.bounding_sphere,
             texture_set,
             rest_pose,
         });

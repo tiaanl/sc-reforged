@@ -24,6 +24,8 @@ pub struct Model {
     pub meshes: Vec<Mesh>,
     /// A collection of collision boxes in the model, each associated with a specific node.
     pub _collision_boxes: Vec<CollisionBox>,
+    /// A bounding sphere surrounding all the vertices in the model.
+    pub bounding_sphere: BoundingSphere,
     /// Look up node indices according to original node names.
     _names: NameLookup,
 }
@@ -48,8 +50,6 @@ pub struct Mesh {
     pub image: Handle<Image>,
     /// Vertex and index data.
     pub mesh: IndexedMesh<Vertex>,
-    /// A bounding sphere surrounding all the vertices in the mesh as tightly as possible.
-    pub bounding_sphere: BoundingSphere,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -70,10 +70,98 @@ pub struct CollisionBox {
     pub _max: Vec3,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct BoundingSphere {
     pub center: Vec3,
     pub radius: f32,
+}
+
+impl BoundingSphere {
+    pub fn from_positions_ritter<I>(positions: I) -> Self
+    where
+        I: IntoIterator<Item = Vec3>,
+    {
+        let positions: Vec<Vec3> = positions.into_iter().collect();
+
+        let positions_count = positions.len();
+
+        if positions_count == 1 {
+            return Self {
+                center: positions[0],
+                radius: 0.0,
+            };
+        }
+
+        let p0 = *positions.iter().min_by(|a, b| a.x.total_cmp(&b.x)).unwrap();
+
+        let p1 = *positions
+            .iter()
+            .max_by(|a, b| {
+                let aa = (**a - p0).length_squared();
+                let bb = (**b - p0).length_squared();
+                aa.total_cmp(&bb)
+            })
+            .unwrap();
+
+        let p2 = *positions
+            .iter()
+            .max_by(|a, b| {
+                let aa = (**a - p1).length_squared();
+                let bb = (**b - p1).length_squared();
+                aa.total_cmp(&bb)
+            })
+            .unwrap();
+
+        let mut center = (p1 + p2) * 0.5;
+        let mut radius = (p2 - p1).length() * 0.5;
+
+        for position in positions.iter() {
+            let delta = position - center;
+            let distance = delta.length();
+            if distance > radius {
+                let new_radius = 0.5 * (radius + distance);
+                if distance > 0.0 {
+                    center += delta * ((new_radius - radius) / distance);
+                }
+                radius = new_radius;
+            }
+        }
+
+        Self { center, radius }
+    }
+
+    /// Minimal sphere that encloses self and other.
+    pub fn union(&self, other: &BoundingSphere) -> BoundingSphere {
+        let delta = other.center - self.center;
+        let d = delta.length();
+
+        // One contains the other, or coincident centers.
+        if d <= (other.radius.max(0.0) - self.radius.max(0.0)).abs() {
+            return if self.radius.max(0.0) >= other.radius.max(0.0) {
+                *self
+            } else {
+                *other
+            };
+        }
+
+        let new_radius = 0.5 * (d + self.radius.max(0.0) + other.radius.max(0.0));
+
+        let t = if d > 0.0 {
+            (new_radius - self.radius.max(0.0)) / d
+        } else {
+            0.0
+        };
+        let new_center = self.center + delta * t;
+
+        BoundingSphere {
+            center: new_center,
+            radius: new_radius,
+        }
+    }
+
+    pub fn expand_to_include(&mut self, other: &BoundingSphere) {
+        *self = self.union(other);
+    }
 }
 
 impl TryFrom<smf::Model> for Model {
@@ -141,18 +229,6 @@ impl TryFrom<smf::Model> for Model {
                     .map(|smf_mesh| -> Result<Mesh, AssetError> {
                         let mesh = smf_mesh_to_mesh(smf_mesh, node_index as u32);
 
-                        // Bounding sphere
-                        let center = mesh.vertices.iter().map(|v| v.position).sum::<Vec3>()
-                            / mesh.vertices.len() as f32;
-
-                        let radius = mesh
-                            .vertices
-                            .iter()
-                            .map(|v| (v.position - center).length())
-                            .fold(0.0, f32::max);
-
-                        let bounding_sphere = BoundingSphere { center, radius };
-
                         // For now assume we're loading a shared image.
                         let path = PathBuf::from("textures")
                             .join("shared")
@@ -164,7 +240,6 @@ impl TryFrom<smf::Model> for Model {
                             node_index: node_index as u32,
                             image,
                             mesh,
-                            bounding_sphere,
                         })
                     })
                     .filter_map(|mesh| {
@@ -184,6 +259,28 @@ impl TryFrom<smf::Model> for Model {
             }
         }
 
+        fn local_transform(nodes: &[Node], node_index: usize) -> Mat4 {
+            let node = &nodes[node_index];
+            if node.parent == u32::MAX {
+                node.transform.to_mat4()
+            } else {
+                local_transform(nodes, node.parent as usize) * node.transform.to_mat4()
+            }
+        }
+
+        let mut bounding_sphere = BoundingSphere::default();
+        for mesh in meshes.iter() {
+            let local = local_transform(&nodes, mesh.node_index as usize);
+            let b = BoundingSphere::from_positions_ritter(
+                mesh.mesh
+                    .vertices
+                    .iter()
+                    .map(|v| local.transform_point3(v.position)),
+            );
+
+            bounding_sphere.expand_to_include(&b);
+        }
+
         let skeleton = Skeleton {
             bones: nodes
                 .iter()
@@ -200,6 +297,7 @@ impl TryFrom<smf::Model> for Model {
             skeleton,
             meshes,
             _collision_boxes: collision_boxes,
+            bounding_sphere,
             _names: names,
         })
     }
