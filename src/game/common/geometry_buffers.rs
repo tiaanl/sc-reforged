@@ -215,7 +215,7 @@ impl GeometryBuffers {
         }
     }
 
-    pub fn color_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
+    pub fn attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
         [
             Some(wgpu::RenderPassColorAttachment {
                 view: &self.color.view,

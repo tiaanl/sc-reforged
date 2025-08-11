@@ -437,6 +437,7 @@ impl Scene for WorldScene {
             &self.environment_bind_group,
             &self.main_camera.gpu_camera.bind_group, // Always the main camera.
         );
+
         self.objects.render_objects(
             frame,
             &self.main_camera.camera,
@@ -452,8 +453,6 @@ impl Scene for WorldScene {
             camera_bind_group,
             &self.environment_bind_group,
         );
-        // self.objects
-        //     .render_alpha_objects(frame, &self.geometry_buffers, camera_bind_group);
 
         // Render any kind of debug overlays.
         self.terrain.render_gizmos(&mut gizmos_vertices);

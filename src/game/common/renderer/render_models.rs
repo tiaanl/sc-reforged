@@ -33,7 +33,7 @@ pub struct RenderVertex {
 
 pub struct RenderModel {
     /// Opaque mesh data.
-    pub opaque_mesh: GpuIndexedMesh,
+    pub opaque_mesh: Option<GpuIndexedMesh>,
     /// Alpha mesh data if there are any meshes with alpha data.
     pub alpha_mesh: Option<GpuIndexedMesh>,
     /// A [BoundingSphere] that wraps the entire model. Used for culling.
@@ -117,7 +117,12 @@ impl RenderModels {
             tracing::warn!("Mesh with no vertices or indices! Should be checked up-front!");
         }
 
-        let opaque_mesh = opaque_mesh.to_gpu();
+        let opaque_mesh = if !opaque_mesh.is_empty() {
+            Some(opaque_mesh.to_gpu())
+        } else {
+            None
+        };
+
         let alpha_mesh = if !alpha_mesh.is_empty() {
             Some(alpha_mesh.to_gpu())
         } else {

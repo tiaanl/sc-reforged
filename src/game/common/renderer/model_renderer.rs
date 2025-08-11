@@ -338,7 +338,7 @@ impl ModelRenderer {
                 .encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("model_renderer_render_pass"),
-                    color_attachments: &geometry_buffers.color_attachments(),
+                    color_attachments: &geometry_buffers.attachments(),
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                         view: &geometry_buffers.depth.view,
                         depth_ops: Some(wgpu::Operations {
@@ -366,7 +366,10 @@ impl ModelRenderer {
                     continue;
                 };
 
-                let mesh = &model.opaque_mesh;
+                let Some(ref mesh) = model.opaque_mesh else {
+                    tracing::warn!("No opaque mesh, but in opaque instances!");
+                    continue;
+                };
 
                 // TODO: Don't put empty meshes into the instances buffer.
                 if mesh.index_count == 0 {
@@ -401,12 +404,12 @@ impl ModelRenderer {
                 .encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("model_renderer_render_pass"),
-                    color_attachments: &geometry_buffers.color_attachments(),
+                    color_attachments: &geometry_buffers.attachments(),
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                         view: &geometry_buffers.depth.view,
                         depth_ops: Some(wgpu::Operations {
                             load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Discard,
+                            store: wgpu::StoreOp::Store,
                         }),
                         stencil_ops: None,
                     }),

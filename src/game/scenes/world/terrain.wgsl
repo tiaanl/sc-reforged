@@ -110,8 +110,8 @@ fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexIn
         world_position,
         vec3<f32>(0.0, 0.0, 1.0), // normal
         tex_coord,
-        vec2<u32>(0, 0),
-        0,
+        chunk_pos,
+        chunk_index,
     );
 }
 
@@ -153,9 +153,8 @@ fn water_fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffer
         vertex.tex_coord,
     );
 
-    // var n = clamp(water_depth / u_terrain_data.water_trans_depth, 0.0, 1.0);
-    // let alpha = u_terrain_data.water_trans_low + (u_terrain_data.water_trans_high - u_terrain_data.water_trans_low) * n;
-    // return vec4<f32>(diffuse, alpha);
+    var n = clamp(water_depth / u_terrain_data.water_trans_depth, 0.0, 1.0);
+    let alpha = u_terrain_data.water_trans_low + (u_terrain_data.water_trans_high - u_terrain_data.water_trans_low) * n;
 
     let world_position = vertex.world_position;
     let world_normal = vertex.normal;
@@ -170,7 +169,7 @@ fn water_fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffer
     );
 
     return geometry_buffers::to_geometry_buffer(
-        vec4<f32>(diffuse.rgb, 1.0),
+        vec4<f32>(diffuse.rgb, alpha),
         vertex.world_position,
         TERRAIN_ENTITY_ID + 1,
     );

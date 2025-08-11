@@ -271,7 +271,7 @@ impl Strata {
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("strata_render_pass"),
-                color_attachments: &geometry_buffers.color_attachments(),
+                color_attachments: &geometry_buffers.attachments(),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &geometry_buffers.depth.view,
                     depth_ops: Some(wgpu::Operations {
