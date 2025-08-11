@@ -325,7 +325,9 @@ impl ModelRenderer {
             };
             opaque_instances.entry(key).or_default().push(gpu_instance);
 
-            if model.alpha_mesh.is_some() {
+            if let Some(ref mesh) = model.alpha_mesh
+                && mesh.index_count != 0
+            {
                 alpha_instances.entry(key).or_default().push(gpu_instance);
             }
         }
@@ -404,7 +406,7 @@ impl ModelRenderer {
                         view: &geometry_buffers.depth.view,
                         depth_ops: Some(wgpu::Operations {
                             load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
+                            store: wgpu::StoreOp::Discard,
                         }),
                         stencil_ops: None,
                     }),
