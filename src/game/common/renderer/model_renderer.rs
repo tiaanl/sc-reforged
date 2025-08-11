@@ -13,8 +13,8 @@ use crate::{
         model,
         models::models,
         renderer::{
-            instance::{RenderInstance, RenderInstanceAnimation},
             render_animations::{RenderAnimation, RenderAnimations},
+            render_instance::{RenderInstance, RenderInstanceAnimation},
             render_models::{RenderModel, RenderModels, RenderVertex},
             render_textures,
         },

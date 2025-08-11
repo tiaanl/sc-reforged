@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use ahash::HashMap;
 use glam::{Quat, Vec3};
@@ -9,7 +9,7 @@ use crate::{
         prelude::Transform,
         storage::{Handle, Storage},
     },
-    game::{config::MotionSequencesDefs, data_dir::data_dir, skeleton::Skeleton},
+    game::{data_dir::data_dir, skeleton::Skeleton},
     global,
 };
 

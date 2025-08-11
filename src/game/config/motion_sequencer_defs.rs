@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use ahash::HashMap;
 use glam::Vec3;
 
