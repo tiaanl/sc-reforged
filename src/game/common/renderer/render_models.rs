@@ -1,16 +1,15 @@
 use ahash::HashMap;
 use glam::{Vec2, Vec3};
-use wgpu::util::DeviceExt;
 
 use super::render_textures::{RenderTexture, RenderTextures};
 use crate::{
     engine::{
         assets::AssetError,
-        prelude::renderer,
+        mesh::{GpuIndexedMesh, IndexedMesh},
         storage::{Handle, Storage},
     },
     game::{
-        image::Image,
+        image::{BlendMode, Image, images},
         model::{BoundingSphere, Model},
         models::models,
         renderer::{
@@ -22,7 +21,7 @@ use crate::{
 
 type NodeIndex = u32;
 
-#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct RenderVertex {
     pub position: Vec3,
@@ -33,12 +32,10 @@ pub struct RenderVertex {
 }
 
 pub struct RenderModel {
-    /// Contains the vertices for the entire model.
-    pub vertex_buffer: wgpu::Buffer,
-    /// Contains the indices for the entire model.
-    pub index_buffer: wgpu::Buffer,
-    /// The total number of indices in the mesh.
-    pub index_count: u32,
+    /// Opaque mesh data.
+    pub opaque_mesh: GpuIndexedMesh,
+    /// Alpha mesh data if there are any meshes with alpha data.
+    pub alpha_mesh: Option<GpuIndexedMesh>,
     /// A [BoundingSphere] that wraps the entire model. Used for culling.
     pub bounding_sphere: BoundingSphere,
     /// All the textures used by the model.
@@ -71,10 +68,8 @@ impl RenderModels {
 
         let mut textures: Vec<Handle<RenderTexture>> = Vec::with_capacity(8);
 
-        let mut vertices = Vec::default();
-        let mut indices = Vec::default();
-
-        let mut first_vertex_index = 0;
+        let mut opaque_mesh = IndexedMesh::default();
+        let mut alpha_mesh = IndexedMesh::default();
 
         let mut image_to_index: HashMap<Handle<Image>, u32> = HashMap::default();
 
@@ -93,7 +88,11 @@ impl RenderModels {
                 }
             };
 
-            mesh.mesh
+            // Safety: We just created a texture successfully, so the image *MUST* exist already.
+            let image = images().get(mesh.image).unwrap();
+
+            let vertices = mesh
+                .mesh
                 .vertices
                 .iter()
                 .map(|v| RenderVertex {
@@ -103,48 +102,35 @@ impl RenderModels {
                     node_index: v.node_index,
                     texture_index,
                 })
-                .for_each(|v| vertices.push(v));
+                .collect();
 
-            mesh.mesh
-                .indices
-                .iter()
-                .map(|index| index + first_vertex_index)
-                .for_each(|i| indices.push(i));
+            let indexed_mesh = IndexedMesh::new(vertices, mesh.mesh.indices.clone());
 
-            first_vertex_index = vertices.len() as u32;
+            let _ = if image.blend_mode == BlendMode::Alpha {
+                alpha_mesh.extend(indexed_mesh)
+            } else {
+                opaque_mesh.extend(indexed_mesh)
+            };
         }
 
-        #[cfg(debug_assertions)]
-        if vertices.is_empty() || indices.is_empty() {
-            unreachable!("Mesh with no vertices or indices! Should be checked up-front!");
+        if opaque_mesh.is_empty() {
+            tracing::warn!("Mesh with no vertices or indices! Should be checked up-front!");
         }
 
-        let vertex_buffer =
-            renderer()
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("model_vertex_buffer"),
-                    contents: bytemuck::cast_slice(&vertices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
-
-        let index_buffer =
-            renderer()
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("model_index_buffer"),
-                    contents: bytemuck::cast_slice(&indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
+        let opaque_mesh = opaque_mesh.to_gpu();
+        let alpha_mesh = if !alpha_mesh.is_empty() {
+            Some(alpha_mesh.to_gpu())
+        } else {
+            None
+        };
 
         let texture_set = render_textures.create_texture_set(textures);
 
         let rest_pose = animations.create_rest_pose(&model.skeleton);
 
         let render_model_handle = self.models.insert(RenderModel {
-            vertex_buffer,
-            index_buffer,
-            index_count: indices.len() as u32,
+            opaque_mesh,
+            alpha_mesh,
             bounding_sphere: model.bounding_sphere,
             texture_set,
             rest_pose,

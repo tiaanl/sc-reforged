@@ -9,7 +9,15 @@ pub struct IndexedMesh<V> {
 }
 
 impl<V: Copy> IndexedMesh<V> {
-    pub fn _extend(&mut self, mesh: Self) -> std::ops::Range<u32> {
+    pub fn new(vertices: Vec<V>, indices: Vec<u32>) -> Self {
+        Self { vertices, indices }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.vertices.is_empty() || self.indices.is_empty()
+    }
+
+    pub fn extend(&mut self, mesh: Self) -> std::ops::Range<u32> {
         let vertex_offset = self.vertices.len() as u32;
 
         self.vertices.extend(mesh.vertices);

@@ -68,7 +68,7 @@ pub struct ModelRenderer {
     /// The pipeline to render all opaque models.
     opaque_pipeline: wgpu::RenderPipeline,
     /// The pipeline to render all models with an alpha channel.
-    _alpha_pipeline: wgpu::RenderPipeline,
+    alpha_pipeline: wgpu::RenderPipeline,
 }
 
 impl ModelRenderer {
@@ -182,7 +182,7 @@ impl ModelRenderer {
                     },
                     depth_stencil: Some(GeometryBuffers::depth_stencil_state(
                         wgpu::CompareFunction::LessEqual,
-                        true,
+                        false,
                     )),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
@@ -203,7 +203,7 @@ impl ModelRenderer {
             render_instances: Storage::default(),
 
             opaque_pipeline,
-            _alpha_pipeline: alpha_pipeline,
+            alpha_pipeline,
         }
     }
 
@@ -272,7 +272,7 @@ impl ModelRenderer {
         environment_bind_group: &wgpu::BindGroup,
     ) {
         // Build instance maps.
-        #[derive(Debug, Eq, Hash, PartialEq)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
         struct Key {
             model: Handle<RenderModel>,
             animation: Handle<RenderAnimation>,
@@ -283,6 +283,7 @@ impl ModelRenderer {
         let frustum = Frustum::from(camera_transform);
 
         let mut opaque_instances: HashMap<Key, Vec<GpuInstance>> = HashMap::default();
+        let mut alpha_instances: HashMap<Key, Vec<GpuInstance>> = HashMap::default();
 
         for (_, instance) in self.render_instances.iter() {
             let Some(model) = self.models.get(instance.render_model) else {
@@ -311,18 +312,22 @@ impl ModelRenderer {
                 RenderInstanceAnimation::from_animation(model.rest_pose)
             };
 
-            opaque_instances
-                .entry(Key {
-                    model: instance.render_model,
-                    animation: animation.handle,
-                })
-                .or_default()
-                .push(GpuInstance {
-                    model_matrix: instance.transform,
-                    id: instance.entity_id,
-                    animation_time: animation.time,
-                    _padding: Default::default(),
-                });
+            let key = Key {
+                model: instance.render_model,
+                animation: animation.handle,
+            };
+
+            let gpu_instance = GpuInstance {
+                model_matrix: instance.transform,
+                id: instance.entity_id,
+                animation_time: animation.time,
+                _padding: Default::default(),
+            };
+            opaque_instances.entry(key).or_default().push(gpu_instance);
+
+            if model.alpha_mesh.is_some() {
+                alpha_instances.entry(key).or_default().push(gpu_instance);
+            }
         }
 
         // Opaque
@@ -359,6 +364,13 @@ impl ModelRenderer {
                     continue;
                 };
 
+                let mesh = &model.opaque_mesh;
+
+                // TODO: Don't put empty meshes into the instances buffer.
+                if mesh.index_count == 0 {
+                    continue;
+                }
+
                 // Create the buffer with instances.
                 let instances_buffer =
                     renderer()
@@ -369,15 +381,81 @@ impl ModelRenderer {
                             usage: wgpu::BufferUsages::VERTEX,
                         });
 
-                render_pass.set_vertex_buffer(0, model.vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
                 render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
                 render_pass.set_bind_group(3, &animation.bind_group, &[]);
 
+                render_pass.draw_indexed(0..mesh.index_count, 0, 0..gpu_instances.len() as u32);
+            }
+        }
+
+        // Alpha
+        {
+            let mut render_pass = frame
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("model_renderer_render_pass"),
+                    color_attachments: &geometry_buffers.color_attachments(),
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &geometry_buffers.depth.view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+
+            render_pass.set_pipeline(&self.alpha_pipeline);
+            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(1, environment_bind_group, &[]);
+
+            for (key, gpu_instances) in alpha_instances.iter() {
+                let Some(model) = self.models.get(key.model) else {
+                    tracing::warn!("model lookup failure!");
+                    continue;
+                };
+
+                let Some(animation) = self.animations.get(key.animation) else {
+                    tracing::warn!("animation lookup failure!");
+                    continue;
+                };
+
+                let Some(ref mesh) = model.alpha_mesh else {
+                    tracing::warn!("No alpha mesh, but in alpha instances!");
+                    continue;
+                };
+
+                // TODO: Don't put empty meshes into the instances buffer.
+                if mesh.index_count == 0 {
+                    continue;
+                }
+
+                // Create the buffer with instances.
+                let instances_buffer =
+                    renderer()
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("model_renderer_instances"),
+                            contents: bytemuck::cast_slice(gpu_instances),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
+
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
                 render_pass
-                    .set_index_buffer(model.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..model.index_count, 0, 0..gpu_instances.len() as u32);
+                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
+                render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
+                render_pass.set_bind_group(3, &animation.bind_group, &[]);
+
+                render_pass.draw_indexed(0..mesh.index_count, 0, 0..gpu_instances.len() as u32);
             }
         }
     }
