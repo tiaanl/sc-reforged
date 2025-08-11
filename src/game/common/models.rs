@@ -94,6 +94,10 @@ impl Models {
 
         let model = Model::try_from(smf)?;
 
+        if model.meshes.is_empty() {
+            return Err(AssetError::custom(path, "Model does not contain meshes!"));
+        }
+
         let handle = self.models.insert(model);
         self.lookup.insert(name.to_owned(), handle);
 

@@ -114,8 +114,8 @@ impl TryFrom<smf::Model> for Model {
                     Some(id) => *id,
                     None => {
                         let n = names.keys().cloned().collect::<Vec<_>>().join(", ");
-                        return Err(AssetError::Unknown(
-                            PathBuf::from(&value.name),
+                        return Err(AssetError::custom(
+                            &value.name,
                             format!(
                                 "Parent name [{}] not found, existing names: {}",
                                 smf_node.parent_name, n

@@ -50,13 +50,11 @@ impl Renderer {
             }))
             .expect("Could not request an adapter.");
 
-        let features = adapter.features();
-
-        let required_features =
-            wgpu::Features::MULTI_DRAW_INDIRECT | wgpu::Features::PUSH_CONSTANTS;
-        if !features.contains(required_features) {
-            tracing::warn!("wgpu::Features::MULTI_DRAW_INDIRECT not available!");
-        }
+        let supported = adapter.features();
+        let required = wgpu::Features::MULTI_DRAW_INDIRECT
+            | wgpu::Features::PUSH_CONSTANTS
+            | wgpu::Features::TEXTURE_BINDING_ARRAY
+            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
 
         let surface_caps = surface.get_capabilities(&adapter);
 
@@ -79,7 +77,7 @@ impl Renderer {
 
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
-                required_features,
+                required_features: required & supported,
                 required_limits: wgpu::Limits {
                     // max_bind_groups: 5,
                     max_push_constant_size: 16,

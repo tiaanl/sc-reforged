@@ -7,7 +7,7 @@
 
 @group(1) @binding(0) var<uniform> u_environment: environment::Environment;
 
-@group(2) @binding(0) var t_texture: texture_2d<f32>;
+@group(2) @binding(0) var t_textures: binding_array<texture_2d<f32>>;
 @group(2) @binding(1) var s_sampler: sampler;
 
 @group(3) @binding(0) var t_positions: texture_2d<f32>;
@@ -17,16 +17,17 @@ struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) tex_coord: vec2<f32>,
-    @location(3) node_index: u32,
+    @interpolate(flat) @location(3) node_index: u32,
+    @interpolate(flat) @location(4) texture_index: u32,
 };
 
 struct InstanceInput {
-    @location(4) col0: vec4<f32>,
-    @location(5) col1: vec4<f32>,
-    @location(6) col2: vec4<f32>,
-    @location(7) col3: vec4<f32>,
-    @location(8) entity_id: u32,
-    @location(9) time: f32,
+    @location(5) col0: vec4<f32>,
+    @location(6) col1: vec4<f32>,
+    @location(7) col2: vec4<f32>,
+    @location(8) col3: vec4<f32>,
+    @interpolate(flat) @location(9) entity_id: u32,
+    @location(10) time: f32,
 };
 
 struct VertexOutput {
@@ -35,6 +36,7 @@ struct VertexOutput {
     @location(1) world_position: vec3<f32>,
     @location(2) normal: vec3<f32>,
     @interpolate(flat) @location(3) entity_id: u32,
+    @interpolate(flat) @location(4) texture_index: u32,
 };
 
 @vertex
@@ -71,11 +73,16 @@ fn vertex(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
         world_position.xyz,
         world_normal,
         instance.entity_id,
+        vertex.texture_index,
     );
 }
 
 fn lit_color(vertex: VertexOutput) -> vec4<f32> {
-    let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
+    //let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
+    //let base_color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
+
+    let texture = t_textures[vertex.texture_index];
+    let base_color = textureSample(texture, s_sampler, vertex.tex_coord);
 
     let camera_distance = length(vertex.world_position - u_camera.position);
 

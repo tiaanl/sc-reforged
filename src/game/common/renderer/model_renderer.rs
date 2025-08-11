@@ -9,7 +9,6 @@ use crate::{
     game::{
         animations::Animation,
         geometry_buffers::GeometryBuffers,
-        image::BlendMode,
         model,
         models::models,
         renderer::{
@@ -57,24 +56,6 @@ impl InstanceUpdater {
     }
 }
 
-#[derive(Debug, Eq, Hash, PartialEq)]
-pub struct InstanceKey {
-    pub render_model: Handle<RenderModel>,
-    pub render_animation: Option<Handle<RenderAnimation>>,
-}
-
-impl InstanceKey {
-    pub fn new(
-        render_model: Handle<RenderModel>,
-        render_animation: Option<Handle<RenderAnimation>>,
-    ) -> Self {
-        Self {
-            render_model,
-            render_animation,
-        }
-    }
-}
-
 pub struct ModelRenderer {
     textures: render_textures::RenderTextures,
     models: RenderModels,
@@ -86,7 +67,7 @@ pub struct ModelRenderer {
     /// The pipeline to render all opaque models.
     opaque_pipeline: wgpu::RenderPipeline,
     /// The pipeline to render all models with an alpha channel.
-    alpha_pipeline: wgpu::RenderPipeline,
+    _alpha_pipeline: wgpu::RenderPipeline,
 }
 
 impl ModelRenderer {
@@ -113,7 +94,7 @@ impl ModelRenderer {
                 bind_group_layouts: &[
                     camera_bind_group_layout,
                     environment_bind_group_layout,
-                    &textures.texture_bind_group_layout,
+                    &textures.texture_set_bind_group_layout,
                     animations.bind_group_layout(),
                 ],
                 push_constant_ranges: &[],
@@ -124,22 +105,23 @@ impl ModelRenderer {
                 array_stride: std::mem::size_of::<RenderVertex>() as wgpu::BufferAddress,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
-                    0 => Float32x3,
-                    1 => Float32x3,
-                    2 => Float32x2,
-                    3 => Uint32
+                    0 => Float32x3, // position
+                    1 => Float32x3, // normal
+                    2 => Float32x2, // tex_coord
+                    3 => Uint32, // node_index
+                    4 => Uint32, // texture_index
                 ],
             },
             wgpu::VertexBufferLayout {
                 array_stride: std::mem::size_of::<GpuInstance>() as wgpu::BufferAddress,
                 step_mode: wgpu::VertexStepMode::Instance,
                 attributes: &wgpu::vertex_attr_array![
-                    4 => Float32x4,
-                    5 => Float32x4,
-                    6 => Float32x4,
-                    7 => Float32x4,
-                    8 => Uint32,
-                    9 => Float32,
+                    5 => Float32x4, // model_mat_col_0
+                    6 => Float32x4, // model_mat_col_1
+                    7 => Float32x4, // model_mat_col_2
+                    8 => Float32x4, // model_mat_col_3
+                    9 => Uint32, // entity_id
+                    10 => Float32, // time
                 ],
             },
         ];
@@ -220,7 +202,7 @@ impl ModelRenderer {
             render_instances: Storage::default(),
 
             opaque_pipeline,
-            alpha_pipeline,
+            _alpha_pipeline: alpha_pipeline,
         }
     }
 
@@ -230,11 +212,11 @@ impl ModelRenderer {
         transform: Mat4,
         entity_id: u32,
     ) -> Result<Handle<RenderInstance>, AssetError> {
-        let instance_key =
+        let render_model =
             self.models
                 .add_model(&mut self.textures, &mut self.animations, model_handle)?;
 
-        let render_instance = RenderInstance::new(instance_key.render_model, entity_id, transform);
+        let render_instance = RenderInstance::new(render_model, entity_id, transform);
         Ok(self.render_instances.insert(render_instance))
     }
 
@@ -366,65 +348,15 @@ impl ModelRenderer {
                             usage: wgpu::BufferUsages::VERTEX,
                         });
 
+                render_pass.set_vertex_buffer(0, model.vertex_buffer.slice(..));
                 render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
 
+                render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
                 render_pass.set_bind_group(3, &animation.bind_group, &[]);
 
-                model.render(&mut render_pass, &self.textures, BlendMode::Opaque);
-
-                model.render(&mut render_pass, &self.textures, BlendMode::ColorKeyed);
-            }
-        }
-
-        // Alpha
-        {
-            let mut render_pass = frame
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("model_renderer_render_pass"),
-                    color_attachments: &geometry_buffers.color_attachments(),
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &geometry_buffers.depth.view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Discard,
-                        }),
-                        stencil_ops: None,
-                    }),
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
-
-            render_pass.set_pipeline(&self.alpha_pipeline);
-            render_pass.set_bind_group(0, camera_bind_group, &[]);
-            render_pass.set_bind_group(1, environment_bind_group, &[]);
-
-            for (key, gpu_instances) in opaque_instances.iter() {
-                let Some(model) = self.models.get(key.model) else {
-                    tracing::warn!("model lookup failure!");
-                    continue;
-                };
-
-                let Some(animation) = self.animations.get(key.animation) else {
-                    tracing::warn!("animation lookup failure!");
-                    continue;
-                };
-
-                // Create the buffer with instances.
-                let instances_buffer =
-                    renderer()
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("model_renderer_instances"),
-                            contents: bytemuck::cast_slice(gpu_instances),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
-
-                render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
-
-                render_pass.set_bind_group(3, &animation.bind_group, &[]);
-
-                model.render(&mut render_pass, &self.textures, BlendMode::Alpha);
+                render_pass
+                    .set_index_buffer(model.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..model.index_count, 0, 0..gpu_instances.len() as u32);
             }
         }
     }

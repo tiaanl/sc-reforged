@@ -13,7 +13,10 @@ pub struct Shaders {
 
 impl Shaders {
     pub fn new() -> Self {
-        let composer = Composer::default().with_capabilities(Capabilities::PUSH_CONSTANT);
+        let composer = Composer::default().with_capabilities(
+            Capabilities::PUSH_CONSTANT
+                | Capabilities::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        );
         Self { composer }
     }
 

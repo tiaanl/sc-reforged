@@ -31,6 +31,7 @@ impl<T> std::fmt::Debug for Handle<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct Storage<T>(slab::Slab<T>);
 
 impl<T> Default for Storage<T> {

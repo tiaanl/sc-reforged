@@ -6,7 +6,7 @@ use crate::{
 };
 
 /// Holds animation data for a [RenderInstance].
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct RenderInstanceAnimation {
     /// Handle to the animation to play.
     pub handle: Handle<RenderAnimation>,
@@ -24,6 +24,7 @@ impl RenderInstanceAnimation {
 }
 
 /// Represents a model being rendered in the world.
+#[derive(Debug)]
 pub struct RenderInstance {
     /// The model to render.
     pub render_model: Handle<RenderModel>,

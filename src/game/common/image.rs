@@ -89,7 +89,7 @@ impl Images {
             match err {
                 ImageError::Decoding(_) => AssetError::Decode(path),
                 ImageError::IoError(error) => AssetError::from_io_error(error, &path),
-                error => AssetError::Unknown(path, format!("{error:?}")),
+                error => AssetError::custom(path, error),
             }
         }
 

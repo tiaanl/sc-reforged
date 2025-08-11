@@ -18,17 +18,21 @@ pub enum AssetError {
     #[error("File system error ({0})")]
     FileSystemError(#[from] FileSystemError),
 
-    #[error("Unknown error ({0})")]
-    Unknown(PathBuf, String),
+    #[error("{1} ({0})")]
+    Custom(PathBuf, String),
 }
 
 impl AssetError {
+    pub fn custom(path: impl AsRef<Path>, description: impl std::fmt::Display) -> Self {
+        Self::Custom(path.as_ref().to_path_buf(), description.to_string())
+    }
+
     pub fn from_io_error(error: std::io::Error, path: &Path) -> Self {
         match error {
             err if err.kind() == std::io::ErrorKind::NotFound => {
                 Self::FileNotFound(path.to_path_buf())
             }
-            err => Self::Unknown(path.to_path_buf(), err.kind().to_string()),
+            err => Self::custom(path, err.kind().to_string()),
         }
     }
 }
