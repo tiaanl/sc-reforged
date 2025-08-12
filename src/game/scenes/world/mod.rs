@@ -688,7 +688,7 @@ pub fn fit_directional_light(
     }
     // Place eye at frustum center - some distance back along light dir
     let center = corners.iter().copied().reduce(|a, b| a + b).unwrap() / 8.0;
-    let eye = center - fwd * 1000.0; // far enough to see everything
+    let eye = center - fwd * 10_000.0; // far enough to see everything
     let view = Mat4::look_at_lh(eye, center, up);
 
     // Transform corners into light space
