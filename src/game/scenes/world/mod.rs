@@ -530,8 +530,6 @@ impl Scene for WorldScene {
             &self.main_camera.gpu_camera.bind_group
         };
 
-        let view_camera_bind_group = &self.light_gpu_camera.bind_group;
-
         {
             // Render Opaque geometry first.
             self.terrain.render(
