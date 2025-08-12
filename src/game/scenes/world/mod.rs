@@ -199,7 +199,7 @@ impl WorldScene {
                     }],
                 });
 
-        let geometry_buffers = GeometryBuffers::new();
+        let geometry_buffers = GeometryBuffers::new(&renderer().device, renderer().surface.size());
         let compositor = Compositor::new(
             &mut shaders,
             &geometry_buffers.bind_group_layout,
@@ -303,11 +303,12 @@ impl WorldScene {
 
 impl Scene for WorldScene {
     fn resize(&mut self) {
+        let size = renderer().surface.size();
+
         // Replace the buffers with new ones.
-        self.geometry_buffers = GeometryBuffers::new();
+        self.geometry_buffers = GeometryBuffers::new(&renderer().device, size);
 
-        let [width, height] = renderer().surface.size().to_array().map(|f| f as f32);
-
+        let [width, height] = size.to_array().map(|f| f as f32);
         let aspect = width / height.max(1.0);
         self.main_camera.camera.aspect_ratio = aspect;
         self.debug_camera.camera.aspect_ratio = aspect;
@@ -482,9 +483,10 @@ impl Scene for WorldScene {
             &self.environment_bind_group,
         );
 
-        self.geometry_data = self
-            .last_mouse_position
-            .map(|position| self.geometry_buffers.fetch_data(position));
+        self.geometry_data = self.last_mouse_position.map(|position| {
+            self.geometry_buffers
+                .fetch_data(&renderer().device, &renderer().queue, position)
+        });
 
         if let Some(ref data) = self.geometry_data {
             // Translation matrix

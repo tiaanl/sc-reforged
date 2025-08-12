@@ -1,7 +1,5 @@
 use glam::{UVec2, Vec3};
 
-use crate::engine::prelude::renderer;
-
 pub struct RenderTarget {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
@@ -136,11 +134,7 @@ impl GeometryBuffers {
     const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     const POSITION_ID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
-    pub fn new() -> Self {
-        let device = &renderer().device;
-
-        let size = renderer().surface.size();
-
+    pub fn new(device: &wgpu::Device, size: UVec2) -> Self {
         tracing::info!("Creating geometry buffers ({}x{})", size.x, size.y);
 
         let shadow = RenderTarget::new(device, "shadow", size, Self::SHADOW_FORMAT);
@@ -189,28 +183,28 @@ impl GeometryBuffers {
         }
     }
 
-    pub fn fetch_data(&self, position: UVec2) -> GeometryData {
-        let mut encoder =
-            renderer()
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("geometry_buffers_pick"),
-                });
+    pub fn fetch_data(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        position: UVec2,
+    ) -> GeometryData {
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("geometry_buffer_fetch_data"),
+        });
 
         self.position_id_read_back_buffer
             .fetch(&mut encoder, &self.position_id.texture, position);
 
-        renderer().queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish()));
 
-        let (position, id) = self
-            .position_id_read_back_buffer
-            .read(&renderer().device, |data| {
-                let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
-                (
-                    Vec3::new(f[0], f[1], f[2]),
-                    u32::from_le_bytes(f[3].to_le_bytes()),
-                )
-            });
+        let (position, id) = self.position_id_read_back_buffer.read(device, |data| {
+            let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
+            (
+                Vec3::new(f[0], f[1], f[2]),
+                u32::from_le_bytes(f[3].to_le_bytes()),
+            )
+        });
 
         GeometryData { position, id }
     }
