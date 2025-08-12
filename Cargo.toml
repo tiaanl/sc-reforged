@@ -8,7 +8,7 @@ default = ["egui"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "dep:epaint"]
 
 [dependencies]
-shadow_company_tools = { path = "../shadow_company_tools" }
+shadow_company_tools = { git = "https://github.com/tiaanl/shadow_company_tools.git" }
 
 bytemuck = { version = "1.18.0", default-features = false, features = ["derive"] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
