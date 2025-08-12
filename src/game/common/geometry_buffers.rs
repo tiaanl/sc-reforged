@@ -1,11 +1,10 @@
-use glam::{UVec2, Vec3, Vec4};
+use glam::{UVec2, Vec3};
 
 use crate::engine::prelude::renderer;
 
 pub struct RenderTarget {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub read_back_buffer: wgpu::Buffer,
 }
 
 impl RenderTarget {
@@ -33,34 +32,48 @@ impl RenderTarget {
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let read_back_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(label),
+        Self { texture, view }
+    }
+}
+
+pub struct ReadBackBuffer {
+    buffer: wgpu::Buffer,
+}
+
+impl ReadBackBuffer {
+    pub fn new(device: &wgpu::Device, label: &str) -> Self {
+        let full_label = format!("read_back_buffer_{label}");
+
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(&full_label),
             size: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
 
-        Self {
-            texture,
-            view,
-            read_back_buffer,
-        }
+        Self { buffer }
     }
 
-    pub fn fetch(&self, encoder: &mut wgpu::CommandEncoder, pos: UVec2) {
+    /// Fetch the data from the given texture at the given position into this [ReadBackBuffer].
+    pub fn fetch(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        texture: &wgpu::Texture,
+        position: UVec2,
+    ) {
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
-                texture: &self.texture,
+                texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d {
-                    x: pos.x,
-                    y: pos.y,
+                    x: position.x,
+                    y: position.y,
                     z: 0,
                 },
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::TexelCopyBufferInfo {
-                buffer: &self.read_back_buffer,
+                buffer: &self.buffer,
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
@@ -75,8 +88,10 @@ impl RenderTarget {
         );
     }
 
+    /// Read the data from this [ReadBackBuffer] for use on the CPU.
     pub fn read<T>(&self, device: &wgpu::Device, f: impl FnOnce(&wgpu::BufferView) -> T) -> T {
-        let buffer_slice = self.read_back_buffer.slice(..);
+        let buffer_slice = self.buffer.slice(..);
+
         buffer_slice.map_async(wgpu::MapMode::Read, |result| {
             if result.is_err() {
                 eprintln!("Failed to map buffer for reading");
@@ -91,7 +106,7 @@ impl RenderTarget {
         let res = f(&data);
 
         drop(data);
-        self.read_back_buffer.unmap();
+        self.buffer.unmap();
 
         res
     }
@@ -103,13 +118,14 @@ pub struct GeometryBuffers {
     pub color: RenderTarget,
     pub position_id: RenderTarget,
 
+    position_id_read_back_buffer: ReadBackBuffer,
+
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
 }
 
 #[derive(Debug, Default)]
 pub struct GeometryData {
-    pub color: Vec4,
     pub position: Vec3,
     pub id: u32,
 }
@@ -131,6 +147,8 @@ impl GeometryBuffers {
         let depth = RenderTarget::new(device, "depth", size, Self::DEPTH_FORMAT);
         let color = RenderTarget::new(device, "color", size, Self::COLOR_FORMAT);
         let position_id = RenderTarget::new(device, "position", size, Self::POSITION_ID_FORMAT);
+
+        let position_id_read_back_buffer = ReadBackBuffer::new(device, "position_id");
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("g_buffer_bind_group_layout"),
@@ -164,12 +182,14 @@ impl GeometryBuffers {
             color,
             position_id,
 
+            position_id_read_back_buffer,
+
             bind_group_layout,
             bind_group,
         }
     }
 
-    pub fn fetch_data(&self, pos: UVec2) -> GeometryData {
+    pub fn fetch_data(&self, position: UVec2) -> GeometryData {
         let mut encoder =
             renderer()
                 .device
@@ -177,35 +197,22 @@ impl GeometryBuffers {
                     label: Some("geometry_buffers_pick"),
                 });
 
-        self.color.fetch(&mut encoder, pos);
-        self.position_id.fetch(&mut encoder, pos);
+        self.position_id_read_back_buffer
+            .fetch(&mut encoder, &self.position_id.texture, position);
 
         renderer().queue.submit(Some(encoder.finish()));
 
-        // -----------------------------------------------------------------------------------------
+        let (position, id) = self
+            .position_id_read_back_buffer
+            .read(&renderer().device, |data| {
+                let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
+                (
+                    Vec3::new(f[0], f[1], f[2]),
+                    u32::from_le_bytes(f[3].to_le_bytes()),
+                )
+            });
 
-        let color = self.color.read(&renderer().device, |data| {
-            Vec4::new(
-                data[0] as f32 / 255.0,
-                data[1] as f32 / 255.0,
-                data[2] as f32 / 255.0,
-                data[3] as f32 / 255.0,
-            )
-        });
-
-        let (position, id) = self.position_id.read(&renderer().device, |data| {
-            let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
-            (
-                Vec3::new(f[0], f[1], f[2]),
-                u32::from_le_bytes(f[3].to_le_bytes()),
-            )
-        });
-
-        GeometryData {
-            color,
-            position,
-            id,
-        }
+        GeometryData { position, id }
     }
 
     pub fn attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {

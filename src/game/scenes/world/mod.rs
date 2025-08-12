@@ -530,8 +530,12 @@ impl Scene for WorldScene {
 
                 ui.heading("Geometry Data");
                 if let Some(ref geometry_data) = self.geometry_data {
-                    ui.label(format!("color: {:?}", geometry_data.color));
-                    ui.label(format!("position: {:?}", geometry_data.position));
+                    ui.label(format!(
+                        "position: {:.2}, {:.2}, {:.2}",
+                        geometry_data.position.x,
+                        geometry_data.position.y,
+                        geometry_data.position.z,
+                    ));
                     ui.label(format!("id: {:?}", geometry_data.id));
                 } else {
                     ui.label("None");
