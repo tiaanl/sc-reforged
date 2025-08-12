@@ -16,19 +16,13 @@
 
 var<push_constant> u_chunk_index: vec2<u32>;
 
-struct Node {
-    x: u32,
-    y: u32,
-    index: u32,
-}
+struct Node { x: u32, y: u32, index: u32 }
 
 fn get_chunk_pos_from_index(chunk_index: u32) -> vec2<u32> {
     let terrain_chunks_x = u_terrain_data.size.x / terrain::CELLS_PER_CHUNK;
     let x = chunk_index % terrain_chunks_x;
-
     let terrain_chunks_y = u_terrain_data.size.y / terrain::CELLS_PER_CHUNK;
     let y = chunk_index / terrain_chunks_y;
-
     return vec2<u32>(x, y);
 }
 
@@ -36,7 +30,6 @@ fn get_node_index(chunk_pos: vec2<u32>, vertex_pos: vec2<u32>) -> Node {
     let x = chunk_pos.x * terrain::CELLS_PER_CHUNK + vertex_pos.x;
     let y = chunk_pos.y * terrain::CELLS_PER_CHUNK + vertex_pos.y;
     let index = y * (u_terrain_data.size.x + 1) + x;
-
     return Node(x, y, index);
 }
 
@@ -80,14 +73,7 @@ fn vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -
         f32(node.y) / f32(u_terrain_data.size.y),
     );
 
-    return VertexOutput(
-        clip_position,
-        world_position,
-        normal,
-        tex_coord,
-        chunk_pos,
-        chunk_index,
-    );
+    return VertexOutput(clip_position, world_position, normal, tex_coord, chunk_pos, chunk_index);
 }
 
 @vertex
@@ -96,148 +82,126 @@ fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexIn
     let node = get_node_index(chunk_pos, vertex.index);
     let world_position = get_node_world_position(node);
 
-    // We calculate the clip position from the correct water location, but we keep the height map
-    // z value in the world position so we can calculate the depth in the fragment shader.
+    // Clip uses the actual water surface height
     let water_position = vec3(world_position.xy, u_terrain_data.water_level);
     let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4<f32>(water_position, 1.0);
 
-    // TODO: Calculate water texture coordinates.
-    let tex_coord = vec2<f32>(
-        f32(node.x) / 8.0,
-        f32(node.y) / 8.0,
-    );
+    // Simple tiling for now
+    let tex_coord = vec2<f32>(f32(node.x) / 8.0, f32(node.y) / 8.0);
 
     return VertexOutput(
         clip_position,
-        world_position,
-        vec3<f32>(0.0, 0.0, 1.0), // normal
+        world_position,                // keep original heightmap z for depth calc later
+        vec3<f32>(0.0, 0.0, 1.0),     // water surface normal
         tex_coord,
         chunk_pos,
         chunk_index,
     );
 }
 
-const TERRAIN_ENTITY_ID: u32 = 1 << 16;
+const TERRAIN_ENTITY_ID: u32 = 1u << 16u;
+
+// ---------- Terrain ----------
 
 @fragment
-fn fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
-    let base_color = textureSample(t_terrain_texture, s_sampler, vertex.tex_coord);
+fn fragment_main(v: VertexOutput) -> geometry_buffers::GeometryBuffers {
+    let albedo = textureSample(t_terrain_texture, s_sampler, v.tex_coord).rgb;
 
-    let world_position = vertex.world_position;
-    let world_normal = vertex.normal;
+    // World-space values
+    let N = normalize(v.normal);
+    let Vpos = v.world_position;
+    let dist = length(u_camera.position - Vpos);
 
-    let distance = length(world_position - u_camera.position);
+    // Sun vectors
+    let Lrays = normalize(u_environment.sun_dir.xyz); // rays direction
+    let L = -Lrays;                                   // direction to light
+    let ndotl = max(dot(N, L), 0.0);
 
-    let diffuse = environment::diffuse_with_fog(
-        u_environment,
-        world_normal.xyz,
-        base_color.rgb,
-        distance,
-    );
-
+    // Shadow coords (proj*view) with Y flip (D3D/Vulkan texture space)
     let sun_proj_view = u_environment.sun_proj * u_environment.sun_view;
-    let light_point = sun_proj_view * vec4<f32>(world_position, 1.0);
-    let inverse_w = 1.0 / light_point.w;
+    let lp   = sun_proj_view * vec4(Vpos, 1.0);
+    let ndc  = lp.xyz / lp.w;
+    let shadow_uv = ndc.xy * vec2(0.5, -0.5) + vec2(0.5, 0.5);
+    let shadow_z  = ndc.z;
 
-    let shadow_uv = light_point.xy * inverse_w * 0.5 + 0.5;
-    let shadow_z = light_point.z * inverse_w;
-
-    var color = vec4<f32>(diffuse.rgb, 1.0);
-
-    if (any(shadow_uv < vec2(0.0)) || any(shadow_uv > vec2(1.0))) {
-        color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    var shadow = 1.0;
+    if !(any(shadow_uv < vec2(0.0)) || any(shadow_uv > vec2(1.0))) {
+        let bias = 0.0015;
+        shadow = textureSampleCompare(shadow_map, shadow_map_sampler, shadow_uv, shadow_z + bias);
     }
 
-    let bias = 0.0015;
+    // Ambient + shadowed direct
+    let ambient = 0.15 * albedo;
+    let direct  = albedo * u_environment.sun_color.rgb * ndotl;
+    var rgb = ambient + shadow * direct;
 
-    // 1 = lit, 0 = fully shadowed (with PCF this is a smooth value)
-    let lit = textureSampleCompare(
-        shadow_map,
-        shadow_map_sampler,
-        shadow_uv,
-        shadow_z + bias,
-    );
+    // Fog
+    let fog_near = u_environment.fog_params.x;
+    let fog_far  = u_environment.fog_params.y;
+    let fog_t = clamp((dist - fog_near) / (fog_far - fog_near), 0.0, 1.0);
+    rgb = mix(rgb, u_environment.fog_color.rgb, fog_t);
 
-    if lit < 0.1 {
-        color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
-    }
-
-    return geometry_buffers::to_geometry_buffer(
-        color,
-        vertex.world_position,
-        TERRAIN_ENTITY_ID,
-    );
+    return geometry_buffers::to_geometry_buffer(vec4(rgb, 1.0), Vpos, TERRAIN_ENTITY_ID);
 }
 
-@fragment
-fn water_fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
-    let water_depth = u_terrain_data.water_level - vertex.world_position.z;
-    if water_depth <= 0.0 {
-        discard;
-    }
+// ---------- Water ----------
 
-    let base_color = textureSample(
-        t_water_texture,
-        s_sampler,
-        vertex.tex_coord,
-    );
+@fragment
+fn water_fragment_main(v: VertexOutput) -> geometry_buffers::GeometryBuffers {
+    // Depth/alpha of water (using terrain heightmap z stored in v.world_position.z)
+    let water_depth = u_terrain_data.water_level - v.world_position.z;
+    if water_depth <= 0.0 { discard; }
 
     var n = clamp(water_depth / u_terrain_data.water_trans_depth, 0.0, 1.0);
-    let alpha = u_terrain_data.water_trans_low + (u_terrain_data.water_trans_high - u_terrain_data.water_trans_low) * n;
+    let alpha = u_terrain_data.water_trans_low
+              + (u_terrain_data.water_trans_high - u_terrain_data.water_trans_low) * n;
 
-    let world_position = vertex.world_position;
-    let world_normal = vertex.normal;
+    let albedo = textureSample(t_water_texture, s_sampler, v.tex_coord).rgb;
 
-    let distance = length(world_position - u_camera.position);
+    // Use the actual surface position for lighting & shadows
+    let Vpos = vec3(v.world_position.xy, u_terrain_data.water_level);
+    let N = normalize(v.normal); // (0,0,1) from vertex shader
+    let dist = length(u_camera.position - Vpos);
 
-    let diffuse = environment::diffuse_with_fog(
-        u_environment,
-        world_normal.xyz,
-        base_color.rgb,
-        distance,
-    );
+    // Sun light
+    let Lrays = normalize(u_environment.sun_dir.xyz);
+    let L = -Lrays;
+    let ndotl = max(dot(N, L), 0.0);
 
+    // Shadows for water surface (same transform + Y flip)
     let sun_proj_view = u_environment.sun_proj * u_environment.sun_view;
-    let light_point = sun_proj_view * vec4<f32>(world_position, 1.0);
-    let inverse_w = 1.0 / light_point.w;
+    let lp   = sun_proj_view * vec4(Vpos, 1.0);
+    let ndc  = lp.xyz / lp.w;
+    let shadow_uv = ndc.xy * vec2(0.5, -0.5) + vec2(0.5, 0.5);
+    let shadow_z  = ndc.z;
 
-    let shadow_uv = light_point.xy * inverse_w * 0.5 + 0.5;
-    let shadow_z = light_point.z * inverse_w;
-
-    var color = vec4<f32>(diffuse.rgb, alpha);
-
-    if (any(shadow_uv < vec2(0.0)) || any(shadow_uv > vec2(1.0))) {
-        color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    var shadow = 1.0;
+    if !(any(shadow_uv < vec2(0.0)) || any(shadow_uv > vec2(1.0))) {
+        let bias = 0.0015;
+        shadow = textureSampleCompare(shadow_map, shadow_map_sampler, shadow_uv, shadow_z + bias);
     }
 
-    let bias = 0.0015;
-    let lit = textureSampleCompare(
-        shadow_map,
-        shadow_map_sampler,
-        shadow_uv,
-        shadow_z + bias,
-    );
+    // Ambient + shadowed direct, then fog; preserve alpha
+    let ambient = 0.15 * albedo;
+    let direct  = albedo * u_environment.sun_color.rgb * ndotl;
+    var rgb = ambient + shadow * direct;
 
-    if lit < 0.1 {
-        color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
-    }
+    let fog_near = u_environment.fog_params.x;
+    let fog_far  = u_environment.fog_params.y;
+    let fog_t = clamp((dist - fog_near) / (fog_far - fog_near), 0.0, 1.0);
+    rgb = mix(rgb, u_environment.fog_color.rgb, fog_t);
 
-    return geometry_buffers::to_geometry_buffer(
-        color,
-        vertex.world_position,
-        TERRAIN_ENTITY_ID + 1,
-    );
+    return geometry_buffers::to_geometry_buffer(vec4(rgb, alpha), v.world_position, TERRAIN_ENTITY_ID + 1u);
 }
 
+// ---------- Wireframe debug ----------
+
 @vertex
-fn wireframe_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) ->  @builtin(position) vec4<f32> {
+fn wireframe_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -> @builtin(position) vec4<f32> {
     let chunk_pos = get_chunk_pos_from_index(chunk_index);
     let node = get_node_index(u_chunk_index, vertex.index);
     let world_position = get_node_world_position(node);
-
-    let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
-
-    return clip_position;
+    return u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
 }
 
 @fragment

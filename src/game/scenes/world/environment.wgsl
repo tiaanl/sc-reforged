@@ -43,15 +43,13 @@ fn diffuse_with_fog(
 ) -> vec3<f32> {
     let diffuse = diffuse(env, normal, base_color);
 
-    return diffuse;
+    let fog_factor = linear_fog_factor(
+        env.fog_params.x, // near
+        env.fog_params.y, // far
+        distance,
+    );
 
-    // let fog_factor = linear_fog_factor(
-    //     env.fog_params.x, // near
-    //     env.fog_params.y, // far
-    //     distance,
-    // );
+    let result = mix(diffuse, env.fog_color.rgb, fog_factor);
 
-    // let result = mix(diffuse, env.fog_color.rgb, fog_factor);
-
-    // return result;
+    return result;
 }

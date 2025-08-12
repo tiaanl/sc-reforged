@@ -109,9 +109,6 @@ fn shadow_vertex(vertex: VertexInput, instance: InstanceInput) -> @builtin(posit
 }
 
 fn lit_color(vertex: VertexOutput) -> vec4<f32> {
-    //let base_color = textureSample(t_texture, s_sampler, vertex.tex_coord);
-    //let base_color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
-
     let texture = t_textures[vertex.texture_index];
     let base_color = textureSample(texture, s_sampler, vertex.tex_coord);
 
