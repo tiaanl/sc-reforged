@@ -2,21 +2,25 @@ use glam::{UVec2, Vec3, Vec4};
 
 use crate::engine::prelude::renderer;
 
-pub struct Buffer {
+pub struct RenderTarget {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub read_back_buffer: wgpu::Buffer,
 }
 
-impl Buffer {
+impl RenderTarget {
     fn new(device: &wgpu::Device, label: &str, size: UVec2, format: wgpu::TextureFormat) -> Self {
+        let size = wgpu::Extent3d {
+            width: size.x.max(1),
+            height: size.y.max(1),
+            depth_or_array_layers: 1,
+        };
+
+        let full_label = format!("render_target_texture_{label}");
+
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(label),
-            size: wgpu::Extent3d {
-                width: size.x.max(1),
-                height: size.y.max(1),
-                depth_or_array_layers: 1,
-            },
+            label: Some(&full_label),
+            size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -94,9 +98,10 @@ impl Buffer {
 }
 
 pub struct GeometryBuffers {
-    pub depth: Buffer,
-    pub color: Buffer,
-    pub position_id: Buffer,
+    pub shadow: RenderTarget,
+    pub depth: RenderTarget,
+    pub color: RenderTarget,
+    pub position_id: RenderTarget,
 
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
@@ -110,63 +115,51 @@ pub struct GeometryData {
 }
 
 impl GeometryBuffers {
+    const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
     const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     const POSITION_ID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
     pub fn new() -> Self {
+        let device = &renderer().device;
+
         let size = renderer().surface.size();
 
         tracing::info!("Creating geometry buffers ({}x{})", size.x, size.y);
 
-        let depth = Buffer::new(&renderer().device, "g_depth", size, Self::DEPTH_FORMAT);
+        let shadow = RenderTarget::new(device, "shadow", size, Self::SHADOW_FORMAT);
+        let depth = RenderTarget::new(device, "depth", size, Self::DEPTH_FORMAT);
+        let color = RenderTarget::new(device, "color", size, Self::COLOR_FORMAT);
+        let position_id = RenderTarget::new(device, "position", size, Self::POSITION_ID_FORMAT);
 
-        let color = Buffer::new(
-            &renderer().device,
-            "g_buffer_colors",
-            size,
-            Self::COLOR_FORMAT,
-        );
-
-        let position_id = Buffer::new(
-            &renderer().device,
-            "g_buffer_positions",
-            size,
-            Self::POSITION_ID_FORMAT,
-        );
-
-        let bind_group_layout =
-            renderer()
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("g_buffer_bind_group_layout"),
-                    entries: &[
-                        // color
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                    ],
-                });
-
-        let bind_group = renderer()
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("g_buffer_bind_group"),
-                layout: &bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("g_buffer_bind_group_layout"),
+            entries: &[
+                // color
+                wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&color.view),
-                }],
-            });
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("g_buffer_bind_group"),
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&color.view),
+            }],
+        });
 
         Self {
+            shadow,
             depth,
             color,
             position_id,

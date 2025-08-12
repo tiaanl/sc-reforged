@@ -199,6 +199,14 @@ impl WorldScene {
                     }],
                 });
 
+        let geometry_buffers = GeometryBuffers::new();
+        let compositor = Compositor::new(
+            &mut shaders,
+            &geometry_buffers.bind_group_layout,
+            &main_camera.gpu_camera.bind_group_layout,
+            &environment_bind_group_layout,
+        );
+
         let terrain = Terrain::new(
             &mut shaders,
             &campaign_def,
@@ -231,14 +239,6 @@ impl WorldScene {
                 }
             }
         }
-
-        let geometry_buffers = GeometryBuffers::new();
-        let compositor = Compositor::new(
-            &mut shaders,
-            &geometry_buffers.bind_group_layout,
-            &main_camera.gpu_camera.bind_group_layout,
-            &environment_bind_group_layout,
-        );
 
         let gizmos_renderer = GizmosRenderer::new(&main_camera.gpu_camera.bind_group_layout);
 
