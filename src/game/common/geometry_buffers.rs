@@ -111,7 +111,6 @@ impl ReadBackBuffer {
 }
 
 pub struct GeometryBuffers {
-    pub shadow: RenderTarget,
     pub depth: RenderTarget,
     pub color: RenderTarget,
     pub position_id: RenderTarget,
@@ -129,15 +128,13 @@ pub struct GeometryData {
 }
 
 impl GeometryBuffers {
-    const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-    pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+    const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
     const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     const POSITION_ID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
     pub fn new(device: &wgpu::Device, size: UVec2) -> Self {
         tracing::info!("Creating geometry buffers ({}x{})", size.x, size.y);
 
-        let shadow = RenderTarget::new(device, "shadow", size, Self::SHADOW_FORMAT);
         let depth = RenderTarget::new(device, "depth", size, Self::DEPTH_FORMAT);
         let color = RenderTarget::new(device, "color", size, Self::COLOR_FORMAT);
         let position_id = RenderTarget::new(device, "position", size, Self::POSITION_ID_FORMAT);
@@ -171,7 +168,6 @@ impl GeometryBuffers {
         });
 
         Self {
-            shadow,
             depth,
             color,
             position_id,

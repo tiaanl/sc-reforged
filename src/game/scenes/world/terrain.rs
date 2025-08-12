@@ -588,13 +588,10 @@ impl Terrain {
                         buffers: &[TerrainVertex::layout()],
                     },
                     primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: GeometryBuffers::DEPTH_FORMAT,
-                        depth_write_enabled: false,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
-                        stencil: wgpu::StencilState::default(),
-                        bias: wgpu::DepthBiasState::default(),
-                    }),
+                    depth_stencil: Some(GeometryBuffers::depth_stencil_state(
+                        wgpu::CompareFunction::LessEqual,
+                        false,
+                    )),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &module,
