@@ -8,8 +8,8 @@ use crate::{
     },
     game::{
         animations::Animation,
-        camera::{Camera, Frustum},
-        geometry_buffers::GeometryBuffers,
+        camera::Frustum,
+        geometry_buffers::{GeometryBuffers, RenderTarget},
         model::{self, BoundingSphere},
         models::models,
         renderer::{
@@ -69,11 +69,14 @@ pub struct ModelRenderer {
     opaque_pipeline: wgpu::RenderPipeline,
     /// The pipeline to render all models with an alpha channel.
     alpha_pipeline: wgpu::RenderPipeline,
+    /// The pipeline to render all shadow casting models to the shadow buffer.
+    shadow_pipeline: wgpu::RenderPipeline,
 }
 
 impl ModelRenderer {
     pub fn new(
         shaders: &mut Shaders,
+        shadow_render_target: &RenderTarget,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
@@ -135,7 +138,7 @@ impl ModelRenderer {
                     layout: Some(&layout),
                     vertex: wgpu::VertexState {
                         module: &module,
-                        entry_point: None,
+                        entry_point: Some("vertex_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers,
                     },
@@ -169,7 +172,7 @@ impl ModelRenderer {
                     layout: Some(&layout),
                     vertex: wgpu::VertexState {
                         module: &module,
-                        entry_point: None,
+                        entry_point: Some("vertex_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers,
                     },
@@ -195,6 +198,36 @@ impl ModelRenderer {
                     cache: None,
                 });
 
+        let shadow_pipeline =
+            renderer()
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("model_renderer_shadow_render_pipeline"),
+                    layout: Some(&layout),
+                    vertex: wgpu::VertexState {
+                        module: &module,
+                        entry_point: Some("shadow_vertex"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers,
+                    },
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: shadow_render_target.format,
+                        depth_write_enabled: true,
+                        depth_compare: wgpu::CompareFunction::LessEqual,
+                        stencil: wgpu::StencilState::default(),
+                        bias: wgpu::DepthBiasState {
+                            constant: 2,
+                            slope_scale: 2.0,
+                            clamp: 0.0,
+                        },
+                    }),
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: None,
+                    multiview: None,
+                    cache: None,
+                });
+
         Self {
             textures,
             models,
@@ -204,6 +237,7 @@ impl ModelRenderer {
 
             opaque_pipeline,
             alpha_pipeline,
+            shadow_pipeline,
         }
     }
 
@@ -263,27 +297,8 @@ impl ModelRenderer {
         }
     }
 
-    pub fn render(
-        &mut self,
-        frame: &mut Frame,
-        camera: &Camera,
-        geometry_buffers: &GeometryBuffers,
-        camera_bind_group: &wgpu::BindGroup,
-        environment_bind_group: &wgpu::BindGroup,
-    ) {
-        // Build instance maps.
-        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-        struct Key {
-            model: Handle<RenderModel>,
-            animation: Handle<RenderAnimation>,
-        }
-
-        let matrices = camera.calculate_matrices();
-        let camera_transform = matrices.projection * matrices.view;
-        let frustum = Frustum::from(camera_transform);
-
-        let mut opaque_instances: HashMap<Key, Vec<GpuInstance>> = HashMap::default();
-        let mut alpha_instances: HashMap<Key, Vec<GpuInstance>> = HashMap::default();
+    fn build_render_set(&self, frustum: &Frustum) -> RenderSet {
+        let mut result = RenderSet::default();
 
         for (_, instance) in self.render_instances.iter() {
             let Some(model) = self.models.get(instance.render_model) else {
@@ -312,7 +327,7 @@ impl ModelRenderer {
                 RenderInstanceAnimation::from_animation(model.rest_pose)
             };
 
-            let key = Key {
+            let key = RenderSetKey {
                 model: instance.render_model,
                 animation: animation.handle,
             };
@@ -323,14 +338,108 @@ impl ModelRenderer {
                 animation_time: animation.time,
                 _padding: Default::default(),
             };
-            opaque_instances.entry(key).or_default().push(gpu_instance);
+            result
+                .opaque_instances
+                .entry(key)
+                .or_default()
+                .push(gpu_instance);
 
             if let Some(ref mesh) = model.alpha_mesh
                 && mesh.index_count != 0
             {
-                alpha_instances.entry(key).or_default().push(gpu_instance);
+                result
+                    .alpha_instances
+                    .entry(key)
+                    .or_default()
+                    .push(gpu_instance);
             }
         }
+
+        result
+    }
+
+    pub fn render_shadow_casters(
+        &mut self,
+        frame: &mut Frame,
+        shadow_render_target: &RenderTarget,
+        frustum: &Frustum,
+        environment_bind_group: &wgpu::BindGroup,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        let render_set = self.build_render_set(frustum);
+
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("model_renderer_shadow_pass"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &shadow_render_target.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+        render_pass.set_pipeline(&self.shadow_pipeline);
+        render_pass.set_bind_group(0, camera_bind_group, &[]);
+        render_pass.set_bind_group(1, environment_bind_group, &[]);
+
+        for (key, gpu_instances) in render_set.opaque_instances.iter() {
+            let Some(model) = self.models.get(key.model) else {
+                tracing::warn!("model lookup failure!");
+                continue;
+            };
+
+            let Some(animation) = self.animations.get(key.animation) else {
+                tracing::warn!("animation lookup failure!");
+                continue;
+            };
+
+            let Some(ref mesh) = model.opaque_mesh else {
+                tracing::warn!("No opaque mesh, but in opaque instances!");
+                continue;
+            };
+
+            // TODO: Don't put empty meshes into the instances buffer.
+            if mesh.index_count == 0 {
+                continue;
+            }
+
+            // Create the buffer with instances.
+            let instances_buffer =
+                renderer()
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("model_renderer_instances"),
+                        contents: bytemuck::cast_slice(gpu_instances),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+
+            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
+            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
+            render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
+            render_pass.set_bind_group(3, &animation.bind_group, &[]);
+
+            render_pass.draw_indexed(0..mesh.index_count, 0, 0..gpu_instances.len() as u32);
+        }
+    }
+
+    pub fn render(
+        &mut self,
+        frame: &mut Frame,
+        frustum: &Frustum,
+        geometry_buffers: &GeometryBuffers,
+        camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
+    ) {
+        let render_set = self.build_render_set(frustum);
 
         // Opaque
         {
@@ -355,7 +464,7 @@ impl ModelRenderer {
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.set_bind_group(1, environment_bind_group, &[]);
 
-            for (key, gpu_instances) in opaque_instances.iter() {
+            for (key, gpu_instances) in render_set.opaque_instances.iter() {
                 let Some(model) = self.models.get(key.model) else {
                     tracing::warn!("model lookup failure!");
                     continue;
@@ -421,7 +530,7 @@ impl ModelRenderer {
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.set_bind_group(1, environment_bind_group, &[]);
 
-            for (key, gpu_instances) in alpha_instances.iter() {
+            for (key, gpu_instances) in render_set.alpha_instances.iter() {
                 let Some(model) = self.models.get(key.model) else {
                     tracing::warn!("model lookup failure!");
                     continue;
@@ -464,4 +573,16 @@ impl ModelRenderer {
             }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct RenderSetKey {
+    model: Handle<RenderModel>,
+    animation: Handle<RenderAnimation>,
+}
+
+#[derive(Default)]
+struct RenderSet {
+    opaque_instances: HashMap<RenderSetKey, Vec<GpuInstance>>,
+    alpha_instances: HashMap<RenderSetKey, Vec<GpuInstance>>,
 }

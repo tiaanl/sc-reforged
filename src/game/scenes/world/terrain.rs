@@ -7,8 +7,11 @@ use wgpu::util::DeviceExt;
 use crate::{
     engine::{gizmos::GizmoVertex, prelude::*},
     game::{
-        config::CampaignDef, data_dir::data_dir, geometry_buffers::GeometryBuffers,
-        height_map::HeightMap, image::images,
+        config::CampaignDef,
+        data_dir::data_dir,
+        geometry_buffers::{GeometryBuffers, RenderTarget},
+        height_map::HeightMap,
+        image::images,
     },
 };
 
@@ -217,6 +220,8 @@ impl Terrain {
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
+        shadow_render_target: &RenderTarget,
+        shadow_sampler: &wgpu::Sampler,
     ) -> Result<Self, AssetError> {
         let renderer = renderer();
 
@@ -469,6 +474,24 @@ impl Terrain {
                             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
                         },
+                        // shadow_map
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 5,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Depth,
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        // shadow_map_sampler
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 6,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                            count: None,
+                        },
                     ],
                 });
 
@@ -508,6 +531,14 @@ impl Terrain {
                     wgpu::BindGroupEntry {
                         binding: 4,
                         resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: wgpu::BindingResource::TextureView(&shadow_render_target.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: wgpu::BindingResource::Sampler(shadow_sampler),
                     },
                 ],
             });

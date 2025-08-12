@@ -10,9 +10,9 @@ use crate::{
     },
     game::{
         animations::{Animation, animations},
-        camera::Camera,
+        camera::Frustum,
         config::ObjectType,
-        geometry_buffers::{GeometryBuffers, GeometryData},
+        geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
         model::Model,
         models::models,
         renderer::{ModelRenderer, RenderAnimation, RenderInstance},
@@ -68,11 +68,13 @@ pub struct Objects {
 impl Objects {
     pub fn new(
         shaders: &mut Shaders,
+        shadow_render_target: &RenderTarget,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let mut model_renderer = ModelRenderer::new(
             shaders,
+            shadow_render_target,
             camera_bind_group_layout,
             environment_bind_group_layout,
         );
@@ -190,17 +192,34 @@ impl Objects {
         }
     }
 
+    pub fn render_shadow_casters(
+        &mut self,
+        frame: &mut Frame,
+        shadow_render_target: &RenderTarget,
+        frustum: &Frustum,
+        environment_bind_group: &wgpu::BindGroup,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        self.model_renderer.render_shadow_casters(
+            frame,
+            shadow_render_target,
+            frustum,
+            environment_bind_group,
+            camera_bind_group,
+        );
+    }
+
     pub fn render_objects(
         &mut self,
         frame: &mut Frame,
-        camera: &Camera,
+        frustum: &Frustum,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
     ) {
         self.model_renderer.render(
             frame,
-            camera,
+            frustum,
             geometry_buffers,
             camera_bind_group,
             environment_bind_group,

@@ -5,6 +5,8 @@ struct Environment {
     sun_color: vec4<f32>,  // r, g, b, PADDING
     fog_color: vec4<f32>,  // r, g, b, PADDING
     fog_params: vec4<f32>, // near, far, PADDING, PADDING
+    sun_proj: mat4x4<f32>,
+    sun_view: mat4x4<f32>,
 }
 
 fn linear_fog_factor(fog_near: f32, fog_far: f32, distance: f32) -> f32 {
@@ -41,13 +43,15 @@ fn diffuse_with_fog(
 ) -> vec3<f32> {
     let diffuse = diffuse(env, normal, base_color);
 
-    let fog_factor = linear_fog_factor(
-        env.fog_params.x, // near
-        env.fog_params.y, // far
-        distance,
-    );
+    return diffuse;
 
-    let result = mix(diffuse, env.fog_color.rgb, fog_factor);
+    // let fog_factor = linear_fog_factor(
+    //     env.fog_params.x, // near
+    //     env.fog_params.y, // far
+    //     distance,
+    // );
 
-    return result;
+    // let result = mix(diffuse, env.fog_color.rgb, fog_factor);
+
+    // return result;
 }

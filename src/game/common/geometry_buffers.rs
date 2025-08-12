@@ -3,10 +3,16 @@ use glam::{UVec2, Vec3};
 pub struct RenderTarget {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
+    pub format: wgpu::TextureFormat,
 }
 
 impl RenderTarget {
-    fn new(device: &wgpu::Device, label: &str, size: UVec2, format: wgpu::TextureFormat) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        label: &str,
+        size: UVec2,
+        format: wgpu::TextureFormat,
+    ) -> Self {
         let size = wgpu::Extent3d {
             width: size.x.max(1),
             height: size.y.max(1),
@@ -30,7 +36,11 @@ impl RenderTarget {
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        Self { texture, view }
+        Self {
+            texture,
+            view,
+            format,
+        }
     }
 }
 

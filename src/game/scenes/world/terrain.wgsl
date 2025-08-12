@@ -11,6 +11,8 @@
 @group(2) @binding(2) var t_terrain_texture: texture_2d<f32>;
 @group(2) @binding(3) var t_water_texture: texture_2d<f32>;
 @group(2) @binding(4) var s_sampler: sampler;
+@group(2) @binding(5) var shadow_map: texture_depth_2d;
+@group(2) @binding(6) var shadow_map_sampler: sampler_comparison;
 
 var<push_constant> u_chunk_index: vec2<u32>;
 
@@ -62,6 +64,9 @@ struct VertexOutput {
     @location(2) tex_coord: vec2<f32>,
     @location(3) chunk_pos: vec2<u32>,
     @location(4) chunk_index: u32,
+
+    @location(5) shadow_uv: vec2<f32>,
+    @location(6) shadow_z: f32,
 }
 
 @vertex
@@ -78,6 +83,13 @@ fn vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -
         f32(node.y) / f32(u_terrain_data.size.y),
     );
 
+    let sun_proj_view = u_environment.sun_proj * u_environment.sun_view;
+    let light_point = sun_proj_view * vec4<f32>(world_position, 1.0);
+    let inverse_w = 1.0 / light_point.w;
+
+    let shadow_uv = light_point.xy * inverse_w * 0.5 + 0.5;
+    let shadow_z = light_point.z * inverse_w;
+
     return VertexOutput(
         clip_position,
         world_position,
@@ -85,6 +97,8 @@ fn vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -
         tex_coord,
         chunk_pos,
         chunk_index,
+        shadow_uv,
+        shadow_z,
     );
 }
 
@@ -105,6 +119,14 @@ fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexIn
         f32(node.y) / 8.0,
     );
 
+    let sun_proj_view = u_environment.sun_proj * u_environment.sun_view;
+    let light_point = sun_proj_view * vec4<f32>(world_position, 1.0);
+    let inverse_w = 1.0 / light_point.w;
+
+    let shadow_uv = light_point.xy * inverse_w * 0.5 + 0.5;
+    let shadow_z = light_point.z * inverse_w;
+
+
     return VertexOutput(
         clip_position,
         world_position,
@@ -112,6 +134,8 @@ fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexIn
         tex_coord,
         chunk_pos,
         chunk_index,
+        shadow_uv,
+        shadow_z,
     );
 }
 
@@ -133,8 +157,28 @@ fn fragment_main(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
         distance,
     );
 
+    var color = vec4<f32>(diffuse.rgb, 1.0);
+
+    if (any(vertex.shadow_uv < vec2(0.0)) || any(vertex.shadow_uv > vec2(1.0))) {
+        color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    }
+
+    let bias = 0.0015;
+
+    // 1 = lit, 0 = fully shadowed (with PCF this is a smooth value)
+    let lit = textureSampleCompare(
+        shadow_map,
+        shadow_map_sampler,
+        vertex.shadow_uv,
+        vertex.shadow_z + bias,
+    );
+
+    if lit < 0.1 {
+        color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    }
+
     return geometry_buffers::to_geometry_buffer(
-        vec4<f32>(diffuse.rgb, 1.0),
+        color,
         vertex.world_position,
         TERRAIN_ENTITY_ID,
     );

@@ -9,11 +9,11 @@ use crate::{
     },
     game::{
         animations::track::Track,
-        camera::{self, Controller},
+        camera::{self, Controller, Frustum, GpuCamera, Matrices},
         compositor::Compositor,
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
-        geometry_buffers::{GeometryBuffers, GeometryData},
+        geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
     },
 };
 
@@ -39,6 +39,9 @@ struct Environment {
 
     pub fog_color: Vec4,
     pub fog_params: Vec4,
+
+    pub sun_proj: Mat4,
+    pub sun_view: Mat4,
 }
 
 /// Wrap all the data for controlling the camera.
@@ -63,6 +66,8 @@ pub struct WorldScene {
     geometry_buffers: GeometryBuffers,
     compositor: Compositor,
     gizmos_renderer: GizmosRenderer,
+    shadow_render_target: RenderTarget,
+    light_gpu_camera: GpuCamera,
 
     time_of_day: f32,
     day_night_cycle: DayNightCycle,
@@ -200,6 +205,29 @@ impl WorldScene {
                 });
 
         let geometry_buffers = GeometryBuffers::new(&renderer().device, renderer().surface.size());
+
+        // Start with a 2K shadow buffer.
+        let shadow_render_target = RenderTarget::new(
+            &renderer().device,
+            "shadow",
+            UVec2::new(2048, 2048),
+            wgpu::TextureFormat::Depth32Float,
+        );
+
+        let shadow_sampler = renderer().device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("shadow_sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            ..Default::default()
+        });
+
+        let light_gpu_camera = GpuCamera::new();
+
         let compositor = Compositor::new(
             &mut shaders,
             &geometry_buffers.bind_group_layout,
@@ -212,10 +240,13 @@ impl WorldScene {
             &campaign_def,
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
+            &shadow_render_target,
+            &shadow_sampler,
         )?;
 
         let mut objects = objects::Objects::new(
             &mut shaders,
+            &shadow_render_target,
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
         );
@@ -253,6 +284,8 @@ impl WorldScene {
             objects,
 
             geometry_buffers,
+            shadow_render_target,
+            light_gpu_camera,
             compositor,
             gizmos_renderer,
 
@@ -297,6 +330,8 @@ impl WorldScene {
             sun_color: sun_color.extend(0.0),
             fog_color: fog_color.extend(0.0),
             fog_params: Vec4::new(fog_near, fog_far, 0.0, 0.0),
+            sun_proj: Mat4::IDENTITY,
+            sun_view: Mat4::IDENTITY,
         }
     }
 }
@@ -348,21 +383,49 @@ impl Scene for WorldScene {
     }
 
     fn render(&mut self, frame: &mut Frame) {
-        {
+        let main_camera_matrices = {
             let matrices = self.main_camera.camera.calculate_matrices();
             let position = self.main_camera.camera.position;
+
             self.main_camera
                 .gpu_camera
                 .upload_matrices(&matrices, position);
-        }
 
-        {
+            matrices
+        };
+
+        let main_camera_frustum =
+            Frustum::from(main_camera_matrices.projection * main_camera_matrices.view);
+
+        let _debug_camera_matrices = {
             let matrices = self.debug_camera.camera.calculate_matrices();
             let position = self.debug_camera.camera.position;
+
             self.debug_camera
                 .gpu_camera
                 .upload_matrices(&matrices, position);
-        }
+
+            matrices
+        };
+
+        let light_matrices = {
+            let matrices = fit_directional_light(
+                self.environment.sun_dir.truncate(), // your sun direction
+                &main_camera_matrices,               // Camera matrices
+                2048,                                // shadow map resolution
+                50.0,                                // XY guard band in world units
+                50.0,                                // near guard
+                50.0,                                // far guard
+                true,                                // texel snapping
+            );
+
+            self.light_gpu_camera.upload_matrices(&matrices, Vec3::ZERO);
+
+            matrices
+        };
+
+        self.environment.sun_proj = light_matrices.projection;
+        self.environment.sun_view = light_matrices.view;
 
         renderer().queue.write_buffer(
             &self.environment_buffer,
@@ -385,75 +448,116 @@ impl Scene for WorldScene {
                 b: self.environment.fog_color.z as f64,
                 a: 1.0,
             };
-            frame
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("world_clear_render_pass"),
-                    color_attachments: &[
-                        // Clear the color buffer with the fog color.
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.geometry_buffers.color.view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(fog_clear_color),
+            drop(
+                frame
+                    .encoder
+                    .begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("world_clear_render_pass"),
+                        color_attachments: &[
+                            // Clear the color buffer with the fog color.
+                            Some(wgpu::RenderPassColorAttachment {
+                                view: &self.geometry_buffers.color.view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(fog_clear_color),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            }),
+                            // Set positions to 0 and ID's to invalid.
+                            Some(wgpu::RenderPassColorAttachment {
+                                view: &self.geometry_buffers.position_id.view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(positions_clear_color),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            }),
+                        ],
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                            view: &self.geometry_buffers.depth.view,
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(1.0),
                                 store: wgpu::StoreOp::Store,
-                            },
+                            }),
+                            stencil_ops: None,
                         }),
-                        // Set positions to 0 and ID's to invalid.
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.geometry_buffers.position_id.view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(positions_clear_color),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        }),
-                    ],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &self.geometry_buffers.depth.view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
-                            store: wgpu::StoreOp::Store,
-                        }),
-                        stencil_ops: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
                     }),
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
+            );
+
+            drop(
+                frame
+                    .encoder
+                    .begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("light_clear_render_pass"),
+                        color_attachments: &[],
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                            view: &self.shadow_render_target.view,
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(1.0),
+                                store: wgpu::StoreOp::Store,
+                            }),
+                            stencil_ops: None,
+                        }),
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                    }),
+            );
         }
 
-        let camera_bind_group = if self.view_debug_camera {
+        let mut gizmos_vertices = Vec::default();
+
+        // --- Shadow pass ---
+
+        {
+            let light_frustum = Frustum::from(light_matrices.projection * light_matrices.view);
+
+            self.objects.render_shadow_casters(
+                frame,
+                &self.shadow_render_target,
+                &light_frustum,
+                &self.environment_bind_group,
+                &self.light_gpu_camera.bind_group,
+            );
+        }
+
+        // --- Color pass ---
+
+        let view_camera_bind_group = if self.view_debug_camera {
             &self.debug_camera.gpu_camera.bind_group
         } else {
             &self.main_camera.gpu_camera.bind_group
         };
 
-        let mut gizmos_vertices = Vec::default();
+        let view_camera_bind_group = &self.light_gpu_camera.bind_group;
 
-        // Render Opaque geometry first.
-        self.terrain.render(
-            frame,
-            &self.geometry_buffers,
-            camera_bind_group,
-            &self.environment_bind_group,
-            &self.main_camera.gpu_camera.bind_group, // Always the main camera.
-        );
+        {
+            // Render Opaque geometry first.
+            self.terrain.render(
+                frame,
+                &self.geometry_buffers,
+                view_camera_bind_group,
+                &self.environment_bind_group,
+                &self.main_camera.gpu_camera.bind_group, // Always the main camera.
+            );
 
-        self.objects.render_objects(
-            frame,
-            &self.main_camera.camera,
-            &self.geometry_buffers,
-            camera_bind_group,
-            &self.environment_bind_group,
-        );
+            self.objects.render_objects(
+                frame,
+                &main_camera_frustum,
+                &self.geometry_buffers,
+                view_camera_bind_group,
+                &self.environment_bind_group,
+            );
 
-        // Now render alpha geoometry.
-        self.terrain.render_water(
-            frame,
-            &self.geometry_buffers,
-            camera_bind_group,
-            &self.environment_bind_group,
-        );
+            // Now render alpha geoometry.
+            self.terrain.render_water(
+                frame,
+                &self.geometry_buffers,
+                view_camera_bind_group,
+                &self.environment_bind_group,
+            );
+        }
 
         // Render any kind of debug overlays.
         self.terrain.render_gizmos(&mut gizmos_vertices);
@@ -494,11 +598,11 @@ impl Scene for WorldScene {
 
             let vertices = GizmosRenderer::create_axis(translation, 100.0);
             self.gizmos_renderer
-                .render(frame, camera_bind_group, &vertices);
+                .render(frame, view_camera_bind_group, &vertices);
         }
 
         self.gizmos_renderer
-            .render(frame, camera_bind_group, &gizmos_vertices);
+            .render(frame, view_camera_bind_group, &gizmos_vertices);
     }
 
     #[cfg(feature = "egui")]
@@ -547,5 +651,97 @@ impl Scene for WorldScene {
             });
 
         self.objects.debug_panel(egui);
+    }
+}
+
+pub fn camera_frustum_corners_world(view: Mat4, proj: Mat4) -> [Vec3; 8] {
+    fn unproject(inv_vp: Mat4, x: f32, y: f32, z: f32) -> Vec3 {
+        let v = inv_vp * Vec4::new(x, y, z, 1.0);
+        v.truncate() / v.w
+    }
+
+    let inv_vp = (proj * view).inverse();
+    let ndc_xy = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
+    let mut out = [Vec3::ZERO; 8];
+    for (i, &(x, y)) in ndc_xy.iter().enumerate() {
+        out[i] = unproject(inv_vp, x, y, 0.0); // near plane
+        out[i + 4] = unproject(inv_vp, x, y, 1.0); // far plane
+    }
+    out
+}
+
+pub fn fit_directional_light(
+    sun_dir: Vec3, // direction from sun toward world
+    camera: &Matrices,
+    shadow_res: u32, // e.g. 2048
+    guard_xy: f32,   // extra margin around frustum in world units
+    guard_z_near: f32,
+    guard_z_far: f32,
+    texel_snap: bool,
+) -> Matrices {
+    // Camera frustum corners
+    let corners = camera_frustum_corners_world(camera.view, camera.projection);
+
+    // Build light view
+    let fwd = sun_dir.normalize();
+    let mut up = Vec3::Z;
+    if fwd.abs_diff_eq(up, 1e-4) {
+        up = Vec3::Y;
+    }
+    // Place eye at frustum center - some distance back along light dir
+    let center = corners.iter().copied().reduce(|a, b| a + b).unwrap() / 8.0;
+    let eye = center - fwd * 1000.0; // far enough to see everything
+    let view = Mat4::look_at_lh(eye, center, up);
+
+    // Transform corners into light space
+    let mut min_x = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    let mut min_z = f32::INFINITY;
+    let mut max_z = f32::NEG_INFINITY;
+
+    for &p in &corners {
+        let point = view.transform_point3(p);
+        min_x = min_x.min(point.x);
+        max_x = max_x.max(point.x);
+        min_y = min_y.min(point.y);
+        max_y = max_y.max(point.y);
+        min_z = min_z.min(point.z);
+        max_z = max_z.max(point.z);
+    }
+
+    // Add guard bands
+    min_x -= guard_xy;
+    max_x += guard_xy;
+    min_y -= guard_xy;
+    max_y += guard_xy;
+    min_z -= guard_z_near;
+    max_z += guard_z_far;
+
+    if texel_snap && shadow_res > 0 {
+        let w = max_x - min_x;
+        let h = max_y - min_y;
+        let step_x = w / shadow_res as f32;
+        let step_y = h / shadow_res as f32;
+
+        let cx = 0.5 * (min_x + max_x);
+        let cy = 0.5 * (min_y + max_y);
+        let cx_snapped = (cx / step_x).floor() * step_x;
+        let cy_snapped = (cy / step_y).floor() * step_y;
+
+        let half_w = 0.5 * w;
+        let half_h = 0.5 * h;
+        min_x = cx_snapped - half_w;
+        max_x = cx_snapped + half_w;
+        min_y = cy_snapped - half_h;
+        max_y = cy_snapped + half_h;
+    }
+
+    // Ortho projection (LH, depth 0..1 for wgpu)
+    let proj = Mat4::orthographic_lh(min_x, max_x, min_y, max_y, min_z, max_z);
+    Matrices {
+        view,
+        projection: proj,
     }
 }
