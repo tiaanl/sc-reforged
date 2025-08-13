@@ -402,8 +402,8 @@ impl Terrain {
             water_level,
 
             water_trans_depth: terrain_mapping.water_trans_depth,
-            water_trans_low: terrain_mapping.water_trans_low as f32 / 512.0,
-            water_trans_high: terrain_mapping.water_trans_high as f32 / 512.0,
+            water_trans_low: terrain_mapping.water_trans_low as f32 / 256.0,
+            water_trans_high: terrain_mapping.water_trans_high as f32 / 256.0,
 
             _padding: 0.0,
         };
@@ -628,7 +628,7 @@ impl Terrain {
                         module: &module,
                         entry_point: Some("water_fragment_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: GeometryBuffers::opaque_targets(),
+                        targets: GeometryBuffers::alpha_targets(),
                     }),
                     multiview: None,
                     cache: None,
@@ -1081,7 +1081,7 @@ impl Terrain {
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("water"),
-                color_attachments: &geometry_buffers.opaque_attachments(),
+                color_attachments: &geometry_buffers.alpha_attachments(),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &geometry_buffers.depth.view,
                     depth_ops: Some(wgpu::Operations {

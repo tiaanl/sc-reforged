@@ -141,9 +141,9 @@ impl From<ConfigLines> for TerrainMapping {
                     terrain_mapping.w2_modulator = Vec2::new(line.param(0), line.param(1))
                 }
 
-                "WATER_TRANS_DEPTH" => terrain_mapping.water_trans_depth = line.param(1),
-                "WATER_TRANS_HIGH" => terrain_mapping.water_trans_high = line.param(1),
-                "WATER_TRANS_LOW" => terrain_mapping.water_trans_low = line.param(1),
+                "WATER_TRANS_DEPTH" => terrain_mapping.water_trans_depth = line.param(0),
+                "WATER_TRANS_HIGH" => terrain_mapping.water_trans_high = line.param(0),
+                "WATER_TRANS_LOW" => terrain_mapping.water_trans_low = line.param(0),
 
                 "SET_WIND_DIRECTION" => {
                     terrain_mapping.wind_direction = Vec2::new(line.param(0), line.param(1));

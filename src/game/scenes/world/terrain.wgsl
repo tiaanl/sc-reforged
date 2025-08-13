@@ -152,15 +152,28 @@ fn fragment_main(v: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
 
 @fragment
 fn water_fragment_main(v: VertexOutput) -> geometry_buffers::AlphaGeometryBuffers {
-    // Depth/alpha of water (using terrain heightmap z stored in v.world_position.z)
+    // --- Water opacity/transparency --- //
+
     let water_depth = u_terrain_data.water_level - v.world_position.z;
-    if water_depth <= 0.0 { discard; }
 
-    var n = clamp(water_depth / u_terrain_data.water_trans_depth, 0.0, 1.0);
-    let alpha = u_terrain_data.water_trans_low
-              + (u_terrain_data.water_trans_high - u_terrain_data.water_trans_low) * n;
+    // If the height of the terrain is above the water, *NO* water should be rendered.
+    if water_depth <= 0.0 {
+        discard;
+    }
 
-    let albedo = textureSample(t_water_texture, s_sampler, v.tex_coord).rgb;
+    let depth01 = clamp(water_depth / u_terrain_data.water_trans_depth, 0.0, 1.0);
+
+    // Transparency at the surface (depth == 0) and at max depth (depth == water_trans_depth).
+    let surface_opacity = u_terrain_data.water_trans_low;
+    let deep_opacity    = u_terrain_data.water_trans_high;
+
+    let opacity = mix(surface_opacity, deep_opacity, depth01);
+
+    // --- Color --- //
+
+    let base_color = textureSample(t_water_texture, s_sampler, v.tex_coord).rgb;
+
+    // --- Shadow map --- //
 
     // Use the actual surface position for lighting & shadows
     let Vpos = vec3(v.world_position.xy, u_terrain_data.water_level);
@@ -186,8 +199,8 @@ fn water_fragment_main(v: VertexOutput) -> geometry_buffers::AlphaGeometryBuffer
     }
 
     // Ambient + shadowed direct, then fog; preserve alpha
-    let ambient = 0.15 * albedo;
-    let direct  = albedo * u_environment.sun_color.rgb * ndotl;
+    let ambient = 0.15 * base_color;
+    let direct  = base_color * u_environment.sun_color.rgb * ndotl;
     var rgb = ambient + shadow * direct;
 
     let fog_near = u_environment.fog_params.x;
@@ -197,7 +210,7 @@ fn water_fragment_main(v: VertexOutput) -> geometry_buffers::AlphaGeometryBuffer
 
     return geometry_buffers::to_alpha_geometry_buffer(
         rgb,
-        alpha,
+        opacity,
         1.0, // No weight right now.
     );
 }

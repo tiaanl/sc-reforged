@@ -360,7 +360,7 @@ impl Scene for WorldScene {
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
-        self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
+        self.time_of_day = (self.time_of_day + delta_time * 0.001).rem_euclid(24.0);
         self.environment = self.calculate_environment(self.time_of_day);
 
         // Set the camera far plane to the `max_view_distance`.
@@ -540,7 +540,7 @@ impl Scene for WorldScene {
 
         // --- Shadow pass ---
 
-        if false {
+        if true {
             let light_frustum = Frustum::from(light_matrices.projection * light_matrices.view);
 
             self.objects.render_shadow_casters(
