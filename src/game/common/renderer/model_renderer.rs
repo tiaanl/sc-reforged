@@ -185,7 +185,7 @@ impl ModelRenderer {
                     },
                     depth_stencil: Some(GeometryBuffers::depth_stencil_state(
                         wgpu::CompareFunction::LessEqual,
-                        false,
+                        false, // No depth writes for alpha pass.
                     )),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {

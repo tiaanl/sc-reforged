@@ -125,27 +125,27 @@ fn lit_color(vertex: VertexOutput) -> vec4<f32> {
 }
 
 @fragment
-fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
+fn fragment_opaque(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
     let color = lit_color(vertex);
 
     if (color.a < math::EPSILON) {
         discard;
     }
 
-    return geometry_buffers::to_geometry_buffer(
-        vec4<f32>(color.rgb, 1.0),
+    return geometry_buffers::to_opaque_geometry_buffer(
+        color.rgb,
         vertex.world_position,
         vertex.entity_id,
     );
 }
 
 @fragment
-fn fragment_alpha(vertex: VertexOutput) -> geometry_buffers::GeometryBuffers {
+fn fragment_alpha(vertex: VertexOutput) -> geometry_buffers::AlphaGeometryBuffers {
     let color = lit_color(vertex);
 
-    return geometry_buffers::to_geometry_buffer(
-        color,
-        vertex.world_position,
-        vertex.entity_id,
+    return geometry_buffers::to_alpha_geometry_buffer(
+        color.rgb,
+        color.a,
+        1.0, // No weight for now.
     );
 }

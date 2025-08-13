@@ -104,7 +104,7 @@ const TERRAIN_ENTITY_ID: u32 = 1u << 16u;
 // ---------- Terrain ----------
 
 @fragment
-fn fragment_main(v: VertexOutput) -> geometry_buffers::GeometryBuffers {
+fn fragment_main(v: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
     let albedo = textureSample(t_terrain_texture, s_sampler, v.tex_coord).rgb;
 
     // World-space values
@@ -141,13 +141,17 @@ fn fragment_main(v: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let fog_t = clamp((dist - fog_near) / (fog_far - fog_near), 0.0, 1.0);
     rgb = mix(rgb, u_environment.fog_color.rgb, fog_t);
 
-    return geometry_buffers::to_geometry_buffer(vec4(rgb, 1.0), Vpos, TERRAIN_ENTITY_ID);
+    return geometry_buffers::to_opaque_geometry_buffer(
+        rgb,
+        Vpos,
+        TERRAIN_ENTITY_ID,
+    );
 }
 
 // ---------- Water ----------
 
 @fragment
-fn water_fragment_main(v: VertexOutput) -> geometry_buffers::GeometryBuffers {
+fn water_fragment_main(v: VertexOutput) -> geometry_buffers::AlphaGeometryBuffers {
     // Depth/alpha of water (using terrain heightmap z stored in v.world_position.z)
     let water_depth = u_terrain_data.water_level - v.world_position.z;
     if water_depth <= 0.0 { discard; }
@@ -191,7 +195,11 @@ fn water_fragment_main(v: VertexOutput) -> geometry_buffers::GeometryBuffers {
     let fog_t = clamp((dist - fog_near) / (fog_far - fog_near), 0.0, 1.0);
     rgb = mix(rgb, u_environment.fog_color.rgb, fog_t);
 
-    return geometry_buffers::to_geometry_buffer(vec4(rgb, alpha), v.world_position, TERRAIN_ENTITY_ID + 1u);
+    return geometry_buffers::to_alpha_geometry_buffer(
+        rgb,
+        alpha,
+        1.0, // No weight right now.
+    );
 }
 
 // ---------- Wireframe debug ----------

@@ -260,7 +260,7 @@ impl GeometryBuffers {
         ]
     }
 
-    pub fn alpha_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 3] {
+    pub fn alpha_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
         [
             Some(wgpu::RenderPassColorAttachment {
                 view: &self.oit_accumulation.view,
@@ -272,14 +272,6 @@ impl GeometryBuffers {
             }),
             Some(wgpu::RenderPassColorAttachment {
                 view: &self.oit_revealage.view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            }),
-            Some(wgpu::RenderPassColorAttachment {
-                view: &self.position_id.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -322,11 +314,6 @@ impl GeometryBuffers {
                         operation: wgpu::BlendOperation::Add,
                     },
                 }),
-                write_mask: wgpu::ColorWrites::ALL,
-            }),
-            Some(wgpu::ColorTargetState {
-                format: Self::POSITION_ID_FORMAT,
-                blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
             }),
         ]
