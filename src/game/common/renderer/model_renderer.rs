@@ -344,14 +344,14 @@ impl ModelRenderer {
                 .or_default()
                 .push(gpu_instance);
 
-            if let Some(ref mesh) = model.alpha_mesh
-                && mesh.index_count != 0
-            {
-                result
-                    .alpha_instances
-                    .entry(key)
-                    .or_default()
-                    .push(gpu_instance);
+            if let Some(ref mesh) = model.alpha_mesh {
+                if mesh.index_count != 0 {
+                    result
+                        .alpha_instances
+                        .entry(key)
+                        .or_default()
+                        .push(gpu_instance);
+                }
             }
         }
 
