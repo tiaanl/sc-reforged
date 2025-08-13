@@ -510,7 +510,7 @@ impl Scene for WorldScene {
 
         // --- Shadow pass ---
 
-        {
+        if false {
             let light_frustum = Frustum::from(light_matrices.projection * light_matrices.view);
 
             self.objects.render_shadow_casters(
