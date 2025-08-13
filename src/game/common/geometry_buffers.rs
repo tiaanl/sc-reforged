@@ -123,6 +123,8 @@ impl ReadBackBuffer {
 pub struct GeometryBuffers {
     pub depth: RenderTarget,
     pub color: RenderTarget,
+    pub oit_accumulation: RenderTarget,
+    pub oit_revealage: RenderTarget,
     pub position_id: RenderTarget,
 
     position_id_read_back_buffer: ReadBackBuffer,
@@ -140,6 +142,8 @@ pub struct GeometryData {
 impl GeometryBuffers {
     const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
     const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+    const OIT_ACCUMULATION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+    const OIT_REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
     const POSITION_ID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
     pub fn new(device: &wgpu::Device, size: UVec2) -> Self {
@@ -147,6 +151,9 @@ impl GeometryBuffers {
 
         let depth = RenderTarget::new(device, "depth", size, Self::DEPTH_FORMAT);
         let color = RenderTarget::new(device, "color", size, Self::COLOR_FORMAT);
+        let oit_accumulation =
+            RenderTarget::new(device, "color", size, Self::OIT_ACCUMULATION_FORMAT);
+        let oit_revealage = RenderTarget::new(device, "color", size, Self::OIT_REVEALAGE_FORMAT);
         let position_id = RenderTarget::new(device, "position", size, Self::POSITION_ID_FORMAT);
 
         let position_id_read_back_buffer = ReadBackBuffer::new(device, "position_id");
@@ -180,6 +187,8 @@ impl GeometryBuffers {
         Self {
             depth,
             color,
+            oit_accumulation,
+            oit_revealage,
             position_id,
 
             position_id_read_back_buffer,
@@ -215,7 +224,7 @@ impl GeometryBuffers {
         GeometryData { position, id }
     }
 
-    pub fn attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
+    pub fn opaque_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
         [
             Some(wgpu::RenderPassColorAttachment {
                 view: &self.color.view,
@@ -251,11 +260,68 @@ impl GeometryBuffers {
         ]
     }
 
+    pub fn alpha_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 3] {
+        [
+            Some(wgpu::RenderPassColorAttachment {
+                view: &self.oit_accumulation.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            }),
+            Some(wgpu::RenderPassColorAttachment {
+                view: &self.oit_revealage.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            }),
+            Some(wgpu::RenderPassColorAttachment {
+                view: &self.position_id.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            }),
+        ]
+    }
+
     pub fn alpha_targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[
             Some(wgpu::ColorTargetState {
-                format: Self::COLOR_FORMAT,
-                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                format: Self::OIT_ACCUMULATION_FORMAT,
+                blend: Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                }),
+                write_mask: wgpu::ColorWrites::ALL,
+            }),
+            Some(wgpu::ColorTargetState {
+                format: Self::OIT_REVEALAGE_FORMAT,
+                blend: Some(wgpu::BlendState {
+                    // = 0 * src + (1 - src_alpha) * dst  ==> multiplicative by (1 - α)
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::Zero,
+                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::Zero,
+                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                }),
                 write_mask: wgpu::ColorWrites::ALL,
             }),
             Some(wgpu::ColorTargetState {

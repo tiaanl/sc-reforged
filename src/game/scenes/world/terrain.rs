@@ -628,7 +628,7 @@ impl Terrain {
                         module: &module,
                         entry_point: Some("water_fragment_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: GeometryBuffers::alpha_targets(),
+                        targets: GeometryBuffers::opaque_targets(),
                     }),
                     multiview: None,
                     cache: None,
@@ -1040,7 +1040,7 @@ impl Terrain {
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("terrain_chunks"),
-                color_attachments: &geometry_buffers.attachments(),
+                color_attachments: &geometry_buffers.opaque_attachments(),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &geometry_buffers.depth.view,
                     depth_ops: Some(wgpu::Operations {
@@ -1081,7 +1081,7 @@ impl Terrain {
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("water"),
-                color_attachments: &geometry_buffers.attachments(),
+                color_attachments: &geometry_buffers.opaque_attachments(),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &geometry_buffers.depth.view,
                     depth_ops: Some(wgpu::Operations {

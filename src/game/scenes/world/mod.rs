@@ -448,6 +448,20 @@ impl Scene for WorldScene {
                 b: self.environment.fog_color.z as f64,
                 a: 1.0,
             };
+
+            let oit_accumulation_clear = wgpu::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.0,
+            };
+            let oit_revealage_clear = wgpu::Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            };
+
             drop(
                 frame
                     .encoder
@@ -460,6 +474,22 @@ impl Scene for WorldScene {
                                 resolve_target: None,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Clear(fog_clear_color),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            }),
+                            Some(wgpu::RenderPassColorAttachment {
+                                view: &self.geometry_buffers.oit_accumulation.view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(oit_accumulation_clear),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            }),
+                            Some(wgpu::RenderPassColorAttachment {
+                                view: &self.geometry_buffers.oit_revealage.view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(oit_revealage_clear),
                                     store: wgpu::StoreOp::Store,
                                 },
                             }),
