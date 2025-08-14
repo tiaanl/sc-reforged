@@ -54,7 +54,7 @@ impl DataDir {
         self.load_config::<config::Mtf>(&path)
     }
 
-    pub fn _load_motion(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
+    pub fn load_motion(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
         let data = file_system().load(path.as_ref())?;
 
         bmf::Motion::read(&mut std::io::Cursor::new(data))

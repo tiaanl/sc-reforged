@@ -132,16 +132,16 @@ impl RenderAnimations {
 
         // If there is no animation data (sometimes used for an animation that just shows the rest
         // pose), then just use the rest pose.
-        if animation.last_key_frame() == 0 {
+        if animation.last_key_frame().is_none() {
             return self.create_rest_pose(skeleton);
-        }
+        };
 
         let baked_animation = Self::bake_animation_globals(animation, skeleton, 30.0, true);
 
         let positions_view = {
             let positions_texture = Self::create_texture(
-                baked_animation.frames,
-                baked_animation.bones,
+                baked_animation.frame_count,
+                baked_animation.bone_count,
                 bytemuck::cast_slice(&baked_animation.positions),
             );
 
@@ -150,8 +150,8 @@ impl RenderAnimations {
 
         let rotations_view = {
             let rotations_texture = Self::create_texture(
-                baked_animation.frames,
-                baked_animation.bones,
+                baked_animation.frame_count,
+                baked_animation.bone_count,
                 bytemuck::cast_slice(&baked_animation.rotations),
             );
 
@@ -175,18 +175,20 @@ impl RenderAnimations {
         }
 
         // Find the biggest key frame.
-        let frames = anim.last_key_frame();
+        let Some(frame_count) = anim.last_key_frame() else {
+            return BakedAnimation::default();
+        };
 
-        let bones = skeleton.bones.len() as u32;
-        let texels = (frames * bones) as usize;
+        let bone_count = skeleton.bones.len() as u32;
+        let texels = (frame_count * bone_count) as usize;
 
         let mut positions = vec![Vec4::ZERO; texels];
         let mut rotations = vec![Quat::IDENTITY; texels];
 
-        // Keep last quaternion per bone to ensure hemisphere continuity
-        let mut last_q: Vec<Option<Quat>> = vec![None; bones as usize];
+        // Keep the last rotation per bone to ensure hemisphere continuity.
+        let mut last_rotation: Vec<Option<Quat>> = vec![None; bone_count as usize];
 
-        for f in 0..frames {
+        for f in 0..frame_count {
             let t_sec = f as f32 / fps;
 
             // 1) Sample absolute locals for this frame
@@ -214,7 +216,7 @@ impl RenderAnimations {
             // 3) Optional: hemisphere-fix per bone to keep adjacent frames “close”
             for i in 0..skeleton.bones.len() {
                 let q = {
-                    if let Some(prev) = last_q[i] {
+                    if let Some(prev) = last_rotation[i] {
                         let mut q = g_q[i];
                         if prev.dot(q) < 0.0 {
                             q = Quat::from_xyzw(-q.x, -q.y, -q.z, -q.w);
@@ -224,10 +226,10 @@ impl RenderAnimations {
                         g_q[i]
                     }
                 };
-                last_q[i] = Some(q);
+                last_rotation[i] = Some(q);
 
                 // 4) Store into flattened arrays at [frame, bone]
-                let idx = (i as u32 * frames + f) as usize;
+                let idx = (i as u32 * frame_count + f) as usize;
 
                 positions[idx].x = g_t[i].x;
                 positions[idx].y = g_t[i].y;
@@ -242,8 +244,8 @@ impl RenderAnimations {
         }
 
         BakedAnimation {
-            frames,
-            bones,
+            frame_count,
+            bone_count,
             positions,
             rotations,
         }
@@ -312,10 +314,10 @@ impl RenderAnimations {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BakedAnimation {
-    pub frames: u32,
-    pub bones: u32,
+    pub frame_count: u32,
+    pub bone_count: u32,
     pub positions: Vec<Vec4>,
     pub rotations: Vec<Quat>,
 }

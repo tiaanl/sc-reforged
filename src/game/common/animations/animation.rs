@@ -22,10 +22,10 @@ pub struct Animation {
 }
 
 impl Animation {
-    pub fn last_key_frame(&self) -> u32 {
+    pub fn last_key_frame(&self) -> Option<u32> {
         let max_pos = self.positions.values().filter_map(|t| t.last_frame()).max();
         let max_rot = self.rotations.values().filter_map(|t| t.last_frame()).max();
-        max_pos.into_iter().chain(max_rot).max().unwrap_or(0)
+        max_pos.into_iter().chain(max_rot).max()
     }
 
     pub fn sample_pose(&self, time: f32, skeleton: &Skeleton, looping: bool) -> Skeleton {
@@ -97,7 +97,7 @@ impl Animations {
     }
 
     pub fn load_direct(&self, path: impl AsRef<Path>) -> Result<Animation, AssetError> {
-        let motion = data_dir()._load_motion(path)?;
+        let motion = data_dir().load_motion(path)?;
 
         fn convert_position(p: Vec3) -> Vec3 {
             Vec3::new(-p.x, p.y, p.z)
