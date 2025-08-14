@@ -192,7 +192,7 @@ impl RenderAnimations {
             let t_sec = f as f32 / fps;
 
             // 1) Sample absolute locals for this frame
-            let locals = anim.sample_pose(t_sec, skeleton, looping);
+            let locals = anim.sample_pose(t_sec, fps, skeleton, looping);
 
             // 2) Build globals by walking hierarchy (assumes parent index < child index)
             let mut g_t = vec![Vec3::ZERO; skeleton.bones.len()];

@@ -20,11 +20,17 @@ pub enum Callback {
 }
 
 #[derive(Debug, Default)]
+pub enum Repeat {
+    #[default]
+    Infinite,
+    Count(i32),
+}
+
+#[derive(Debug, Default)]
 pub struct Motion {
     name: String,
-    is_immediate: bool,
-    is_loop: bool,
-    rep: Option<i32>,
+    immediate: bool,
+    repeat: Repeat,
     callbacks: Vec<Callback>,
 }
 
@@ -95,16 +101,16 @@ impl From<ConfigLines> for MotionSequencesDefs {
 
                         // [IMMEDIATE] [LOOP] [REP=<count>]
                         match line.string(1).as_str() {
-                            "IMMEDIATE" => motion.is_immediate = true,
-                            "LOOP" => motion.is_loop = true,
+                            "IMMEDIATE" => motion.immediate = true,
+                            "LOOP" => motion.repeat = Repeat::Infinite,
                             s if s.starts_with("REP") => {
-                                let rep = s
+                                let count = s
                                     .split("=")
                                     .nth(1)
                                     .unwrap()
                                     .parse::<i32>()
                                     .unwrap_or_default();
-                                motion.rep = Some(rep);
+                                motion.repeat = Repeat::Count(count);
                             }
                             _ => {}
                         }

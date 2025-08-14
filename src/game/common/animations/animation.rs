@@ -28,9 +28,8 @@ impl Animation {
         max_pos.into_iter().chain(max_rot).max()
     }
 
-    pub fn sample_pose(&self, time: f32, skeleton: &Skeleton, looping: bool) -> Skeleton {
-        const FPS: f32 = 30.0;
-        let f = time * FPS;
+    pub fn sample_pose(&self, time: f32, fps: f32, skeleton: &Skeleton, looping: bool) -> Skeleton {
+        let f = time * fps;
 
         let bones = skeleton
             .bones

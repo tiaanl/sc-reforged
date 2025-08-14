@@ -291,7 +291,8 @@ impl Objects {
         }
 
         if let Some(animation) = object.animation.and_then(|handle| animations().get(handle)) {
-            let skeleton = animation.sample_pose(object.animation_time, &model.skeleton, true);
+            let skeleton =
+                animation.sample_pose(object.animation_time, 30.0, &model.skeleton, true);
             do_node(&skeleton, object.transform.to_mat4(), 0, vertices, 0);
         } else {
             do_node(&model.skeleton, object.transform.to_mat4(), 0, vertices, 0);

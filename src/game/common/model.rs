@@ -259,28 +259,6 @@ impl TryFrom<smf::Model> for Model {
             }
         }
 
-        fn local_transform(nodes: &[Node], node_index: usize) -> Mat4 {
-            let node = &nodes[node_index];
-            if node.parent == u32::MAX {
-                node.transform.to_mat4()
-            } else {
-                local_transform(nodes, node.parent as usize) * node.transform.to_mat4()
-            }
-        }
-
-        let mut bounding_sphere = BoundingSphere::default();
-        for mesh in meshes.iter() {
-            let local = local_transform(&nodes, mesh.node_index as usize);
-            let b = BoundingSphere::from_positions_ritter(
-                mesh.mesh
-                    .vertices
-                    .iter()
-                    .map(|v| local.transform_point3(v.position)),
-            );
-
-            bounding_sphere.expand_to_include(&b);
-        }
-
         let skeleton = Skeleton {
             bones: nodes
                 .iter()
@@ -292,6 +270,19 @@ impl TryFrom<smf::Model> for Model {
                 })
                 .collect(),
         };
+
+        let mut bounding_sphere = BoundingSphere::default();
+        for mesh in meshes.iter() {
+            let local = skeleton.local_transform(mesh.node_index);
+            let b = BoundingSphere::from_positions_ritter(
+                mesh.mesh
+                    .vertices
+                    .iter()
+                    .map(|v| local.transform_point3(v.position)),
+            );
+
+            bounding_sphere.expand_to_include(&b);
+        }
 
         Ok(Model {
             skeleton,
