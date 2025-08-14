@@ -26,6 +26,8 @@ struct Opts {
     /// Path to the game data directory.
     /// (e.g. "C:\Program Files\Sinister Games\Shadow Comapany - Left for Dead\Data")
     path: PathBuf,
+    /// The name of the starting campaign. Defaults to "training".
+    campaign_name: Option<String>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -54,7 +56,7 @@ enum App {
 impl winit::application::ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         match self {
-            App::Uninitialzed(_opts) => {
+            App::Uninitialzed(opts) => {
                 event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
                 let mut attributes = winit::window::WindowAttributes::default()
@@ -94,24 +96,29 @@ impl winit::application::ApplicationHandler for App {
                 let scene: Box<dyn Scene> = {
                     // WorldScene
 
+                    // Campaigns and total texture count:
+                    //   training -> 140
+                    //   angola_tutorial -> 149
+                    //   angola -> 368
+                    //   romania -> 289
+                    //   kola -> 213
+                    //   caribbean -> 279
+                    //   kola_2 -> 240
+                    //   ecuador -> 341
+                    //   peru -> 197
+                    //   angola_2 -> 347
+
                     let campaign_defs = data_dir().load_campaign_defs().unwrap();
 
-                    // Campaigns and total texture count.
+                    let campaign_name = opts
+                        .campaign_name
+                        .clone()
+                        .unwrap_or(String::from("training"));
 
                     let campaign_def = campaign_defs
                         .campaigns
                         .iter()
-                        // .find(|c| c.base_name == "test")
-                        // .find(|c| c.base_name == "training") // 140
-                        // .find(|c| c.base_name == "angola_tutorial") // 149
-                        // .find(|c| c.base_name == "angola") // 368
-                        // .find(|c| c.base_name == "romania") // 289
-                        // .find(|c| c.base_name == "kola") // 213
-                        .find(|c| c.base_name == "caribbean") // 279
-                        // .find(|c| c.base_name == "kola_2") // 240
-                        // .find(|c| c.base_name == "ecuador") // 341
-                        // .find(|c| c.base_name == "peru") // 197
-                        // .find(|c| c.base_name == "angola_2") // 347
+                        .find(|c| c.base_name == campaign_name)
                         .cloned()
                         .unwrap();
 
