@@ -18,6 +18,7 @@ use crate::{
 };
 
 mod objects;
+pub mod sequencer;
 mod strata;
 mod terrain;
 
@@ -249,7 +250,7 @@ impl WorldScene {
             &shadow_render_target,
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
-        );
+        )?;
 
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;

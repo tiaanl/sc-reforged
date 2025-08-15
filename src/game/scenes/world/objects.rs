@@ -16,6 +16,7 @@ use crate::{
         model::Model,
         models::models,
         renderer::{ModelRenderer, RenderAnimation, RenderInstance},
+        scenes::world::sequencer::Sequence,
         skeleton::Skeleton,
     },
 };
@@ -31,6 +32,8 @@ pub struct Object {
 
     pub animation: Option<Handle<Animation>>,
     pub animation_time: f32,
+
+    pub sequence: Option<Handle<Sequence>>,
 
     /// Whether to draw the bones of the skeleton.
     pub draw_debug_bones: bool,
@@ -71,7 +74,7 @@ impl Objects {
         shadow_render_target: &RenderTarget,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
-    ) -> Self {
+    ) -> Result<Self, AssetError> {
         let mut model_renderer = ModelRenderer::new(
             shaders,
             shadow_render_target,
@@ -115,7 +118,7 @@ impl Objects {
             model_renderer.add_animation(man_skel, anim)
         };
 
-        Self {
+        Ok(Self {
             model_renderer,
             objects: vec![],
             selected_object: None,
@@ -123,7 +126,7 @@ impl Objects {
             running_animation,
             crouching_animation,
             crawling_animation,
-        }
+        })
     }
 
     pub fn spawn(
@@ -154,6 +157,8 @@ impl Objects {
 
             animation: None,
             animation_time: 0.0,
+
+            sequence: None,
 
             draw_debug_bones: false,
             draw_bounding_spheres: false,
@@ -327,6 +332,8 @@ impl Objects {
                     .collapsible(false)
                     .resizable(false)
                     .show(egui, |ui| {
+                        use crate::game::scenes::world::sequencer::sequencer;
+
                         ui.set_width(300.0);
 
                         ui.heading(format!("{} ({:?})", object.title, object.object_type));
@@ -339,6 +346,30 @@ impl Objects {
                                 .rotation
                                 .to_euler(glam::EulerRot::default()),
                         );
+
+                        let selected_text = object
+                            .sequence
+                            .and_then(|handle| sequencer().get(handle))
+                            .map(|seq| seq.name.clone())
+                            .clone()
+                            .unwrap_or_default();
+
+                        egui::ComboBox::from_label("Sequences")
+                            .selected_text(selected_text)
+                            .show_ui(ui, |ui| {
+                                for (name, handle) in sequencer().lookup() {
+                                    let selected = object
+                                        .sequence
+                                        .as_ref()
+                                        .map(|s| s == handle)
+                                        .unwrap_or(false);
+                                    if ui.selectable_label(selected, name).clicked() {
+                                        // Safety: Sequence must be there, because we're iterating
+                                        // a known list of sequences.
+                                        object.sequence = Some(*handle);
+                                    }
+                                }
+                            });
 
                         fn drag_vec3(
                             ui: &mut egui::Ui,

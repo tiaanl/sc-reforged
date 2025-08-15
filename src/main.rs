@@ -16,6 +16,7 @@ use crate::game::{
     file_system::scoped_file_system,
     image::{Images, scoped_images},
     models::{Models, scoped_models},
+    scenes::world::sequencer::{Sequencer, scoped_sequencer},
 };
 
 mod engine;
@@ -349,6 +350,8 @@ fn main() {
     let _images = scoped_images(|| Images::new().expect("Could not initialize images."));
     let _models = scoped_models(|| Models::new().expect("Could not initialize models."));
     let _animations = game::animations::scoped_animations(game::animations::Animations::new);
+    let _sequencer =
+        scoped_sequencer(|| Sequencer::new().expect("Could not initialize sequencer."));
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
 

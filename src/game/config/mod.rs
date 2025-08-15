@@ -13,7 +13,7 @@ pub use campaign::*;
 pub use campaign_defs::*;
 pub use image_defs::*;
 pub use model_lods::*;
-// pub use motion_sequencer_defs::*;
+pub use motion_sequencer_defs::*;
 pub use mtf::*;
 pub use object_templates::*;
 pub use terrain_mapping::*;

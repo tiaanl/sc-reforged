@@ -43,6 +43,11 @@ impl<T> Default for Storage<T> {
 
 impl<T> Storage<T> {
     #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(slab::Slab::with_capacity(capacity))
+    }
+
+    #[inline]
     pub fn insert(&mut self, item: T) -> Handle<T> {
         Handle(self.0.insert(item), PhantomData)
     }

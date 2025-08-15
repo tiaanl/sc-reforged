@@ -1,0 +1,94 @@
+#![allow(unused)]
+
+use std::{collections::hash_map::Iter, path::PathBuf};
+
+use ahash::{HashMap, HashMapExt};
+
+use crate::{
+    engine::{
+        assets::AssetError,
+        storage::{Handle, Storage},
+    },
+    game::{
+        animations::{Animation, animations},
+        config,
+        data_dir::data_dir,
+    },
+    global,
+};
+
+pub struct Clip {
+    pub animation: Handle<Animation>,
+    pub immediate: bool,
+    pub repeat: config::Repeat,
+    pub callbacks: Vec<config::Callback>,
+}
+
+#[derive(Default)]
+pub struct Sequence {
+    // The `name` here is just so we can get a name from a handle.  Don't want to reverse lookup
+    // from the hash map.
+    pub name: String,
+    pub clips: Vec<Clip>,
+}
+
+pub struct Sequencer {
+    sequences: Storage<Sequence>,
+    lookup: HashMap<String, Handle<Sequence>>,
+}
+
+impl Sequencer {
+    pub fn new() -> Result<Self, AssetError> {
+        let motion_sequences = data_dir().load_config::<config::MotionSequencerDefs>(
+            PathBuf::from("config").join("mot_sequencer_defs.txt"),
+        )?;
+
+        let mut sequences = Storage::with_capacity(motion_sequences.sequences.len());
+        let mut lookup = HashMap::with_capacity(motion_sequences.sequences.len());
+
+        for config_sequence in motion_sequences.sequences.iter() {
+            let mut sequence = Sequence {
+                name: config_sequence.name.clone(),
+                clips: Vec::default(),
+            };
+
+            for config_motion in config_sequence.motions.iter() {
+                sequence.clips.push(Clip {
+                    animation: animations().load(
+                        PathBuf::from("motions")
+                            .join(config_motion.name.clone())
+                            .with_extension("bmf"),
+                    )?,
+                    immediate: config_motion.immediate,
+                    repeat: config_motion.repeat,
+                    callbacks: config_motion.callbacks.clone(),
+                });
+            }
+
+            let handle = sequences.insert(sequence);
+            lookup.insert(config_sequence.name.clone(), handle);
+        }
+
+        Ok(Self { sequences, lookup })
+    }
+
+    pub fn lookup(&self) -> Iter<'_, String, Handle<Sequence>> {
+        self.lookup.iter()
+    }
+
+    pub fn sequence_names(&self) -> Vec<String> {
+        self.lookup.keys().cloned().collect()
+    }
+
+    #[inline]
+    pub fn get(&self, handle: Handle<Sequence>) -> Option<&Sequence> {
+        self.sequences.get(handle)
+    }
+
+    #[inline]
+    pub fn get_by_name(&self, name: &str) -> Option<Handle<Sequence>> {
+        self.lookup.get(name).cloned()
+    }
+}
+
+global!(Sequencer, scoped_sequencer, sequencer);

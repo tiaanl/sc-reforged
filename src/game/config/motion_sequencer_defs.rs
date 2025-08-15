@@ -13,13 +13,13 @@ pub struct TransitionSequence {
     pub motion: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Callback {
     NotifyEnd,
     Frame { name: String, frame: i32 },
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum Repeat {
     #[default]
     Infinite,
@@ -28,10 +28,10 @@ pub enum Repeat {
 
 #[derive(Debug, Default)]
 pub struct Motion {
-    name: String,
-    immediate: bool,
-    repeat: Repeat,
-    callbacks: Vec<Callback>,
+    pub name: String,
+    pub immediate: bool,
+    pub repeat: Repeat,
+    pub callbacks: Vec<Callback>,
 }
 
 impl Motion {
@@ -45,8 +45,8 @@ impl Motion {
 
 #[derive(Debug, Default)]
 pub struct Sequence {
-    name: String,
-    motions: Vec<Motion>,
+    pub name: String,
+    pub motions: Vec<Motion>,
 }
 
 impl Sequence {
@@ -59,7 +59,7 @@ impl Sequence {
 }
 
 #[derive(Debug, Default)]
-pub struct MotionSequencesDefs {
+pub struct MotionSequencerDefs {
     pub transition_sequences: Vec<TransitionSequence>,
     pub sequences: Vec<Sequence>,
     pub default_cog_positions: HashMap<String, Vec3>,
@@ -69,9 +69,9 @@ pub struct MotionSequencesDefs {
     pub skip_last_frame_motions: Vec<String>,
 }
 
-impl From<ConfigLines> for MotionSequencesDefs {
+impl From<ConfigLines> for MotionSequencerDefs {
     fn from(value: ConfigLines) -> Self {
-        let mut motion_sequence_defs = MotionSequencesDefs::default();
+        let mut motion_sequence_defs = MotionSequencerDefs::default();
 
         let mut transition_sequence: Option<TransitionSequence> = None;
         let mut sequence: Option<Sequence> = None;
