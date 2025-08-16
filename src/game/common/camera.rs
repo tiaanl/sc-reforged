@@ -115,11 +115,23 @@ impl Frustum {
     }
 }
 
-#[derive(Clone, Copy, Default, bytemuck::NoUninit)]
-#[repr(C)]
+#[derive(Default)]
 pub struct Matrices {
     pub projection: Mat4,
     pub view: Mat4,
+    pub projection_view_inverse: Mat4,
+}
+
+impl Matrices {
+    pub fn from_projection_view(projection: Mat4, view: Mat4) -> Self {
+        let projection_view_inverse = (projection * view).inverse();
+
+        Self {
+            projection,
+            view,
+            projection_view_inverse,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -134,7 +146,7 @@ pub struct Camera {
 
 impl Camera {
     pub const FORWARD: Vec3 = Vec3::Y;
-    pub const RIGHT: Vec3 = Vec3::X;
+    pub const RIGHT: Vec3 = Vec3::NEG_X;
     pub const UP: Vec3 = Vec3::Z;
 
     pub fn new(
@@ -161,7 +173,13 @@ impl Camera {
         let target = self.position + self.rotation * Self::FORWARD;
         let view = Mat4::look_at_lh(self.position, target, self.rotation * Self::UP);
 
-        Matrices { projection, view }
+        let projection_view_inverse = (projection * view).inverse();
+
+        Matrices {
+            projection,
+            view,
+            projection_view_inverse,
+        }
     }
 
     /// Generates a ray in world space based on the mouse position.
@@ -363,8 +381,7 @@ impl FreeCameraController {
 
     pub fn move_right(&mut self, distance: f32) {
         self.dirty.smudge();
-        // Because of our left-handed, z-up coord-system, right is negative.
-        self.position -= self.rotation() * Camera::RIGHT * distance;
+        self.position += self.rotation() * Camera::RIGHT * distance;
     }
 
     pub fn move_up(&mut self, distance: f32) {
@@ -596,8 +613,7 @@ impl GameCameraController {
 
     pub fn move_right(&mut self, distance: f32) {
         self.dirty.smudge();
-        // Because of our left-handed, z-up coord-system, right is negative.
-        self.desired.position -=
+        self.desired.position +=
             Quat::from_rotation_z(self.current.yaw.to_radians()) * Camera::RIGHT * distance;
     }
 

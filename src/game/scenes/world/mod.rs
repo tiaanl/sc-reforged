@@ -768,9 +768,7 @@ pub fn fit_directional_light(
     }
 
     // Ortho projection (LH, depth 0..1 for wgpu)
-    let proj = Mat4::orthographic_lh(min_x, max_x, min_y, max_y, min_z, max_z);
-    Matrices {
-        view,
-        projection: proj,
-    }
+    let projection = Mat4::orthographic_lh(min_x, max_x, min_y, max_y, min_z, max_z);
+
+    Matrices::from_projection_view(projection, view)
 }
