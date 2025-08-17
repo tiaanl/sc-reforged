@@ -1,0 +1,38 @@
+- object
+  - object_effect
+    - object_effect_particle_system
+  - object_inventory
+    - object_inventory_trap
+  - object_scenery
+    - 0040f4ea(c) ??
+    - object_scenery_lit
+    - object_scenery_strip_light
+  - object_scripted
+    - object_bird
+    - object_sentry_gun
+    - object_adv_physics_model
+      - object_howitzer
+      - object_boat
+      - object_helicopter
+      - object_treaded
+      - object_vel_veer
+        - object_snow_mobile
+    - object_bipedal
+      - object_ape
+  - object_shell
+    - object_shell_85mm_rocket
+    - FUN_00410b90:00410b9a(c)  ??
+    - object_shell_grenade
+    - object_shell_law_rocket
+  - object_structure
+    - object_structure_arm_gate
+    - object_structure_building
+    - object_structure_double_gate
+    - object_structure_fence
+    - 0041424a(c) ??
+    - object_structure_locker
+    - object_structure_single_gate
+    - object_structure_slide_bridge
+    - object_structure_slide_door
+    - object_structure_strip_light_controller
+    - object_structure_swing_door
