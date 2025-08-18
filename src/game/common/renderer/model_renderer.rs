@@ -33,7 +33,7 @@ struct GpuInstance {
 #[derive(Default)]
 pub struct InstanceUpdater {
     transform: Option<Mat4>,
-    animation: Option<Handle<RenderAnimation>>,
+    animation: Option<RenderInstanceAnimation>,
     animation_time: Option<f32>,
     /// If `true`, the even if an animation was specified, the animation handle will be cleared.
     clear_animation: bool,
@@ -44,12 +44,8 @@ impl InstanceUpdater {
         self.transform = Some(transform);
     }
 
-    pub fn set_animation(&mut self, animation: Handle<RenderAnimation>) {
-        self.animation = Some(animation);
-    }
-
-    pub fn set_animation_time(&mut self, time: f32) {
-        self.animation_time = Some(time);
+    pub fn set_animation(&mut self, animation: Handle<RenderAnimation>, time: f32) {
+        self.animation = Some(RenderInstanceAnimation { animation, time });
     }
 
     pub fn clear_animation(&mut self) {
@@ -284,16 +280,8 @@ impl ModelRenderer {
 
         if updater.clear_animation {
             instance.animation = None;
-        } else {
-            if let Some(animation) = updater.animation {
-                instance.animation = Some(RenderInstanceAnimation::from_animation(animation));
-            }
-
-            if let Some(animation_time) = updater.animation_time {
-                if let Some(ref mut animation) = instance.animation {
-                    animation.time = animation_time;
-                }
-            }
+        } else if let Some(animation) = updater.animation {
+            instance.animation = Some(animation);
         }
     }
 
@@ -329,7 +317,7 @@ impl ModelRenderer {
 
             let key = RenderSetKey {
                 model: instance.render_model,
-                animation: animation.handle,
+                animation: animation.animation,
             };
 
             let gpu_instance = GpuInstance {

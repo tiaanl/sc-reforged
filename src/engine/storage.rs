@@ -31,6 +31,12 @@ impl<T> std::fmt::Debug for Handle<T> {
     }
 }
 
+impl<T> std::fmt::Display for Handle<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Handle").field(&self.0).finish()
+    }
+}
+
 #[derive(Debug)]
 pub struct Storage<T>(slab::Slab<T>);
 

@@ -9,7 +9,7 @@ use crate::{
 #[derive(Clone, Copy, Debug)]
 pub struct RenderInstanceAnimation {
     /// Handle to the animation to play.
-    pub handle: Handle<RenderAnimation>,
+    pub animation: Handle<RenderAnimation>,
     /// The time to calculate the animation frame.
     pub time: f32,
 }
@@ -17,7 +17,7 @@ pub struct RenderInstanceAnimation {
 impl RenderInstanceAnimation {
     pub fn from_animation(animation: Handle<RenderAnimation>) -> Self {
         Self {
-            handle: animation,
+            animation,
             time: 0.0,
         }
     }

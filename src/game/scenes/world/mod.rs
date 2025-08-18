@@ -14,11 +14,12 @@ use crate::{
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
+        scenes::world::actions::PlayerAction,
     },
 };
 
+pub mod actions;
 mod objects;
-pub mod sequencer;
 mod strata;
 mod terrain;
 
@@ -361,6 +362,27 @@ impl Scene for WorldScene {
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
+        if input.mouse_just_pressed(MouseButton::Left) {
+            if let Some(ref data) = self.geometry_data {
+                // TODO: This needs a better place.
+                const TERRAIN_ENTITY_ID: u32 = 1 << 16;
+
+                // Figure out the type of object we clicked on:
+                let player_action = if data.id >= TERRAIN_ENTITY_ID {
+                    PlayerAction::Terrain {
+                        position: data.position,
+                    }
+                } else {
+                    PlayerAction::Object {
+                        position: data.position,
+                        id: data.id,
+                    }
+                };
+
+                self.objects.handle_player_action(&player_action);
+            }
+        }
+
         self.time_of_day = (self.time_of_day + delta_time * 0.001).rem_euclid(24.0);
         self.environment = self.calculate_environment(self.time_of_day);
 

@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::{collections::hash_map::Iter, path::PathBuf};
 
 use ahash::{HashMap, HashMapExt};
@@ -9,35 +7,19 @@ use crate::{
         assets::AssetError,
         storage::{Handle, Storage},
     },
-    game::{
-        animations::{Animation, animations},
-        config,
-        data_dir::data_dir,
-    },
+    game::{config, data_dir::data_dir},
     global,
 };
 
-pub struct Clip {
-    pub animation: Handle<Animation>,
-    pub immediate: bool,
-    pub repeat: config::Repeat,
-    pub callbacks: Vec<config::Callback>,
-}
+use super::animations;
+use super::{Clip, Sequence};
 
-#[derive(Default)]
-pub struct Sequence {
-    // The `name` here is just so we can get a name from a handle.  Don't want to reverse lookup
-    // from the hash map.
-    pub name: String,
-    pub clips: Vec<Clip>,
-}
-
-pub struct Sequencer {
+pub struct Sequences {
     sequences: Storage<Sequence>,
     lookup: HashMap<String, Handle<Sequence>>,
 }
 
-impl Sequencer {
+impl Sequences {
     pub fn new() -> Result<Self, AssetError> {
         let motion_sequences = data_dir().load_config::<config::MotionSequencerDefs>(
             PathBuf::from("config").join("mot_sequencer_defs.txt"),
@@ -82,6 +64,7 @@ impl Sequencer {
 
     #[inline]
     pub fn get(&self, handle: Handle<Sequence>) -> Option<&Sequence> {
+        tracing::warn!("Requesting missing sequence! ({})", handle);
         self.sequences.get(handle)
     }
 
@@ -91,4 +74,4 @@ impl Sequencer {
     }
 }
 
-global!(Sequencer, scoped_sequencer, sequencer);
+global!(Sequences, scoped_sequences, sequences);

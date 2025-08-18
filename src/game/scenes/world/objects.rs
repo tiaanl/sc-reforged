@@ -1,6 +1,4 @@
-use std::path::PathBuf;
-
-use ahash::HashSet;
+use ahash::{HashMap, HashSet};
 
 use crate::{
     engine::{
@@ -9,20 +7,21 @@ use crate::{
         storage::Handle,
     },
     game::{
-        animations::{Animation, animations},
+        animations::{Animation, Sequencer, animations, sequences},
         camera::Frustum,
         config::ObjectType,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
         model::Model,
         models::models,
         renderer::{ModelRenderer, RenderAnimation, RenderInstance},
-        scenes::world::sequencer::Sequence,
+        scenes::world::actions::PlayerAction,
         skeleton::Skeleton,
     },
 };
 
+impl ObjectType {}
+
 /// Represents an object inside the game world.a
-#[derive(Debug)]
 pub struct Object {
     pub title: String,
     pub object_type: ObjectType,
@@ -30,10 +29,7 @@ pub struct Object {
     pub model_handle: Handle<Model>,
     pub render_instance: Handle<RenderInstance>,
 
-    pub animation: Option<Handle<Animation>>,
-    pub animation_time: f32,
-
-    pub sequence: Option<Handle<Sequence>>,
+    pub sequencer: Sequencer,
 
     /// Whether to draw the bones of the skeleton.
     pub draw_debug_bones: bool,
@@ -45,27 +41,33 @@ pub struct Object {
 
 impl Object {
     pub fn update(&mut self, delta_time: f32) {
-        self.animation_time += delta_time;
+        self.sequencer.update(delta_time);
     }
 
     pub fn clear_animation(&mut self) {
-        self.animation = None;
-        self.animation_time = 0.0;
+        self.sequencer.stop();
+    }
+
+    pub fn handle_player_action(&mut self, player_action: &PlayerAction) {
+        match player_action {
+            PlayerAction::Object { position, id } => {
+                tracing::info!("{} -> object clicked {} at {:?}", self.title, id, position);
+            }
+            PlayerAction::Terrain { position } => {
+                tracing::info!("{} -> terrain clicked at {:?}", self.title, position);
+            }
+        }
     }
 }
 
 pub struct Objects {
     model_renderer: ModelRenderer,
+    render_animation_lookup: HashMap<Handle<Animation>, Handle<RenderAnimation>>,
 
     pub objects: Vec<Object>,
 
     /// The entity index that the mouse is currently over.
     selected_object: Option<u32>,
-
-    walking_animation: Handle<RenderAnimation>,
-    running_animation: Handle<RenderAnimation>,
-    crouching_animation: Handle<RenderAnimation>,
-    crawling_animation: Handle<RenderAnimation>,
 }
 
 impl Objects {
@@ -75,57 +77,28 @@ impl Objects {
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
-        let mut model_renderer = ModelRenderer::new(
+        let model_renderer = ModelRenderer::new(
             shaders,
             shadow_render_target,
             camera_bind_group_layout,
             environment_bind_group_layout,
         );
 
-        let man_skel = models()
-            .load_bipedal_model("man_skel")
-            .expect("Could not load default skeleton");
+        // Add all the sequence animations to the renderer.
+        // for (name, sequence) in sequences().lookup() {
+        //     let sequence = sequences().get(*sequence).unwrap();
 
-        let walking_animation = {
-            let anim = animations()
-                .load(PathBuf::from("motions").join("bipedal_walk.bmf"))
-                .expect("Could not load walking animation");
-
-            model_renderer.add_animation(man_skel, anim)
-        };
-
-        let running_animation = {
-            let anim = animations()
-                .load(PathBuf::from("motions").join("bipedal_stand_run.bmf"))
-                .expect("Could not load walking animation");
-
-            model_renderer.add_animation(man_skel, anim)
-        };
-
-        let crouching_animation = {
-            let anim = animations()
-                .load(PathBuf::from("motions").join("bipedal_crouchwalk_cycle.bmf"))
-                .expect("Could not load walking animation");
-
-            model_renderer.add_animation(man_skel, anim)
-        };
-
-        let crawling_animation = {
-            let anim = animations()
-                .load(PathBuf::from("motions").join("bipedal_prone_low_crawl.bmf"))
-                .expect("Could not load walking animation");
-
-            model_renderer.add_animation(man_skel, anim)
-        };
+        //     for clip in sequence.clips.iter() {
+        //         model_renderer.add_animation(
+        //     }
+        // }
 
         Ok(Self {
             model_renderer,
+            render_animation_lookup: HashMap::default(),
+
             objects: vec![],
             selected_object: None,
-            walking_animation,
-            running_animation,
-            crouching_animation,
-            crawling_animation,
         })
     }
 
@@ -155,10 +128,7 @@ impl Objects {
             model_handle,
             render_instance: model_instance_handle,
 
-            animation: None,
-            animation_time: 0.0,
-
-            sequence: None,
+            sequencer: Sequencer::default(),
 
             draw_debug_bones: false,
             draw_bounding_spheres: false,
@@ -176,14 +146,20 @@ impl Objects {
     ) {
         let delta_time = delta_time / 100.0;
 
-        self.objects.iter_mut().for_each(|object| {
-            object.update(delta_time);
+        // Update sequencers.
+        self.objects
+            .iter_mut()
+            .filter(|object| object.sequencer.is_playing())
+            .for_each(|object| {
+                object.update(delta_time);
 
-            self.model_renderer
-                .update_instance(object.render_instance, |updater| {
-                    updater.set_animation_time(object.animation_time);
-                });
-        });
+                // if let Some(animation_state) = object.sequencer.get_animation_state() {
+                //     self.model_renderer
+                //         .update_instance(object.render_instance, |updater| {
+                //             updater.set_animation(animation_state.animation, animation_state.time);
+                //         });
+                // }
+            });
 
         if input.mouse_just_pressed(MouseButton::Left) {
             if let Some(geometry_data) = geometry_data {
@@ -194,6 +170,20 @@ impl Objects {
             }
 
             self.selected_object = None;
+        }
+    }
+
+    pub fn handle_player_action(&mut self, player_action: &PlayerAction) {
+        if let Some(object) = self.selected_object {
+            let object = match self.objects.get_mut(object as usize) {
+                Some(object) => object,
+                None => {
+                    // The ID to an object is not found, so it must be a stale ID, just clear it.
+                    todo!("clear the id");
+                }
+            };
+
+            object.handle_player_action(player_action);
         }
     }
 
@@ -295,10 +285,12 @@ impl Objects {
             }
         }
 
-        if let Some(animation) = object.animation.and_then(|handle| animations().get(handle)) {
-            let skeleton =
-                animation.sample_pose(object.animation_time, 30.0, &model.skeleton, true);
-            do_node(&skeleton, object.transform.to_mat4(), 0, vertices, 0);
+        if let Some(animation_state) = object.sequencer.get_animation_state() {
+            if let Some(animation) = animations().get(animation_state.animation) {
+                let skeleton =
+                    animation.sample_pose(animation_state.time, 30.0, &model.skeleton, true);
+                do_node(&skeleton, object.transform.to_mat4(), 0, vertices, 0);
+            }
         } else {
             do_node(&model.skeleton, object.transform.to_mat4(), 0, vertices, 0);
         }
@@ -332,8 +324,6 @@ impl Objects {
                     .collapsible(false)
                     .resizable(false)
                     .show(egui, |ui| {
-                        use crate::game::scenes::world::sequencer::sequencer;
-
                         ui.set_width(300.0);
 
                         ui.heading(format!("{} ({:?})", object.title, object.object_type));
@@ -347,29 +337,17 @@ impl Objects {
                                 .to_euler(glam::EulerRot::default()),
                         );
 
-                        let selected_text = object
-                            .sequence
-                            .and_then(|handle| sequencer().get(handle))
-                            .map(|seq| seq.name.clone())
-                            .clone()
-                            .unwrap_or_default();
+                        egui::ComboBox::from_label("Sequences").show_ui(ui, |ui| {
+                            use crate::game::animations::sequences;
 
-                        egui::ComboBox::from_label("Sequences")
-                            .selected_text(selected_text)
-                            .show_ui(ui, |ui| {
-                                for (name, handle) in sequencer().lookup() {
-                                    let selected = object
-                                        .sequence
-                                        .as_ref()
-                                        .map(|s| s == handle)
-                                        .unwrap_or(false);
-                                    if ui.selectable_label(selected, name).clicked() {
-                                        // Safety: Sequence must be there, because we're iterating
-                                        // a known list of sequences.
-                                        object.sequence = Some(*handle);
-                                    }
+                            for (name, sequence) in sequences().lookup() {
+                                if ui.button(name).clicked() {
+                                    // Safety: Sequence must be there, because we're iterating
+                                    // a known list of sequences.
+                                    object.sequencer.play(*sequence);
                                 }
-                            });
+                            }
+                        });
 
                         fn drag_vec3(
                             ui: &mut egui::Ui,
@@ -421,50 +399,6 @@ impl Objects {
                                     updater.set_transform(object.transform.to_mat4());
                                 },
                             );
-                        }
-
-                        if ui.button("Walking").clicked() {
-                            self.model_renderer.update_instance(
-                                object.render_instance,
-                                |updater| {
-                                    updater.set_animation(self.walking_animation);
-                                },
-                            );
-                        }
-
-                        if ui.button("Running").clicked() {
-                            self.model_renderer.update_instance(
-                                object.render_instance,
-                                |updater| {
-                                    updater.set_animation(self.running_animation);
-                                },
-                            );
-                        }
-
-                        if ui.button("Crouching").clicked() {
-                            self.model_renderer.update_instance(
-                                object.render_instance,
-                                |updater| {
-                                    updater.set_animation(self.crouching_animation);
-                                },
-                            );
-                        }
-
-                        if ui.button("Crawling").clicked() {
-                            self.model_renderer.update_instance(
-                                object.render_instance,
-                                |updater| {
-                                    updater.set_animation(self.crawling_animation);
-                                },
-                            );
-                        }
-
-                        if ui.button("Clear animation").clicked() {
-                            object.clear_animation();
-                            self.model_renderer
-                                .update_instance(object.render_instance, |updater| {
-                                    updater.clear_animation()
-                                });
                         }
 
                         if let Some(model) = models().get(object.model_handle) {
