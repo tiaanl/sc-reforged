@@ -9,5 +9,5 @@ pub use animation::*;
 pub use interpolate::*;
 
 pub use sequence::{Clip, Sequence};
-pub use sequencer::{AnimationState, Sequencer};
+pub use sequencer::Sequencer;
 pub use sequences::{Sequences, scoped_sequences, sequences};

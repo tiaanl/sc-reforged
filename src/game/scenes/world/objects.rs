@@ -1,4 +1,4 @@
-use ahash::{HashMap, HashSet};
+use ahash::HashSet;
 
 use crate::{
     engine::{
@@ -7,13 +7,13 @@ use crate::{
         storage::Handle,
     },
     game::{
-        animations::{Animation, Sequencer, animations, sequences},
+        animations::{Sequencer, animations, sequences},
         camera::Frustum,
         config::ObjectType,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
         model::Model,
         models::models,
-        renderer::{ModelRenderer, RenderAnimation, RenderInstance},
+        renderer::{ModelRenderer, RenderInstance},
         scenes::world::actions::PlayerAction,
         skeleton::Skeleton,
     },
@@ -55,6 +55,10 @@ impl Object {
             }
             PlayerAction::Terrain { position } => {
                 tracing::info!("{} -> terrain clicked at {:?}", self.title, position);
+
+                if let Some(walk) = sequences().get_by_name("MSEQ_WALK") {
+                    self.sequencer.play_sequence(walk);
+                }
             }
         }
     }
@@ -62,7 +66,6 @@ impl Object {
 
 pub struct Objects {
     model_renderer: ModelRenderer,
-    render_animation_lookup: HashMap<Handle<Animation>, Handle<RenderAnimation>>,
 
     pub objects: Vec<Object>,
 
@@ -84,18 +87,8 @@ impl Objects {
             environment_bind_group_layout,
         );
 
-        // Add all the sequence animations to the renderer.
-        // for (name, sequence) in sequences().lookup() {
-        //     let sequence = sequences().get(*sequence).unwrap();
-
-        //     for clip in sequence.clips.iter() {
-        //         model_renderer.add_animation(
-        //     }
-        // }
-
         Ok(Self {
             model_renderer,
-            render_animation_lookup: HashMap::default(),
 
             objects: vec![],
             selected_object: None,
@@ -153,12 +146,15 @@ impl Objects {
             .for_each(|object| {
                 object.update(delta_time);
 
-                // if let Some(animation_state) = object.sequencer.get_animation_state() {
-                //     self.model_renderer
-                //         .update_instance(object.render_instance, |updater| {
-                //             updater.set_animation(animation_state.animation, animation_state.time);
-                //         });
-                // }
+                if let Some(animation_state) = object.sequencer.get_animation_state() {
+                    let render_animation = self
+                        .model_renderer
+                        .add_animation(object.model_handle, animation_state.animation);
+                    self.model_renderer
+                        .update_instance(object.render_instance, |updater| {
+                            updater.set_animation(render_animation, animation_state.time);
+                        });
+                }
             });
 
         if input.mouse_just_pressed(MouseButton::Left) {
@@ -337,17 +333,23 @@ impl Objects {
                                 .to_euler(glam::EulerRot::default()),
                         );
 
-                        egui::ComboBox::from_label("Sequences").show_ui(ui, |ui| {
+                        egui::ComboBox::from_label("Sequencer").show_ui(ui, |ui| {
                             use crate::game::animations::sequences;
 
                             for (name, sequence) in sequences().lookup() {
                                 if ui.button(name).clicked() {
                                     // Safety: Sequence must be there, because we're iterating
                                     // a known list of sequences.
-                                    object.sequencer.play(*sequence);
+                                    object.sequencer.play_sequence(*sequence);
                                 }
                             }
                         });
+                        object.sequencer.debug_panel(ui);
+
+                        if let Some(animation_state) = object.sequencer.get_animation_state() {
+                            ui.label(format!("Animation: {}", animation_state.animation));
+                            ui.label(format!("Time: {}", animation_state.time));
+                        }
 
                         fn drag_vec3(
                             ui: &mut egui::Ui,

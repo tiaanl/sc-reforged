@@ -64,13 +64,15 @@ impl Sequences {
 
     #[inline]
     pub fn get(&self, handle: Handle<Sequence>) -> Option<&Sequence> {
-        tracing::warn!("Requesting missing sequence! ({})", handle);
         self.sequences.get(handle)
     }
 
     #[inline]
     pub fn get_by_name(&self, name: &str) -> Option<Handle<Sequence>> {
-        self.lookup.get(name).cloned()
+        self.lookup
+            .get(name)
+            .inspect(|_| tracing::warn!("Requesting missing named sequence! ({})", name))
+            .cloned()
     }
 }
 

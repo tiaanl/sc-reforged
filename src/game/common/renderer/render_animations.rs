@@ -1,3 +1,4 @@
+use ahash::HashMap;
 use glam::{Quat, Vec3, Vec4};
 
 use crate::{
@@ -7,6 +8,8 @@ use crate::{
     },
     game::{
         animations::{Animation, animations},
+        model::Model,
+        models::models,
         skeleton::Skeleton,
     },
 };
@@ -17,6 +20,8 @@ pub struct RenderAnimation {
 
 pub struct RenderAnimations {
     animations: Storage<RenderAnimation>,
+
+    lookup: HashMap<(Handle<Model>, Handle<Animation>), Handle<RenderAnimation>>,
 
     animation_bind_group_layout: wgpu::BindGroupLayout,
 }
@@ -54,6 +59,7 @@ impl Default for RenderAnimations {
 
         Self {
             animations: Storage::default(),
+            lookup: HashMap::default(),
             animation_bind_group_layout,
         }
     }
@@ -123,12 +129,21 @@ impl RenderAnimations {
 
     pub fn add(
         &mut self,
+        model_handle: Handle<Model>,
         animation_handle: Handle<Animation>,
-        skeleton: &Skeleton,
     ) -> Handle<RenderAnimation> {
+        if let Some(render_animation) = self.lookup.get(&(model_handle, animation_handle)) {
+            return *render_animation;
+        }
+
         let animation = animations()
             .get(animation_handle)
             .expect("Adding missing animation!");
+
+        let skeleton = &models()
+            .get(model_handle)
+            .expect("Adding missing model!")
+            .skeleton;
 
         // If there is no animation data (sometimes used for an animation that just shows the rest
         // pose), then just use the rest pose.
@@ -160,7 +175,10 @@ impl RenderAnimations {
 
         let bind_group = self.create_bind_group(&positions_view, &rotations_view);
 
-        self.animations.insert(RenderAnimation { bind_group })
+        let render_animation = self.animations.insert(RenderAnimation { bind_group });
+        self.lookup
+            .insert((model_handle, animation_handle), render_animation);
+        render_animation
     }
 
     pub fn bake_animation_globals(
