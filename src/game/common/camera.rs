@@ -389,11 +389,9 @@ impl FreeCameraController {
         self.position += self.rotation() * Camera::UP * distance;
     }
 
-    pub fn update_camera_if_dirty(&self, camera: &mut Camera) -> bool {
-        self.dirty.if_dirty(|| {
-            camera.position = self.position;
-            camera.rotation = self.rotation();
-        })
+    pub fn update_camera(&self, camera: &mut Camera) {
+        camera.position = self.position;
+        camera.rotation = self.rotation();
     }
 }
 
@@ -623,12 +621,9 @@ impl GameCameraController {
         self.desired.position += Camera::UP * distance;
     }
 
-    pub fn update_camera_if_dirty(&self, camera: &mut Camera) -> bool {
-        // self.dirty.if_dirty(|| {
+    pub fn update_camera(&self, camera: &mut Camera) {
         camera.position = self.current.position;
         camera.rotation = self.current.rotation();
-        // })
-        true
     }
 }
 

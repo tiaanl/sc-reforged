@@ -396,10 +396,10 @@ impl Scene for WorldScene {
 
         self.main_camera
             .controller
-            .update_camera_if_dirty(&mut self.main_camera.camera);
+            .update_camera(&mut self.main_camera.camera);
         self.debug_camera
             .controller
-            .update_camera_if_dirty(&mut self.debug_camera.camera);
+            .update_camera(&mut self.debug_camera.camera);
 
         self.objects
             .update(delta_time, input, self.geometry_data.as_ref());

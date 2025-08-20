@@ -47,8 +47,10 @@ enum App {
         input: InputState,
         /// The last position the mouse was on the window client area.
         last_mouse_position: Option<UVec2>,
-        // The instant that the last frame started to render.
+        /// The instant that the last frame started to render.
         last_frame_time: Instant,
+        /// An average FPS.
+        average_fps: f32,
         /// The scene we are currently rendering to the screen.
         scene: Box<dyn Scene>,
     },
@@ -142,6 +144,7 @@ impl winit::application::ApplicationHandler for App {
                     input: InputState::default(),
                     last_mouse_position: None,
                     last_frame_time: Instant::now(),
+                    average_fps: 0.0,
                     scene,
                 };
             }
@@ -170,6 +173,7 @@ impl winit::application::ApplicationHandler for App {
                 input,
                 last_mouse_position,
                 last_frame_time,
+                average_fps,
                 scene,
                 ..
             } => {
@@ -200,18 +204,21 @@ impl winit::application::ApplicationHandler for App {
                     }
 
                     WindowEvent::RedrawRequested => {
-                        let output = renderer().surface.get_texture(&renderer().device);
-                        let surface = output
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
-
-                        // Calculate the delta time *AFTER* acquiring the texture from the swapchain.
                         let now = Instant::now();
                         let last_frame_duration = now - *last_frame_time;
                         *last_frame_time = now;
 
                         let delta_time = last_frame_duration.as_secs_f32();
+                        *average_fps = (*average_fps + (1.0 / delta_time)) / 2.0;
+
+                        // println!("delta_time: {delta_time}");
+
                         scene.update(delta_time, input);
+
+                        let output = renderer().surface.get_texture(&renderer().device);
+                        let surface = output
+                            .texture
+                            .create_view(&wgpu::TextureViewDescriptor::default());
 
                         let encoder = renderer().device.create_command_encoder(
                             &wgpu::CommandEncoderDescriptor {
@@ -240,8 +247,9 @@ impl winit::application::ApplicationHandler for App {
                                         let fps_label = {
                                             let text = egui::WidgetText::RichText(
                                                 egui::RichText::new(format!(
-                                                    "{:3.1}",
+                                                    "{:3.1} {:3.1}",
                                                     1.0 / last_frame_duration.as_secs_f64(),
+                                                    average_fps,
                                                 )),
                                             )
                                             .background_color(
