@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
 
+use egui::{RichText, Widget};
+
 use crate::engine::storage::Handle;
 
 use super::{Animation, Sequence, animations, sequences};
@@ -28,7 +30,7 @@ impl Sequencer {
             return;
         };
 
-        self.time += delta_time;
+        self.time += delta_time * 30.0;
 
         match front {
             Play::Single(animation) => {
@@ -93,18 +95,31 @@ impl Sequencer {
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
         for play in self.sequence.iter() {
             match play {
-                Play::Single(a) => {
-                    let time_str = if let Some(animation) = animations().get(*a) {
-                        animation
-                            .last_key_frame()
-                            .map(|t| t.to_string())
-                            .unwrap_or_default()
-                    } else {
-                        String::new()
-                    };
-                    ui.label(format!("Single: {a} ({time_str})"));
+                Play::Single(animation) => {
+                    let key_frame_count = animations()
+                        .get(*animation)
+                        .and_then(|a| a.last_key_frame())
+                        .unwrap_or_default();
+                    play_panel("Single", *animation, key_frame_count, ui);
                 }
             }
         }
     }
+}
+
+fn play_panel(typ: &str, animation: Handle<Animation>, key_frame_count: u32, ui: &mut egui::Ui) {
+    egui::Frame::group(ui.style())
+        .corner_radius(5.0)
+        .stroke(egui::Stroke::new(1.0, ui.visuals().text_color()))
+        .inner_margin(5.0)
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.horizontal(|ui| {
+                egui::Label::new(RichText::new(typ).strong()).ui(ui);
+                ui.vertical(|ui| {
+                    egui::Label::new(format!("Animation: {animation}")).ui(ui);
+                    egui::Label::new(format!("Frames: {key_frame_count}")).ui(ui);
+                });
+            });
+        });
 }

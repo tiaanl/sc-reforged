@@ -107,7 +107,7 @@ impl WorldScene {
             let camera_from = campaign.view_initial.from.extend(1600.0);
             let camera_to = campaign.view_initial.to.extend(0.0);
 
-            let mut controller = camera::GameCameraController::new(15.0, 0.2);
+            let mut controller = camera::GameCameraController::new(1000.0, 0.2);
             controller.move_to_direct(camera_from);
             controller.look_at_direct(camera_to);
             let camera = camera::Camera::new(
@@ -115,8 +115,8 @@ impl WorldScene {
                 Quat::IDENTITY,
                 45.0_f32.to_radians(),
                 1.0,
-                100.0,
-                10_000.0,
+                10.0,
+                13_300.0,
             );
             let gpu_camera = camera::GpuCamera::new();
 
@@ -128,13 +128,13 @@ impl WorldScene {
         };
 
         let debug_camera = {
-            let controller = camera::FreeCameraController::new(50.0, 0.2);
+            let controller = camera::FreeCameraController::new(1000.0, 0.2);
             let camera = camera::Camera::new(
                 Vec3::new(0.0, 0.0, 10_000.0),
                 Quat::IDENTITY,
                 45.0_f32.to_radians(),
                 1.0,
-                100.0,
+                10.0,
                 150_000.0,
             );
             let gpu_camera = camera::GpuCamera::new();
@@ -383,7 +383,7 @@ impl Scene for WorldScene {
             }
         }
 
-        self.time_of_day = (self.time_of_day + delta_time * 0.001).rem_euclid(24.0);
+        self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
         self.environment = self.calculate_environment(self.time_of_day);
 
         // Set the camera far plane to the `max_view_distance`.

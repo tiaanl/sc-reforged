@@ -34,9 +34,14 @@ impl Surface {
         self.configure(device);
     }
 
-    pub fn get_texture(&self) -> wgpu::SurfaceTexture {
-        self.surface
-            .get_current_texture()
-            .expect("Could not get current texture in swap chain.")
+    pub fn get_texture(&self, device: &wgpu::Device) -> wgpu::SurfaceTexture {
+        match self.surface.get_current_texture() {
+            Ok(texture) => texture,
+            Err(wgpu::SurfaceError::Outdated) => {
+                self.configure(device);
+                self.get_texture(device)
+            }
+            Err(err) => panic!("Current texture not available! {err}"),
+        }
     }
 }

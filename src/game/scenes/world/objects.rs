@@ -19,8 +19,6 @@ use crate::{
     },
 };
 
-impl ObjectType {}
-
 /// Represents an object inside the game world.a
 pub struct Object {
     pub title: String,
@@ -137,8 +135,6 @@ impl Objects {
         input: &InputState,
         geometry_data: Option<&GeometryData>,
     ) {
-        let delta_time = delta_time / 100.0;
-
         // Update sequencers.
         self.objects
             .iter_mut()

@@ -557,6 +557,7 @@ impl GameCameraData {
 pub struct GameCameraController {
     /// Movement speed.
     speed: f32,
+
     /// Rotation sensitivity.
     sensitivity: f32,
 
@@ -659,11 +660,11 @@ impl Controller for GameCameraController {
             self.move_up(-move_delta);
         }
         if input.key_pressed(self.controls.look_up) {
-            self.desired.pitch += delta_time;
+            self.desired.pitch += delta_time * 540.0_f32.to_radians();
             self.dirty.smudge();
         }
         if input.key_pressed(self.controls.look_down) {
-            self.desired.pitch -= delta_time;
+            self.desired.pitch -= delta_time * 540.0_f32.to_radians();
             self.dirty.smudge();
         }
 

@@ -200,17 +200,18 @@ impl winit::application::ApplicationHandler for App {
                     }
 
                     WindowEvent::RedrawRequested => {
+                        let output = renderer().surface.get_texture(&renderer().device);
+                        let surface = output
+                            .texture
+                            .create_view(&wgpu::TextureViewDescriptor::default());
+
+                        // Calculate the delta time *AFTER* acquiring the texture from the swapchain.
                         let now = Instant::now();
                         let last_frame_duration = now - *last_frame_time;
                         *last_frame_time = now;
 
-                        let delta_time = last_frame_duration.as_secs_f32() * 60.0;
+                        let delta_time = last_frame_duration.as_secs_f32();
                         scene.update(delta_time, input);
-
-                        let output = renderer().surface.get_texture();
-                        let surface = output
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
 
                         let encoder = renderer().device.create_command_encoder(
                             &wgpu::CommandEncoderDescriptor {
@@ -233,12 +234,14 @@ impl winit::application::ApplicationHandler for App {
                                 &mut frame.encoder,
                                 &frame.surface,
                                 |ctx| {
+                                    ctx.set_pixels_per_point(1.2);
+
                                     egui::Area::new(egui::Id::new("engine_info")).show(ctx, |ui| {
                                         let fps_label = {
                                             let text = egui::WidgetText::RichText(
                                                 egui::RichText::new(format!(
-                                                    "{:0.1}",
-                                                    1.0 / last_frame_duration.as_secs_f64()
+                                                    "{:3.1}",
+                                                    1.0 / last_frame_duration.as_secs_f64(),
                                                 )),
                                             )
                                             .background_color(
