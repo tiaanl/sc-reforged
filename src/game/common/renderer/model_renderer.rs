@@ -11,7 +11,6 @@ use crate::{
         camera::Frustum,
         geometry_buffers::{GeometryBuffers, RenderTarget},
         model::{self, BoundingSphere},
-        models::models,
         renderer::{
             render_animations::{RenderAnimation, RenderAnimations},
             render_instance::{RenderInstance, RenderInstanceAnimation},
@@ -30,11 +29,53 @@ struct GpuInstance {
     _padding: [u32; 2],
 }
 
+struct InstancesBuffer {
+    buffer: wgpu::Buffer,
+    cursor: u64,
+    capacity: u64,
+}
+
+impl InstancesBuffer {
+    const STRIDE: usize = std::mem::size_of::<GpuInstance>();
+
+    fn new(capacity: u64) -> Self {
+        let buffer_size_in_bytes = capacity as usize * Self::STRIDE;
+
+        let buffer = renderer().device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("model_renderer_instances_buffer"),
+            size: buffer_size_in_bytes as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        Self {
+            buffer,
+            cursor: 0,
+            capacity,
+        }
+    }
+
+    fn write(&mut self, instances: &[GpuInstance]) -> std::ops::Range<u64> {
+        renderer().queue.write_buffer(
+            &self.buffer,
+            self.cursor * Self::STRIDE as u64,
+            bytemuck::cast_slice(instances),
+        );
+
+        let start = self.cursor;
+        self.cursor += instances.len() as u64;
+        (start * Self::STRIDE as u64)..(self.cursor * Self::STRIDE as u64)
+    }
+
+    fn reset(&mut self) {
+        self.cursor = 0;
+    }
+}
+
 #[derive(Default)]
 pub struct InstanceUpdater {
     transform: Option<Mat4>,
     animation: Option<RenderInstanceAnimation>,
-    animation_time: Option<f32>,
     /// If `true`, the even if an animation was specified, the animation handle will be cleared.
     clear_animation: bool,
 }
@@ -48,7 +89,7 @@ impl InstanceUpdater {
         self.animation = Some(RenderInstanceAnimation { animation, time });
     }
 
-    pub fn clear_animation(&mut self) {
+    pub fn _clear_animation(&mut self) {
         self.clear_animation = true;
     }
 }
@@ -60,6 +101,9 @@ pub struct ModelRenderer {
 
     /// Keep a list of each model we have to render.
     render_instances: Storage<RenderInstance>,
+
+    /// A single buffer to hold instances for a render pass.
+    instances_buffer: InstancesBuffer,
 
     /// The pipeline to render all opaque models.
     opaque_pipeline: wgpu::RenderPipeline,
@@ -79,6 +123,9 @@ impl ModelRenderer {
         let textures = render_textures::RenderTextures::new();
         let models = RenderModels::default();
         let animations = RenderAnimations::default();
+
+        // Default for 1024 instances for now.
+        let instances_buffer = InstancesBuffer::new(2);
 
         let module = shaders.create_shader(
             "model_renderer",
@@ -229,6 +276,8 @@ impl ModelRenderer {
             models,
             animations,
 
+            instances_buffer,
+
             render_instances: Storage::default(),
 
             opaque_pipeline,
@@ -256,7 +305,6 @@ impl ModelRenderer {
         model_handle: Handle<model::Model>,
         animation_handle: Handle<Animation>,
     ) -> Handle<RenderAnimation> {
-        let model = models().get(model_handle).expect("Could not get model");
         self.animations.add(model_handle, animation_handle)
     }
 
@@ -287,6 +335,8 @@ impl ModelRenderer {
 
     fn build_render_set(&self, frustum: &Frustum) -> RenderSet {
         let mut result = RenderSet::default();
+
+        let mut total_instances = 0;
 
         for (_, instance) in self.render_instances.iter() {
             let Some(model) = self.models.get(instance.render_model) else {
@@ -331,6 +381,7 @@ impl ModelRenderer {
                 .entry(key)
                 .or_default()
                 .push(gpu_instance);
+            total_instances += 1;
 
             if let Some(ref mesh) = model.alpha_mesh {
                 if mesh.index_count != 0 {
@@ -339,9 +390,12 @@ impl ModelRenderer {
                         .entry(key)
                         .or_default()
                         .push(gpu_instance);
+                    total_instances += 1;
                 }
             }
         }
+
+        result.total_instances = total_instances;
 
         result
     }
@@ -429,6 +483,16 @@ impl ModelRenderer {
     ) {
         let render_set = self.build_render_set(frustum);
 
+        {
+            // Make sure we can fit all the instances.
+            if render_set.total_instances > self.instances_buffer.capacity {
+                let new_size = render_set.total_instances.max(1).next_power_of_two();
+                tracing::info!("Resizing instances buffer to {}", new_size);
+                self.instances_buffer = InstancesBuffer::new(new_size);
+            }
+        }
+        self.instances_buffer.reset();
+
         // Opaque
         {
             let mut render_pass = frame
@@ -473,18 +537,11 @@ impl ModelRenderer {
                     continue;
                 }
 
-                // Create the buffer with instances.
-                let instances_buffer =
-                    renderer()
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("model_renderer_instances"),
-                            contents: bytemuck::cast_slice(gpu_instances),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
+                let instance_range = self.instances_buffer.write(gpu_instances);
 
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
+                render_pass
+                    .set_vertex_buffer(1, self.instances_buffer.buffer.slice(instance_range));
                 render_pass
                     .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
@@ -539,18 +596,11 @@ impl ModelRenderer {
                     continue;
                 }
 
-                // Create the buffer with instances.
-                let instances_buffer =
-                    renderer()
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("model_renderer_instances"),
-                            contents: bytemuck::cast_slice(gpu_instances),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
+                let instances_range = self.instances_buffer.write(gpu_instances);
 
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
+                render_pass
+                    .set_vertex_buffer(1, self.instances_buffer.buffer.slice(instances_range));
                 render_pass
                     .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
@@ -571,6 +621,7 @@ struct RenderSetKey {
 
 #[derive(Default)]
 struct RenderSet {
+    total_instances: u64,
     opaque_instances: HashMap<RenderSetKey, Vec<GpuInstance>>,
     alpha_instances: HashMap<RenderSetKey, Vec<GpuInstance>>,
 }
