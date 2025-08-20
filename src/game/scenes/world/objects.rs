@@ -1,66 +1,27 @@
+use std::path::PathBuf;
+
 use ahash::HashSet;
 
 use crate::{
     engine::{
         gizmos::{GizmoVertex, GizmosRenderer},
         prelude::*,
-        storage::Handle,
     },
     game::{
-        animations::{Sequencer, animations, sequences},
+        animations::Sequencer,
         camera::Frustum,
         config::ObjectType,
-        geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
+        geometry_buffers::{GeometryBuffers, RenderTarget},
         model::Model,
         models::models,
-        renderer::{ModelRenderer, RenderInstance},
-        scenes::world::actions::PlayerAction,
+        renderer::ModelRenderer,
+        scenes::world::{
+            actions::PlayerAction,
+            object::{BipedalOrder, Object, ObjectDetail},
+        },
         skeleton::Skeleton,
     },
 };
-
-/// Represents an object inside the game world.a
-pub struct Object {
-    pub title: String,
-    pub object_type: ObjectType,
-    pub transform: Transform,
-    pub model_handle: Handle<Model>,
-    pub render_instance: Handle<RenderInstance>,
-
-    pub sequencer: Sequencer,
-
-    /// Whether to draw the bones of the skeleton.
-    pub draw_debug_bones: bool,
-    /// Whether to draw the bounding sphere for each mesh.
-    pub draw_bounding_spheres: bool,
-    /// A list of node indices to draw in debug mode.
-    pub selected_bones: HashSet<usize>,
-}
-
-impl Object {
-    pub fn update(&mut self, delta_time: f32) {
-        self.sequencer.update(delta_time);
-    }
-
-    pub fn clear_animation(&mut self) {
-        self.sequencer.stop();
-    }
-
-    pub fn handle_player_action(&mut self, player_action: &PlayerAction) {
-        match player_action {
-            PlayerAction::Object { position, id } => {
-                tracing::info!("{} -> object clicked {} at {:?}", self.title, id, position);
-            }
-            PlayerAction::Terrain { position } => {
-                tracing::info!("{} -> terrain clicked at {:?}", self.title, position);
-
-                if let Some(walk) = sequences().get_by_name("MSEQ_WALK") {
-                    self.sequencer.play_sequence(walk);
-                }
-            }
-        }
-    }
-}
 
 pub struct Objects {
     model_renderer: ModelRenderer,
@@ -96,30 +57,66 @@ impl Objects {
     pub fn spawn(
         &mut self,
         transform: Transform,
+        object_type: ObjectType,
         model_name: &str,
         title: &str,
-        object_type: ObjectType,
     ) -> Result<(), AssetError> {
-        let model_handle = if object_type.is_bipedal() {
-            models().load_bipedal_model(model_name)
-        } else {
-            models().load_object_model(model_name)
-        }?;
+        let new_entity_id = self.objects.len() as u32;
 
-        let model_instance_handle = self.model_renderer.add_render_instance(
-            model_handle,
-            transform.to_mat4(),
-            self.objects.len() as u32,
-        )?;
+        let detail = match object_type {
+            ObjectType::Ape | ObjectType::Bipedal => {
+                let body_model = models().load_bipedal_model(model_name)?;
+                let body_render_instance = self.model_renderer.add_render_instance(
+                    body_model,
+                    transform.to_mat4(),
+                    self.objects.len() as u32,
+                )?;
+
+                let head_name = "head_john";
+
+                let head_model = models().load_model(
+                    head_name,
+                    PathBuf::from("models")
+                        .join("people")
+                        .join("heads")
+                        .join(head_name)
+                        .join(head_name)
+                        .with_extension("smf"),
+                )?;
+                let head_render_instance = self.model_renderer.add_render_instance(
+                    head_model,
+                    transform.to_mat4(),
+                    new_entity_id,
+                )?;
+
+                ObjectDetail::Bipedal {
+                    body_model,
+                    body_render_instance,
+                    head_render_instance,
+                    order: BipedalOrder::Stand,
+                    sequencer: Sequencer::default(),
+                }
+            }
+
+            _ => {
+                let model = models().load_object_model(model_name)?;
+                let render_instance = self.model_renderer.add_render_instance(
+                    model,
+                    transform.to_mat4(),
+                    new_entity_id,
+                )?;
+                ObjectDetail::Scenery {
+                    model,
+                    render_instance,
+                }
+            }
+        };
 
         self.objects.push(Object {
             title: title.to_string(),
             object_type,
             transform,
-            model_handle,
-            render_instance: model_instance_handle,
-
-            sequencer: Sequencer::default(),
+            detail,
 
             draw_debug_bones: false,
             draw_bounding_spheres: false,
@@ -129,53 +126,52 @@ impl Objects {
         Ok(())
     }
 
-    pub fn update(
-        &mut self,
-        delta_time: f32,
-        input: &InputState,
-        geometry_data: Option<&GeometryData>,
-    ) {
+    pub fn update(&mut self, delta_time: f32) {
         // Update sequencers.
-        self.objects
-            .iter_mut()
-            .filter(|object| object.sequencer.is_playing())
-            .for_each(|object| {
-                object.update(delta_time);
-
-                if let Some(animation_state) = object.sequencer.get_animation_state() {
-                    let render_animation = self
-                        .model_renderer
-                        .add_animation(object.model_handle, animation_state.animation);
-                    self.model_renderer
-                        .update_instance(object.render_instance, |updater| {
-                            updater.set_animation(render_animation, animation_state.time);
-                        });
-                }
-            });
-
-        if input.mouse_just_pressed(MouseButton::Left) {
-            if let Some(geometry_data) = geometry_data {
-                if geometry_data.id < 1 << 16 {
-                    self.selected_object = Some(geometry_data.id);
-                    return;
-                }
-            }
-
-            self.selected_object = None;
-        }
+        self.objects.iter_mut().for_each(|object| {
+            object.update(delta_time, &mut self.model_renderer);
+        });
     }
 
     pub fn handle_player_action(&mut self, player_action: &PlayerAction) {
-        if let Some(object) = self.selected_object {
-            let object = match self.objects.get_mut(object as usize) {
-                Some(object) => object,
-                None => {
-                    // The ID to an object is not found, so it must be a stale ID, just clear it.
-                    todo!("clear the id");
-                }
-            };
+        if let Some(selected_object) = self.selected_object {
+            match *player_action {
+                PlayerAction::Object { id, .. } => {
+                    if selected_object == id {
+                        let object = self.objects.get_mut(selected_object as usize).unwrap();
+                        object.interact_with_self();
+                    } else {
+                        let (left, right, sel_is_left) = if selected_object < id {
+                            let (l, r) = self.objects.split_at_mut(id as usize);
+                            (l, r, true)
+                        } else {
+                            let (l, r) = self.objects.split_at_mut(selected_object as usize);
+                            (l, r, false)
+                        };
 
-            object.handle_player_action(player_action);
+                        let (selected, clicked): (&mut Object, &mut Object) = if sel_is_left {
+                            (&mut left[selected_object as usize], &mut right[0])
+                        } else {
+                            (&mut right[0], &mut left[id as usize])
+                        };
+
+                        if !selected.interact_with(clicked) {
+                            self.selected_object = Some(id);
+                        }
+                    }
+                }
+                PlayerAction::Terrain { position } => {
+                    let object = self.objects.get_mut(selected_object as usize).unwrap();
+                    object.interact_with_terrain(position);
+                }
+            }
+        } else {
+            match *player_action {
+                PlayerAction::Object { id, .. } => self.selected_object = Some(id),
+                PlayerAction::Terrain { .. } => {
+                    // With nothing selected, clickin on the terrain does nothing.
+                }
+            }
         }
     }
 
@@ -215,7 +211,12 @@ impl Objects {
 
     pub fn render_gizmos(&self, vertices: &mut Vec<GizmoVertex>) {
         for object in self.objects.iter() {
-            let Some(model) = models().get(object.model_handle) else {
+            let model = match object.detail {
+                ObjectDetail::Scenery { model, .. } => model,
+                ObjectDetail::Bipedal { body_model, .. } => body_model,
+            };
+
+            let Some(model) = models().get(model) else {
                 continue;
             };
 
@@ -277,15 +278,15 @@ impl Objects {
             }
         }
 
-        if let Some(animation_state) = object.sequencer.get_animation_state() {
-            if let Some(animation) = animations().get(animation_state.animation) {
-                let skeleton =
-                    animation.sample_pose(animation_state.time, 30.0, &model.skeleton, true);
-                do_node(&skeleton, object.transform.to_mat4(), 0, vertices, 0);
-            }
-        } else {
-            do_node(&model.skeleton, object.transform.to_mat4(), 0, vertices, 0);
-        }
+        // if let Some(animation_state) = object.sequencer.get_animation_state() {
+        //     if let Some(animation) = animations().get(animation_state.animation) {
+        //         let skeleton =
+        //             animation.sample_pose(animation_state.time, 30.0, &model.skeleton, true);
+        //         do_node(&skeleton, object.transform.to_mat4(), 0, vertices, 0);
+        //     }
+        // } else {
+        do_node(&model.skeleton, object.transform.to_mat4(), 0, vertices, 0);
+        // }
     }
 
     fn render_selected_bones(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
@@ -329,22 +330,29 @@ impl Objects {
                                 .to_euler(glam::EulerRot::default()),
                         );
 
-                        egui::ComboBox::from_label("Sequencer").show_ui(ui, |ui| {
-                            use crate::game::animations::sequences;
+                        match object.detail {
+                            ObjectDetail::Scenery { .. } => {}
+                            ObjectDetail::Bipedal {
+                                ref mut sequencer, ..
+                            } => {
+                                egui::ComboBox::from_label("Sequencer").show_ui(ui, |ui| {
+                                    use crate::game::animations::sequences;
 
-                            for (name, sequence) in sequences().lookup() {
-                                if ui.button(name).clicked() {
-                                    // Safety: Sequence must be there, because we're iterating
-                                    // a known list of sequences.
-                                    object.sequencer.play_sequence(*sequence);
+                                    for (name, sequence) in sequences().lookup() {
+                                        if ui.button(name).clicked() {
+                                            // Safety: Sequence must be there, because we're iterating
+                                            // a known list of sequences.
+                                            sequencer.play_sequence(*sequence);
+                                        }
+                                    }
+                                });
+                                sequencer.debug_panel(ui);
+
+                                if let Some(animation_state) = sequencer.get_animation_state() {
+                                    ui.label(format!("Animation: {}", animation_state.animation));
+                                    ui.label(format!("Time: {}", animation_state.time));
                                 }
                             }
-                        });
-                        object.sequencer.debug_panel(ui);
-
-                        if let Some(animation_state) = object.sequencer.get_animation_state() {
-                            ui.label(format!("Animation: {}", animation_state.animation));
-                            ui.label(format!("Time: {}", animation_state.time));
                         }
 
                         fn drag_vec3(
@@ -391,14 +399,10 @@ impl Objects {
 
                             // self.model_renderer.set_instance_transform(object.model_instance_handle, transform);
 
-                            self.model_renderer.update_instance(
-                                object.render_instance,
-                                |updater| {
-                                    updater.set_transform(object.transform.to_mat4());
-                                },
-                            );
+                            object.update_model_renderer(&mut self.model_renderer);
                         }
 
+                        /*
                         if let Some(model) = models().get(object.model_handle) {
                             ui.heading("Skeleton");
                             fn do_node(
@@ -436,6 +440,7 @@ impl Objects {
 
                             do_node(ui, &model.skeleton, 0xFFFF_FFFF, &mut object.selected_bones);
                         }
+                        */
 
                         ui.heading("Debug");
                         ui.checkbox(&mut object.draw_debug_bones, "Draw debug bones");

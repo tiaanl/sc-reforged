@@ -7,5 +7,6 @@ mod render_textures;
 pub use model_renderer::*;
 
 pub use render_animations::RenderAnimation; // For use as a handle.
+pub use render_models::RenderModel;
 
 pub use render_instance::RenderInstance;

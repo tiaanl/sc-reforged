@@ -22,6 +22,7 @@ pub enum Callback {
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Repeat {
     #[default]
+    None,
     Infinite,
     Count(i32),
 }

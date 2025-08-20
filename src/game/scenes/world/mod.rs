@@ -19,6 +19,7 @@ use crate::{
 };
 
 pub mod actions;
+mod object;
 mod objects;
 mod strata;
 mod terrain;
@@ -263,10 +264,10 @@ impl WorldScene {
                 if let Err(err) = objects.spawn(
                     // Rotate objects to the left.
                     Transform::from_translation(object.position)
-                        .with_euler_rotation(object.rotation * Vec3::new(1.0, 1.0, -1.0)),
+                        .with_euler_rotation(object.rotation * Vec3::new(1.0, -1.0, -1.0)),
+                    object_type,
                     &object.name,
                     &object.title,
-                    object_type,
                 ) {
                     tracing::error!("Could not load model: {}", err);
                 }
@@ -401,8 +402,7 @@ impl Scene for WorldScene {
             .controller
             .update_camera(&mut self.debug_camera.camera);
 
-        self.objects
-            .update(delta_time, input, self.geometry_data.as_ref());
+        self.objects.update(delta_time);
     }
 
     fn render(&mut self, frame: &mut Frame) {

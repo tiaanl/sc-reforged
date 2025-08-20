@@ -14,6 +14,8 @@ pub struct AnimationState {
 
 enum Play {
     Single(Handle<Animation>),
+    Count(Handle<Animation>, i32),
+    Loop(Handle<Animation>),
 }
 
 /// Keeps track of a playing sequence.
@@ -25,23 +27,39 @@ pub struct Sequencer {
 
 impl Sequencer {
     pub fn update(&mut self, delta_time: f32) {
-        let Some(front) = self.sequence.front() else {
+        let Some(front) = self.sequence.front_mut() else {
             // There is nothing to play.
             return;
         };
 
-        self.time += delta_time * 30.0;
+        self.time += delta_time;
 
-        match front {
+        match *front {
             Play::Single(animation) => {
-                let animation = animations().get(*animation).expect("Missing animation!");
-                let duration = animation
-                    .last_key_frame()
-                    .expect("Playing empty animation!") as f32;
+                let animation = animations().get(animation).expect("Missing animation!");
+                let duration = animation.last_key_frame().unwrap_or_default() as f32;
                 if self.time >= duration {
                     self.time -= duration;
-                    self.sequence.pop_front();
                 }
+            }
+
+            Play::Count(animation, ref mut count) => {
+                let animation = animations().get(animation).expect("Missing animation!");
+                let duration = animation.last_key_frame().unwrap_or_default() as f32;
+                if self.time >= duration {
+                    self.time -= duration;
+                    *count -= 1;
+
+                    if *count == 0 {
+                        self.sequence.pop_front();
+                    }
+                }
+            }
+
+            Play::Loop(animation) => {
+                let animation = animations().get(animation).expect("Missing animation!");
+                let duration = animation.last_key_frame().unwrap_or_default() as f32;
+                self.time = self.time.rem_euclid(duration);
             }
         }
     }
@@ -62,7 +80,13 @@ impl Sequencer {
         tracing::info!("Playing sequence: {}", sequence.name);
 
         for clip in sequence.clips.iter() {
-            self.sequence.push_back(Play::Single(clip.animation));
+            use crate::game::config::Repeat;
+
+            match clip.repeat {
+                Repeat::None => self.sequence.push_back(Play::Single(clip.animation)),
+                Repeat::Infinite => self.sequence.push_back(Play::Loop(clip.animation)),
+                Repeat::Count(count) => self.sequence.push_back(Play::Count(clip.animation, count)),
+            }
         }
 
         // self.sequence = Some(sequence);
@@ -85,10 +109,12 @@ impl Sequencer {
         };
 
         match front {
-            Play::Single(animation) => Some(AnimationState {
-                animation: *animation,
-                time: self.time,
-            }),
+            Play::Single(animation) | Play::Count(animation, _) | Play::Loop(animation) => {
+                Some(AnimationState {
+                    animation: *animation,
+                    time: self.time,
+                })
+            }
         }
     }
 
@@ -101,6 +127,21 @@ impl Sequencer {
                         .and_then(|a| a.last_key_frame())
                         .unwrap_or_default();
                     play_panel("Single", *animation, key_frame_count, ui);
+                }
+                Play::Count(animation, _) => {
+                    let key_frame_count = animations()
+                        .get(*animation)
+                        .and_then(|a| a.last_key_frame())
+                        .unwrap_or_default();
+                    play_panel("Count", *animation, key_frame_count, ui);
+                }
+
+                Play::Loop(animation) => {
+                    let key_frame_count = animations()
+                        .get(*animation)
+                        .and_then(|a| a.last_key_frame())
+                        .unwrap_or_default();
+                    play_panel("Loop", *animation, key_frame_count, ui);
                 }
             }
         }

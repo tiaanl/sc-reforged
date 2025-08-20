@@ -10,6 +10,7 @@ pub struct Transform {
 #[allow(unused)]
 impl Transform {
     pub fn new(translation: Vec3, rotation: Quat) -> Self {
+        debug_assert!(rotation.is_normalized());
         Self {
             translation,
             rotation,
@@ -25,6 +26,7 @@ impl Transform {
     }
 
     pub fn from_rotation(rotation: Quat) -> Self {
+        debug_assert!(rotation.is_normalized());
         Self {
             translation: Vec3::ZERO,
             rotation,
@@ -47,6 +49,7 @@ impl Transform {
     }
 
     pub fn with_rotation(mut self, rotation: Quat) -> Self {
+        debug_assert!(rotation.is_normalized());
         self.rotation = rotation;
         self
     }
@@ -58,6 +61,10 @@ impl Transform {
 
     pub fn to_mat4(&self) -> Mat4 {
         Mat4::from_rotation_translation(self.rotation, self.translation)
+    }
+
+    pub fn forward(&self) -> Vec3 {
+        self.rotation * Vec3::Y
     }
 }
 

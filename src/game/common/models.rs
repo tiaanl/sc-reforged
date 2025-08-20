@@ -78,7 +78,7 @@ impl Models {
         self.load_model(name, path)
     }
 
-    fn load_model(
+    pub fn load_model(
         &mut self,
         name: &str,
         path: impl AsRef<Path>,
