@@ -120,7 +120,7 @@ impl WorldScene {
         shaders.add_module(include_str!("frustum.wgsl"), "frustum.wgsl");
 
         let main_camera = {
-            let camera_from = campaign.view_initial.from.extend(1600.0);
+            let camera_from = campaign.view_initial.from.extend(2500.0);
             let camera_to = campaign.view_initial.to.extend(0.0);
 
             let mut controller = camera::GameCameraController::new(1000.0, 0.2);
@@ -706,11 +706,11 @@ impl Scene for WorldScene {
 
         self.update_schedule.run(&mut self.world);
 
-        {
-            let mut gizmo_vertices = self.world.resource_mut::<GizmoVertices>();
-            gizmos_vertices.extend_from_slice(&gizmo_vertices.vertices);
-            gizmo_vertices.vertices.clear();
-        }
+        // {
+        //     let mut gizmo_vertices = self.world.resource_mut::<GizmoVertices>();
+        //     gizmos_vertices.extend_from_slice(&gizmo_vertices.vertices);
+        //     gizmo_vertices.vertices.clear();
+        // }
 
         self.gizmos_renderer
             .render(frame, view_camera_bind_group, &gizmos_vertices);

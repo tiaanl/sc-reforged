@@ -65,7 +65,7 @@ impl winit::application::ApplicationHandler for App {
                 let mut attributes = winit::window::WindowAttributes::default()
                     .with_title("Shadow Company - Reforged")
                     // .with_inner_size(winit::dpi::LogicalSize::new(640, 480))
-                    .with_inner_size(winit::dpi::LogicalSize::new(1280, 800));
+                    .with_inner_size(winit::dpi::LogicalSize::new(1600.0, 900.0));
 
                 // No resizing?
                 if false {

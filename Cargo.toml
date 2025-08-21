@@ -31,3 +31,6 @@ wgpu = { version = "24.0", features = ["naga-ir"] }
 winit = { version = "0.30.5" }
 ahash = "0.8.12"
 bevy_ecs = "0.16.1"
+
+[profile.dev.package.zune-jpeg]
+opt-level = 3
