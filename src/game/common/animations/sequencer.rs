@@ -62,7 +62,7 @@ impl Sequencer {
         }
     }
 
-    pub fn is_playing(&self) -> bool {
+    pub fn _is_playing(&self) -> bool {
         !self.sequence.is_empty()
     }
 
@@ -86,12 +86,9 @@ impl Sequencer {
                 Repeat::Count(count) => self.sequence.push_back(Play::Count(clip.animation, count)),
             }
         }
-
-        // self.sequence = Some(sequence);
-        // self.time = 0.0;
     }
 
-    pub fn play_animation(&mut self, animation: Handle<Animation>) {
+    pub fn _play_animation(&mut self, animation: Handle<Animation>) {
         self.sequence.clear();
         self.sequence.push_back(Play::Single(animation));
     }

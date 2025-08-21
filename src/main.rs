@@ -253,12 +253,12 @@ impl winit::application::ApplicationHandler for App {
                                                 )),
                                             )
                                             .background_color(
-                                                epaint::Color32::from_rgba_premultiplied(
+                                                egui::Color32::from_rgba_premultiplied(
                                                     0, 0, 0, 127,
                                                 ),
                                             )
                                             .monospace();
-                                            egui::Label::new(text.color(epaint::Color32::WHITE))
+                                            egui::Label::new(text.color(egui::Color32::WHITE))
                                                 .wrap_mode(egui::TextWrapMode::Extend)
                                         };
 

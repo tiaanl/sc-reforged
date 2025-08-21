@@ -41,9 +41,9 @@ impl Sequences {
                             .join(config_motion.name.clone())
                             .with_extension("bmf"),
                     )?,
-                    immediate: config_motion.immediate,
+                    _immediate: config_motion.immediate,
                     repeat: config_motion.repeat,
-                    callbacks: config_motion.callbacks.clone(),
+                    _callbacks: config_motion.callbacks.clone(),
                 });
             }
 
@@ -56,10 +56,6 @@ impl Sequences {
 
     pub fn lookup(&self) -> Iter<'_, String, Handle<Sequence>> {
         self.lookup.iter()
-    }
-
-    pub fn sequence_names(&self) -> Vec<String> {
-        self.lookup.keys().cloned().collect()
     }
 
     #[inline]

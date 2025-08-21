@@ -1,15 +1,10 @@
-use bevy_ecs::{
-    schedule::{Schedule, ScheduleLabel},
-    system::{Query, ResMut},
-    world::World,
-};
 use glam::Vec4Swizzles;
 use terrain::Terrain;
 use wgpu::util::DeviceExt;
 
 use crate::{
     engine::{
-        gizmos::{GizmoSphere, GizmoVertex, GizmoVertices, GizmosRenderer},
+        gizmos::{GizmoVertex, GizmosRenderer},
         prelude::*,
     },
     game::{
@@ -59,9 +54,6 @@ struct Camera<C: camera::Controller> {
     gpu_camera: camera::GpuCamera,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, ScheduleLabel)]
-struct UpdateSchedule;
-
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
     view_debug_camera: bool,
@@ -94,9 +86,6 @@ pub struct WorldScene {
     last_frame_time: std::time::Instant,
     fps_history: Vec<f32>,
     fps_history_cursor: usize,
-
-    world: World,
-    update_schedule: Schedule,
 }
 
 impl WorldScene {
@@ -291,33 +280,6 @@ impl WorldScene {
 
         let gizmos_renderer = GizmosRenderer::new(&main_camera.gpu_camera.bind_group_layout);
 
-        let mut world = World::default();
-        world.init_resource::<GizmoVertices>();
-
-        let _entity_id = world
-            .spawn((
-                Transform::from_translation(Vec3::new(1000.0, 1000.0, 1000.0)),
-                GizmoSphere::new(100.0, 30),
-            ))
-            .id();
-
-        let mut update_schedule = Schedule::new(UpdateSchedule);
-
-        update_schedule.add_systems(
-            |query: Query<(&Transform, &GizmoSphere)>,
-             mut gizmo_vertices: ResMut<GizmoVertices>| {
-                for (transform, sphere) in query.iter() {
-                    gizmo_vertices
-                        .vertices
-                        .extend(GizmosRenderer::create_iso_sphere(
-                            transform.to_mat4(),
-                            sphere.radius,
-                            sphere.resolution,
-                        ));
-                }
-            },
-        );
-
         let fps_history = vec![0.0; 100];
         let fps_history_cursor = 0;
 
@@ -350,9 +312,6 @@ impl WorldScene {
             last_frame_time: std::time::Instant::now(),
             fps_history,
             fps_history_cursor,
-
-            world,
-            update_schedule,
         })
     }
 
@@ -427,7 +386,7 @@ impl Scene for WorldScene {
                     }
                 } else {
                     PlayerAction::Object {
-                        position: data.position,
+                        _position: data.position,
                         id: data.id,
                     }
                 };
@@ -703,14 +662,6 @@ impl Scene for WorldScene {
             self.gizmos_renderer
                 .render(frame, view_camera_bind_group, &vertices);
         }
-
-        self.update_schedule.run(&mut self.world);
-
-        // {
-        //     let mut gizmo_vertices = self.world.resource_mut::<GizmoVertices>();
-        //     gizmos_vertices.extend_from_slice(&gizmo_vertices.vertices);
-        //     gizmo_vertices.vertices.clear();
-        // }
 
         self.gizmos_renderer
             .render(frame, view_camera_bind_group, &gizmos_vertices);

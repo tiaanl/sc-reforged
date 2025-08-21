@@ -5,9 +5,9 @@ use crate::{
 
 pub struct Clip {
     pub animation: Handle<Animation>,
-    pub immediate: bool,
+    pub _immediate: bool,
     pub repeat: config::Repeat,
-    pub callbacks: Vec<config::Callback>,
+    pub _callbacks: Vec<config::Callback>,
 }
 
 #[derive(Default)]

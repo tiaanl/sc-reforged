@@ -1,4 +1,3 @@
-use bevy_ecs::{component::Component, resource::Resource};
 use glam::{Mat4, Vec3, Vec4};
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
@@ -36,23 +35,6 @@ impl BufferLayout for GizmoVertex {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: VERTEX_ATTR_ARRAY,
         }
-    }
-}
-
-#[derive(Component)]
-pub struct GizmoSphere {
-    pub radius: f32,
-    pub resolution: i32,
-}
-
-#[derive(Default, Resource)]
-pub struct GizmoVertices {
-    pub vertices: Vec<GizmoVertex>,
-}
-
-impl GizmoSphere {
-    pub fn new(radius: f32, resolution: i32) -> Self {
-        Self { radius, resolution }
     }
 }
 

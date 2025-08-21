@@ -1,8 +1,7 @@
-use bevy_ecs::component::Component;
 use glam::{Mat4, Quat, Vec3};
 
 /// A translation and rotation that can be converted into a 4x4 matrix.
-#[derive(Clone, Component, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Transform {
     pub translation: Vec3,
     pub rotation: Quat,
@@ -25,7 +24,7 @@ impl Transform {
         }
     }
 
-    pub fn from_rotation(rotation: Quat) -> Self {
+    pub fn _from_rotation(rotation: Quat) -> Self {
         debug_assert!(rotation.is_normalized());
         Self {
             translation: Vec3::ZERO,
@@ -34,8 +33,8 @@ impl Transform {
     }
 
     /// Create a new transform from euler angles as a rotation.
-    pub fn from_euler_rotation(rotation: Vec3) -> Self {
-        Self::from_rotation(Quat::from_euler(
+    pub fn _from_euler_rotation(rotation: Vec3) -> Self {
+        Self::_from_rotation(Quat::from_euler(
             glam::EulerRot::XYZ,
             rotation.x,
             rotation.y,
@@ -43,12 +42,12 @@ impl Transform {
         ))
     }
 
-    pub fn with_translation(mut self, translation: Vec3) -> Self {
+    pub fn _with_translation(mut self, translation: Vec3) -> Self {
         self.translation = translation;
         self
     }
 
-    pub fn with_rotation(mut self, rotation: Quat) -> Self {
+    pub fn _with_rotation(mut self, rotation: Quat) -> Self {
         debug_assert!(rotation.is_normalized());
         self.rotation = rotation;
         self
@@ -63,7 +62,7 @@ impl Transform {
         Mat4::from_rotation_translation(self.rotation, self.translation)
     }
 
-    pub fn forward(&self) -> Vec3 {
+    pub fn _forward(&self) -> Vec3 {
         self.rotation * Vec3::Y
     }
 }
@@ -78,12 +77,12 @@ mod tests {
         assert_eq!(transform, Mat4::IDENTITY);
 
         let transform = Transform::default()
-            .with_rotation(Quat::from_xyzw(0.0, 0.0, 0.0, 1.0))
+            ._with_rotation(Quat::from_xyzw(0.0, 0.0, 0.0, 1.0))
             .to_mat4();
         assert_eq!(transform, Mat4::IDENTITY);
 
         let transform = Transform::default()
-            .with_translation(Vec3::new(10.0, 8.0, 6.0))
+            ._with_translation(Vec3::new(10.0, 8.0, 6.0))
             .to_mat4();
 
         let transform = transform * Transform::default().to_mat4();

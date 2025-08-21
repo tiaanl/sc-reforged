@@ -119,10 +119,6 @@ impl ObjectType {
             _ => return None,
         })
     }
-
-    pub fn is_bipedal(&self) -> bool {
-        matches!(self, ObjectType::Ape | ObjectType::Bipedal)
-    }
 }
 
 #[derive(Debug)]

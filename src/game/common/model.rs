@@ -266,7 +266,7 @@ impl TryFrom<smf::Model> for Model {
                     parent: node.parent,
                     transform: node.transform.clone(),
                     id: node.bone_id,
-                    name: node.name.clone(),
+                    _name: node.name.clone(),
                 })
                 .collect(),
         };
