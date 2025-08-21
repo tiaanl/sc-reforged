@@ -114,9 +114,6 @@ pub struct Terrain {
     /// The total amount of chunks of the terrain.
     total_chunks: u32,
 
-    /// Dictates the terrain resolution.
-    pub max_view_distance: f32,
-
     /// Pipeline to render the terrain.
     terrain_pipeline: wgpu::RenderPipeline,
 
@@ -787,7 +784,6 @@ impl Terrain {
             height_map,
             total_chunks,
 
-            max_view_distance: 13_300.0,
             terrain_pipeline,
             water_pipeline,
             // wireframe_pipeline,
@@ -950,8 +946,6 @@ impl Terrain {
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
         use egui::widgets::DragValue;
         ui.checkbox(&mut self.draw_wireframe, "Draw wireframe");
-
-        ui.add(DragValue::new(&mut self.max_view_distance).speed(10.0));
 
         ui.horizontal(|ui| {
             ui.label("Water level");

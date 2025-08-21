@@ -1,10 +1,15 @@
+use bevy_ecs::{
+    schedule::{Schedule, ScheduleLabel},
+    system::{Query, ResMut},
+    world::World,
+};
 use glam::Vec4Swizzles;
 use terrain::Terrain;
 use wgpu::util::DeviceExt;
 
 use crate::{
     engine::{
-        gizmos::{GizmoVertex, GizmosRenderer},
+        gizmos::{GizmoSphere, GizmoVertex, GizmoVertices, GizmosRenderer},
         prelude::*,
     },
     game::{
@@ -54,6 +59,9 @@ struct Camera<C: camera::Controller> {
     gpu_camera: camera::GpuCamera,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, ScheduleLabel)]
+struct UpdateSchedule;
+
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
     view_debug_camera: bool,
@@ -82,6 +90,13 @@ pub struct WorldScene {
 
     last_mouse_position: Option<UVec2>,
     geometry_data: Option<GeometryData>,
+
+    last_frame_time: std::time::Instant,
+    fps_history: Vec<f32>,
+    fps_history_cursor: usize,
+
+    world: World,
+    update_schedule: Schedule,
 }
 
 impl WorldScene {
@@ -209,11 +224,11 @@ impl WorldScene {
 
         let geometry_buffers = GeometryBuffers::new(&renderer().device, renderer().surface.size());
 
-        // Start with a 2K shadow buffer.
+        // Start with a 4K shadow buffer.
         let shadow_render_target = RenderTarget::new(
             &renderer().device,
             "shadow",
-            UVec2::new(2048, 2048),
+            UVec2::new(4096, 4096),
             wgpu::TextureFormat::Depth32Float,
         );
 
@@ -276,6 +291,36 @@ impl WorldScene {
 
         let gizmos_renderer = GizmosRenderer::new(&main_camera.gpu_camera.bind_group_layout);
 
+        let mut world = World::default();
+        world.init_resource::<GizmoVertices>();
+
+        let _entity_id = world
+            .spawn((
+                Transform::from_translation(Vec3::new(1000.0, 1000.0, 1000.0)),
+                GizmoSphere::new(100.0, 30),
+            ))
+            .id();
+
+        let mut update_schedule = Schedule::new(UpdateSchedule);
+
+        update_schedule.add_systems(
+            |query: Query<(&Transform, &GizmoSphere)>,
+             mut gizmo_vertices: ResMut<GizmoVertices>| {
+                for (transform, sphere) in query.iter() {
+                    gizmo_vertices
+                        .vertices
+                        .extend(GizmosRenderer::create_iso_sphere(
+                            transform.to_mat4(),
+                            sphere.radius,
+                            sphere.resolution,
+                        ));
+                }
+            },
+        );
+
+        let fps_history = vec![0.0; 100];
+        let fps_history_cursor = 0;
+
         Ok(Self {
             view_debug_camera: false,
             control_debug_camera: false,
@@ -301,6 +346,13 @@ impl WorldScene {
 
             last_mouse_position: None,
             geometry_data: None,
+
+            last_frame_time: std::time::Instant::now(),
+            fps_history,
+            fps_history_cursor,
+
+            world,
+            update_schedule,
         })
     }
 
@@ -387,8 +439,8 @@ impl Scene for WorldScene {
         self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
         self.environment = self.calculate_environment(self.time_of_day);
 
-        // Set the camera far plane to the `max_view_distance`.
-        self.main_camera.camera.far = self.terrain.max_view_distance;
+        // Set the camera far plane to max distance of the fog.
+        self.main_camera.camera.far = self.environment.fog_params.y;
         if self.control_debug_camera {
             self.debug_camera.controller.update(delta_time, input);
         } else {
@@ -652,17 +704,32 @@ impl Scene for WorldScene {
                 .render(frame, view_camera_bind_group, &vertices);
         }
 
+        self.update_schedule.run(&mut self.world);
+
+        {
+            let mut gizmo_vertices = self.world.resource_mut::<GizmoVertices>();
+            gizmos_vertices.extend_from_slice(&gizmo_vertices.vertices);
+            gizmo_vertices.vertices.clear();
+        }
+
         self.gizmos_renderer
             .render(frame, view_camera_bind_group, &gizmos_vertices);
+
+        let now = std::time::Instant::now();
+        let render_time = now - self.last_frame_time;
+        self.last_frame_time = now;
+
+        self.fps_history[self.fps_history_cursor] = render_time.as_secs_f32();
+        self.fps_history_cursor = (self.fps_history_cursor + 1) % self.fps_history.len();
     }
 
     #[cfg(feature = "egui")]
-    fn debug_panel(&mut self, egui: &egui::Context) {
+    fn debug_panel(&mut self, ctx: &egui::Context) {
         use egui::widgets::Slider;
 
         egui::Window::new("World")
             .default_open(false)
-            .show(egui, |ui| {
+            .show(ctx, |ui| {
                 ui.heading("Camera");
                 ui.checkbox(&mut self.view_debug_camera, "View debug camera");
                 ui.checkbox(&mut self.control_debug_camera, "Control debug camera");
@@ -701,7 +768,48 @@ impl Scene for WorldScene {
                 ui.heading("Entities");
             });
 
-        self.objects.debug_panel(egui);
+        egui::Window::new("Timings")
+            .resizable(false)
+            .default_open(false)
+            .show(ctx, |ui| {
+                ui.set_min_size(egui::Vec2::new(400.0, 300.0));
+                let (rect, _resp) =
+                    ui.allocate_exact_size(egui::vec2(400.0, 300.0), egui::Sense::hover());
+
+                let painter = ui.painter_at(rect);
+
+                let bar_width = rect.width() / self.fps_history.len() as f32;
+
+                let fps_range = 288.0;
+
+                for i in 0..self.fps_history.len() {
+                    let value =
+                        self.fps_history[(self.fps_history_cursor + i) % self.fps_history.len()];
+
+                    let left = rect.left() + i as f32 * bar_width;
+                    let right = rect.left() + (i + 1) as f32 * bar_width;
+
+                    let bottom = rect.bottom();
+                    let top = bottom - rect.height() * ((1.0 / value) / fps_range);
+
+                    let bar_rect = egui::Rect::from_min_max(
+                        egui::Pos2::new(left, top),
+                        egui::Pos2::new(right, bottom),
+                    );
+                    painter.rect_filled(bar_rect, 0.0, egui::Color32::RED);
+                }
+
+                let line_pos = rect.bottom() - (rect.bottom() - rect.top()) * 0.5;
+                painter.line(
+                    vec![
+                        egui::Pos2::new(rect.left(), line_pos),
+                        egui::Pos2::new(rect.right(), line_pos),
+                    ],
+                    egui::Stroke::new(2.0, egui::Color32::BLUE),
+                )
+            });
+
+        self.objects.debug_panel(ctx);
     }
 }
 

@@ -20,7 +20,6 @@ epaint = { version = "0.31", optional = true, default-features = false, features
 glam = { version = "0.30", default-features = false, features = ["bytemuck", "std"] }
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg"] }
 naga_oil = { version = "0.17.0", default-features = false }
-parking_lot = "0.12.3"
 pathdiff = "0.2.3"
 pollster = { version = "0.4", default-features = false }
 slab = "0.4.9"
@@ -31,6 +30,4 @@ walkdir = { version = "2.5.0", default-features = false }
 wgpu = { version = "24.0", features = ["naga-ir"] }
 winit = { version = "0.30.5" }
 ahash = "0.8.12"
-
-[profile.dev.package.zune-jpeg]
-opt-level = 3
+bevy_ecs = "0.16.1"

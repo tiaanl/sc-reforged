@@ -4,7 +4,6 @@ use std::{
 };
 
 use ahash::HashMap;
-use egui::TextBuffer;
 use glam::UVec2;
 use image::ImageError;
 
@@ -67,7 +66,10 @@ impl Images {
     }
 
     pub fn load_image(&mut self, path: impl AsRef<Path>) -> Result<Handle<Image>, AssetError> {
-        if let Some(handle) = self.lookup.get(path.as_ref().to_string_lossy().as_str()) {
+        if let Some(handle) = self
+            .lookup
+            .get(path.as_ref().to_string_lossy().to_string().as_str())
+        {
             return Ok(*handle);
         }
 

@@ -1,13 +1,13 @@
+use bevy_ecs::component::Component;
 use glam::{Mat4, Quat, Vec3};
 
 /// A translation and rotation that can be converted into a 4x4 matrix.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Component, Debug, Default)]
 pub struct Transform {
     pub translation: Vec3,
     pub rotation: Quat,
 }
 
-#[allow(unused)]
 impl Transform {
     pub fn new(translation: Vec3, rotation: Quat) -> Self {
         debug_assert!(rotation.is_normalized());

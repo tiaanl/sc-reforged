@@ -1,7 +1,5 @@
 use std::collections::VecDeque;
 
-use egui::{RichText, Widget};
-
 use crate::engine::storage::Handle;
 
 use super::{Animation, Sequence, animations, sequences};
@@ -118,6 +116,7 @@ impl Sequencer {
         }
     }
 
+    #[cfg(feature = "egui")]
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
         for play in self.sequence.iter() {
             match play {
@@ -148,7 +147,10 @@ impl Sequencer {
     }
 }
 
+#[cfg(feature = "egui")]
 fn play_panel(typ: &str, animation: Handle<Animation>, key_frame_count: u32, ui: &mut egui::Ui) {
+    use egui::{RichText, Widget};
+
     egui::Frame::group(ui.style())
         .corner_radius(5.0)
         .stroke(egui::Stroke::new(1.0, ui.visuals().text_color()))

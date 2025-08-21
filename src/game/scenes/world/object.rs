@@ -8,7 +8,6 @@ use crate::{
         config::ObjectType,
         model::Model,
         renderer::{ModelRenderer, RenderInstance},
-        scenes::world::actions::PlayerAction,
     },
 };
 
@@ -28,13 +27,6 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn interactable(&self) -> bool {
-        match self.detail {
-            ObjectDetail::Scenery { .. } => false,
-            ObjectDetail::Bipedal { .. } => false,
-        }
-    }
-
     pub fn update(&mut self, delta_time: f32, model_renderer: &mut ModelRenderer) {
         match self.detail {
             ObjectDetail::Scenery {

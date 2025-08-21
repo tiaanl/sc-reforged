@@ -631,7 +631,7 @@ impl Controller for GameCameraController {
     fn update(&mut self, delta_time: f32, input: &InputState) {
         let move_delta =
             if input.key_pressed(KeyCode::ShiftLeft) || input.key_pressed(KeyCode::ShiftRight) {
-                self.speed * 2.0
+                self.speed * 3.0
             } else {
                 self.speed
             } * delta_time;
@@ -655,11 +655,11 @@ impl Controller for GameCameraController {
             self.move_up(-move_delta);
         }
         if input.key_pressed(self.controls.look_up) {
-            self.desired.pitch += delta_time * 540.0_f32.to_radians();
+            self.desired.pitch += delta_time * 360.0_f32.to_radians() * 10.0;
             self.dirty.smudge();
         }
         if input.key_pressed(self.controls.look_down) {
-            self.desired.pitch -= delta_time * 540.0_f32.to_radians();
+            self.desired.pitch -= delta_time * 360.0_f32.to_radians() * 10.0;
             self.dirty.smudge();
         }
 
@@ -678,7 +678,7 @@ impl Controller for GameCameraController {
         }
 
         if input.wheel_delta() != 0.0 {
-            self.desired.position.z += input.wheel_delta() * self.speed;
+            self.desired.position.z += input.wheel_delta() * move_delta * 3.0;
             self.dirty.smudge();
         }
 
