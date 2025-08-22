@@ -2,7 +2,7 @@
 
 use crate::{
     engine::{gizmos::GizmoVertex, prelude::*},
-    game::math::{Frustum, Matrices, Ray},
+    game::math::{Frustum, Ray, ViewProjection},
 };
 
 use glam::{FloatExt, Mat4, Quat, Vec2, Vec3, Vec4};
@@ -44,13 +44,13 @@ impl Camera {
         }
     }
 
-    pub fn calculate_matrices(&self) -> Matrices {
+    pub fn calculate_view_projection(&self) -> ViewProjection {
         let projection = Mat4::perspective_lh(self.fov, self.aspect_ratio, self.near, self.far);
 
         let target = self.position + self.rotation * Self::FORWARD;
         let view = Mat4::look_at_lh(self.position, target, self.rotation * Self::UP);
 
-        Matrices::from_projection_view(projection, view)
+        ViewProjection::from_projection_view(projection, view)
     }
 
     /// Generates a ray in world space based on the mouse position.
@@ -58,9 +58,9 @@ impl Camera {
         let ndc = Vec3::new(mouse_ndc.x, mouse_ndc.y, 1.0);
 
         // TODO: Can we cache the matrices somewhere?
-        let matrices = self.calculate_matrices();
+        let view_projection = self.calculate_view_projection();
 
-        let world_coords = matrices.unproject_ndc(ndc);
+        let world_coords = view_projection.unproject_ndc(ndc);
 
         let ray_origin = self.position;
         let ray_direction = (world_coords - ray_origin).normalize();
@@ -139,11 +139,11 @@ impl GpuCamera {
         }
     }
 
-    pub fn upload_matrices(&self, matrices: &Matrices, position: Vec3) {
+    pub fn upload(&self, view_projection: &ViewProjection, position: Vec3) {
         let data = CameraBuffer {
-            proj_view: matrices.proj_view,
+            proj_view: view_projection.mat,
             position: position.extend(1.0),
-            frustum: Frustum::from(matrices.proj_view)
+            frustum: Frustum::from(view_projection.mat)
                 .planes
                 .map(|p| p.normal.extend(p.distance)),
         };
@@ -550,7 +550,10 @@ impl Controller for GameCameraController {
     }
 }
 
-pub fn render_camera_frustum(matrices: &Matrices, gizmo_vertices: &mut Vec<GizmoVertex>) {
+pub fn render_camera_frustum(
+    view_projection: &ViewProjection,
+    gizmo_vertices: &mut Vec<GizmoVertex>,
+) {
     const COLOR: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
     const EDGES: &[(usize, usize)] = &[
         // near ring
@@ -570,7 +573,9 @@ pub fn render_camera_frustum(matrices: &Matrices, gizmo_vertices: &mut Vec<Gizmo
         (7, 4),
     ];
 
-    let v: [GizmoVertex; 8] = matrices.corners().map(|p| GizmoVertex::new(p, COLOR));
+    let v: [GizmoVertex; 8] = view_projection
+        .corners()
+        .map(|p| GizmoVertex::new(p, COLOR));
 
     gizmo_vertices.reserve(EDGES.len() * 2);
     for &(from, to) in EDGES {

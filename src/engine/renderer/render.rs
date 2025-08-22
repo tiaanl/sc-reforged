@@ -131,15 +131,6 @@ impl Renderer {
         self.surface.resize(&self.device, size);
     }
 
-    pub fn create_shader_module(&self, label: &str, source: &str) -> wgpu::ShaderModule {
-        let shader_module_label = format!("{label}_shader_module");
-        self.device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some(&shader_module_label),
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(source)),
-            })
-    }
-
     pub fn create_texture_view(&self, label: &str, image: &image::RgbaImage) -> wgpu::TextureView {
         let (width, height) = (image.width(), image.height());
 

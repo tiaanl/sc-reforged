@@ -3,30 +3,24 @@
 use glam::{Mat4, Vec3, Vec4};
 
 #[derive(Default)]
-pub struct Matrices {
+pub struct ViewProjection {
     /// Combined projection * view matrix.
-    pub proj_view: Mat4,
+    pub mat: Mat4,
     /// Inverse of the projection * view matrix.
-    pub proj_view_inverse: Mat4,
+    pub inv: Mat4,
 }
 
-impl Matrices {
+impl ViewProjection {
     pub fn from_projection_view(projection: Mat4, view: Mat4) -> Self {
-        let proj_view = projection * view;
-        let proj_view_inverse = proj_view.inverse();
+        let mat = projection * view;
+        let inv = mat.inverse();
 
-        Self {
-            proj_view,
-            proj_view_inverse,
-        }
+        Self { mat, inv }
     }
 
     #[inline]
     pub fn unproject_ndc(&self, point: Vec3) -> Vec3 {
-        debug_assert!(point.x >= -1.0 && point.x <= 1.0);
-        debug_assert!(point.y >= -1.0 && point.y <= 1.0);
-        debug_assert!(point.z >= -1.0 && point.z <= 1.0);
-        self.proj_view_inverse.project_point3(point)
+        self.inv.project_point3(point)
     }
 
     pub fn corners(&self) -> [Vec3; 8] {
@@ -41,10 +35,10 @@ impl Matrices {
     }
 
     pub fn frustum(&self) -> Frustum {
-        let r0 = self.proj_view.row(0);
-        let r1 = self.proj_view.row(1);
-        let r2 = self.proj_view.row(2);
-        let r3 = self.proj_view.row(3);
+        let r0 = self.mat.row(0);
+        let r1 = self.mat.row(1);
+        let r2 = self.mat.row(2);
+        let r3 = self.mat.row(3);
 
         let left = Plane::from_row(r3 + r0);
         let right = Plane::from_row(r3 - r0);

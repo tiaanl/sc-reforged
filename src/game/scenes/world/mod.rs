@@ -14,7 +14,7 @@ use crate::{
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
-        math::Matrices,
+        math::ViewProjection,
         scenes::world::actions::PlayerAction,
     },
 };
@@ -417,34 +417,34 @@ impl Scene for WorldScene {
     }
 
     fn render(&mut self, frame: &mut Frame) {
-        let main_camera_matrices = {
-            let matrices = self.main_camera.camera.calculate_matrices();
+        let main_view_projection = {
+            let view_projection = self.main_camera.camera.calculate_view_projection();
             let position = self.main_camera.camera.position;
 
             self.main_camera
                 .gpu_camera
-                .upload_matrices(&matrices, position);
+                .upload(&view_projection, position);
 
-            matrices
+            view_projection
         };
 
-        let main_camera_frustum = main_camera_matrices.frustum();
+        let main_camera_frustum = main_view_projection.frustum();
 
-        let _debug_camera_matrices = {
-            let matrices = self.debug_camera.camera.calculate_matrices();
+        let _debug_view_projection = {
+            let view_projection = self.debug_camera.camera.calculate_view_projection();
             let position = self.debug_camera.camera.position;
 
             self.debug_camera
                 .gpu_camera
-                .upload_matrices(&matrices, position);
+                .upload(&view_projection, position);
 
-            matrices
+            view_projection
         };
 
-        let light_matrices = {
-            let matrices = fit_directional_light(
+        let light_view_projection = {
+            let view_projection = fit_directional_light(
                 self.environment.sun_dir.truncate(), // your sun direction
-                &main_camera_matrices,               // Camera matrices
+                &main_view_projection,               // Camera
                 2048,                                // shadow map resolution
                 50.0,                                // XY guard band in world units
                 50.0,                                // near guard
@@ -452,12 +452,12 @@ impl Scene for WorldScene {
                 true,                                // texel snapping
             );
 
-            self.light_gpu_camera.upload_matrices(&matrices, Vec3::ZERO);
+            self.light_gpu_camera.upload(&view_projection, Vec3::ZERO);
 
-            matrices
+            view_projection
         };
 
-        self.environment.sun_proj_view = light_matrices.proj_view;
+        self.environment.sun_proj_view = light_view_projection.mat;
 
         renderer().queue.write_buffer(
             &self.environment_buffer,
@@ -574,7 +574,7 @@ impl Scene for WorldScene {
 
         if true {
             let _z = tracy_client::span!("render shadow map");
-            let light_frustum = light_matrices.frustum();
+            let light_frustum = light_view_projection.frustum();
 
             self.objects.render_shadow_casters(
                 frame,
@@ -640,7 +640,7 @@ impl Scene for WorldScene {
 
             // Render the main camera frustum when we're looking through the debug camera.
             if self.view_debug_camera {
-                camera::render_camera_frustum(&main_camera_matrices, &mut gizmos_vertices);
+                camera::render_camera_frustum(&main_view_projection, &mut gizmos_vertices);
             }
 
             self.compositor.render(
@@ -774,13 +774,13 @@ impl Scene for WorldScene {
 
 pub fn fit_directional_light(
     sun_dir: Vec3, // direction from sun toward world
-    camera: &Matrices,
+    camera: &ViewProjection,
     shadow_res: u32, // e.g. 2048
     guard_xy: f32,   // extra margin around frustum in world units
     guard_z_near: f32,
     guard_z_far: f32,
     texel_snap: bool,
-) -> Matrices {
+) -> ViewProjection {
     // Camera frustum corners
     let corners = camera.corners();
 
@@ -843,5 +843,5 @@ pub fn fit_directional_light(
     // Ortho projection (LH, depth 0..1 for wgpu)
     let projection = Mat4::orthographic_lh(min_x, max_x, min_y, max_y, min_z, max_z);
 
-    Matrices::from_projection_view(projection, view)
+    ViewProjection::from_projection_view(projection, view)
 }
