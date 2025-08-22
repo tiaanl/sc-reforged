@@ -2,53 +2,13 @@
 
 use crate::{
     engine::{gizmos::GizmoVertex, prelude::*},
-    game::math::{Frustum, Ray},
+    game::math::{Frustum, Matrices, Ray},
 };
 
 use glam::{FloatExt, Mat4, Quat, Vec2, Vec3, Vec4};
 
 pub fn register_camera_shader(shaders: &mut Shaders) {
     shaders.add_module(include_str!("camera.wgsl"), "camera.wgsl");
-}
-
-#[derive(Default)]
-pub struct Matrices {
-    pub projection: Mat4,
-    pub view: Mat4,
-    pub projection_view_inverse: Mat4,
-}
-
-impl Matrices {
-    pub fn from_projection_view(projection: Mat4, view: Mat4) -> Self {
-        let projection_view_inverse = (projection * view).inverse();
-
-        Self {
-            projection,
-            view,
-            projection_view_inverse,
-        }
-    }
-
-    pub fn unproject(&self, point: Vec3) -> Vec3 {
-        let v = self.projection_view_inverse * point.extend(1.0);
-        v.truncate() / v.w
-    }
-
-    pub fn corners(&self) -> [Vec3; 8] {
-        const NDC: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
-
-        let mut result = [Vec3::ZERO; 8];
-
-        for i in 0..NDC.len() {
-            let x = NDC[i].0;
-            let y = NDC[i].1;
-
-            result[i] = self.unproject(Vec3::new(x, y, 0.0));
-            result[i + 4] = self.unproject(Vec3::new(x, y, 1.0));
-        }
-
-        result
-    }
 }
 
 #[derive(Debug, Default)]
@@ -90,13 +50,7 @@ impl Camera {
         let target = self.position + self.rotation * Self::FORWARD;
         let view = Mat4::look_at_lh(self.position, target, self.rotation * Self::UP);
 
-        let projection_view_inverse = (projection * view).inverse();
-
-        Matrices {
-            projection,
-            view,
-            projection_view_inverse,
-        }
+        Matrices::from_projection_view(projection, view)
     }
 
     /// Generates a ray in world space based on the mouse position.
@@ -105,12 +59,8 @@ impl Camera {
 
         // TODO: Can we cache the matrices somewhere?
         let matrices = self.calculate_matrices();
-        let projection_matrix = matrices.projection;
-        let view_matrix = matrices.view;
 
-        let inverse_view_proj = (projection_matrix * view_matrix).inverse();
-
-        let world_coords = inverse_view_proj.project_point3(ndc);
+        let world_coords = matrices.unproject_ndc(ndc);
 
         let ray_origin = self.position;
         let ray_direction = (world_coords - ray_origin).normalize();
@@ -134,8 +84,7 @@ impl Camera {
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct CameraBuffer {
-    pub proj: Mat4,
-    pub view: Mat4,
+    pub proj_view: Mat4,
     pub position: Vec4,
     pub frustum: [Vec4; 6],
 }
@@ -191,13 +140,10 @@ impl GpuCamera {
     }
 
     pub fn upload_matrices(&self, matrices: &Matrices, position: Vec3) {
-        let proj_view = matrices.projection * matrices.view;
-
         let data = CameraBuffer {
-            proj: matrices.projection,
-            view: matrices.view,
+            proj_view: matrices.proj_view,
             position: position.extend(1.0),
-            frustum: Frustum::from(proj_view)
+            frustum: Frustum::from(matrices.proj_view)
                 .planes
                 .map(|p| p.normal.extend(p.distance)),
         };
@@ -605,44 +551,30 @@ impl Controller for GameCameraController {
 }
 
 pub fn render_camera_frustum(matrices: &Matrices, gizmo_vertices: &mut Vec<GizmoVertex>) {
-    let corners = matrices.corners();
+    const COLOR: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
+    const EDGES: &[(usize, usize)] = &[
+        // near ring
+        (0, 1),
+        (1, 2),
+        (2, 3),
+        (3, 0),
+        // sides
+        (0, 4),
+        (1, 5),
+        (2, 6),
+        (3, 7),
+        // far ring
+        (4, 5),
+        (5, 6),
+        (6, 7),
+        (7, 4),
+    ];
 
-    let green = Vec4::new(0.0, 1.0, 0.0, 1.0);
+    let v: [GizmoVertex; 8] = matrices.corners().map(|p| GizmoVertex::new(p, COLOR));
 
-    // Transform NDC corners to world space
-    let vertices = corners.map(|corner| GizmoVertex::new(corner, green));
-
-    // Should we even render this rectangle?  Its extremely small.
-    gizmo_vertices.extend_from_slice(&[
-        vertices[0],
-        vertices[1],
-        vertices[1],
-        vertices[2],
-        vertices[2],
-        vertices[3],
-        vertices[3],
-        vertices[0],
-    ]);
-
-    gizmo_vertices.extend_from_slice(&[
-        vertices[0],
-        vertices[4],
-        vertices[1],
-        vertices[5],
-        vertices[2],
-        vertices[6],
-        vertices[3],
-        vertices[7],
-    ]);
-
-    gizmo_vertices.extend_from_slice(&[
-        vertices[4],
-        vertices[5],
-        vertices[5],
-        vertices[6],
-        vertices[6],
-        vertices[7],
-        vertices[7],
-        vertices[4],
-    ]);
+    gizmo_vertices.reserve(EDGES.len() * 2);
+    for &(from, to) in EDGES {
+        gizmo_vertices.push(v[from]);
+        gizmo_vertices.push(v[to]);
+    }
 }

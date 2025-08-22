@@ -9,12 +9,12 @@ use crate::{
     },
     game::{
         animations::track::Track,
-        camera::{self, Controller, GpuCamera, Matrices},
+        camera::{self, Controller, GpuCamera},
         compositor::Compositor,
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
-        math::Frustum,
+        math::Matrices,
         scenes::world::actions::PlayerAction,
     },
 };
@@ -44,8 +44,7 @@ struct Environment {
     pub fog_color: Vec4,
     pub fog_params: Vec4,
 
-    pub sun_proj: Mat4,
-    pub sun_view: Mat4,
+    pub sun_proj_view: Mat4,
 }
 
 /// Wrap all the data for controlling the camera.
@@ -279,7 +278,8 @@ impl WorldScene {
             }
         }
 
-        let gizmos_renderer = GizmosRenderer::new(&main_camera.gpu_camera.bind_group_layout);
+        let gizmos_renderer =
+            GizmosRenderer::new(&mut shaders, &main_camera.gpu_camera.bind_group_layout);
 
         let fps_history = vec![0.0; 100];
         let fps_history_cursor = 0;
@@ -345,8 +345,7 @@ impl WorldScene {
             sun_color: sun_color.extend(0.0),
             fog_color: fog_color.extend(0.0),
             fog_params: Vec4::new(fog_near, fog_far, 0.0, 0.0),
-            sun_proj: Mat4::IDENTITY,
-            sun_view: Mat4::IDENTITY,
+            sun_proj_view: Mat4::IDENTITY,
         }
     }
 }
@@ -429,8 +428,7 @@ impl Scene for WorldScene {
             matrices
         };
 
-        let main_camera_frustum =
-            Frustum::from(main_camera_matrices.projection * main_camera_matrices.view);
+        let main_camera_frustum = main_camera_matrices.frustum();
 
         let _debug_camera_matrices = {
             let matrices = self.debug_camera.camera.calculate_matrices();
@@ -459,8 +457,7 @@ impl Scene for WorldScene {
             matrices
         };
 
-        self.environment.sun_proj = light_matrices.projection;
-        self.environment.sun_view = light_matrices.view;
+        self.environment.sun_proj_view = light_matrices.proj_view;
 
         renderer().queue.write_buffer(
             &self.environment_buffer,
@@ -577,7 +574,7 @@ impl Scene for WorldScene {
 
         if true {
             let _z = tracy_client::span!("render shadow map");
-            let light_frustum = Frustum::from(light_matrices.projection * light_matrices.view);
+            let light_frustum = light_matrices.frustum();
 
             self.objects.render_shadow_casters(
                 frame,
@@ -666,6 +663,12 @@ impl Scene for WorldScene {
                 self.gizmos_renderer
                     .render(frame, view_camera_bind_group, &vertices);
             }
+
+            gizmos_vertices.push(GizmoVertex::new(Vec3::ZERO, Vec4::new(1.0, 0.0, 0.0, 1.0)));
+            gizmos_vertices.push(GizmoVertex::new(
+                Vec3::Z * 100.0,
+                Vec4::new(1.0, 0.0, 0.0, 1.0),
+            ));
 
             self.gizmos_renderer
                 .render(frame, view_camera_bind_group, &gizmos_vertices);
@@ -769,22 +772,6 @@ impl Scene for WorldScene {
     }
 }
 
-pub fn camera_frustum_corners_world(view: Mat4, proj: Mat4) -> [Vec3; 8] {
-    fn unproject(inv_vp: Mat4, x: f32, y: f32, z: f32) -> Vec3 {
-        let v = inv_vp * Vec4::new(x, y, z, 1.0);
-        v.truncate() / v.w
-    }
-
-    let inv_vp = (proj * view).inverse();
-    let ndc_xy = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
-    let mut out = [Vec3::ZERO; 8];
-    for (i, &(x, y)) in ndc_xy.iter().enumerate() {
-        out[i] = unproject(inv_vp, x, y, 0.0); // near plane
-        out[i + 4] = unproject(inv_vp, x, y, 1.0); // far plane
-    }
-    out
-}
-
 pub fn fit_directional_light(
     sun_dir: Vec3, // direction from sun toward world
     camera: &Matrices,
@@ -795,7 +782,7 @@ pub fn fit_directional_light(
     texel_snap: bool,
 ) -> Matrices {
     // Camera frustum corners
-    let corners = camera_frustum_corners_world(camera.view, camera.projection);
+    let corners = camera.corners();
 
     // Build light view
     let fwd = sun_dir.normalize();

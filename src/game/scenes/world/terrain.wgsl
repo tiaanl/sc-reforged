@@ -66,7 +66,7 @@ fn vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -
     let world_position = get_node_world_position(node);
     let normal = get_node_normal(node);
 
-    let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
+    let clip_position = u_camera.mat_proj_view * vec4(world_position, 1.0);
 
     let tex_coord = vec2<f32>(
         f32(node.x) / f32(u_terrain_data.size.x),
@@ -84,7 +84,7 @@ fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexIn
 
     // Clip uses the actual water surface height
     let water_position = vec3(world_position.xy, u_terrain_data.water_level);
-    let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4<f32>(water_position, 1.0);
+    let clip_position = u_camera.mat_proj_view * vec4<f32>(water_position, 1.0);
 
     // Simple tiling for now
     let tex_coord = vec2<f32>(f32(node.x) / 8.0, f32(node.y) / 8.0);
@@ -118,8 +118,7 @@ fn fragment_main(v: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffers {
     let ndotl = max(dot(N, L), 0.0);
 
     // Shadow coords (proj*view) with Y flip (D3D/Vulkan texture space)
-    let sun_proj_view = u_environment.sun_proj * u_environment.sun_view;
-    let lp   = sun_proj_view * vec4(Vpos, 1.0);
+    let lp   = u_environment.sun_proj_view * vec4(Vpos, 1.0);
     let ndc  = lp.xyz / lp.w;
     let shadow_uv = ndc.xy * vec2(0.5, -0.5) + vec2(0.5, 0.5);
     let shadow_z  = ndc.z;
@@ -186,8 +185,7 @@ fn water_fragment_main(v: VertexOutput) -> geometry_buffers::AlphaGeometryBuffer
     let ndotl = max(dot(N, L), 0.0);
 
     // Shadows for water surface (same transform + Y flip)
-    let sun_proj_view = u_environment.sun_proj * u_environment.sun_view;
-    let lp   = sun_proj_view * vec4(Vpos, 1.0);
+    let lp   = u_environment.sun_proj_view * vec4(Vpos, 1.0);
     let ndc  = lp.xyz / lp.w;
     let shadow_uv = ndc.xy * vec2(0.5, -0.5) + vec2(0.5, 0.5);
     let shadow_z  = ndc.z;
@@ -222,7 +220,7 @@ fn wireframe_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: Vert
     let chunk_pos = get_chunk_pos_from_index(chunk_index);
     let node = get_node_index(u_chunk_index, vertex.index);
     let world_position = get_node_world_position(node);
-    return u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
+    return u_camera.mat_proj_view * vec4(world_position, 1.0);
 }
 
 @fragment

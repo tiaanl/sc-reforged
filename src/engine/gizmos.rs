@@ -1,7 +1,10 @@
 use glam::{Mat4, Vec3, Vec4};
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
-use crate::{Frame, engine::prelude::renderer};
+use crate::{
+    Frame,
+    engine::{prelude::renderer, shaders::Shaders},
+};
 
 use super::renderer::BufferLayout;
 
@@ -43,10 +46,15 @@ pub struct GizmosRenderer {
 }
 
 impl GizmosRenderer {
-    pub fn new(camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(shaders: &mut Shaders, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let renderer = renderer();
 
-        let module = renderer.create_shader_module("gizmos", include_str!("gizmos.wgsl"));
+        let module = shaders.create_shader(
+            "gizmos",
+            include_str!("gizmos.wgsl"),
+            "gizmos.wgsl",
+            Default::default(),
+        );
 
         let layout = renderer
             .device

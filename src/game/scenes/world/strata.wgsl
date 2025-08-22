@@ -52,7 +52,7 @@ fn vertex_main(vertex: VertexInput) -> VertexOutput {
         chunk_start.y + vertex.position.y * u_terrain_data.nominal_edge_size,
         bottom + vertex.position.z * (height - bottom),
     );
-    let clip_position = u_camera.mat_projection * u_camera.mat_view * vec4(world_position, 1.0);
+    let clip_position = u_camera.mat_proj_view * vec4(world_position, 1.0);
 
     let tex_coord = vec2<f32>(
         vertex.tex_coord.x,

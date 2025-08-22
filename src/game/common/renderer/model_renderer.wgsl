@@ -64,7 +64,7 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     );
     let world_normal = math::normalize_safe(normal_matrix * vertex.normal);
 
-    let view_projection = u_camera.mat_projection * u_camera.mat_view;
+    let view_projection = u_camera.mat_proj_view;
     let clip_position = view_projection * world_position;
 
     return VertexOutput(
@@ -102,7 +102,7 @@ fn shadow_vertex(vertex: VertexInput, instance: InstanceInput) -> @builtin(posit
     );
     let world_normal = math::normalize_safe(normal_matrix * vertex.normal);
 
-    let view_projection = u_camera.mat_projection * u_camera.mat_view;
+    let view_projection = u_camera.mat_proj_view;
     let clip_position = view_projection * world_position;
 
     return clip_position;

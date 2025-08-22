@@ -73,7 +73,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         return;
     }
 
-    let f = frustum::extract_frustum_planes(u_camera.mat_projection * u_camera.mat_view);
+    let f = frustum::extract_frustum_planes(u_camera.mat_proj_view);
 
     let chunk = u_chunk_data[chunk_index];
 

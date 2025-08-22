@@ -1,8 +1,6 @@
-struct Matrices {
-    projection: mat4x4<f32>,
-    view: mat4x4<f32>,
-}
-@group(0) @binding(0) var<uniform> u_matrices: Matrices;
+#import world::camera
+
+@group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -17,7 +15,7 @@ struct VertexOutput {
 @vertex
 fn vertex_main(vertex: VertexInput) -> VertexOutput {
     return VertexOutput(
-        u_matrices.projection * u_matrices.view * vertex.position,
+        u_camera.mat_proj_view * vertex.position,
         vertex.color
     );
 }

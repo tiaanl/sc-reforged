@@ -5,8 +5,7 @@ struct Environment {
     sun_color: vec4<f32>,  // r, g, b, PADDING
     fog_color: vec4<f32>,  // r, g, b, PADDING
     fog_params: vec4<f32>, // near, far, PADDING, PADDING
-    sun_proj: mat4x4<f32>,
-    sun_view: mat4x4<f32>,
+    sun_proj_view: mat4x4<f32>,
 }
 
 fn linear_fog_factor(fog_near: f32, fog_far: f32, distance: f32) -> f32 {

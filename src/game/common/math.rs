@@ -2,6 +2,63 @@
 
 use glam::{Mat4, Vec3, Vec4};
 
+#[derive(Default)]
+pub struct Matrices {
+    /// Combined projection * view matrix.
+    pub proj_view: Mat4,
+    /// Inverse of the projection * view matrix.
+    pub proj_view_inverse: Mat4,
+}
+
+impl Matrices {
+    pub fn from_projection_view(projection: Mat4, view: Mat4) -> Self {
+        let proj_view = projection * view;
+        let proj_view_inverse = proj_view.inverse();
+
+        Self {
+            proj_view,
+            proj_view_inverse,
+        }
+    }
+
+    #[inline]
+    pub fn unproject_ndc(&self, point: Vec3) -> Vec3 {
+        debug_assert!(point.x >= -1.0 && point.x <= 1.0);
+        debug_assert!(point.y >= -1.0 && point.y <= 1.0);
+        debug_assert!(point.z >= -1.0 && point.z <= 1.0);
+        self.proj_view_inverse.project_point3(point)
+    }
+
+    pub fn corners(&self) -> [Vec3; 8] {
+        const NDC: &[(f32, f32)] = &[(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
+
+        let mut result = [Vec3::ZERO; 8];
+        for (i, &(x, y)) in NDC.iter().enumerate() {
+            result[i] = self.unproject_ndc(Vec3::new(x, y, 0.0)); // near
+            result[i + 4] = self.unproject_ndc(Vec3::new(x, y, 1.0)); // far
+        }
+        result
+    }
+
+    pub fn frustum(&self) -> Frustum {
+        let r0 = self.proj_view.row(0);
+        let r1 = self.proj_view.row(1);
+        let r2 = self.proj_view.row(2);
+        let r3 = self.proj_view.row(3);
+
+        let left = Plane::from_row(r3 + r0);
+        let right = Plane::from_row(r3 - r0);
+        let bottom = Plane::from_row(r3 + r1);
+        let top = Plane::from_row(r3 - r1);
+        let near = Plane::from_row(r2); // wgpu (D3D/Metal, 0..1 Z)
+        let far = Plane::from_row(r3 - r2);
+
+        Frustum {
+            planes: [left, right, bottom, top, near, far],
+        }
+    }
+}
+
 pub struct Frustum {
     pub planes: [Plane; 6],
 }
@@ -82,13 +139,23 @@ pub struct Plane {
 impl Plane {
     fn from_row(row: Vec4) -> Self {
         let normal = row.truncate();
-        let inv_len = 1.0 / normal.length();
+        let length = normal.length();
+
+        if length <= f32::EPSILON || !length.is_infinite() {
+            return Self {
+                normal: Vec3::Z,
+                distance: 0.0,
+            };
+        }
+
+        let inv_length = 1.0 / length;
         Self {
-            normal: normal * inv_len,
-            distance: row.w * inv_len,
+            normal: normal / inv_length,
+            distance: row.w / inv_length,
         }
     }
 
+    #[inline]
     pub fn signed_distance(&self, point: Vec3) -> f32 {
         self.normal.dot(point) + self.distance
     }
