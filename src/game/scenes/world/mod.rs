@@ -643,7 +643,7 @@ impl Scene for WorldScene {
 
             // Render the main camera frustum when we're looking through the debug camera.
             if self.view_debug_camera {
-                camera::render_camera_frustum(&self.main_camera.camera, &mut gizmos_vertices);
+                camera::render_camera_frustum(&main_camera_matrices, &mut gizmos_vertices);
             }
 
             self.compositor.render(

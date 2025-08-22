@@ -28,6 +28,27 @@ impl Matrices {
             projection_view_inverse,
         }
     }
+
+    pub fn unproject(&self, point: Vec3) -> Vec3 {
+        let v = self.projection_view_inverse * point.extend(1.0);
+        v.truncate() / v.w
+    }
+
+    pub fn corners(&self) -> [Vec3; 8] {
+        const NDC: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
+
+        let mut result = [Vec3::ZERO; 8];
+
+        for i in 0..NDC.len() {
+            let x = NDC[i].0;
+            let y = NDC[i].1;
+
+            result[i] = self.unproject(Vec3::new(x, y, 0.0));
+            result[i + 4] = self.unproject(Vec3::new(x, y, 1.0));
+        }
+
+        result
+    }
 }
 
 #[derive(Debug, Default)]
@@ -583,35 +604,13 @@ impl Controller for GameCameraController {
     }
 }
 
-pub fn render_camera_frustum(camera: &Camera, gizmo_vertices: &mut Vec<GizmoVertex>) {
-    use glam::Vec4Swizzles;
-
-    // Z = 0..1
-    let ndc_corners = [
-        Vec4::new(-1.0, -1.0, 0.0, 1.0), // Near-bottom-left
-        Vec4::new(-1.0, 1.0, 0.0, 1.0),  // Near-top-left
-        Vec4::new(1.0, 1.0, 0.0, 1.0),   // Near-top-right
-        Vec4::new(1.0, -1.0, 0.0, 1.0),  // Near-bottom-right
-        Vec4::new(-1.0, -1.0, 1.0, 1.0), // Far-bottom-left
-        Vec4::new(-1.0, 1.0, 1.0, 1.0),  // Far-top-left
-        Vec4::new(1.0, 1.0, 1.0, 1.0),   // Far-top-right
-        Vec4::new(1.0, -1.0, 1.0, 1.0),  // Far-bottom-right
-    ];
-
-    // Calculate the view-projection matrix
-    let matrices = camera.calculate_matrices();
-    let view_projection = matrices.projection * matrices.view;
-
-    // Invert the view-projection matrix
-    let inv_view_projection = view_projection.inverse();
+pub fn render_camera_frustum(matrices: &Matrices, gizmo_vertices: &mut Vec<GizmoVertex>) {
+    let corners = matrices.corners();
 
     let green = Vec4::new(0.0, 1.0, 0.0, 1.0);
 
     // Transform NDC corners to world space
-    let vertices = ndc_corners.map(|corner| {
-        let world_space = inv_view_projection * corner;
-        GizmoVertex::new(world_space.xyz() / world_space.w, green)
-    });
+    let vertices = corners.map(|corner| GizmoVertex::new(corner, green));
 
     // Should we even render this rectangle?  Its extremely small.
     gizmo_vertices.extend_from_slice(&[

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use glam::{Mat4, Vec3, Vec4};
 
 pub struct Frustum {
