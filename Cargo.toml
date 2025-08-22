@@ -30,6 +30,7 @@ slab = "0.4.9"
 thiserror = { version = "2.0", default-features = false }
 tracing = { version = "0.1.40", default-features = false, features = ["release_max_level_info", "max_level_debug"] }
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["ansi", "fmt"] }
+tracy-client = { version = "0.18" }
 walkdir = { version = "2.5.0", default-features = false }
 
 [profile.dev.package.zune-jpeg]

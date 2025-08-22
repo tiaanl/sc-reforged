@@ -4,7 +4,6 @@ use clap::Parser;
 use engine::prelude::*;
 use game::scenes::world::WorldScene;
 use glam::UVec2;
-use tracing::{error, info, warn};
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, KeyEvent},
@@ -128,13 +127,13 @@ impl winit::application::ApplicationHandler for App {
                     Box::new(match WorldScene::new(campaign_def) {
                         Ok(scene) => scene,
                         Err(err) => {
-                            error!("Could not create world scene! - {}", err);
+                            tracing::error!("Could not create world scene! - {}", err);
                             panic!();
                         }
                     })
                 };
 
-                info!("Application initialized!");
+                tracing::info!("Application initialized!");
 
                 *self = App::Initialized {
                     window,
@@ -150,7 +149,7 @@ impl winit::application::ApplicationHandler for App {
             }
 
             App::Initialized { .. } => {
-                warn!("Application already initialized!");
+                tracing::warn!("Application already initialized!");
             }
         }
     }
@@ -164,7 +163,7 @@ impl winit::application::ApplicationHandler for App {
         use winit::event::WindowEvent;
         match self {
             App::Uninitialzed(_) => {
-                warn!("Can't process events for uninitialized application.");
+                tracing::warn!("Can't process events for uninitialized application.");
             }
             App::Initialized {
                 window,
@@ -204,82 +203,99 @@ impl winit::application::ApplicationHandler for App {
                     }
 
                     WindowEvent::RedrawRequested => {
-                        let now = Instant::now();
-                        let last_frame_duration = now - *last_frame_time;
-                        *last_frame_time = now;
+                        {
+                            let _z = tracy_client::span!("update");
 
-                        let delta_time = last_frame_duration.as_secs_f32();
-                        *average_fps = (*average_fps + (1.0 / delta_time)) / 2.0;
+                            let now = Instant::now();
+                            let last_frame_duration = now - *last_frame_time;
+                            *last_frame_time = now;
 
-                        // println!("delta_time: {delta_time}");
+                            let delta_time = last_frame_duration.as_secs_f32();
+                            *average_fps = (*average_fps + (1.0 / delta_time)) / 2.0;
 
-                        scene.update(delta_time, input);
-
-                        let output = renderer().surface.get_texture(&renderer().device);
-                        let surface = output
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
-
-                        let encoder = renderer().device.create_command_encoder(
-                            &wgpu::CommandEncoderDescriptor {
-                                label: Some("main command encoder"),
-                            },
-                        );
-
-                        let mut frame = Frame { encoder, surface };
+                            scene.update(delta_time, input);
+                        }
 
                         {
-                            scene.render(&mut frame);
-                            input.reset_current_frame();
-                        }
+                            let _z = tracy_client::span!("render");
 
-                        // Render egui if it requires a repaint.
-                        #[cfg(feature = "egui")]
-                        if repaint {
-                            egui_integration.render(
-                                window,
-                                &mut frame.encoder,
-                                &frame.surface,
-                                |ctx| {
-                                    ctx.set_pixels_per_point(1.2);
+                            let output = {
+                                let _x = tracy_client::span!("get texture");
+                                renderer().surface.get_texture(&renderer().device)
+                            };
+                            let surface = output
+                                .texture
+                                .create_view(&wgpu::TextureViewDescriptor::default());
 
-                                    egui::Area::new(egui::Id::new("engine_info")).show(ctx, |ui| {
-                                        let fps_label = {
-                                            let text = egui::WidgetText::RichText(
-                                                egui::RichText::new(format!(
-                                                    "{:3.1} {:3.1}",
-                                                    1.0 / last_frame_duration.as_secs_f64(),
-                                                    average_fps,
-                                                )),
-                                            )
-                                            .background_color(
-                                                egui::Color32::from_rgba_premultiplied(
-                                                    0, 0, 0, 127,
-                                                ),
-                                            )
-                                            .monospace();
-                                            egui::Label::new(text.color(egui::Color32::WHITE))
-                                                .wrap_mode(egui::TextWrapMode::Extend)
-                                        };
-
-                                        use egui::Widget;
-
-                                        fps_label.ui(ui);
-                                    });
-
-                                    // Debug stuff from the scene.
-                                    scene.debug_panel(ctx);
+                            let encoder = renderer().device.create_command_encoder(
+                                &wgpu::CommandEncoderDescriptor {
+                                    label: Some("main command encoder"),
                                 },
                             );
+
+                            let mut frame = Frame { encoder, surface };
+
+                            {
+                                scene.render(&mut frame);
+                                input.reset_current_frame();
+                            }
+
+                            // Render egui if it requires a repaint.
+                            #[cfg(feature = "egui")]
+                            if repaint {
+                                egui_integration.render(
+                                    window,
+                                    &mut frame.encoder,
+                                    &frame.surface,
+                                    |ctx| {
+                                        ctx.set_pixels_per_point(1.2);
+
+                                        egui::Area::new(egui::Id::new("engine_info")).show(
+                                            ctx,
+                                            |ui| {
+                                                let fps_label = {
+                                                    let text = egui::WidgetText::RichText(
+                                                        egui::RichText::new(format!(
+                                                            "{:3.1} {:3.1}",
+                                                            1.0 / last_frame_duration.as_secs_f64(),
+                                                            average_fps,
+                                                        )),
+                                                    )
+                                                    .background_color(
+                                                        egui::Color32::from_rgba_premultiplied(
+                                                            0, 0, 0, 127,
+                                                        ),
+                                                    )
+                                                    .monospace();
+                                                    egui::Label::new(
+                                                        text.color(egui::Color32::WHITE),
+                                                    )
+                                                    .wrap_mode(egui::TextWrapMode::Extend)
+                                                };
+
+                                                use egui::Widget;
+
+                                                fps_label.ui(ui);
+                                            },
+                                        );
+
+                                        // Debug stuff from the scene.
+                                        scene.debug_panel(ctx);
+                                    },
+                                );
+                            }
+
+                            renderer()
+                                .queue
+                                .submit(std::iter::once(frame.encoder.finish()));
+
+                            output.present();
+
+                            // Frame is done rendering.
+                            tracy_client::frame_mark();
+
+                            window.request_redraw();
                         }
-
-                        renderer()
-                            .queue
-                            .submit(std::iter::once(frame.encoder.finish()));
-
-                        output.present();
-
-                        window.request_redraw();
                     }
 
                     WindowEvent::MouseInput { button, state, .. } => {
@@ -336,7 +352,7 @@ impl winit::application::ApplicationHandler for App {
     ) {
         match self {
             App::Uninitialzed(_) => {
-                warn!("Can't process events for uninitialized application.");
+                tracing::warn!("Can't process events for uninitialized application.");
             }
             App::Initialized { input, .. } => {
                 input.handle_device_event(event);
@@ -346,6 +362,9 @@ impl winit::application::ApplicationHandler for App {
 }
 
 fn main() {
+    let _tracy = tracy_client::Client::start();
+    tracy_client::set_thread_name!("Main thread");
+
     tracing_subscriber::fmt().init();
 
     let opts = match Opts::try_parse() {

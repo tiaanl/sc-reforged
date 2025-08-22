@@ -819,6 +819,8 @@ impl Terrain {
         environment_bind_group: &wgpu::BindGroup,
         frustum_camera_bind_group: &wgpu::BindGroup,
     ) {
+        let _z = tracy_client::span!("render terrain");
+
         // Make sure the terrain data is up to date if it changed.
         self.terrain_data.if_changed(|terrain_data| {
             renderer().queue.write_buffer(
@@ -1071,6 +1073,8 @@ impl Terrain {
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
     ) {
+        let _z = tracy_client::span!("render water");
+
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {

@@ -200,6 +200,7 @@ impl Objects {
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
     ) {
+        let _z = tracy_client::span!("render objects");
         self.model_renderer.render(
             frame,
             frustum,

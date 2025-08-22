@@ -575,6 +575,7 @@ impl Scene for WorldScene {
         // --- Shadow pass ---
 
         if true {
+            let _z = tracy_client::span!("render shadow map");
             let light_frustum = Frustum::from(light_matrices.projection * light_matrices.view);
 
             self.objects.render_shadow_casters(
@@ -621,50 +622,53 @@ impl Scene for WorldScene {
             );
         }
 
-        // Render any kind of debug overlays.
-        self.terrain.render_gizmos(&mut gizmos_vertices);
-        self.objects.render_gizmos(&mut gizmos_vertices);
+        {
+            let _z = tracy_client::span!("render gizmos");
+            // Render any kind of debug overlays.
+            self.terrain.render_gizmos(&mut gizmos_vertices);
+            self.objects.render_gizmos(&mut gizmos_vertices);
 
-        if false {
-            // Render the direction of the sun.
-            let vertices = [
-                GizmoVertex::new(Vec3::ZERO, Vec4::new(0.0, 0.0, 1.0, 1.0)),
-                GizmoVertex::new(
-                    self.environment.sun_dir.xyz() * 1_000.0,
-                    Vec4::new(0.0, 0.0, 1.0, 1.0),
-                ),
-            ];
-            gizmos_vertices.extend(vertices);
-        }
+            if false {
+                // Render the direction of the sun.
+                let vertices = [
+                    GizmoVertex::new(Vec3::ZERO, Vec4::new(0.0, 0.0, 1.0, 1.0)),
+                    GizmoVertex::new(
+                        self.environment.sun_dir.xyz() * 1_000.0,
+                        Vec4::new(0.0, 0.0, 1.0, 1.0),
+                    ),
+                ];
+                gizmos_vertices.extend(vertices);
+            }
 
-        // Render the main camera frustum when we're looking through the debug camera.
-        if self.view_debug_camera {
-            camera::render_camera_frustum(&self.main_camera.camera, &mut gizmos_vertices);
-        }
+            // Render the main camera frustum when we're looking through the debug camera.
+            if self.view_debug_camera {
+                camera::render_camera_frustum(&self.main_camera.camera, &mut gizmos_vertices);
+            }
 
-        self.compositor.render(
-            frame,
-            &self.geometry_buffers,
-            &self.main_camera.gpu_camera.bind_group,
-            &self.environment_bind_group,
-        );
+            self.compositor.render(
+                frame,
+                &self.geometry_buffers,
+                &self.main_camera.gpu_camera.bind_group,
+                &self.environment_bind_group,
+            );
 
-        self.geometry_data = self.last_mouse_position.map(|position| {
-            self.geometry_buffers
-                .fetch_data(&renderer().device, &renderer().queue, position)
-        });
+            self.geometry_data = self.last_mouse_position.map(|position| {
+                self.geometry_buffers
+                    .fetch_data(&renderer().device, &renderer().queue, position)
+            });
 
-        if let Some(ref data) = self.geometry_data {
-            // Translation matrix
-            let translation = Mat4::from_translation(data.position);
+            if let Some(ref data) = self.geometry_data {
+                // Translation matrix
+                let translation = Mat4::from_translation(data.position);
 
-            let vertices = GizmosRenderer::create_axis(translation, 100.0);
+                let vertices = GizmosRenderer::create_axis(translation, 100.0);
+                self.gizmos_renderer
+                    .render(frame, view_camera_bind_group, &vertices);
+            }
+
             self.gizmos_renderer
-                .render(frame, view_camera_bind_group, &vertices);
+                .render(frame, view_camera_bind_group, &gizmos_vertices);
         }
-
-        self.gizmos_renderer
-            .render(frame, view_camera_bind_group, &gizmos_vertices);
 
         let now = std::time::Instant::now();
         let render_time = now - self.last_frame_time;
