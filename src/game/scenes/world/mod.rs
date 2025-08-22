@@ -9,11 +9,12 @@ use crate::{
     },
     game::{
         animations::track::Track,
-        camera::{self, Controller, Frustum, GpuCamera, Matrices},
+        camera::{self, Controller, GpuCamera, Matrices},
         compositor::Compositor,
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
+        math::Frustum,
         scenes::world::actions::PlayerAction,
     },
 };
@@ -683,7 +684,7 @@ impl Scene for WorldScene {
         use egui::widgets::Slider;
 
         egui::Window::new("World")
-            .default_open(false)
+            .default_open(true)
             .show(ctx, |ui| {
                 ui.heading("Camera");
                 ui.checkbox(&mut self.view_debug_camera, "View debug camera");

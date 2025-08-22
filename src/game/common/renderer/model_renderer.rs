@@ -8,9 +8,9 @@ use crate::{
     },
     game::{
         animations::Animation,
-        camera::Frustum,
         geometry_buffers::{GeometryBuffers, RenderTarget},
-        model::{self, BoundingSphere},
+        math::{BoundingSphere, Frustum},
+        model,
         renderer::{
             render_animations::{RenderAnimation, RenderAnimations},
             render_instance::{RenderInstance, RenderInstanceAnimation},

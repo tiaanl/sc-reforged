@@ -9,9 +9,9 @@ use crate::{
     },
     game::{
         animations::Sequencer,
-        camera::Frustum,
         config::ObjectType,
         geometry_buffers::{GeometryBuffers, RenderTarget},
+        math::Frustum,
         model::Model,
         models::models,
         renderer::ModelRenderer,

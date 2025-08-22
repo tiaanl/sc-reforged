@@ -2,117 +2,13 @@
 
 use crate::{
     engine::{gizmos::GizmoVertex, prelude::*},
-    game::model::BoundingSphere,
+    game::math::{Frustum, Ray},
 };
 
 use glam::{FloatExt, Mat4, Quat, Vec2, Vec3, Vec4};
 
 pub fn register_camera_shader(shaders: &mut Shaders) {
     shaders.add_module(include_str!("camera.wgsl"), "camera.wgsl");
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Plane {
-    pub normal: Vec3,
-    pub distance: f32,
-}
-
-impl Plane {
-    fn from_row(row: Vec4) -> Self {
-        let normal = row.truncate();
-        let inv_len = 1.0 / normal.length();
-        Self {
-            normal: normal * inv_len,
-            distance: row.w * inv_len,
-        }
-    }
-
-    pub fn signed_distance(&self, point: Vec3) -> f32 {
-        self.normal.dot(point) + self.distance
-    }
-}
-
-#[derive(Debug)]
-pub struct Ray {
-    pub origin: Vec3,
-    pub direction: Vec3,
-}
-
-impl Ray {
-    pub fn intersect_plane(&self, plane: &Plane) -> Option<Vec3> {
-        let denom = self.direction.dot(plane.normal);
-
-        // Check if the ray is parallel to the plane
-        if denom.abs() < 1e-6 {
-            return None;
-        }
-
-        let t = ((plane.normal * plane.distance) - self.origin).dot(plane.normal) / denom;
-
-        // Check if the intersection is behind the ray's origin
-        if t < 0.0 {
-            return None;
-        }
-
-        // Compute the intersection point
-        Some(self.origin + t * self.direction)
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct BoundingBox {
-    pub min: Vec3,
-    pub max: Vec3,
-}
-
-impl BoundingBox {
-    pub fn center(&self) -> Vec3 {
-        self.min + (self.max - self.min)
-    }
-}
-
-pub struct Frustum {
-    pub planes: [Plane; 6],
-}
-
-impl From<Mat4> for Frustum {
-    fn from(view_proj: Mat4) -> Self {
-        let r0 = view_proj.row(0);
-        let r1 = view_proj.row(1);
-        let r2 = view_proj.row(2);
-        let r3 = view_proj.row(3);
-
-        let left = Plane::from_row(r3 + r0);
-        let right = Plane::from_row(r3 - r0);
-        let bottom = Plane::from_row(r3 + r1);
-        let top = Plane::from_row(r3 - r1);
-        let near = Plane::from_row(r2); // wgpu (D3D/Metal, 0..1 Z)
-        let far = Plane::from_row(r3 - r2);
-
-        Frustum {
-            planes: [left, right, bottom, top, near, far],
-        }
-    }
-}
-
-impl Frustum {
-    pub fn intersects_bounding_box(&self, b: &BoundingBox) -> bool {
-        const EPS: f32 = 1e-5;
-        for pl in &self.planes {
-            let mask = pl.normal.cmplt(Vec3::ZERO);
-            let p = Vec3::select(mask, b.min, b.max);
-            if pl.signed_distance(p) < -EPS {
-                return false;
-            }
-        }
-        true
-    }
-
-    pub fn intersects_bounding_sphere(&self, bounding_sphere: &BoundingSphere) -> bool {
-        self.planes
-            .iter()
-            .all(|plane| plane.signed_distance(bounding_sphere.center) >= -bounding_sphere.radius)
-    }
 }
 
 #[derive(Default)]

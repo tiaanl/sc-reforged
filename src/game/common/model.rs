@@ -7,6 +7,7 @@ use crate::{
     engine::{prelude::*, storage::Handle},
     game::{
         image::{Image, images},
+        math::BoundingSphere,
         skeleton::{Bone, Skeleton},
     },
 };
@@ -68,100 +69,6 @@ pub struct CollisionBox {
     pub _min: Vec3,
     /// Maximum values for the bounding box.
     pub _max: Vec3,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct BoundingSphere {
-    pub center: Vec3,
-    pub radius: f32,
-}
-
-impl BoundingSphere {
-    pub fn from_positions_ritter<I>(positions: I) -> Self
-    where
-        I: IntoIterator<Item = Vec3>,
-    {
-        let positions: Vec<Vec3> = positions.into_iter().collect();
-
-        let positions_count = positions.len();
-
-        if positions_count == 1 {
-            return Self {
-                center: positions[0],
-                radius: 0.0,
-            };
-        }
-
-        let p0 = *positions.iter().min_by(|a, b| a.x.total_cmp(&b.x)).unwrap();
-
-        let p1 = *positions
-            .iter()
-            .max_by(|a, b| {
-                let aa = (**a - p0).length_squared();
-                let bb = (**b - p0).length_squared();
-                aa.total_cmp(&bb)
-            })
-            .unwrap();
-
-        let p2 = *positions
-            .iter()
-            .max_by(|a, b| {
-                let aa = (**a - p1).length_squared();
-                let bb = (**b - p1).length_squared();
-                aa.total_cmp(&bb)
-            })
-            .unwrap();
-
-        let mut center = (p1 + p2) * 0.5;
-        let mut radius = (p2 - p1).length() * 0.5;
-
-        for position in positions.iter() {
-            let delta = position - center;
-            let distance = delta.length();
-            if distance > radius {
-                let new_radius = 0.5 * (radius + distance);
-                if distance > 0.0 {
-                    center += delta * ((new_radius - radius) / distance);
-                }
-                radius = new_radius;
-            }
-        }
-
-        Self { center, radius }
-    }
-
-    /// Minimal sphere that encloses self and other.
-    pub fn union(&self, other: &BoundingSphere) -> BoundingSphere {
-        let delta = other.center - self.center;
-        let d = delta.length();
-
-        // One contains the other, or coincident centers.
-        if d <= (other.radius.max(0.0) - self.radius.max(0.0)).abs() {
-            return if self.radius.max(0.0) >= other.radius.max(0.0) {
-                *self
-            } else {
-                *other
-            };
-        }
-
-        let new_radius = 0.5 * (d + self.radius.max(0.0) + other.radius.max(0.0));
-
-        let t = if d > 0.0 {
-            (new_radius - self.radius.max(0.0)) / d
-        } else {
-            0.0
-        };
-        let new_center = self.center + delta * t;
-
-        BoundingSphere {
-            center: new_center,
-            radius: new_radius,
-        }
-    }
-
-    pub fn expand_to_include(&mut self, other: &BoundingSphere) {
-        *self = self.union(other);
-    }
 }
 
 impl TryFrom<smf::Model> for Model {

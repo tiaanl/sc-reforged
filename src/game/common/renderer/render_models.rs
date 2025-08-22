@@ -10,7 +10,8 @@ use crate::{
     },
     game::{
         image::{BlendMode, Image, images},
-        model::{BoundingSphere, Model},
+        math::BoundingSphere,
+        model::Model,
         models::models,
         renderer::{
             render_animations::{RenderAnimation, RenderAnimations},

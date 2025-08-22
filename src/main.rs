@@ -203,12 +203,12 @@ impl winit::application::ApplicationHandler for App {
                     }
 
                     WindowEvent::RedrawRequested => {
+                        let now = Instant::now();
+                        let last_frame_duration = now - *last_frame_time;
+                        *last_frame_time = now;
+
                         {
                             let _z = tracy_client::span!("update");
-
-                            let now = Instant::now();
-                            let last_frame_duration = now - *last_frame_time;
-                            *last_frame_time = now;
 
                             let delta_time = last_frame_duration.as_secs_f32();
                             *average_fps = (*average_fps + (1.0 / delta_time)) / 2.0;
