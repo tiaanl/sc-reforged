@@ -2,6 +2,7 @@
 
 use glam::{Mat4, Vec3, Vec4};
 
+/// Represents a view into the world by way of matrices.
 #[derive(Default)]
 pub struct ViewProjection {
     /// Combined projection * view matrix.

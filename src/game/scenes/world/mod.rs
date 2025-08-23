@@ -15,13 +15,14 @@ use crate::{
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
         math::ViewProjection,
-        scenes::world::actions::PlayerAction,
+        scenes::world::{actions::PlayerAction, overlay_renderer::OverlayRenderer},
     },
 };
 
 pub mod actions;
 mod object;
 mod objects;
+mod overlay_renderer;
 mod strata;
 mod terrain;
 
@@ -72,6 +73,8 @@ pub struct WorldScene {
     shadow_render_target: RenderTarget,
     light_gpu_camera: GpuCamera,
 
+    overlay_renderer: OverlayRenderer,
+
     time_of_day: f32,
     day_night_cycle: DayNightCycle,
 
@@ -86,6 +89,8 @@ pub struct WorldScene {
     last_frame_time: std::time::Instant,
     fps_history: Vec<f32>,
     fps_history_cursor: usize,
+
+    render_overlay: bool,
 }
 
 impl WorldScene {
@@ -97,6 +102,10 @@ impl WorldScene {
         let mut shaders = Shaders::new();
         camera::register_camera_shader(&mut shaders);
         shaders.add_module(include_str!("environment.wgsl"), "environment.wgsl");
+        shaders.add_module(
+            include_str!("../../common/fullscreen.wgsl"),
+            "fullscreen.wgsl",
+        );
         shaders.add_module(include_str!("../../common/renderer/math.wgsl"), "math.wgsl");
         shaders.add_module(
             include_str!("../../common/renderer/animation.wgsl"),
@@ -278,6 +287,13 @@ impl WorldScene {
             }
         }
 
+        let overlay_renderer = OverlayRenderer::new(
+            &mut shaders,
+            &main_camera.gpu_camera.bind_group_layout,
+            &environment_bind_group_layout,
+            &geometry_buffers,
+        );
+
         let gizmos_renderer =
             GizmosRenderer::new(&mut shaders, &main_camera.gpu_camera.bind_group_layout);
 
@@ -300,6 +316,8 @@ impl WorldScene {
             compositor,
             gizmos_renderer,
 
+            overlay_renderer,
+
             time_of_day,
             day_night_cycle,
             environment,
@@ -313,6 +331,8 @@ impl WorldScene {
             last_frame_time: std::time::Instant::now(),
             fps_history,
             fps_history_cursor,
+
+            render_overlay: false,
         })
     }
 
@@ -395,7 +415,8 @@ impl Scene for WorldScene {
             }
         }
 
-        self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
+        // Advance time of day.
+        // self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
         self.environment = self.calculate_environment(self.time_of_day);
 
         // Set the camera far plane to max distance of the fog.
@@ -620,6 +641,27 @@ impl Scene for WorldScene {
             );
         }
 
+        if self.render_overlay {
+            self.overlay_renderer.render(
+                frame,
+                &self.main_camera.gpu_camera.bind_group,
+                &self.environment_bind_group,
+                &self.geometry_buffers,
+            );
+        } else {
+            self.compositor.render(
+                frame,
+                &self.geometry_buffers,
+                &self.main_camera.gpu_camera.bind_group,
+                &self.environment_bind_group,
+            );
+        }
+
+        self.geometry_data = self.last_mouse_position.map(|position| {
+            self.geometry_buffers
+                .fetch_data(&renderer().device, &renderer().queue, position)
+        });
+
         {
             let _z = tracy_client::span!("render gizmos");
             // Render any kind of debug overlays.
@@ -642,18 +684,6 @@ impl Scene for WorldScene {
             if self.view_debug_camera {
                 camera::render_camera_frustum(&main_view_projection, &mut gizmos_vertices);
             }
-
-            self.compositor.render(
-                frame,
-                &self.geometry_buffers,
-                &self.main_camera.gpu_camera.bind_group,
-                &self.environment_bind_group,
-            );
-
-            self.geometry_data = self.last_mouse_position.map(|position| {
-                self.geometry_buffers
-                    .fetch_data(&renderer().device, &renderer().queue, position)
-            });
 
             if let Some(ref data) = self.geometry_data {
                 // Translation matrix
@@ -689,6 +719,9 @@ impl Scene for WorldScene {
         egui::Window::new("World")
             .default_open(true)
             .show(ctx, |ui| {
+                ui.heading("Render");
+                ui.checkbox(&mut self.render_overlay, "Render overlay");
+
                 ui.heading("Camera");
                 ui.checkbox(&mut self.view_debug_camera, "View debug camera");
                 ui.checkbox(&mut self.control_debug_camera, "Control debug camera");
