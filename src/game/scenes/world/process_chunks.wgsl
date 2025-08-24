@@ -1,13 +1,16 @@
 #import world::camera
 #import world::frustum
-#import world::terrain
 
-struct ChunkData {
-    min: vec3<f32>,
-    _padding1: f32,
-    max: vec3<f32>,
-    _padding2: f32,
-};
+struct ChunkInstance {
+    center: vec3<f32>,
+    radius: f32,
+
+    chunk: vec2<i32>,
+    min_elevation: f32,
+    max_elevation: f32,
+
+    flags: u32,
+}
 
 struct DrawArgs {
     index_count: u32,
@@ -20,7 +23,7 @@ struct DrawArgs {
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
 @group(1) @binding(0) var<uniform> u_terrain_data: terrain::TerrainData;
-@group(1) @binding(1) var<storage, read> u_chunk_data: array<ChunkData>;
+@group(1) @binding(1) var<storage, read> u_chunk_instances: array<ChunkInstance>;
 @group(1) @binding(2) var<storage, read_write> u_terrain_draw_args: array<DrawArgs>;
 @group(1) @binding(3) var<storage, read_write> u_water_draw_args: array<DrawArgs>;
 
@@ -65,32 +68,36 @@ fn hide_water_chunk(chunk_index: u32) {
     u_water_draw_args[chunk_index] = DrawArgs(0, 0, 0, 0, 0);
 }
 
-@compute @workgroup_size(64)
+@compute
+@workgroup_size(64)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let chunk_index = id.x;
 
-    if (chunk_index >= arrayLength(&u_chunk_data)) {
+    if (chunk_index >= arrayLength(&u_chunk_instances)) {
         return;
     }
 
-    let f = frustum::extract_frustum_planes(u_camera.mat_proj_view);
+    let f = frustum::Frustum(u_camera.frustum);
 
-    let chunk = u_chunk_data[chunk_index];
+    let chunk_instance: ChunkInstance = u_chunk_instances[chunk_index];
 
-    if frustum::is_aabb_in_frustum(f, chunk.min, chunk.max) {
+    let visible = frustum::is_sphere_in_frustum(f, chunk_instance.center, chunk_instance.radius);
+    if visible {
         draw_terrain_chunk(chunk_index, 0u);
     } else {
         hide_terrain_chunk(chunk_index);
     }
 
-    // If the water level is below the min of the chunk, then we don't even have to check the
-    // frustum.
-    if u_terrain_data.water_level < chunk.min.z {
+    // If the water level is below the minimum elevation of the chunk, then it will never be
+    // visible.
+    if u_terrain_data.water_level < chunk_instance.min_elevation {
         hide_water_chunk(chunk_index);
     } else {
-        let water_min = vec3<f32>(chunk.min.xy, u_terrain_data.water_level);
-        let water_max = vec3<f32>(chunk.max.xy, u_terrain_data.water_level);
-        if frustum::is_aabb_in_frustum(f, water_min, water_max) {
+        let water_center = vec3<f32>(chunk_instance.center.xy, u_terrain_data.water_level);
+        let half_chunk_size = u_terrain_data.nominal_edge_size * f32(terrain::CELLS_PER_CHUNK) * 0.5;
+        let radius = half_chunk_size * sqrt(2.0);
+
+        if frustum::is_sphere_in_frustum(f, water_center, radius) {
             draw_water_chunk(chunk_index);
         } else {
             hide_water_chunk(chunk_index);

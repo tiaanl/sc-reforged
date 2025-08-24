@@ -27,6 +27,15 @@ impl HeightMap {
         })
     }
 
+    pub fn elevation_at(&self, node: IVec2) -> u8 {
+        let x = node.x.clamp(0, self.size.x as i32 - 1);
+        let y = node.y.clamp(0, self.size.y as i32 - 1);
+
+        let index = y as usize * self.size.x as usize + x as usize;
+
+        self.elevations[index]
+    }
+
     /// Returns the world position of the specified node.
     ///
     /// NOTE: Coordinates outside the height map are clamped to the nearest edge, creating a flat
@@ -37,19 +46,12 @@ impl HeightMap {
         nominal_edge_size: f32,
         elevation_base: f32,
     ) -> Vec3 {
-        let elevation = {
-            let clamped_x = pos.x.clamp(0, self.size.x as i32 - 1);
-            let clamped_y = pos.y.clamp(0, self.size.y as i32 - 1);
-
-            let index = clamped_y as usize * self.size.x as usize + clamped_x as usize;
-
-            self.elevations[index] as f32 * elevation_base
-        };
+        let elevation = self.elevation_at(pos);
 
         Vec3::new(
             pos.x as f32 * nominal_edge_size,
             pos.y as f32 * nominal_edge_size,
-            elevation,
+            elevation as f32 * elevation_base,
         )
     }
 }

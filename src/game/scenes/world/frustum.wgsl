@@ -4,24 +4,6 @@ struct Frustum {
     planes: array<vec4<f32>, 6>,
 }
 
-fn extract_frustum_planes(clip: mat4x4<f32>) -> Frustum {
-    let row1 = vec4<f32>(clip[0][0], clip[1][0], clip[2][0], clip[3][0]);
-    let row2 = vec4<f32>(clip[0][1], clip[1][1], clip[2][1], clip[3][1]);
-    let row3 = vec4<f32>(clip[0][2], clip[1][2], clip[2][2], clip[3][2]);
-    let row4 = vec4<f32>(clip[0][3], clip[1][3], clip[2][3], clip[3][3]);
-
-    let planes = array<vec4<f32>, 6>(
-        normalize(row4 + row1), // left
-        normalize(row4 - row1), // right
-        normalize(row4 + row2), // bottom
-        normalize(row4 - row2), // top
-        normalize(row4 + row3), // near
-        normalize(row4 - row3)  // far
-    );
-
-    return Frustum(planes);
-}
-
 fn is_point_in_frustum(frustum: Frustum, point: vec3<f32>) -> bool {
     for (var i = 0; i < 6; i = i + 1) {
         let plane = frustum.planes[i];

@@ -58,26 +58,6 @@ pub struct Frustum {
     pub planes: [Plane; 6],
 }
 
-impl From<Mat4> for Frustum {
-    fn from(view_proj: Mat4) -> Self {
-        let r0 = view_proj.row(0);
-        let r1 = view_proj.row(1);
-        let r2 = view_proj.row(2);
-        let r3 = view_proj.row(3);
-
-        let left = Plane::from_row(r3 + r0);
-        let right = Plane::from_row(r3 - r0);
-        let bottom = Plane::from_row(r3 + r1);
-        let top = Plane::from_row(r3 - r1);
-        let near = Plane::from_row(r2); // wgpu (D3D/Metal, 0..1 Z)
-        let far = Plane::from_row(r3 - r2);
-
-        Frustum {
-            planes: [left, right, bottom, top, near, far],
-        }
-    }
-}
-
 impl Frustum {
     pub fn intersects_bounding_box(&self, b: &BoundingBox) -> bool {
         const EPS: f32 = 1e-5;
@@ -136,7 +116,7 @@ impl Plane {
         let normal = row.truncate();
         let length = normal.length();
 
-        if length <= f32::EPSILON || !length.is_infinite() {
+        if length <= f32::EPSILON || !length.is_finite() {
             return Self {
                 normal: Vec3::Z,
                 distance: 0.0,
@@ -145,8 +125,8 @@ impl Plane {
 
         let inv_length = 1.0 / length;
         Self {
-            normal: normal / inv_length,
-            distance: row.w / inv_length,
+            normal: normal * inv_length,
+            distance: row.w * inv_length,
         }
     }
 

@@ -1,7 +1,6 @@
 #import world::camera
 #import world::environment
 #import world::geometry_buffers
-#import world::terrain
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 @group(1) @binding(0) var<uniform> u_environment: environment::Environment;
@@ -16,24 +15,7 @@
 
 var<push_constant> u_chunk_index: vec2<u32>;
 
-struct Node { x: u32, y: u32, index: u32 }
-
-fn get_chunk_pos_from_index(chunk_index: u32) -> vec2<u32> {
-    let terrain_chunks_x = u_terrain_data.size.x / terrain::CELLS_PER_CHUNK;
-    let x = chunk_index % terrain_chunks_x;
-    let terrain_chunks_y = u_terrain_data.size.y / terrain::CELLS_PER_CHUNK;
-    let y = chunk_index / terrain_chunks_y;
-    return vec2<u32>(x, y);
-}
-
-fn get_node_index(chunk_pos: vec2<u32>, vertex_pos: vec2<u32>) -> Node {
-    let x = chunk_pos.x * terrain::CELLS_PER_CHUNK + vertex_pos.x;
-    let y = chunk_pos.y * terrain::CELLS_PER_CHUNK + vertex_pos.y;
-    let index = y * (u_terrain_data.size.x + 1) + x;
-    return Node(x, y, index);
-}
-
-fn get_node_world_position(node: Node) -> vec3<f32> {
+fn get_node_world_position(node: terrain::Node) -> vec3<f32> {
     return vec3<f32>(
         f32(node.x) * u_terrain_data.nominal_edge_size,
         f32(node.y) * u_terrain_data.nominal_edge_size,
@@ -41,7 +23,7 @@ fn get_node_world_position(node: Node) -> vec3<f32> {
     );
 }
 
-fn get_node_normal(node: Node) -> vec3<f32> {
+fn get_node_normal(node: terrain::Node) -> vec3<f32> {
     return u_height_map[node.index].xyz;
 }
 
@@ -61,8 +43,8 @@ struct VertexOutput {
 
 @vertex
 fn vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -> VertexOutput {
-    let chunk_pos = get_chunk_pos_from_index(chunk_index);
-    let node = get_node_index(chunk_pos, vertex.index);
+    let chunk_pos = terrain::get_chunk_pos_from_index(u_terrain_data, chunk_index);
+    let node = terrain::get_node(u_terrain_data, chunk_pos, vertex.index);
     let world_position = get_node_world_position(node);
     let normal = get_node_normal(node);
 
@@ -78,8 +60,8 @@ fn vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -
 
 @vertex
 fn water_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -> VertexOutput {
-    let chunk_pos = get_chunk_pos_from_index(chunk_index);
-    let node = get_node_index(chunk_pos, vertex.index);
+    let chunk_pos = terrain::get_chunk_pos_from_index(u_terrain_data, chunk_index);
+    let node = terrain::get_node(u_terrain_data, chunk_pos, vertex.index);
     let world_position = get_node_world_position(node);
 
     // Clip uses the actual water surface height
@@ -217,8 +199,8 @@ fn water_fragment_main(v: VertexOutput) -> geometry_buffers::AlphaGeometryBuffer
 
 @vertex
 fn wireframe_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -> @builtin(position) vec4<f32> {
-    let chunk_pos = get_chunk_pos_from_index(chunk_index);
-    let node = get_node_index(u_chunk_index, vertex.index);
+    let chunk_pos = terrain::get_chunk_pos_from_index(u_terrain_data, chunk_index);
+    let node = terrain::get_node(u_terrain_data, u_chunk_index, vertex.index);
     let world_position = get_node_world_position(node);
     return u_camera.mat_proj_view * vec4(world_position, 1.0);
 }

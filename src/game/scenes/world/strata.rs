@@ -18,7 +18,6 @@ pub struct Strata {
 }
 
 impl Strata {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         terrain_size: UVec2,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
@@ -228,6 +227,7 @@ impl Strata {
                         ],
                     },
                     primitive: wgpu::PrimitiveState {
+                        front_face: wgpu::FrontFace::Ccw,
                         cull_mode: Some(wgpu::Face::Back),
                         ..Default::default()
                     },

@@ -446,7 +446,7 @@ impl Scene for WorldScene {
                 2048,                                // shadow map resolution
                 50.0,                                // XY guard band in world units
                 50.0,                                // near guard
-                -5000.0,                             // far guard
+                50.0,                                // far guard
                 true,                                // texel snapping
             );
 

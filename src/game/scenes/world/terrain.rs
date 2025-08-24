@@ -5,13 +5,17 @@ use tracing::info;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    engine::{gizmos::GizmoVertex, prelude::*},
+    engine::{
+        gizmos::{GizmoVertex, GizmosRenderer},
+        prelude::*,
+    },
     game::{
         config::CampaignDef,
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, RenderTarget},
         height_map::HeightMap,
         image::images,
+        math::BoundingSphere,
     },
     wgsl_shader,
 };
@@ -108,6 +112,38 @@ struct TerrainData {
     _padding: f32,
 }
 
+const CHUNK_INSTANCE_FLAG_STRATA_NORTH: u32 = 1 << 0;
+const CHUNK_INSTANCE_FLAG_STRATA_EAST: u32 = 1 << 1;
+const CHUNK_INSTANCE_FLAG_STRATA_SOUTH: u32 = 1 << 2;
+const CHUNK_INSTANCE_FLAG_STRATA_WEST: u32 = 1 << 3;
+
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[repr(C)]
+struct GpuChunkInstance {
+    center: Vec3,
+    radius: f32,
+
+    chunk: IVec2,
+    min_elevation: f32,
+    max_elevation: f32,
+
+    flags: u32,
+    _pad0: [u32; 3],
+}
+
+impl std::fmt::Debug for GpuChunkInstance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GpuChunkInstance")
+            .field("center", &self.center)
+            .field("radius", &self.radius)
+            .field("chunk", &self.chunk)
+            .field("min_elevation", &self.min_elevation)
+            .field("max_elevation", &self.max_elevation)
+            .field("flags", &self.flags)
+            .finish()
+    }
+}
+
 pub struct Terrain {
     /// Height data for the terrain.
     height_map: HeightMap,
@@ -144,8 +180,6 @@ pub struct Terrain {
     /// The mesh we use to render chunks.
     chunk_mesh: ChunkMesh,
 
-    chunk_data: Vec<ChunkData>,
-
     /// Each node: (normal, elevation)
     nodes: Vec<Vec4>,
 
@@ -154,6 +188,9 @@ pub struct Terrain {
     lod_level: usize,
 
     normals_lookup: Vec<Vec3>,
+
+    /// An instance for each chunk to render for the terrain.
+    chunk_instances: Vec<GpuChunkInstance>,
 }
 
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
@@ -173,24 +210,6 @@ impl BufferLayout for TerrainVertex {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: ATTRS,
         }
-    }
-}
-
-#[derive(Clone, Copy, bytemuck::NoUninit)]
-#[repr(C)]
-struct ChunkData {
-    min: Vec3,
-    _padding1: f32,
-    max: Vec3,
-    _padding2: f32,
-}
-
-impl std::fmt::Debug for ChunkData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ChunkData")
-            .field("min", &self.min)
-            .field("max", &self.max)
-            .finish()
     }
 }
 
@@ -250,6 +269,21 @@ impl Terrain {
             info!("Loading terrain height map: {}", path.display());
             data_dir().load_height_map(path)?
         };
+
+        let chunk_instances = Self::build_chunk_instances(
+            &height_map,
+            terrain_mapping.nominal_edge_size,
+            terrain_mapping.altitude_map_height_base,
+        );
+
+        let chunk_instances_buffer =
+            renderer
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("chunk_instances_buffer"),
+                    contents: bytemuck::cast_slice(&chunk_instances),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
 
         let normals_lookup = Self::generate_normals_lookup_table();
 
@@ -321,40 +355,6 @@ impl Terrain {
             altitude_map_height_base,
             ..
         } = terrain_mapping;
-
-        // Generate the array of chunks we use for frustum culling.
-        let chunk_data = {
-            let mut chunk_data = Vec::with_capacity(total_chunks as usize);
-            for chunk_y in 0..chunks.y {
-                for chunk_x in 0..chunks.x {
-                    let y_range =
-                        (chunk_y * Self::CELLS_PER_CHUNK)..=((chunk_y + 1) * Self::CELLS_PER_CHUNK);
-                    let x_range =
-                        (chunk_x * Self::CELLS_PER_CHUNK)..=((chunk_x + 1) * Self::CELLS_PER_CHUNK);
-
-                    let mut min = Vec3::INFINITY;
-                    let mut max = Vec3::NEG_INFINITY;
-                    for y in y_range {
-                        for x in x_range.clone() {
-                            let position = height_map.position_for_vertex(
-                                IVec2::new(x as i32, y as i32),
-                                nominal_edge_size,
-                                altitude_map_height_base,
-                            );
-                            min = min.min(position);
-                            max = max.max(position);
-                        }
-                    }
-                    chunk_data.push(ChunkData {
-                        min,
-                        _padding1: 0.0,
-                        max,
-                        _padding2: 0.0,
-                    });
-                }
-            }
-            chunk_data
-        };
 
         info!(
             "terrain size: {} x {}, terrain heightmap size: {} x {}",
@@ -629,15 +629,6 @@ impl Terrain {
 
         // Process chunks
 
-        let chunk_data_buffer =
-            renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("chunk_data"),
-                    contents: bytemuck::cast_slice(&chunk_data),
-                    usage: wgpu::BufferUsages::STORAGE,
-                });
-
         let draw_args_descriptor = {
             let size_of_indirect_args = std::mem::size_of::<wgpu::util::DrawIndexedIndirectArgs>();
             wgpu::BufferDescriptor {
@@ -675,7 +666,7 @@ impl Terrain {
                             },
                             count: None,
                         },
-                        // u_chunk_data
+                        // u_chunk_instances
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
                             visibility: wgpu::ShaderStages::COMPUTE,
@@ -751,7 +742,7 @@ impl Terrain {
                         wgpu::BindGroupEntry {
                             binding: 1,
                             resource: wgpu::BindingResource::Buffer(
-                                chunk_data_buffer.as_entire_buffer_binding(),
+                                chunk_instances_buffer.as_entire_buffer_binding(),
                             ),
                         },
                         wgpu::BindGroupEntry {
@@ -790,8 +781,6 @@ impl Terrain {
 
             chunk_mesh,
 
-            chunk_data,
-
             nodes,
 
             render_bind_group,
@@ -799,7 +788,100 @@ impl Terrain {
             _draw_normals: false,
             lod_level: 0,
             normals_lookup,
+
+            chunk_instances,
         })
+    }
+
+    fn build_chunk_instances(
+        height_map: &HeightMap,
+        nominal_edge_size: f32,
+        elevation_base: f32,
+    ) -> Vec<GpuChunkInstance> {
+        let chunk_count = (height_map.size + UVec2::splat(Self::CELLS_PER_CHUNK) - UVec2::ONE)
+            / Self::CELLS_PER_CHUNK;
+
+        let mut chunk_instances =
+            Vec::with_capacity(chunk_count.x as usize * chunk_count.y as usize);
+
+        for chunk_y in 0..chunk_count.y as i32 {
+            for chunk_x in 0..chunk_count.x as i32 {
+                // The [BoundingSphere] API is causing us to re-allocate a new positions vec each
+                // time.
+                // let mut positions = {
+                //     let side = Self::CELLS_PER_CHUNK as usize + 1;
+                //     Vec::with_capacity(side * side)
+                // };
+
+                // To touch each node in the chunk, we have to do 0..=CELLS_PER_CHUNK to get the
+                // end edges.
+                //
+                // 0   1   2   3   4   5   6   7   8
+                // +---+---+---+---+---+---+---+---+
+                // | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+                // +---+---+---+---+---+---+---+---+
+                let chunk_min = IVec2::new(
+                    chunk_x * Self::CELLS_PER_CHUNK as i32,
+                    chunk_y * Self::CELLS_PER_CHUNK as i32,
+                );
+                let chunk_max = chunk_min + IVec2::splat(Self::CELLS_PER_CHUNK as i32);
+
+                let mut min_elevation = u8::MAX;
+                let mut max_elevation = u8::MIN;
+                for node_y in chunk_min.y..=chunk_max.y {
+                    for node_x in chunk_min.x..=chunk_max.x {
+                        let elevation = height_map.elevation_at(IVec2::new(node_x, node_y));
+                        min_elevation = min_elevation.min(elevation);
+                        max_elevation = max_elevation.max(elevation);
+                    }
+                }
+
+                let min_elevation = min_elevation as f32 * elevation_base;
+                let max_elevation = max_elevation as f32 * elevation_base;
+
+                let world_min = Vec3::new(
+                    chunk_min.x as f32 * nominal_edge_size,
+                    chunk_min.y as f32 * nominal_edge_size,
+                    min_elevation,
+                );
+
+                let world_max = Vec3::new(
+                    chunk_max.x as f32 * nominal_edge_size,
+                    chunk_max.y as f32 * nominal_edge_size,
+                    max_elevation,
+                );
+
+                let center = (world_min + world_max) * 0.5;
+                let half_diagonal = (world_max - world_min) * 0.5;
+                let radius = half_diagonal.length();
+
+                let sphere = BoundingSphere { center, radius };
+
+                let mut flags = 0_u32;
+                if chunk_x == 0 {
+                    flags |= CHUNK_INSTANCE_FLAG_STRATA_EAST;
+                } else if chunk_x == chunk_count.x as i32 - 1 {
+                    flags |= CHUNK_INSTANCE_FLAG_STRATA_WEST;
+                }
+                if chunk_y == 0 {
+                    flags |= CHUNK_INSTANCE_FLAG_STRATA_SOUTH;
+                } else if chunk_y == chunk_count.y as i32 - 1 {
+                    flags |= CHUNK_INSTANCE_FLAG_STRATA_NORTH;
+                }
+
+                chunk_instances.push(GpuChunkInstance {
+                    center: sphere.center,
+                    radius: sphere.radius,
+                    chunk: IVec2::new(chunk_x, chunk_y),
+                    min_elevation,
+                    max_elevation,
+                    flags,
+                    _pad0: Default::default(),
+                });
+            }
+        }
+
+        chunk_instances
     }
 
     pub fn render(
@@ -822,7 +904,7 @@ impl Terrain {
         });
 
         // Always use the main camera for frustum culling.
-        self.process_chunks(frustum_camera_bind_group);
+        self.process_chunks(frame, frustum_camera_bind_group);
 
         self.strata.render(
             frame,
@@ -845,45 +927,11 @@ impl Terrain {
         // }
 
         if false {
-            let color = Vec4::new(0.0, 1.0, 0.0, 1.0);
-            for data in self.chunk_data.iter() {
-                let ChunkData { min, max, .. } = data;
-
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, min.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, min.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, min.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, min.y, max.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, min.y, max.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(min.x, max.y, max.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
-
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, min.z), color));
-                vertices.push(GizmoVertex::new(Vec3::new(max.x, max.y, max.z), color));
+            // Render terrain chunk bounding spheres.
+            for chunk_instance in self.chunk_instances.iter() {
+                let transform = Mat4::from_translation(chunk_instance.center);
+                let radius = chunk_instance.radius;
+                vertices.extend(GizmosRenderer::create_iso_sphere(transform, radius, 32));
             }
         }
 
@@ -993,27 +1041,18 @@ impl Terrain {
 impl Terrain {
     /// Run the process_chunks compute shader to cull chunks not in the camera frustum and to set
     /// the LOD level.
-    pub fn process_chunks(&self, camera_bind_group: &wgpu::BindGroup) {
-        let mut encoder =
-            renderer()
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("process_chunks"),
-                });
-
-        {
-            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+    pub fn process_chunks(&self, frame: &mut Frame, camera_bind_group: &wgpu::BindGroup) {
+        let mut compute_pass = frame
+            .encoder
+            .begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("process_chunks"),
                 timestamp_writes: None,
             });
 
-            compute_pass.set_pipeline(&self.process_chunks_pipeline);
-            compute_pass.set_bind_group(0, camera_bind_group, &[]);
-            compute_pass.set_bind_group(1, &self.process_chunks_bind_group, &[]);
-            compute_pass.dispatch_workgroups(self.total_chunks.div_ceil(64), 1, 1);
-        }
-
-        renderer().queue.submit(std::iter::once(encoder.finish()));
+        compute_pass.set_pipeline(&self.process_chunks_pipeline);
+        compute_pass.set_bind_group(0, camera_bind_group, &[]);
+        compute_pass.set_bind_group(1, &self.process_chunks_bind_group, &[]);
+        compute_pass.dispatch_workgroups(self.total_chunks.div_ceil(64), 1, 1);
     }
 
     fn render_terrain(

@@ -2,7 +2,7 @@
 
 use crate::{
     engine::{gizmos::GizmoVertex, prelude::*},
-    game::math::{Frustum, Ray, ViewProjection},
+    game::math::{Ray, ViewProjection},
 };
 
 use glam::{FloatExt, Mat4, Quat, Vec2, Vec3, Vec4};
@@ -139,13 +139,14 @@ impl GpuCamera {
         let data = CameraBuffer {
             proj_view: view_projection.mat,
             position: position.extend(1.0),
-            frustum: Frustum::from(view_projection.mat)
+            frustum: view_projection
+                .frustum()
                 .planes
                 .map(|p| p.normal.extend(p.distance)),
         };
         renderer()
             .queue
-            .write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[data]));
+            .write_buffer(&self.buffer, 0, bytemuck::bytes_of(&data));
     }
 }
 
