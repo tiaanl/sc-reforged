@@ -6,3 +6,9 @@ struct Camera {
     _padding: f32,
     frustum: array<vec4<f32>, 6>,
 }
+
+fn camera_forward(camera: Camera) -> vec3<f32> {
+    let normal = camera.frustum[4].xyz;
+    let length = max(length(normal), 1e-6);
+    return normal / length;
+}

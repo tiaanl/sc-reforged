@@ -1,4 +1,4 @@
-#define_import_path world::environment
+#define_import_path environment
 
 struct Environment {
     sun_dir: vec4<f32>,    // x, y, z, PADDING

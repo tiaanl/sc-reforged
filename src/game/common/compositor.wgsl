@@ -1,5 +1,4 @@
 #import world::camera
-#import world::environment
 
 @group(0) @binding(0) var t_color: texture_2d<f32>;
 @group(0) @binding(1) var t_oit_accumulation: texture_2d<f32>;

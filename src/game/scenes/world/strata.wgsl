@@ -1,5 +1,4 @@
 #import world::camera
-#import world::environment
 #import world::geometry_buffers
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;

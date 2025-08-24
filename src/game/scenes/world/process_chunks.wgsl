@@ -9,6 +9,7 @@ struct ChunkInstance {
     min_elevation: f32,
     max_elevation: f32,
 
+    lod_index: u32,
     flags: u32,
 }
 
@@ -22,16 +23,26 @@ struct DrawArgs {
 
 @group(0) @binding(0) var<uniform> u_camera: camera::Camera;
 
-@group(1) @binding(0) var<uniform> u_terrain_data: terrain::TerrainData;
-@group(1) @binding(1) var<storage, read> u_chunk_instances: array<ChunkInstance>;
-@group(1) @binding(2) var<storage, read_write> u_terrain_draw_args: array<DrawArgs>;
-@group(1) @binding(3) var<storage, read_write> u_water_draw_args: array<DrawArgs>;
+@group(1) @binding(0) var<uniform> u_environment: environment::Environment;
+
+@group(2) @binding(0) var<uniform> u_terrain_data: terrain::TerrainData;
+@group(2) @binding(1) var<storage, read_write> u_chunk_instances: array<ChunkInstance>;
+@group(2) @binding(2) var<storage, read_write> u_terrain_draw_args: array<DrawArgs>;
+@group(2) @binding(3) var<storage, read_write> u_water_draw_args: array<DrawArgs>;
+@group(2) @binding(4) var<storage, read_write> u_wireframe_draw_args: array<DrawArgs>;
 
 const LEVELS: array<vec2<u32>, 4> = array<vec2<u32>, 4>(
     vec2<u32>(0u, 384u),
     vec2<u32>(384u, 96u),
     vec2<u32>(480u, 24u),
     vec2<u32>(504u, 6u),
+);
+
+const WIREFRAME_LEVELS: array<vec2<u32>, 4> = array<vec2<u32>, 4>(
+    vec2<u32>(0u, 512u),
+    vec2<u32>(512u, 128u),
+    vec2<u32>(640u, 32u),
+    vec2<u32>(672u, 8u),
 );
 
 fn draw_terrain_chunk(chunk_index: u32, level: u32) {
@@ -43,6 +54,16 @@ fn draw_terrain_chunk(chunk_index: u32, level: u32) {
         lod_data.x,     // first_index,
         0,              // vertex_base
         chunk_index,    // first_instance - Use the first instance as the chunk index.
+    );
+
+    let wireframe_lod_data = WIREFRAME_LEVELS[level];
+
+    u_wireframe_draw_args[chunk_index] = DrawArgs(
+        wireframe_lod_data.y,   // index_count
+        1,                      // instance_count,
+        wireframe_lod_data.x,   // first_index,
+        0,                      // vertex_base
+        chunk_index,            // first_instance - Use the first instance as the chunk index.
     );
 }
 
@@ -62,10 +83,23 @@ fn draw_water_chunk(chunk_index: u32) {
 
 fn hide_terrain_chunk(chunk_index: u32) {
     u_terrain_draw_args[chunk_index] = DrawArgs(0, 0, 0, 0, 0);
+    u_wireframe_draw_args[chunk_index] = DrawArgs(0, 0, 0, 0, 0);
 }
 
 fn hide_water_chunk(chunk_index: u32) {
     u_water_draw_args[chunk_index] = DrawArgs(0, 0, 0, 0, 0);
+}
+
+fn lod_index(center: vec3<f32>) -> u32 {
+    let far = max(u_environment.fog_params.y, 1e-6);
+    let inv_step = f32(4) / far;
+    let forward = camera::camera_forward(u_camera);
+
+    let distance = max(0.0, dot(center - u_camera.position, forward));
+
+    let t = distance * inv_step;
+    let i = i32(floor(t));
+    return u32(clamp(i, 0, i32(3)));
 }
 
 @compute
@@ -81,9 +115,14 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
     let chunk_instance: ChunkInstance = u_chunk_instances[chunk_index];
 
+    let lod = lod_index(chunk_instance.center);
+
+    // Write the LOD index to the chunk instances.
+    u_chunk_instances[chunk_index].lod_index = lod;
+
     let visible = frustum::is_sphere_in_frustum(f, chunk_instance.center, chunk_instance.radius);
     if visible {
-        draw_terrain_chunk(chunk_index, 0u);
+        draw_terrain_chunk(chunk_index, lod);
     } else {
         hide_terrain_chunk(chunk_index);
     }
