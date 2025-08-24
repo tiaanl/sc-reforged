@@ -256,7 +256,7 @@ impl WorldScene {
                 if let Err(err) = objects.spawn(
                     // Rotate objects to the left.
                     Transform::from_translation(object.position)
-                        .with_euler_rotation(object.rotation * Vec3::new(1.0, -1.0, -1.0)),
+                        .with_euler_rotation(object.rotation * Vec3::new(1.0, 1.0, -1.0)),
                     object_type,
                     &object.name,
                     &object.title,
