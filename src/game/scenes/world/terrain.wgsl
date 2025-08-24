@@ -13,8 +13,6 @@
 @group(2) @binding(5) var shadow_map: texture_depth_2d;
 @group(2) @binding(6) var shadow_map_sampler: sampler_comparison;
 
-var<push_constant> u_chunk_index: vec2<u32>;
-
 fn get_node_world_position(node: terrain::Node) -> vec3<f32> {
     return vec3<f32>(
         f32(node.x) * u_terrain_data.nominal_edge_size,
@@ -200,8 +198,9 @@ fn water_fragment_main(v: VertexOutput) -> geometry_buffers::AlphaGeometryBuffer
 @vertex
 fn wireframe_vertex_main(@builtin(instance_index) chunk_index: u32, vertex: VertexInput) -> @builtin(position) vec4<f32> {
     let chunk_pos = terrain::get_chunk_pos_from_index(u_terrain_data, chunk_index);
-    let node = terrain::get_node(u_terrain_data, u_chunk_index, vertex.index);
+    let node = terrain::get_node(u_terrain_data, chunk_pos, vertex.index);
     let world_position = get_node_world_position(node);
+
     return u_camera.mat_proj_view * vec4(world_position, 1.0);
 }
 
