@@ -99,24 +99,6 @@ impl WorldScene {
 
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
 
-        let mut shaders = Shaders::new();
-        camera::register_camera_shader(&mut shaders);
-        shaders.add_module(include_str!("environment.wgsl"), "environment.wgsl");
-        shaders.add_module(
-            include_str!("../../common/fullscreen.wgsl"),
-            "fullscreen.wgsl",
-        );
-        shaders.add_module(include_str!("../../common/renderer/math.wgsl"), "math.wgsl");
-        shaders.add_module(
-            include_str!("../../common/renderer/animation.wgsl"),
-            "animation.wgsl",
-        );
-        shaders.add_module(
-            include_str!("../../common/geometry_buffers.wgsl"),
-            "geometry_buffers.wgsl",
-        );
-        shaders.add_module(include_str!("frustum.wgsl"), "frustum.wgsl");
-
         let main_camera = {
             let camera_from = campaign.view_initial.from.extend(2500.0);
             let camera_to = campaign.view_initial.to.extend(0.0);
@@ -245,14 +227,12 @@ impl WorldScene {
         let light_gpu_camera = GpuCamera::new();
 
         let compositor = Compositor::new(
-            &mut shaders,
             &geometry_buffers.bind_group_layout,
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
         );
 
         let terrain = Terrain::new(
-            &mut shaders,
             &campaign_def,
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
@@ -261,7 +241,6 @@ impl WorldScene {
         )?;
 
         let mut objects = objects::Objects::new(
-            &mut shaders,
             &shadow_render_target,
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
@@ -288,14 +267,12 @@ impl WorldScene {
         }
 
         let overlay_renderer = OverlayRenderer::new(
-            &mut shaders,
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
             &geometry_buffers,
         );
 
-        let gizmos_renderer =
-            GizmosRenderer::new(&mut shaders, &main_camera.gpu_camera.bind_group_layout);
+        let gizmos_renderer = GizmosRenderer::new(&main_camera.gpu_camera.bind_group_layout);
 
         let fps_history = vec![0.0; 100];
         let fps_history_cursor = 0;
@@ -469,7 +446,7 @@ impl Scene for WorldScene {
                 2048,                                // shadow map resolution
                 50.0,                                // XY guard band in world units
                 50.0,                                // near guard
-                50.0,                                // far guard
+                -5000.0,                             // far guard
                 true,                                // texel snapping
             );
 

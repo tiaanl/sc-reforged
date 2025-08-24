@@ -34,13 +34,11 @@ pub struct Objects {
 
 impl Objects {
     pub fn new(
-        shaders: &mut Shaders,
         shadow_render_target: &RenderTarget,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
         let model_renderer = ModelRenderer::new(
-            shaders,
             shadow_render_target,
             camera_bind_group_layout,
             environment_bind_group_layout,

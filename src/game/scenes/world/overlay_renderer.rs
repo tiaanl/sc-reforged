@@ -1,6 +1,7 @@
 use crate::{
-    engine::{prelude::Frame, renderer::renderer, shaders::Shaders},
+    engine::{prelude::Frame, renderer::renderer},
     game::geometry_buffers::GeometryBuffers,
+    wgsl_shader,
 };
 
 pub struct OverlayRenderer {
@@ -9,17 +10,13 @@ pub struct OverlayRenderer {
 
 impl OverlayRenderer {
     pub fn new(
-        shaders: &mut Shaders,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
         geometry_buffers: &GeometryBuffers,
     ) -> Self {
-        let module = shaders.create_shader(
-            "overlay",
-            include_str!("overlay.wgsl"),
-            "overlay.wgsl",
-            Default::default(),
-        );
+        let module = renderer()
+            .device
+            .create_shader_module(wgsl_shader!("overlay"));
 
         let layout = renderer()
             .device
@@ -40,7 +37,7 @@ impl OverlayRenderer {
                 layout: Some(&layout),
                 vertex: wgpu::VertexState {
                     module: &module,
-                    entry_point: None,
+                    entry_point: Some("vertex_main"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     buffers: &[],
                 },
@@ -49,7 +46,7 @@ impl OverlayRenderer {
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: &module,
-                    entry_point: None,
+                    entry_point: Some("fragment_main"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: renderer().surface.format(),

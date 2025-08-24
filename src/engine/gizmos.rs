@@ -1,10 +1,7 @@
 use glam::{Mat4, Vec3, Vec4};
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
-use crate::{
-    Frame,
-    engine::{prelude::renderer, shaders::Shaders},
-};
+use crate::{Frame, engine::prelude::renderer, wgsl_shader};
 
 use super::renderer::BufferLayout;
 
@@ -46,15 +43,10 @@ pub struct GizmosRenderer {
 }
 
 impl GizmosRenderer {
-    pub fn new(shaders: &mut Shaders, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let renderer = renderer();
 
-        let module = shaders.create_shader(
-            "gizmos",
-            include_str!("gizmos.wgsl"),
-            "gizmos.wgsl",
-            Default::default(),
-        );
+        let module = renderer.device.create_shader_module(wgsl_shader!("gizmos"));
 
         let layout = renderer
             .device
@@ -71,7 +63,7 @@ impl GizmosRenderer {
                 layout: Some(&layout),
                 vertex: wgpu::VertexState {
                     module: &module,
-                    entry_point: None,
+                    entry_point: Some("vertex_main"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     buffers: &[GizmoVertex::layout()],
                 },
@@ -83,7 +75,7 @@ impl GizmosRenderer {
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: &module,
-                    entry_point: None,
+                    entry_point: Some("fragment_main"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: renderer.surface.format(),

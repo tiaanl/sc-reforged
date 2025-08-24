@@ -18,6 +18,7 @@ use crate::{
             render_textures,
         },
     },
+    wgsl_shader,
 };
 
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
@@ -115,7 +116,6 @@ pub struct ModelRenderer {
 
 impl ModelRenderer {
     pub fn new(
-        shaders: &mut Shaders,
         shadow_render_target: &RenderTarget,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
@@ -127,12 +127,9 @@ impl ModelRenderer {
         // Default for 1024 instances for now.
         let instances_buffer = InstancesBuffer::new(2);
 
-        let module = shaders.create_shader(
-            "model_renderer",
-            include_str!("model_renderer.wgsl"),
-            "model_renderer.wgsl",
-            Default::default(),
-        );
+        let module = renderer()
+            .device
+            .create_shader_module(wgsl_shader!("model_renderer"));
 
         let layout = renderer()
             .device

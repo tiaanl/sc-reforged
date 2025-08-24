@@ -1,4 +1,4 @@
-use std::{collections::HashMap, f32::consts::PI, path::PathBuf};
+use std::{f32::consts::PI, path::PathBuf};
 
 use glam::{IVec2, UVec2, Vec4};
 use tracing::info;
@@ -13,6 +13,7 @@ use crate::{
         height_map::HeightMap,
         image::images,
     },
+    wgsl_shader,
 };
 
 use super::strata::Strata;
@@ -213,7 +214,6 @@ impl Terrain {
     pub const VERTICES_PER_CHUNK: u32 = Self::CELLS_PER_CHUNK + 1;
 
     pub fn new(
-        shaders: &mut Shaders,
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
@@ -226,8 +226,6 @@ impl Terrain {
 
         let water_level =
             terrain_mapping.water_level as f32 * terrain_mapping.altitude_map_height_base;
-
-        shaders.add_module(include_str!("terrain_data.wgsl"), "terrain_data.wgsl");
 
         let terrain_texture_view = {
             let path = PathBuf::from("trnhigh")
@@ -540,12 +538,9 @@ impl Terrain {
                 ],
             });
 
-        let module = shaders.create_shader(
-            "terrain",
-            include_str!("terrain.wgsl"),
-            "terrain.wgsl",
-            HashMap::default(),
-        );
+        let module = renderer
+            .device
+            .create_shader_module(wgsl_shader!("terrain"));
 
         let terrain_pipeline_layout =
             renderer
@@ -656,7 +651,6 @@ impl Terrain {
         let water_draw_args_buffer = renderer.device.create_buffer(&draw_args_descriptor);
 
         let strata = Strata::new(
-            shaders,
             height_map.size,
             camera_bind_group_layout,
             environment_bind_group_layout,
@@ -717,12 +711,9 @@ impl Terrain {
                     ],
                 });
 
-        let module = shaders.create_shader(
-            "process_chunks",
-            include_str!("process_chunks.wgsl"),
-            "process_chunks.wgsl",
-            HashMap::default(),
-        );
+        let module = renderer
+            .device
+            .create_shader_module(wgsl_shader!("process_chunks"));
 
         let layout = renderer
             .device

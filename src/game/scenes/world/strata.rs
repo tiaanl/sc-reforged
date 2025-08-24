@@ -7,6 +7,7 @@ use crate::engine::prelude::*;
 use crate::game::geometry_buffers::GeometryBuffers;
 use crate::game::image::images;
 use crate::game::scenes::world::terrain::Terrain;
+use crate::wgsl_shader;
 
 pub struct Strata {
     mesh: GpuIndexedMesh,
@@ -19,7 +20,6 @@ pub struct Strata {
 impl Strata {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        shaders: &mut Shaders,
         terrain_size: UVec2,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
@@ -191,12 +191,7 @@ impl Strata {
                 ],
             });
 
-        let module = shaders.create_shader(
-            "strata",
-            include_str!("strata.wgsl"),
-            "strata.wgsl",
-            Default::default(),
-        );
+        let module = renderer.device.create_shader_module(wgsl_shader!("strata"));
 
         let pipeline_layout =
             renderer
@@ -219,7 +214,7 @@ impl Strata {
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &module,
-                        entry_point: None,
+                        entry_point: Some("vertex_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[
                             StrataVertex::layout(),
@@ -243,7 +238,7 @@ impl Strata {
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &module,
-                        entry_point: None,
+                        entry_point: Some("fragment_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffers::opaque_targets(),
                     }),

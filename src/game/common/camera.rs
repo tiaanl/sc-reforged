@@ -7,10 +7,6 @@ use crate::{
 
 use glam::{FloatExt, Mat4, Quat, Vec2, Vec3, Vec4};
 
-pub fn register_camera_shader(shaders: &mut Shaders) {
-    shaders.add_module(include_str!("camera.wgsl"), "camera.wgsl");
-}
-
 #[derive(Debug, Default)]
 pub struct Camera {
     pub position: Vec3,

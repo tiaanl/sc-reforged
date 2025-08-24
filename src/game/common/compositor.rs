@@ -1,4 +1,4 @@
-use crate::engine::prelude::*;
+use crate::{engine::prelude::*, wgsl_shader};
 
 use super::geometry_buffers::GeometryBuffers;
 
@@ -8,17 +8,13 @@ pub struct Compositor {
 
 impl Compositor {
     pub fn new(
-        shaders: &mut Shaders,
         geometry_buffers_bind_group_layout: &wgpu::BindGroupLayout,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let module = shaders.create_shader(
-            "compositor",
-            include_str!("compositor.wgsl"),
-            "compositor.wgsl",
-            Default::default(),
-        );
+        let module = renderer()
+            .device
+            .create_shader_module(wgsl_shader!("compositor"));
 
         let pipeline_layout =
             renderer()
@@ -41,7 +37,7 @@ impl Compositor {
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &module,
-                        entry_point: None,
+                        entry_point: Some("vertex_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[],
                     },
@@ -50,7 +46,7 @@ impl Compositor {
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &module,
-                        entry_point: None,
+                        entry_point: Some("fragment_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: &[Some(wgpu::ColorTargetState {
                             format: renderer().surface.format(),
