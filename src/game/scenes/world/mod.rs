@@ -94,6 +94,8 @@ pub struct WorldScene {
 }
 
 impl WorldScene {
+    const SHADOW_MAP_RESOLUTION: u32 = 2048;
+
     pub fn new(campaign_def: CampaignDef) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
@@ -210,7 +212,7 @@ impl WorldScene {
         let shadow_render_target = RenderTarget::new(
             &renderer().device,
             "shadow",
-            UVec2::new(4096, 4096),
+            UVec2::new(Self::SHADOW_MAP_RESOLUTION, Self::SHADOW_MAP_RESOLUTION),
             wgpu::TextureFormat::Depth32Float,
         );
 
@@ -445,7 +447,7 @@ impl Scene for WorldScene {
             let view_projection = fit_directional_light(
                 self.environment.sun_dir.truncate(), // your sun direction
                 &main_view_projection,               // Camera
-                2048,                                // shadow map resolution
+                Self::SHADOW_MAP_RESOLUTION,         // shadow map resolution
                 50.0,                                // XY guard band in world units
                 50.0,                                // near guard
                 50.0,                                // far guard
@@ -636,11 +638,6 @@ impl Scene for WorldScene {
             );
         }
 
-        self.geometry_data = self.last_mouse_position.map(|position| {
-            self.geometry_buffers
-                .fetch_data(&renderer().device, &renderer().queue, position)
-        });
-
         {
             let _z = tracy_client::span!("render gizmos");
             // Render any kind of debug overlays.
@@ -689,6 +686,13 @@ impl Scene for WorldScene {
 
         self.fps_history[self.fps_history_cursor] = render_time.as_secs_f32();
         self.fps_history_cursor = (self.fps_history_cursor + 1) % self.fps_history.len();
+    }
+
+    fn post_render(&mut self) {
+        self.geometry_data = self.last_mouse_position.map(|position| {
+            self.geometry_buffers
+                .fetch_data(&renderer().device, &renderer().queue, position)
+        });
     }
 
     #[cfg(feature = "egui")]
