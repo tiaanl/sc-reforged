@@ -907,6 +907,7 @@ impl Terrain {
     pub fn render(
         &self,
         frame: &mut Frame,
+        in_editor: bool,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
@@ -940,7 +941,7 @@ impl Terrain {
             environment_bind_group,
         );
 
-        if self.draw_wireframe {
+        if in_editor && self.draw_wireframe {
             self.render_wireframe(
                 frame,
                 geometry_buffers,

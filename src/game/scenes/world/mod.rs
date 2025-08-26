@@ -15,11 +15,14 @@ use crate::{
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
         math::ViewProjection,
-        scenes::world::{actions::PlayerAction, overlay_renderer::OverlayRenderer},
+        scenes::world::{
+            actions::PlayerAction, game_mode::GameMode, overlay_renderer::OverlayRenderer,
+        },
     },
 };
 
 pub mod actions;
+mod game_mode;
 mod object;
 mod objects;
 mod overlay_renderer;
@@ -57,6 +60,8 @@ struct Camera<C: camera::Controller> {
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
+    game_mode: GameMode,
+
     view_debug_camera: bool,
     control_debug_camera: bool,
 
@@ -282,6 +287,8 @@ impl WorldScene {
         let fps_history_cursor = 0;
 
         Ok(Self {
+            game_mode: GameMode::Editor,
+
             view_debug_camera: false,
             control_debug_camera: false,
 
@@ -315,6 +322,10 @@ impl WorldScene {
 
             render_overlay: false,
         })
+    }
+
+    pub fn in_editor(&self) -> bool {
+        matches!(self.game_mode, GameMode::Editor)
     }
 
     fn calculate_environment(&self, time_of_day: f32) -> Environment {
@@ -375,6 +386,14 @@ impl Scene for WorldScene {
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
+        if input.key_just_pressed(KeyCode::Backquote) {
+            self.game_mode = if self.in_editor() {
+                GameMode::Game
+            } else {
+                GameMode::Editor
+            }
+        }
+
         if input.mouse_just_pressed(MouseButton::Left) {
             if let Some(ref data) = self.geometry_data {
                 // TODO: This needs a better place.
@@ -589,7 +608,7 @@ impl Scene for WorldScene {
 
         // --- Color pass ---
 
-        let view_camera_bind_group = if self.view_debug_camera {
+        let view_camera_bind_group = if self.in_editor() && self.view_debug_camera {
             &self.debug_camera.gpu_camera.bind_group
         } else {
             &self.main_camera.gpu_camera.bind_group
@@ -599,6 +618,7 @@ impl Scene for WorldScene {
             // Render Opaque geometry first.
             self.terrain.render(
                 frame,
+                self.in_editor(),
                 &self.geometry_buffers,
                 view_camera_bind_group,
                 &self.environment_bind_group,
@@ -622,7 +642,7 @@ impl Scene for WorldScene {
             );
         }
 
-        if self.render_overlay {
+        if self.in_editor() && self.render_overlay {
             self.overlay_renderer.render(
                 frame,
                 &self.main_camera.gpu_camera.bind_group,
@@ -638,7 +658,7 @@ impl Scene for WorldScene {
             );
         }
 
-        {
+        if self.in_editor() {
             let _z = tracy_client::span!("render gizmos");
             // Render any kind of debug overlays.
             self.terrain.render_gizmos(&mut gizmos_vertices);
@@ -698,6 +718,10 @@ impl Scene for WorldScene {
     #[cfg(feature = "egui")]
     fn debug_panel(&mut self, ctx: &egui::Context) {
         use egui::widgets::Slider;
+
+        if !self.in_editor() {
+            return;
+        }
 
         egui::Window::new("World")
             .default_open(true)
