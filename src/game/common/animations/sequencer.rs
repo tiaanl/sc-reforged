@@ -27,6 +27,7 @@ impl Sequencer {
     pub fn update(&mut self, delta_time: f32) {
         let Some(front) = self.sequence.front_mut() else {
             // There is nothing to play.
+            self.time = 0.0;
             return;
         };
 
@@ -38,6 +39,7 @@ impl Sequencer {
                 let duration = animation.last_key_frame().unwrap_or_default() as f32;
                 if self.time >= duration {
                     self.time -= duration;
+                    self.sequence.pop_front();
                 }
             }
 
@@ -58,6 +60,9 @@ impl Sequencer {
                 let animation = animations().get(animation).expect("Missing animation!");
                 let duration = animation.last_key_frame().unwrap_or_default() as f32;
                 self.time = self.time.rem_euclid(duration);
+                if self.time >= duration {
+                    self.time -= duration;
+                }
             }
         }
     }
