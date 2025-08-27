@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{
-    engine::{gizmos::GizmoVertex, prelude::*},
+    engine::prelude::*,
     game::math::{Ray, ViewProjection},
 };
 
@@ -544,39 +544,5 @@ impl Controller for GameCameraController {
 
         // Interpolate the desired closer to the target.
         self.current.lerp(&self.desired, 0.1);
-    }
-}
-
-pub fn render_camera_frustum(
-    view_projection: &ViewProjection,
-    gizmo_vertices: &mut Vec<GizmoVertex>,
-) {
-    const COLOR: Vec4 = Vec4::new(0.0, 1.0, 0.0, 1.0);
-    const EDGES: &[(usize, usize)] = &[
-        // near ring
-        (0, 1),
-        (1, 2),
-        (2, 3),
-        (3, 0),
-        // sides
-        (0, 4),
-        (1, 5),
-        (2, 6),
-        (3, 7),
-        // far ring
-        (4, 5),
-        (5, 6),
-        (6, 7),
-        (7, 4),
-    ];
-
-    let v: [GizmoVertex; 8] = view_projection
-        .corners()
-        .map(|p| GizmoVertex::new(p, COLOR));
-
-    gizmo_vertices.reserve(EDGES.len() * 2);
-    for &(from, to) in EDGES {
-        gizmo_vertices.push(v[from]);
-        gizmo_vertices.push(v[to]);
     }
 }

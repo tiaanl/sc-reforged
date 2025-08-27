@@ -172,7 +172,7 @@ pub struct Terrain {
     /// Each node: (normal, elevation)
     nodes: Vec<Vec4>,
 
-    draw_wireframe: bool,
+    render_wireframe: bool,
     lod_level: usize,
 
     normals_lookup: Vec<Vec3>,
@@ -804,7 +804,7 @@ impl Terrain {
             nodes,
 
             render_bind_group,
-            draw_wireframe: true,
+            render_wireframe: false,
             lod_level: 0,
             normals_lookup,
 
@@ -941,7 +941,7 @@ impl Terrain {
             environment_bind_group,
         );
 
-        if in_editor && self.draw_wireframe {
+        if in_editor && self.render_wireframe {
             self.render_wireframe(
                 frame,
                 geometry_buffers,
@@ -1012,7 +1012,7 @@ impl Terrain {
     #[cfg(feature = "egui")]
     pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
         use egui::widgets::DragValue;
-        ui.checkbox(&mut self.draw_wireframe, "Draw wireframe");
+        ui.checkbox(&mut self.render_wireframe, "Draw wireframe");
 
         ui.horizontal(|ui| {
             ui.label("Water level");

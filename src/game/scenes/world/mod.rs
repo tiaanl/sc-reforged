@@ -74,7 +74,6 @@ pub struct WorldScene {
     // Render
     geometry_buffers: GeometryBuffers,
     compositor: Compositor,
-    gizmos_renderer: GizmosRenderer,
     shadow_render_target: RenderTarget,
     light_gpu_camera: GpuCamera,
 
@@ -94,6 +93,9 @@ pub struct WorldScene {
     last_frame_time: std::time::Instant,
     fps_history: Vec<f32>,
     fps_history_cursor: usize,
+
+    gizmos_vertices: Vec<GizmoVertex>,
+    gizmos_renderer: GizmosRenderer,
 
     render_overlay: bool,
 }
@@ -302,7 +304,6 @@ impl WorldScene {
             shadow_render_target,
             light_gpu_camera,
             compositor,
-            gizmos_renderer,
 
             overlay_renderer,
 
@@ -319,6 +320,9 @@ impl WorldScene {
             last_frame_time: std::time::Instant::now(),
             fps_history,
             fps_history_cursor,
+
+            gizmos_vertices: Vec::with_capacity(128),
+            gizmos_renderer,
 
             render_overlay: false,
         })
@@ -589,22 +593,18 @@ impl Scene for WorldScene {
             );
         }
 
-        let mut gizmos_vertices = Vec::default();
-
         // --- Shadow pass ---
 
-        if true {
-            let _z = tracy_client::span!("render shadow map");
-            let light_frustum = light_view_projection.frustum();
+        let _z = tracy_client::span!("render shadow map");
+        let light_frustum = light_view_projection.frustum();
 
-            self.objects.render_shadow_casters(
-                frame,
-                &self.shadow_render_target,
-                &light_frustum,
-                &self.environment_bind_group,
-                &self.light_gpu_camera.bind_group,
-            );
-        }
+        self.objects.render_shadow_casters(
+            frame,
+            &self.shadow_render_target,
+            &light_frustum,
+            &self.environment_bind_group,
+            &self.light_gpu_camera.bind_group,
+        );
 
         // --- Color pass ---
 
@@ -660,25 +660,31 @@ impl Scene for WorldScene {
 
         if self.in_editor() {
             let _z = tracy_client::span!("render gizmos");
+
+            self.gizmos_vertices.clear();
+
             // Render any kind of debug overlays.
-            self.terrain.render_gizmos(&mut gizmos_vertices);
-            self.objects.render_gizmos(&mut gizmos_vertices);
+            self.terrain.render_gizmos(&mut self.gizmos_vertices);
+            self.objects.render_gizmos(&mut self.gizmos_vertices);
 
             if false {
                 // Render the direction of the sun.
-                let vertices = [
+                self.gizmos_vertices.extend_from_slice(&[
                     GizmoVertex::new(Vec3::ZERO, Vec4::new(0.0, 0.0, 1.0, 1.0)),
                     GizmoVertex::new(
                         self.environment.sun_dir.xyz() * 1_000.0,
                         Vec4::new(0.0, 0.0, 1.0, 1.0),
                     ),
-                ];
-                gizmos_vertices.extend(vertices);
+                ]);
             }
 
             // Render the main camera frustum when we're looking through the debug camera.
             if self.view_debug_camera {
-                camera::render_camera_frustum(&main_view_projection, &mut gizmos_vertices);
+                self.gizmos_vertices
+                    .extend(GizmosRenderer::create_view_projection(
+                        &main_view_projection,
+                        Vec4::new(1.0, 0.0, 1.0, 1.0),
+                    ));
             }
 
             if let Some(ref data) = self.geometry_data {
@@ -690,14 +696,8 @@ impl Scene for WorldScene {
                     .render(frame, view_camera_bind_group, &vertices);
             }
 
-            gizmos_vertices.push(GizmoVertex::new(Vec3::ZERO, Vec4::new(1.0, 0.0, 0.0, 1.0)));
-            gizmos_vertices.push(GizmoVertex::new(
-                Vec3::Z * 100.0,
-                Vec4::new(1.0, 0.0, 0.0, 1.0),
-            ));
-
             self.gizmos_renderer
-                .render(frame, view_camera_bind_group, &gizmos_vertices);
+                .render(frame, view_camera_bind_group, &self.gizmos_vertices);
         }
 
         let now = std::time::Instant::now();

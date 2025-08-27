@@ -1,7 +1,7 @@
 use glam::{Mat4, Vec3, Vec4};
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
-use crate::{Frame, engine::prelude::renderer, wgsl_shader};
+use crate::{Frame, engine::prelude::renderer, game::math::ViewProjection, wgsl_shader};
 
 use super::renderer::BufferLayout;
 
@@ -178,5 +178,41 @@ impl GizmosRenderer {
         }
 
         vertices
+    }
+
+    pub fn create_view_projection(
+        view_projection: &ViewProjection,
+        color: Vec4,
+    ) -> Vec<GizmoVertex> {
+        const EDGES: &[(usize, usize)] = &[
+            // near ring
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 0),
+            // sides
+            (0, 4),
+            (1, 5),
+            (2, 6),
+            (3, 7),
+            // far ring
+            (4, 5),
+            (5, 6),
+            (6, 7),
+            (7, 4),
+        ];
+
+        let mut result = Vec::with_capacity(EDGES.len() * 2);
+
+        let v: [GizmoVertex; 8] = view_projection
+            .corners()
+            .map(|p| GizmoVertex::new(p, color));
+
+        for &(from, to) in EDGES {
+            result.push(v[from]);
+            result.push(v[to]);
+        }
+
+        result
     }
 }
