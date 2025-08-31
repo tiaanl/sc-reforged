@@ -76,37 +76,6 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     );
 }
 
-@vertex
-fn shadow_vertex(vertex: VertexInput, instance: InstanceInput) -> @builtin(position) vec4<f32> {
-    let model_matrix = mat4x4<f32>(
-        instance.col0,
-        instance.col1,
-        instance.col2,
-        instance.col3,
-    );
-
-    let local_transform = animation::local_transform_for_time(
-        t_positions,
-        t_rotations,
-        vertex.node_index,
-        instance.time,
-    );
-    let world_transform = model_matrix * local_transform;
-
-    let world_position = world_transform * vec4<f32>(vertex.position, 1.0);
-    let normal_matrix = mat3x3<f32>(
-        world_transform[0].xyz,
-        world_transform[1].xyz,
-        world_transform[2].xyz,
-    );
-    let world_normal = math::normalize_safe(normal_matrix * vertex.normal);
-
-    let view_projection = u_camera.mat_proj_view;
-    let clip_position = view_projection * world_position;
-
-    return clip_position;
-}
-
 fn lit_color(vertex: VertexOutput) -> vec4<f32> {
     let texture = t_textures[vertex.texture_index];
     let base_color = textureSample(texture, s_sampler, vertex.tex_coord);

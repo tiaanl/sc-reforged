@@ -79,9 +79,7 @@ impl Renderer {
             &wgpu::DeviceDescriptor {
                 required_features: required & supported,
                 required_limits: wgpu::Limits {
-                    // max_bind_groups: 5,
                     max_push_constant_size: 16,
-                    // max_vertex_attributes: 24,
                     max_color_attachment_bytes_per_sample: 56,
                     ..Default::default()
                 },

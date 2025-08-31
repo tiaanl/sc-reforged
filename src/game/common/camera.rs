@@ -41,12 +41,7 @@ impl Camera {
     }
 
     pub fn calculate_view_projection(&self) -> ViewProjection {
-        let projection = Mat4::perspective_lh(self.fov, self.aspect_ratio, self.near, self.far);
-
-        let target = self.position + self.rotation * Self::FORWARD;
-        let view = Mat4::look_at_lh(self.position, target, self.rotation * Self::UP);
-
-        ViewProjection::from_projection_view(projection, view)
+        ViewProjection::from_projection_view(self.calculate_projection(), self.calculate_view())
     }
 
     /// Generates a ray in world space based on the mouse position.
@@ -55,7 +50,6 @@ impl Camera {
 
         // TODO: Can we cache the matrices somewhere?
         let view_projection = self.calculate_view_projection();
-
         let world_coords = view_projection.unproject_ndc(ndc);
 
         let ray_origin = self.position;
@@ -75,6 +69,47 @@ impl Camera {
         let rotation_matrix = glam::Mat3::from_cols(right, up, forward);
         self.rotation = Quat::from_mat3(&rotation_matrix);
     }
+
+    pub fn view_slice_planes(&self, count: u32) -> Vec<[Vec3; 4]> {
+        let inv = self.calculate_view().inverse();
+
+        let right = inv.col(0).truncate();
+        let up = inv.col(1).truncate();
+        let forward = inv.col(2).truncate();
+
+        let position = inv.col(3).truncate();
+
+        let mut slices = Vec::with_capacity(count as usize);
+
+        for i in 0..=count {
+            let t = i as f32 / count as f32;
+            let distance = self.near + t * (self.far - self.near);
+
+            let half_height = (self.fov * 0.5).tan() * distance;
+            let half_width = half_height * self.aspect_ratio;
+            let center = position + forward * distance;
+
+            slices.push([
+                center + up * half_height - right * half_width,
+                center + up * half_height + right * half_width,
+                center - up * half_height + right * half_width,
+                center - up * half_height - right * half_width,
+            ]);
+        }
+
+        slices
+    }
+
+    #[inline]
+    fn calculate_projection(&self) -> Mat4 {
+        Mat4::perspective_lh(self.fov, self.aspect_ratio, self.near, self.far)
+    }
+
+    #[inline]
+    fn calculate_view(&self) -> Mat4 {
+        let target = self.position + self.rotation * Self::FORWARD;
+        Mat4::look_at_lh(self.position, target, self.rotation * Self::UP)
+    }
 }
 
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
@@ -92,41 +127,36 @@ pub struct GpuCamera {
 }
 
 impl GpuCamera {
-    pub fn new() -> Self {
-        let buffer = renderer().device.create_buffer(&wgpu::BufferDescriptor {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("camera_buffer"),
             size: std::mem::size_of::<CameraBuffer>() as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        let bind_group_layout =
-            renderer()
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("camera_bind_group_layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::all(),
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("camera_bind_group_layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::all(),
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
 
-        let bind_group = renderer()
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("camera_bind_group"),
-                layout: &bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(buffer.as_entire_buffer_binding()),
-                }],
-            });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("camera_bind_group"),
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(buffer.as_entire_buffer_binding()),
+            }],
+        });
 
         Self {
             buffer,

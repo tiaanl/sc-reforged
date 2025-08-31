@@ -18,6 +18,7 @@ use crate::{
         scenes::world::{
             actions::PlayerAction, game_mode::GameMode, overlay_renderer::OverlayRenderer,
         },
+        shadows::ShadowCascades,
     },
 };
 
@@ -72,6 +73,7 @@ pub struct WorldScene {
     objects: objects::Objects,
 
     // Render
+    shadow_cascades: ShadowCascades,
     geometry_buffers: GeometryBuffers,
     compositor: Compositor,
     shadow_render_target: RenderTarget,
@@ -123,7 +125,7 @@ impl WorldScene {
                 10.0,
                 13_300.0,
             );
-            let gpu_camera = camera::GpuCamera::new();
+            let gpu_camera = camera::GpuCamera::new(&renderer().device);
 
             Camera {
                 controller,
@@ -142,7 +144,7 @@ impl WorldScene {
                 10.0,
                 150_000.0,
             );
-            let gpu_camera = camera::GpuCamera::new();
+            let gpu_camera = camera::GpuCamera::new(&renderer().device);
 
             Camera {
                 controller,
@@ -213,6 +215,9 @@ impl WorldScene {
                     }],
                 });
 
+        let shadow_cascades =
+            ShadowCascades::new(&renderer().device, 4, Self::SHADOW_MAP_RESOLUTION);
+
         let geometry_buffers = GeometryBuffers::new(&renderer().device, renderer().surface.size());
 
         // Start with a 4K shadow buffer.
@@ -235,7 +240,7 @@ impl WorldScene {
             ..Default::default()
         });
 
-        let light_gpu_camera = GpuCamera::new();
+        let light_gpu_camera = GpuCamera::new(&renderer().device);
 
         let compositor = Compositor::new(
             &geometry_buffers.bind_group_layout,
@@ -252,7 +257,6 @@ impl WorldScene {
         )?;
 
         let mut objects = objects::Objects::new(
-            &shadow_render_target,
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
         )?;
@@ -300,6 +304,7 @@ impl WorldScene {
             terrain,
             objects,
 
+            shadow_cascades,
             geometry_buffers,
             shadow_render_target,
             light_gpu_camera,
@@ -466,10 +471,17 @@ impl Scene for WorldScene {
             view_projection
         };
 
+        self.shadow_cascades.update_from_camera(
+            &self.main_camera.camera,
+            self.environment.sun_dir.truncate(),
+        );
+
         let light_view_projection = {
+            let planes = self.main_camera.camera.view_slice_planes(1);
             let view_projection = fit_directional_light(
                 self.environment.sun_dir.truncate(), // your sun direction
-                &main_view_projection,               // Camera
+                &planes[0],                          // near corners
+                &planes[1],                          // far corners
                 Self::SHADOW_MAP_RESOLUTION,         // shadow map resolution
                 50.0,                                // XY guard band in world units
                 50.0,                                // near guard
@@ -591,20 +603,16 @@ impl Scene for WorldScene {
                         occlusion_query_set: None,
                     }),
             );
+
+            self.shadow_cascades.clear_buffers(&mut frame.encoder);
         }
 
         // --- Shadow pass ---
 
         let _z = tracy_client::span!("render shadow map");
-        let light_frustum = light_view_projection.frustum();
 
-        self.objects.render_shadow_casters(
-            frame,
-            &self.shadow_render_target,
-            &light_frustum,
-            &self.environment_bind_group,
-            &self.light_gpu_camera.bind_group,
-        );
+        self.objects
+            .render_shadow_casters(frame, &self.shadow_cascades);
 
         // --- Color pass ---
 
@@ -620,6 +628,7 @@ impl Scene for WorldScene {
                 frame,
                 self.in_editor(),
                 &self.geometry_buffers,
+                &self.shadow_cascades,
                 view_camera_bind_group,
                 &self.environment_bind_group,
                 &self.main_camera.gpu_camera.bind_group, // Always the main camera.
@@ -666,6 +675,21 @@ impl Scene for WorldScene {
             // Render any kind of debug overlays.
             self.terrain.render_gizmos(&mut self.gizmos_vertices);
             self.objects.render_gizmos(&mut self.gizmos_vertices);
+
+            self.gizmos_vertices
+                .extend(GizmosRenderer::create_view_projection(
+                    &light_view_projection,
+                    Vec4::new(0.0, 1.0, 1.0, 1.0),
+                ));
+
+            for cascade in self.shadow_cascades.cascades.iter() {
+                let color = Vec4::new(1.0, 0.0, 0.0, 1.0);
+                self.gizmos_vertices
+                    .extend(GizmosRenderer::create_view_projection(
+                        &cascade.view_projection,
+                        color,
+                    ));
+            }
 
             if false {
                 // Render the direction of the sun.
@@ -812,27 +836,33 @@ impl Scene for WorldScene {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn fit_directional_light(
     sun_dir: Vec3, // direction from sun toward world
-    camera: &ViewProjection,
+    corners_near: &[Vec3; 4],
+    corners_far: &[Vec3; 4],
     shadow_res: u32, // e.g. 2048
     guard_xy: f32,   // extra margin around frustum in world units
     guard_z_near: f32,
     guard_z_far: f32,
     texel_snap: bool,
 ) -> ViewProjection {
-    // Camera frustum corners
-    let corners = camera.corners();
-
     // Build light view
-    let fwd = sun_dir.normalize();
+    let forward = sun_dir.normalize();
     let mut up = Vec3::Z;
-    if fwd.abs_diff_eq(up, 1e-4) {
+    if forward.abs_diff_eq(up, 1e-4) {
         up = Vec3::Y;
     }
+
     // Place eye at frustum center - some distance back along light dir
-    let center = corners.iter().copied().reduce(|a, b| a + b).unwrap() / 8.0;
-    let eye = center - fwd * 10_000.0; // far enough to see everything
+    let center = corners_near
+        .iter()
+        .chain(corners_far)
+        .copied()
+        .reduce(|a, b| a + b)
+        .unwrap()
+        / 8.0;
+    let eye = center - forward * 10_000.0; // far enough to see everything
     let view = Mat4::look_at_lh(eye, center, up);
 
     // Transform corners into light space
@@ -843,7 +873,7 @@ pub fn fit_directional_light(
     let mut min_z = f32::INFINITY;
     let mut max_z = f32::NEG_INFINITY;
 
-    for &p in &corners {
+    for &p in corners_near.iter().chain(corners_far) {
         let point = view.transform_point3(p);
         min_x = min_x.min(point.x);
         max_x = max_x.max(point.x);

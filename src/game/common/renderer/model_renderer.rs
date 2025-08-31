@@ -8,7 +8,7 @@ use crate::{
     },
     game::{
         animations::Animation,
-        geometry_buffers::{GeometryBuffers, RenderTarget},
+        geometry_buffers::GeometryBuffers,
         math::{BoundingSphere, Frustum},
         model,
         renderer::{
@@ -17,6 +17,7 @@ use crate::{
             render_models::{RenderModel, RenderModels, RenderVertex},
             render_textures,
         },
+        shadows::ShadowCascades,
     },
     wgsl_shader,
 };
@@ -116,7 +117,6 @@ pub struct ModelRenderer {
 
 impl ModelRenderer {
     pub fn new(
-        shadow_render_target: &RenderTarget,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
@@ -238,7 +238,23 @@ impl ModelRenderer {
                     cache: None,
                 });
 
-        let shadow_pipeline =
+        let shadow_pipeline = {
+            let module = renderer()
+                .device
+                .create_shader_module(wgsl_shader!("model_renderer_shadows"));
+
+            let layout =
+                renderer()
+                    .device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("model_renderer_shadow_render_pipeline_layout"),
+                        bind_group_layouts: &[
+                            camera_bind_group_layout,
+                            animations.bind_group_layout(),
+                        ],
+                        push_constant_ranges: &[],
+                    });
+
             renderer()
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -246,27 +262,18 @@ impl ModelRenderer {
                     layout: Some(&layout),
                     vertex: wgpu::VertexState {
                         module: &module,
-                        entry_point: Some("shadow_vertex"),
+                        entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers,
                     },
                     primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: shadow_render_target.format,
-                        depth_write_enabled: true,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
-                        stencil: wgpu::StencilState::default(),
-                        bias: wgpu::DepthBiasState {
-                            constant: 2,
-                            slope_scale: 2.0,
-                            clamp: 0.0,
-                        },
-                    }),
+                    depth_stencil: Some(ShadowCascades::depth_stencil_state()),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: None,
                     multiview: None,
                     cache: None,
-                });
+                })
+        };
 
         Self {
             textures,
@@ -397,76 +404,71 @@ impl ModelRenderer {
         result
     }
 
-    pub fn render_shadow_casters(
-        &mut self,
-        frame: &mut Frame,
-        shadow_render_target: &RenderTarget,
-        frustum: &Frustum,
-        environment_bind_group: &wgpu::BindGroup,
-        camera_bind_group: &wgpu::BindGroup,
-    ) {
-        let render_set = self.build_render_set(frustum);
+    pub fn render_shadow_casters(&mut self, frame: &mut Frame, shadow_cascades: &ShadowCascades) {
+        let frustum = shadow_cascades.full_view_projection.frustum();
+        let render_set = self.build_render_set(&frustum);
 
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("model_renderer_shadow_pass"),
-                color_attachments: &[],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &shadow_render_target.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
+        for (index, cascade) in shadow_cascades.cascades.iter().enumerate() {
+            let mut render_pass = frame
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("model_renderer_shadow_pass"),
+                    color_attachments: &[],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &shadow_cascades.cascade_view(index as u32),
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
                     }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
 
-        render_pass.set_pipeline(&self.shadow_pipeline);
-        render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, environment_bind_group, &[]);
+            render_pass.set_pipeline(&self.shadow_pipeline);
+            render_pass.set_bind_group(0, &cascade.gpu_camera.bind_group, &[]);
 
-        for (key, gpu_instances) in render_set.opaque_instances.iter() {
-            let Some(model) = self.models.get(key.model) else {
-                tracing::warn!("model lookup failure!");
-                continue;
-            };
+            for (key, gpu_instances) in render_set.opaque_instances.iter() {
+                let Some(model) = self.models.get(key.model) else {
+                    tracing::warn!("model lookup failure!");
+                    continue;
+                };
 
-            let Some(animation) = self.animations.get(key.animation) else {
-                tracing::warn!("animation lookup failure!");
-                continue;
-            };
+                let Some(animation) = self.animations.get(key.animation) else {
+                    tracing::warn!("animation lookup failure!");
+                    continue;
+                };
 
-            let Some(ref mesh) = model.opaque_mesh else {
-                tracing::warn!("No opaque mesh, but in opaque instances!");
-                continue;
-            };
+                let Some(ref mesh) = model.opaque_mesh else {
+                    tracing::warn!("No opaque mesh, but in opaque instances!");
+                    continue;
+                };
 
-            // TODO: Don't put empty meshes into the instances buffer.
-            if mesh.index_count == 0 {
-                continue;
+                // TODO: Don't put empty meshes into the instances buffer.
+                if mesh.index_count == 0 {
+                    continue;
+                }
+
+                // Create the buffer with instances.
+                let instances_buffer =
+                    renderer()
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("model_renderer_instances"),
+                            contents: bytemuck::cast_slice(gpu_instances),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
+
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
+                render_pass.set_bind_group(1, &animation.bind_group, &[]);
+
+                render_pass.draw_indexed(0..mesh.index_count, 0, 0..gpu_instances.len() as u32);
             }
-
-            // Create the buffer with instances.
-            let instances_buffer =
-                renderer()
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("model_renderer_instances"),
-                        contents: bytemuck::cast_slice(gpu_instances),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    });
-
-            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
-            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-
-            render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
-            render_pass.set_bind_group(3, &animation.bind_group, &[]);
-
-            render_pass.draw_indexed(0..mesh.index_count, 0, 0..gpu_instances.len() as u32);
         }
     }
 

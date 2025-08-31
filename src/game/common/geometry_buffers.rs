@@ -3,7 +3,6 @@ use glam::{UVec2, Vec3};
 pub struct RenderTarget {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub format: wgpu::TextureFormat,
 }
 
 impl RenderTarget {
@@ -36,11 +35,7 @@ impl RenderTarget {
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        Self {
-            texture,
-            view,
-            format,
-        }
+        Self { texture, view }
     }
 }
 

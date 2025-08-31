@@ -10,7 +10,7 @@ use crate::{
     game::{
         animations::Sequencer,
         config::ObjectType,
-        geometry_buffers::{GeometryBuffers, RenderTarget},
+        geometry_buffers::GeometryBuffers,
         math::Frustum,
         model::Model,
         models::models,
@@ -19,6 +19,7 @@ use crate::{
             actions::PlayerAction,
             object::{BipedalOrder, Object, ObjectDetail},
         },
+        shadows::ShadowCascades,
         skeleton::Skeleton,
     },
 };
@@ -34,15 +35,11 @@ pub struct Objects {
 
 impl Objects {
     pub fn new(
-        shadow_render_target: &RenderTarget,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, AssetError> {
-        let model_renderer = ModelRenderer::new(
-            shadow_render_target,
-            camera_bind_group_layout,
-            environment_bind_group_layout,
-        );
+        let model_renderer =
+            ModelRenderer::new(camera_bind_group_layout, environment_bind_group_layout);
 
         Ok(Self {
             model_renderer,
@@ -173,21 +170,9 @@ impl Objects {
         }
     }
 
-    pub fn render_shadow_casters(
-        &mut self,
-        frame: &mut Frame,
-        shadow_render_target: &RenderTarget,
-        frustum: &Frustum,
-        environment_bind_group: &wgpu::BindGroup,
-        camera_bind_group: &wgpu::BindGroup,
-    ) {
-        self.model_renderer.render_shadow_casters(
-            frame,
-            shadow_render_target,
-            frustum,
-            environment_bind_group,
-            camera_bind_group,
-        );
+    pub fn render_shadow_casters(&mut self, frame: &mut Frame, shadow_cascades: &ShadowCascades) {
+        self.model_renderer
+            .render_shadow_casters(frame, shadow_cascades);
     }
 
     pub fn render_objects(

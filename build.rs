@@ -27,6 +27,7 @@ const COMMON: &[&str] = &[
 const SHADERS: &[&str] = &[
     "src/game/common/compositor.wgsl",
     "src/game/common/renderer/model_renderer.wgsl",
+    "src/game/common/renderer/model_renderer_shadows.wgsl",
     "src/game/scenes/world/overlay.wgsl",
     "src/game/scenes/world/terrain.wgsl",
     "src/engine/gizmos.wgsl",

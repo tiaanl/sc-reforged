@@ -16,6 +16,7 @@ use crate::{
         height_map::HeightMap,
         image::images,
         math::BoundingSphere,
+        shadows::ShadowCascades,
     },
     wgsl_shader,
 };
@@ -531,7 +532,7 @@ impl Terrain {
                     layout: Some(&terrain_pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &module,
-                        entry_point: Some("vertex_main"),
+                        entry_point: Some("vertex_terrain"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[],
                     },
@@ -543,7 +544,7 @@ impl Terrain {
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &module,
-                        entry_point: Some("fragment_main"),
+                        entry_point: Some("fragment_terrain"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffers::opaque_targets(),
                     }),
@@ -574,7 +575,7 @@ impl Terrain {
                     layout: Some(&layout),
                     vertex: wgpu::VertexState {
                         module: &module,
-                        entry_point: Some("water_vertex_main"),
+                        entry_point: Some("vertex_water"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[],
                     },
@@ -586,7 +587,7 @@ impl Terrain {
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &module,
-                        entry_point: Some("water_fragment_main"),
+                        entry_point: Some("fragment_water"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffers::alpha_targets(),
                     }),
@@ -603,7 +604,7 @@ impl Terrain {
                     layout: Some(&terrain_pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &module,
-                        entry_point: Some("wireframe_vertex_main"),
+                        entry_point: Some("vertex_wireframe"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[],
                     },
@@ -615,7 +616,7 @@ impl Terrain {
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &module,
-                        entry_point: Some("wireframe_fragment_main"),
+                        entry_point: Some("fragment_wireframe"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffers::opaque_targets(),
                     }),
@@ -904,11 +905,13 @@ impl Terrain {
         chunk_instances
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
         frame: &mut Frame,
         in_editor: bool,
         geometry_buffers: &GeometryBuffers,
+        shadow_cascades: &ShadowCascades,
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
         frustum_camera_bind_group: &wgpu::BindGroup,
@@ -937,6 +940,7 @@ impl Terrain {
         self.render_terrain(
             frame,
             geometry_buffers,
+            shadow_cascades,
             camera_bind_group,
             environment_bind_group,
         );
@@ -1091,6 +1095,7 @@ impl Terrain {
         &self,
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
+        shadow_cascades: &ShadowCascades,
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
     ) {
@@ -1119,6 +1124,7 @@ impl Terrain {
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.set_bind_group(1, environment_bind_group, &[]);
         render_pass.set_bind_group(2, &self.render_bind_group, &[]);
+        render_pass.set_bind_group(3, &shadow_cascades.bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(
             &self.terrain_draw_args_buffer,
