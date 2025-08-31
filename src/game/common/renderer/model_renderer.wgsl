@@ -1,8 +1,8 @@
 #import world::animation
-#import world::camera
+#import world::camera::Camera;
 #import world::geometry_buffers
 
-@group(0) @binding(0) var<uniform> u_camera: camera::Camera;
+@group(0) @binding(0) var<uniform> u_camera: Camera;
 
 @group(1) @binding(0) var<uniform> u_environment: environment::Environment;
 

@@ -111,8 +111,9 @@ pub struct ModelRenderer {
     opaque_pipeline: wgpu::RenderPipeline,
     /// The pipeline to render all models with an alpha channel.
     alpha_pipeline: wgpu::RenderPipeline,
-    /// The pipeline to render all shadow casting models to the shadow buffer.
-    shadow_pipeline: wgpu::RenderPipeline,
+
+    /// Resources for rendering shadow casters.
+    shadow_renderer: ShadowRenderer,
 }
 
 impl ModelRenderer {
@@ -238,42 +239,8 @@ impl ModelRenderer {
                     cache: None,
                 });
 
-        let shadow_pipeline = {
-            let module = renderer()
-                .device
-                .create_shader_module(wgsl_shader!("model_renderer_shadows"));
-
-            let layout =
-                renderer()
-                    .device
-                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: Some("model_renderer_shadow_render_pipeline_layout"),
-                        bind_group_layouts: &[
-                            camera_bind_group_layout,
-                            animations.bind_group_layout(),
-                        ],
-                        push_constant_ranges: &[],
-                    });
-
-            renderer()
-                .device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("model_renderer_shadow_render_pipeline"),
-                    layout: Some(&layout),
-                    vertex: wgpu::VertexState {
-                        module: &module,
-                        entry_point: None,
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers,
-                    },
-                    primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: Some(ShadowCascades::depth_stencil_state()),
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: None,
-                    multiview: None,
-                    cache: None,
-                })
-        };
+        let shadow_renderer =
+            ShadowRenderer::new(&renderer().device, animations.bind_group_layout(), buffers);
 
         Self {
             textures,
@@ -286,7 +253,8 @@ impl ModelRenderer {
 
             opaque_pipeline,
             alpha_pipeline,
-            shadow_pipeline,
+
+            shadow_renderer,
         }
     }
 
@@ -408,14 +376,17 @@ impl ModelRenderer {
         let frustum = shadow_cascades.full_view_projection.frustum();
         let render_set = self.build_render_set(&frustum);
 
-        for (index, cascade) in shadow_cascades.cascades.iter().enumerate() {
+        self.shadow_renderer
+            .update_cascades(&renderer().queue, shadow_cascades);
+
+        for index in 0..(shadow_cascades.cascades.len() as u32) {
             let mut render_pass = frame
                 .encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("model_renderer_shadow_pass"),
                     color_attachments: &[],
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &shadow_cascades.cascade_view(index as u32),
+                        view: &shadow_cascades.cascade_view(index),
                         depth_ops: Some(wgpu::Operations {
                             load: wgpu::LoadOp::Load,
                             store: wgpu::StoreOp::Store,
@@ -426,8 +397,13 @@ impl ModelRenderer {
                     occlusion_query_set: None,
                 });
 
-            render_pass.set_pipeline(&self.shadow_pipeline);
-            render_pass.set_bind_group(0, &cascade.gpu_camera.bind_group, &[]);
+            render_pass.set_pipeline(&self.shadow_renderer.pipeline);
+            render_pass.set_bind_group(0, &self.shadow_renderer.bind_group, &[]);
+            render_pass.set_push_constants(
+                wgpu::ShaderStages::VERTEX,
+                0,
+                bytemuck::bytes_of(&index),
+            );
 
             for (key, gpu_instances) in render_set.opaque_instances.iter() {
                 let Some(model) = self.models.get(key.model) else {
@@ -623,4 +599,97 @@ struct RenderSet {
     total_instances: u64,
     opaque_instances: HashMap<RenderSetKey, Vec<GpuInstance>>,
     alpha_instances: HashMap<RenderSetKey, Vec<GpuInstance>>,
+}
+
+struct ShadowRenderer {
+    /// The pipeline to render all shadow casting models to a cacade.
+    pipeline: wgpu::RenderPipeline,
+    /// A buffer used to upload cascade data we need to render shadow casters.
+    buffer: wgpu::Buffer,
+    /// The bind group hobinding to the `shadow_cascades_buffer`.
+    bind_group: wgpu::BindGroup,
+}
+
+impl ShadowRenderer {
+    fn new(
+        device: &wgpu::Device,
+        animations_bind_group_layout: &wgpu::BindGroupLayout,
+        buffers: &[wgpu::VertexBufferLayout],
+    ) -> Self {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("model_renderer_cascades_bind_group_layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        let pipeline = {
+            let module = device.create_shader_module(wgsl_shader!("model_renderer_shadows"));
+
+            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("model_renderer_shadow_render_pipeline_layout"),
+                bind_group_layouts: &[&bind_group_layout, animations_bind_group_layout],
+                push_constant_ranges: &[wgpu::PushConstantRange {
+                    stages: wgpu::ShaderStages::VERTEX,
+                    range: 0..4, // Single u32
+                }],
+            });
+
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("model_renderer_shadow_render_pipeline"),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: &module,
+                    entry_point: None,
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    buffers,
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: Some(ShadowCascades::depth_stencil_state()),
+                multisample: wgpu::MultisampleState::default(),
+                fragment: None,
+                multiview: None,
+                cache: None,
+            })
+        };
+
+        let cascades = [[0.0_f32; 16]; ShadowCascades::MAX_CASCADES];
+
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("model_renderer_cascades_buffer"),
+            contents: bytemuck::bytes_of(&cascades),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("model_renderer_cascades_bind_group"),
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+
+        Self {
+            pipeline,
+            buffer,
+            bind_group,
+        }
+    }
+
+    fn update_cascades(&self, queue: &wgpu::Queue, shadow_cascades: &ShadowCascades) {
+        let mut data = [[0.0_f32; 16]; ShadowCascades::MAX_CASCADES];
+        for (index, cascade) in shadow_cascades.cascades.iter().enumerate() {
+            data[index] = cascade.view_projection.mat.to_cols_array();
+        }
+
+        queue.write_buffer(&self.buffer, 0, bytemuck::bytes_of(&data));
+    }
 }

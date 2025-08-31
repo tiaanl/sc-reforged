@@ -46,7 +46,7 @@ pub struct ShadowCascades {
 impl ShadowCascades {
     pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-    const MAX_CASCADES: usize = 4;
+    pub const MAX_CASCADES: usize = 4;
 
     pub fn depth_stencil_state() -> wgpu::DepthStencilState {
         wgpu::DepthStencilState {

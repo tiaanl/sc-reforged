@@ -1,10 +1,12 @@
 #import world::camera
 #import world::animation
 
-@group(0) @binding(0) var<uniform> u_camera: camera::Camera;
+@group(0) @binding(0) var<uniform> u_cascades: array<mat4x4<f32>, 4>;
 
 @group(1) @binding(0) var t_positions: texture_2d<f32>;
 @group(1) @binding(1) var t_rotations: texture_2d<f32>;
+
+var<push_constant> cascade_index: u32;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -41,5 +43,5 @@ fn vertex_shadow(vertex: VertexInput, instance: InstanceInput) -> @builtin(posit
 
     let world_position = model_matrix * local_transform * vec4<f32>(vertex.position, 1.0);
 
-    return u_camera.mat_proj_view * world_position;
+    return u_cascades[cascade_index] * world_position;
 }
