@@ -1,4 +1,3 @@
-use glam::Vec4Swizzles;
 use terrain::Terrain;
 use wgpu::util::DeviceExt;
 
@@ -42,12 +41,12 @@ struct DayNightCycle {
 
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
 #[repr(C)]
-struct Environment {
-    pub sun_dir: Vec4,
-    pub sun_color: Vec4,
+struct GpuEnvironment {
+    pub sun_dir: [f32; 4],
+    pub sun_color: [f32; 4],
 
-    pub fog_color: Vec4,
-    pub fog_params: Vec4,
+    pub fog_color: [f32; 4],
+    pub fog_params: [f32; 4],
 
     pub sun_proj_view: Mat4,
 }
@@ -84,7 +83,8 @@ pub struct WorldScene {
     time_of_day: f32,
     day_night_cycle: DayNightCycle,
 
-    environment: Environment,
+    environment: GpuEnvironment,
+    ambient_color: Vec3,
 
     environment_buffer: wgpu::Buffer,
     environment_bind_group: wgpu::BindGroup,
@@ -171,7 +171,8 @@ impl WorldScene {
             e
         };
 
-        let environment = Environment::default();
+        let environment = GpuEnvironment::default();
+        let ambient_color = Vec3::splat(0.3);
 
         let environment_buffer =
             renderer()
@@ -302,6 +303,7 @@ impl WorldScene {
             time_of_day,
             day_night_cycle,
             environment,
+            ambient_color,
 
             environment_buffer,
             environment_bind_group,
@@ -324,7 +326,7 @@ impl WorldScene {
         matches!(self.game_mode, GameMode::Editor)
     }
 
-    fn calculate_environment(&self, time_of_day: f32) -> Environment {
+    fn calculate_environment(&self, time_of_day: f32) -> GpuEnvironment {
         let sun_dir = self
             .day_night_cycle
             .sun_dir
@@ -348,11 +350,11 @@ impl WorldScene {
             .fog_color
             .sample_sub_frame(time_of_day, true);
 
-        Environment {
-            sun_dir: sun_dir.extend(0.0),
-            sun_color: sun_color.extend(0.0),
-            fog_color: fog_color.extend(0.0),
-            fog_params: Vec4::new(fog_near, fog_far, 0.0, 0.0),
+        GpuEnvironment {
+            sun_dir: sun_dir.extend(self.ambient_color.x).to_array(),
+            sun_color: sun_color.extend(self.ambient_color.y).to_array(),
+            fog_color: fog_color.extend(self.ambient_color.z).to_array(),
+            fog_params: [fog_near, fog_far, 0.0, 0.0],
             sun_proj_view: Mat4::IDENTITY,
         }
     }
@@ -416,7 +418,7 @@ impl Scene for WorldScene {
         self.environment = self.calculate_environment(self.time_of_day);
 
         // Set the camera far plane to max distance of the fog.
-        self.main_camera.camera.far = self.environment.fog_params.y;
+        self.main_camera.camera.far = self.environment.fog_params[1];
         if self.control_debug_camera {
             self.debug_camera.controller.update(delta_time, input);
         } else {
@@ -458,22 +460,21 @@ impl Scene for WorldScene {
             view_projection
         };
 
-        self.shadow_cascades.update_from_camera(
-            &self.main_camera.camera,
-            self.environment.sun_dir.truncate(),
-        );
+        let sun_dir = Vec4::from(self.environment.sun_dir).truncate();
+        self.shadow_cascades
+            .update_from_camera(&self.main_camera.camera, sun_dir);
 
         let light_view_projection = {
             let planes = self.main_camera.camera.view_slice_planes(1);
             let view_projection = fit_directional_light(
-                self.environment.sun_dir.truncate(), // your sun direction
-                &planes[0],                          // near corners
-                &planes[1],                          // far corners
-                Self::SHADOW_MAP_RESOLUTION,         // shadow map resolution
-                50.0,                                // XY guard band in world units
-                50.0,                                // near guard
-                50.0,                                // far guard
-                true,                                // texel snapping
+                sun_dir,                     // Sun direction
+                &planes[0],                  // near corners
+                &planes[1],                  // far corners
+                Self::SHADOW_MAP_RESOLUTION, // shadow map resolution
+                50.0,                        // XY guard band in world units
+                50.0,                        // near guard
+                50.0,                        // far guard
+                true,                        // texel snapping
             );
 
             self.light_gpu_camera.upload(&view_projection, Vec3::ZERO);
@@ -499,9 +500,9 @@ impl Scene for WorldScene {
                 a: f32::from_le_bytes(INVALID_ID.to_le_bytes()) as f64,
             };
             let fog_clear_color = wgpu::Color {
-                r: self.environment.fog_color.x as f64,
-                g: self.environment.fog_color.y as f64,
-                b: self.environment.fog_color.z as f64,
+                r: self.environment.fog_color[0] as f64,
+                g: self.environment.fog_color[1] as f64,
+                b: self.environment.fog_color[2] as f64,
                 a: 1.0,
             };
 
@@ -678,17 +679,6 @@ impl Scene for WorldScene {
                     ));
             }
 
-            if false {
-                // Render the direction of the sun.
-                self.gizmos_vertices.extend_from_slice(&[
-                    GizmoVertex::new(Vec3::ZERO, Vec4::new(0.0, 0.0, 1.0, 1.0)),
-                    GizmoVertex::new(
-                        self.environment.sun_dir.xyz() * 1_000.0,
-                        Vec4::new(0.0, 0.0, 1.0, 1.0),
-                    ),
-                ]);
-            }
-
             // Render the main camera frustum when we're looking through the debug camera.
             if self.view_debug_camera {
                 self.gizmos_vertices
@@ -749,14 +739,11 @@ impl Scene for WorldScene {
                     ui.label("Time of day");
                     ui.add(Slider::new(&mut self.time_of_day, 0.0..=24.0).drag_value_speed(0.01));
                 });
-                ui.horizontal(|ui| {
-                    ui.label("Sun dir");
-                    ui.label(format!(
-                        "{:.2}, {:.2}, {:.2}",
-                        self.environment.sun_dir.x,
-                        self.environment.sun_dir.y,
-                        self.environment.sun_dir.z,
-                    ));
+
+                ui.collapsing("Ambient", |ui| {
+                    ui.add(Slider::new(&mut self.ambient_color.x, 0.0..=1.0));
+                    ui.add(Slider::new(&mut self.ambient_color.y, 0.0..=1.0));
+                    ui.add(Slider::new(&mut self.ambient_color.z, 0.0..=1.0));
                 });
 
                 ui.heading("Terrain");

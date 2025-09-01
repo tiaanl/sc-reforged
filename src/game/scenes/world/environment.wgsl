@@ -1,9 +1,9 @@
 #define_import_path environment
 
 struct Environment {
-    sun_dir: vec4<f32>,    // x, y, z, PADDING
-    sun_color: vec4<f32>,  // r, g, b, PADDING
-    fog_color: vec4<f32>,  // r, g, b, PADDING
+    sun_dir: vec4<f32>,    // x, y, z, ambient.r
+    sun_color: vec4<f32>,  // r, g, b, ambient.g
+    fog_color: vec4<f32>,  // r, g, b, ambient.b
     fog_params: vec4<f32>, // near, far, PADDING, PADDING
     sun_proj_view: mat4x4<f32>,
 }
@@ -28,7 +28,8 @@ fn diffuse(
     let sun_light = env.sun_color.rgb * n_dot_l * visibility;
 
     // Ambient term (not shadowed)
-    let ambient_color = env.sun_color.rgb * 0.3;
+    let ambient = vec3<f32>(env.sun_dir.w, env.sun_color.w, env.fog_color.w);
+    let ambient_color = env.sun_color.rgb * ambient;
 
     let lighting = sun_light + ambient_color;
 
