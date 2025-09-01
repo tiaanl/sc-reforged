@@ -215,12 +215,12 @@ impl ShadowCascades {
         }
     }
 
-    pub fn update_from_camera(&mut self, camera: &Camera, light_direction: Vec3) {
+    pub fn update_from_camera(&mut self, camera: &Camera, light_direction: Vec3, lambda: f32) {
         let guard_xy = 50.0;
         let guard_near = 50.0;
         let guard_far = 50.0;
 
-        let slice_planes = camera.view_slice_planes(self.cascades.len() as u32);
+        let slice_planes = camera.view_slice_planes(self.cascades.len() as u32, lambda);
 
         let near = slice_planes.first().unwrap();
         let far = slice_planes.last().unwrap();

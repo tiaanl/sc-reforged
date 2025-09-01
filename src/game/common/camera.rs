@@ -70,34 +70,43 @@ impl Camera {
         self.rotation = Quat::from_mat3(&rotation_matrix);
     }
 
-    pub fn view_slice_planes(&self, count: u32) -> Vec<[Vec3; 4]> {
-        let inv = self.calculate_view().inverse();
-
-        let right = inv.col(0).truncate();
-        let up = inv.col(1).truncate();
-        let forward = inv.col(2).truncate();
-
-        let position = inv.col(3).truncate();
-
-        let mut slices = Vec::with_capacity(count as usize);
-
-        for i in 0..=count {
-            let t = i as f32 / count as f32;
-            let distance = self.near + t * (self.far - self.near);
-
-            let half_height = (self.fov * 0.5).tan() * distance;
-            let half_width = half_height * self.aspect_ratio;
-            let center = position + forward * distance;
-
-            slices.push([
-                center + up * half_height - right * half_width,
-                center + up * half_height + right * half_width,
-                center - up * half_height + right * half_width,
-                center - up * half_height - right * half_width,
-            ]);
+    pub fn view_slice_planes(&self, count: u32, lambda: f32) -> Vec<[Vec3; 4]> {
+        fn cascade_view_splits(near: f32, far: f32, count: u32, lambda: f32) -> Vec<f32> {
+            assert!(count >= 1 && far > near);
+            let mut d = Vec::with_capacity(count as usize + 1);
+            d.push(near);
+            for i in 1..count {
+                let s = i as f32 / count as f32;
+                let d_lin = near + (far - near) * s;
+                let d_log = near * (far / near).powf(s);
+                d.push(d_lin * (1.0 - lambda) + d_log * lambda);
+            }
+            d.push(far);
+            d
         }
 
-        slices
+        // Distances along camera forward (+Z in your LH view space)
+        let inverse_view = self.calculate_view().inverse();
+        let right = inverse_view.col(0).truncate();
+        let up = inverse_view.col(1).truncate();
+        let forward = inverse_view.col(2).truncate();
+        let position = inverse_view.col(3).truncate();
+
+        cascade_view_splits(self.near, self.far, count, lambda)
+            .iter()
+            .map(|distance| {
+                let half_height = (self.fov * 0.5).tan() * distance;
+                let half_width = half_height * self.aspect_ratio;
+                let center = position + forward * distance;
+
+                [
+                    center + up * half_height - right * half_width,
+                    center + up * half_height + right * half_width,
+                    center - up * half_height + right * half_width,
+                    center - up * half_height - right * half_width,
+                ]
+            })
+            .collect::<Vec<_>>()
     }
 
     #[inline]

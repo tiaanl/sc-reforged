@@ -1,3 +1,4 @@
+#import shadows::Cascades;
 #import world::animation
 #import world::camera::Camera;
 #import world::geometry_buffers
@@ -11,6 +12,11 @@
 
 @group(3) @binding(0) var t_positions: texture_2d<f32>;
 @group(3) @binding(1) var t_rotations: texture_2d<f32>;
+
+@group(4) @binding(0) var<uniform> u_cascades: Cascades;
+
+@group(5) @binding(0) var t_shadow_maps: texture_depth_2d_array;
+@group(5) @binding(1) var s_shadow_maps: sampler_comparison;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -80,13 +86,44 @@ fn lit_color(vertex: VertexOutput) -> vec4<f32> {
     let texture = t_textures[vertex.texture_index];
     let base_color = textureSample(texture, s_sampler, vertex.tex_coord);
 
-    let camera_distance = length(vertex.world_position - u_camera.position);
+    let world_position = vertex.world_position;
+    let normal = vertex.normal;
+    let camera_distance = length(world_position - u_camera.position);
 
-    let diffuse = environment::diffuse_with_fog(
+    var visibility = 1.0;
+
+    for (var cascade_index = 0u; cascade_index < u_cascades.count; cascade_index += 1) {
+        let light_ndc_position = shadows::project_to_light_ndc(
+            u_cascades.cascades[cascade_index],
+            world_position,
+        );
+
+        if math::inside_ndc(light_ndc_position) {
+            // Map the clip position [-1..1] to [0..1].
+            let shadow_uv = light_ndc_position.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
+
+            let bias = shadows::depth_bias(normal, u_environment.sun_dir.xyz);
+            let depth_ref = clamp(light_ndc_position.z, 0.0, 1.0);
+
+            visibility = shadows::sample_shadow_pcf_3x3(
+                t_shadow_maps,
+                s_shadow_maps,
+                cascade_index,
+                shadow_uv,
+                depth_ref,
+            );
+
+            break;
+        }
+    }
+
+
+    let diffuse = environment::diffuse_with_fog_shadow(
         u_environment,
         vertex.normal.xyz,
         base_color.rgb,
         camera_distance,
+        visibility,
     );
 
     return vec4<f32>(diffuse, base_color.a);

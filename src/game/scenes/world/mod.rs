@@ -73,6 +73,7 @@ pub struct WorldScene {
 
     // Render
     shadow_cascades: ShadowCascades,
+    shadow_cascades_lambda: f32,
     geometry_buffers: GeometryBuffers,
     compositor: Compositor,
     shadow_render_target: RenderTarget,
@@ -247,6 +248,7 @@ impl WorldScene {
         let mut objects = objects::Objects::new(
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
+            &shadow_cascades,
         )?;
 
         if let Some(ref mtf_name) = campaign.mtf_name {
@@ -293,6 +295,7 @@ impl WorldScene {
             objects,
 
             shadow_cascades,
+            shadow_cascades_lambda: 0.8,
             geometry_buffers,
             shadow_render_target,
             light_gpu_camera,
@@ -461,11 +464,14 @@ impl Scene for WorldScene {
         };
 
         let sun_dir = Vec4::from(self.environment.sun_dir).truncate();
-        self.shadow_cascades
-            .update_from_camera(&self.main_camera.camera, sun_dir);
+        self.shadow_cascades.update_from_camera(
+            &self.main_camera.camera,
+            sun_dir,
+            self.shadow_cascades_lambda,
+        );
 
         let light_view_projection = {
-            let planes = self.main_camera.camera.view_slice_planes(1);
+            let planes = self.main_camera.camera.view_slice_planes(1, 0.5);
             let view_projection = fit_directional_light(
                 sun_dir,                     // Sun direction
                 &planes[0],                  // near corners
@@ -628,6 +634,7 @@ impl Scene for WorldScene {
                 &self.geometry_buffers,
                 view_camera_bind_group,
                 &self.environment_bind_group,
+                &self.shadow_cascades,
             );
 
             // Now render alpha geoometry.
@@ -664,19 +671,22 @@ impl Scene for WorldScene {
             self.terrain.render_gizmos(&mut self.gizmos_vertices);
             self.objects.render_gizmos(&mut self.gizmos_vertices);
 
-            self.gizmos_vertices
-                .extend(GizmosRenderer::create_view_projection(
-                    &light_view_projection,
-                    Vec4::new(0.0, 1.0, 1.0, 1.0),
-                ));
-
-            for cascade in self.shadow_cascades.cascades.iter() {
-                let color = Vec4::new(1.0, 0.0, 0.0, 1.0);
+            // Render the light cascades.
+            if false {
                 self.gizmos_vertices
                     .extend(GizmosRenderer::create_view_projection(
-                        &cascade.view_projection,
-                        color,
+                        &light_view_projection,
+                        Vec4::new(0.0, 1.0, 1.0, 1.0),
                     ));
+
+                for cascade in self.shadow_cascades.cascades.iter() {
+                    let color = Vec4::new(1.0, 0.0, 0.0, 1.0);
+                    self.gizmos_vertices
+                        .extend(GizmosRenderer::create_view_projection(
+                            &cascade.view_projection,
+                            color,
+                        ));
+                }
             }
 
             // Render the main camera frustum when we're looking through the debug camera.
@@ -740,6 +750,7 @@ impl Scene for WorldScene {
                     ui.add(Slider::new(&mut self.time_of_day, 0.0..=24.0).drag_value_speed(0.01));
                 });
 
+                ui.add(Slider::new(&mut self.shadow_cascades_lambda, 0.0..=1.0));
                 ui.collapsing("Ambient", |ui| {
                     ui.add(Slider::new(&mut self.ambient_color.x, 0.0..=1.0));
                     ui.add(Slider::new(&mut self.ambient_color.y, 0.0..=1.0));

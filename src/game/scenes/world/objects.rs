@@ -37,9 +37,13 @@ impl Objects {
     pub fn new(
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
+        shadow_cascades: &ShadowCascades,
     ) -> Result<Self, AssetError> {
-        let model_renderer =
-            ModelRenderer::new(camera_bind_group_layout, environment_bind_group_layout);
+        let model_renderer = ModelRenderer::new(
+            camera_bind_group_layout,
+            environment_bind_group_layout,
+            shadow_cascades,
+        );
 
         Ok(Self {
             model_renderer,
@@ -182,6 +186,7 @@ impl Objects {
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
+        shadow_cascades: &ShadowCascades,
     ) {
         let _z = tracy_client::span!("render objects");
         self.model_renderer.render(
@@ -190,6 +195,7 @@ impl Objects {
             geometry_buffers,
             camera_bind_group,
             environment_bind_group,
+            shadow_cascades,
         );
     }
 

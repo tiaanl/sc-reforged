@@ -120,6 +120,7 @@ impl ModelRenderer {
     pub fn new(
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
+        shadow_cascades: &ShadowCascades,
     ) -> Self {
         let textures = render_textures::RenderTextures::new();
         let models = RenderModels::default();
@@ -141,6 +142,8 @@ impl ModelRenderer {
                     environment_bind_group_layout,
                     &textures.texture_set_bind_group_layout,
                     animations.bind_group_layout(),
+                    &shadow_cascades.cascades_bind_group.layout,
+                    &shadow_cascades.shadow_maps_bind_group.layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -455,6 +458,7 @@ impl ModelRenderer {
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
         environment_bind_group: &wgpu::BindGroup,
+        shadow_cascades: &ShadowCascades,
     ) {
         let render_set = self.build_render_set(frustum);
 
@@ -490,6 +494,8 @@ impl ModelRenderer {
             render_pass.set_pipeline(&self.opaque_pipeline);
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.set_bind_group(1, environment_bind_group, &[]);
+            render_pass.set_bind_group(4, &shadow_cascades.cascades_bind_group.bind_group, &[]);
+            render_pass.set_bind_group(5, &shadow_cascades.shadow_maps_bind_group.bind_group, &[]);
 
             for (key, gpu_instances) in render_set.opaque_instances.iter() {
                 let Some(model) = self.models.get(key.model) else {
@@ -549,6 +555,8 @@ impl ModelRenderer {
             render_pass.set_pipeline(&self.alpha_pipeline);
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.set_bind_group(1, environment_bind_group, &[]);
+            render_pass.set_bind_group(4, &shadow_cascades.cascades_bind_group.bind_group, &[]);
+            render_pass.set_bind_group(5, &shadow_cascades.shadow_maps_bind_group.bind_group, &[]);
 
             for (key, gpu_instances) in render_set.alpha_instances.iter() {
                 let Some(model) = self.models.get(key.model) else {
