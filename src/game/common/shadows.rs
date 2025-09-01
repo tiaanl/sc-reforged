@@ -2,7 +2,7 @@ use glam::{Mat4, Vec3};
 use wgpu::util::DeviceExt;
 
 use crate::{
-    engine::prelude::renderer,
+    engine::{bind_group::BindGroup, prelude::renderer},
     game::{
         camera::{Camera, GpuCamera},
         math::ViewProjection,
@@ -39,10 +39,10 @@ pub struct ShadowCascades {
     shadow_buffers: wgpu::Texture,
     /// GPU buffer holding the cascades data.
     cascades_buffer: wgpu::Buffer,
-    /// Holds the layout for the `cascades_bind_group_layout`.
-    pub cascades_bind_group_layout: wgpu::BindGroupLayout,
     /// Holds all the data needed for rendering shadows.
-    pub cascades_bind_group: wgpu::BindGroup,
+    pub cascades_bind_group: BindGroup,
+    /// Holds the shadow maps and sampler.
+    shadow_maps_bind_group: BindGroup,
 }
 
 impl ShadowCascades {
@@ -78,8 +78,8 @@ impl ShadowCascades {
             depth_or_array_layers: count,
         };
 
-        let shadow_buffers = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("shadow_cascade_buffers"),
+        let shadow_maps = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("shadow_maps_texture"),
             size,
             mip_level_count: 1,
             sample_count: 1,
@@ -89,15 +89,15 @@ impl ShadowCascades {
             view_formats: &[],
         });
 
-        let shadow_buffers_view = shadow_buffers.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("shadow_cascade_buffers_view"),
+        let shadow_maps_view = shadow_maps.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("shadow_maps_texture_view"),
             dimension: Some(wgpu::TextureViewDimension::D2Array),
             base_array_layer: 0,
             array_layer_count: Some(count),
             ..Default::default()
         });
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        let shadow_maps_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("shadow_cascades_sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -109,6 +109,47 @@ impl ShadowCascades {
             ..Default::default()
         });
 
+        let shadow_maps_bind_group = {
+            let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("shadow_maps_bind_group_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Depth,
+                            view_dimension: wgpu::TextureViewDimension::D2Array,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                        count: None,
+                    },
+                ],
+            });
+
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("shadow_maps_bind_group"),
+                layout: &layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&shadow_maps_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&shadow_maps_sampler),
+                    },
+                ],
+            });
+
+            BindGroup { layout, bind_group }
+        };
+
         let gpu_cascades = GpuCascades::default();
         let cascades_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("shadow_cascades_buffer"),
@@ -116,8 +157,8 @@ impl ShadowCascades {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let cascades_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let cascades_bind_group = {
+            let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("shadow_cascades_bind_group_layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -131,23 +172,26 @@ impl ShadowCascades {
                 }],
             });
 
-        let cascades_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("shadow_cascades_bind_group"),
-            layout: &cascades_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: cascades_buffer.as_entire_binding(),
-            }],
-        });
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("shadow_cascades_bind_group"),
+                layout: &layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: cascades_buffer.as_entire_binding(),
+                }],
+            });
+
+            BindGroup { layout, bind_group }
+        };
 
         Self {
             resolution,
             full_view_projection: ViewProjection::default(),
             cascades,
             cascades_buffer,
-            shadow_buffers,
-            cascades_bind_group_layout,
+            shadow_buffers: shadow_maps,
             cascades_bind_group,
+            shadow_maps_bind_group,
         }
     }
 

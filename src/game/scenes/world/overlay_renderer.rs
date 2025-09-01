@@ -24,7 +24,7 @@ impl OverlayRenderer {
                 label: Some("overlay"),
                 bind_group_layouts: &[
                     camera_bind_group_layout,
-                    &shadow_cascades.cascades_bind_group_layout,
+                    &shadow_cascades.cascades_bind_group.layout,
                     &geometry_buffers.bind_group_layout,
                 ],
                 push_constant_ranges: &[],
@@ -87,7 +87,7 @@ impl OverlayRenderer {
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &shadow_cascades.cascades_bind_group, &[]);
+        render_pass.set_bind_group(1, &shadow_cascades.cascades_bind_group.bind_group, &[]);
         render_pass.set_bind_group(2, &geometry_buffers.bind_group, &[]);
         render_pass.draw(0..3, 0..1);
     }
