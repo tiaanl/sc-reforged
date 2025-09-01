@@ -12,35 +12,38 @@ fn linear_fog_factor(fog_near: f32, fog_far: f32, distance: f32) -> f32 {
     return clamp((distance - fog_near) / (fog_far - fog_near), 0.0, 1.0);
 }
 
+/// Diffuse + ambient lighting, modulated by shadow visibility.
 fn diffuse(
     env: Environment,
     normal: vec3<f32>,
     base_color: vec3<f32>,
+    visibility: f32,              // 0 = full shadow, 1 = fully lit
 ) -> vec3<f32> {
     let N = normalize(normal);
-    let L = -normalize(env.sun_dir.xyz); // Terrain to sun
+    let L = -normalize(env.sun_dir.xyz); // from fragment toward sun
 
-    let diffuse_intensity = max(dot(N, L), 0.0); // Lambertian reflectance
-    let diffuse_color = env.sun_color.rgb * diffuse_intensity;
+    let n_dot_l = max(dot(N, L), 0.0);
 
-    // TODO: Put this in the Environment struct.
-    // let ambient_color = vec3<f32>(0.3, 0.3, 0.3);
+    // Direct sunlight (scaled by visibility)
+    let sun_light = env.sun_color.rgb * n_dot_l * visibility;
+
+    // Ambient term (not shadowed)
     let ambient_color = env.sun_color.rgb * 0.3;
 
-    let lighting = diffuse_color + ambient_color;
+    let lighting = sun_light + ambient_color;
 
-    let result = lighting * base_color;
-
-    return result;
+    return lighting * base_color;
 }
 
-fn diffuse_with_fog(
+/// Same as diffuse_with_fog(), but blends in a shadow term.
+fn diffuse_with_fog_shadow(
     env: Environment,
     normal: vec3<f32>,
     base_color: vec3<f32>,
     distance: f32,
+    visibility: f32,
 ) -> vec3<f32> {
-    let diffuse = diffuse(env, normal, base_color);
+    let lit_color = diffuse(env, normal, base_color, visibility);
 
     let fog_factor = linear_fog_factor(
         env.fog_params.x, // near
@@ -48,7 +51,16 @@ fn diffuse_with_fog(
         distance,
     );
 
-    let result = mix(diffuse, env.fog_color.rgb, fog_factor);
-
-    return result;
+    return mix(lit_color, env.fog_color.rgb, fog_factor);
 }
+
+/// Same as diffuse(), but blends fog on top.
+fn diffuse_with_fog(
+    env: Environment,
+    normal: vec3<f32>,
+    base_color: vec3<f32>,
+    distance: f32,
+) -> vec3<f32> {
+    return diffuse_with_fog_shadow(env, normal, base_color, distance, 1.0);
+}
+

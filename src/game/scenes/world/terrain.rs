@@ -10,13 +10,8 @@ use crate::{
         prelude::*,
     },
     game::{
-        config::CampaignDef,
-        data_dir::data_dir,
-        geometry_buffers::{GeometryBuffers, RenderTarget},
-        height_map::HeightMap,
-        image::images,
-        math::BoundingSphere,
-        shadows::ShadowCascades,
+        config::CampaignDef, data_dir::data_dir, geometry_buffers::GeometryBuffers,
+        height_map::HeightMap, image::images, math::BoundingSphere, shadows::ShadowCascades,
     },
     wgsl_shader,
 };
@@ -205,8 +200,7 @@ impl Terrain {
         campaign_def: &CampaignDef,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
-        shadow_render_target: &RenderTarget,
-        shadow_sampler: &wgpu::Sampler,
+        shadow_cascades: &ShadowCascades,
     ) -> Result<Self, AssetError> {
         let renderer = renderer();
 
@@ -438,24 +432,6 @@ impl Terrain {
                             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
                         },
-                        // shadow_map
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 5,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Depth,
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        // shadow_map_sampler
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 6,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-                            count: None,
-                        },
                     ],
                 });
 
@@ -496,14 +472,6 @@ impl Terrain {
                         binding: 4,
                         resource: wgpu::BindingResource::Sampler(&sampler),
                     },
-                    wgpu::BindGroupEntry {
-                        binding: 5,
-                        resource: wgpu::BindingResource::TextureView(&shadow_render_target.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 6,
-                        resource: wgpu::BindingResource::Sampler(shadow_sampler),
-                    },
                 ],
             });
 
@@ -520,6 +488,8 @@ impl Terrain {
                         camera_bind_group_layout,
                         environment_bind_group_layout,
                         &bind_group_layout,
+                        &shadow_cascades.cascades_bind_group.layout,
+                        &shadow_cascades.shadow_maps_bind_group.layout,
                     ],
                     push_constant_ranges: &[],
                 });
@@ -1125,6 +1095,7 @@ impl Terrain {
         render_pass.set_bind_group(1, environment_bind_group, &[]);
         render_pass.set_bind_group(2, &self.render_bind_group, &[]);
         render_pass.set_bind_group(3, &shadow_cascades.cascades_bind_group.bind_group, &[]);
+        render_pass.set_bind_group(4, &shadow_cascades.shadow_maps_bind_group.bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(
             &self.terrain_draw_args_buffer,

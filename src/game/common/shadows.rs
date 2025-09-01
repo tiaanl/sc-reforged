@@ -42,7 +42,7 @@ pub struct ShadowCascades {
     /// Holds all the data needed for rendering shadows.
     pub cascades_bind_group: BindGroup,
     /// Holds the shadow maps and sampler.
-    shadow_maps_bind_group: BindGroup,
+    pub shadow_maps_bind_group: BindGroup,
 }
 
 impl ShadowCascades {

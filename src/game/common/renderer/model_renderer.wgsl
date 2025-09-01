@@ -86,7 +86,7 @@ fn lit_color(vertex: VertexOutput) -> vec4<f32> {
         u_environment,
         vertex.normal.xyz,
         base_color.rgb,
-        camera_distance
+        camera_distance,
     );
 
     return vec4<f32>(diffuse, base_color.a);

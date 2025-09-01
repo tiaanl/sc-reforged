@@ -228,18 +228,6 @@ impl WorldScene {
             wgpu::TextureFormat::Depth32Float,
         );
 
-        let shadow_sampler = renderer().device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("shadow_sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            compare: Some(wgpu::CompareFunction::LessEqual),
-            ..Default::default()
-        });
-
         let light_gpu_camera = GpuCamera::new(&renderer().device);
 
         let compositor = Compositor::new(
@@ -252,8 +240,7 @@ impl WorldScene {
             &campaign_def,
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
-            &shadow_render_target,
-            &shadow_sampler,
+            &shadow_cascades,
         )?;
 
         let mut objects = objects::Objects::new(

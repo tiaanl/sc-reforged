@@ -1,13 +1,16 @@
+#import environment::{diffuse_with_fog, diffuse_with_fog_shadow};
+#import math::{position_in_frustum, project};
 #import world::camera::Camera;
-#import environment::diffuse_with_fog;
 #import world::geometry_buffers::{
     AlphaGeometryBuffers,
     OpaqueGeometryBuffers,
     to_alpha_geometry_buffer,
     to_opaque_geometry_buffer,
 };
+#import shadows::Cascades;
 
 @group(0) @binding(0) var<uniform> u_camera: Camera;
+
 @group(1) @binding(0) var<uniform> u_environment: environment::Environment;
 
 @group(2) @binding(0) var<storage, read> u_height_map: array<vec4<f32>>;
@@ -15,6 +18,11 @@
 @group(2) @binding(2) var t_terrain_texture: texture_2d<f32>;
 @group(2) @binding(3) var t_water_texture: texture_2d<f32>;
 @group(2) @binding(4) var s_sampler: sampler;
+
+@group(3) @binding(0) var<uniform> u_cascades: Cascades;
+
+@group(4) @binding(0) var t_shadow_maps: texture_depth_2d_array;
+@group(4) @binding(1) var s_shadow_maps: sampler_comparison;
 
 fn get_node_world_position(node: terrain::Node) -> vec3<f32> {
     return vec3<f32>(
@@ -84,6 +92,16 @@ fn vertex_water(
 
 const TERRAIN_ENTITY_ID: u32 = 1u << 16u;
 
+fn project_to_light_ndc(light_vp: mat4x4<f32>, world_position: vec3<f32>) -> vec3<f32> {
+  let light_clip_position = light_vp * vec4<f32>(world_position, 1.0);
+  // If behind the light camera, early out with outside value
+  if (light_clip_position.w <= 0.0) {
+    // Return something outside so bounds check fails
+    return vec3<f32>(2.0, 2.0, 2.0);
+  }
+  return light_clip_position.xyz / light_clip_position.w;
+}
+
 @fragment
 fn fragment_terrain(vertex: VertexOutput) -> OpaqueGeometryBuffers {
     let base_color = textureSample(t_terrain_texture, s_sampler, vertex.tex_coord).rgb;
@@ -92,7 +110,40 @@ fn fragment_terrain(vertex: VertexOutput) -> OpaqueGeometryBuffers {
     let world_position = vertex.world_position;
     let distance_to_camera = length(u_camera.position - world_position);
 
-    let diffuse = diffuse_with_fog(u_environment, normal, base_color, distance_to_camera);
+    var visibility = 1.0;
+
+    for (var cascade_index = 0u; cascade_index < u_cascades.count; cascade_index += 1) {
+        let light_ndc_position = shadows::project_to_light_ndc(
+            u_cascades.cascades[cascade_index],
+            world_position,
+        );
+
+        if math::inside_ndc(light_ndc_position) {
+            // Map the clip position [-1..1] to [0..1].
+            let shadow_uv = light_ndc_position.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
+
+            let bias = shadows::depth_bias(normal, u_environment.sun_dir.xyz);
+            let depth_ref = clamp(light_ndc_position.z, 0.0, 1.0);
+
+            visibility = shadows::sample_shadow_pcf_3x3(
+                t_shadow_maps,
+                s_shadow_maps,
+                cascade_index,
+                shadow_uv,
+                depth_ref,
+            );
+
+            break;
+        }
+    }
+
+    var diffuse = diffuse_with_fog_shadow(
+        u_environment,
+        normal,
+        base_color,
+        distance_to_camera,
+        visibility,
+    );
 
     return to_opaque_geometry_buffer(
         diffuse,
@@ -124,7 +175,12 @@ fn fragment_water(vertex: VertexOutput) -> AlphaGeometryBuffers {
     let world_position = vertex.world_position;
     let distance_to_camera = length(u_camera.position - world_position);
 
-    let diffuse = diffuse_with_fog(u_environment, vertex.normal, base_color, distance_to_camera);
+    let diffuse = diffuse_with_fog(
+        u_environment,
+        vertex.normal,
+        base_color,
+        distance_to_camera,
+    );
 
     return to_alpha_geometry_buffer(
         diffuse,
