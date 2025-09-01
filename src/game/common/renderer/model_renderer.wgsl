@@ -13,10 +13,9 @@
 @group(3) @binding(0) var t_positions: texture_2d<f32>;
 @group(3) @binding(1) var t_rotations: texture_2d<f32>;
 
-@group(4) @binding(0) var<uniform> u_cascades: Cascades;
-
-@group(5) @binding(0) var t_shadow_maps: texture_depth_2d_array;
-@group(5) @binding(1) var s_shadow_maps: sampler_comparison;
+@group(4) @binding(0) var t_shadow_maps: texture_depth_2d_array;
+@group(4) @binding(1) var s_shadow_maps: sampler_comparison;
+@group(4) @binding(2) var<uniform> u_cascades: Cascades;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,

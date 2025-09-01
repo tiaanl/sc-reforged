@@ -488,7 +488,6 @@ impl Terrain {
                         camera_bind_group_layout,
                         environment_bind_group_layout,
                         &bind_group_layout,
-                        &shadow_cascades.cascades_bind_group.layout,
                         &shadow_cascades.shadow_maps_bind_group.layout,
                     ],
                     push_constant_ranges: &[],
@@ -1094,8 +1093,7 @@ impl Terrain {
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.set_bind_group(1, environment_bind_group, &[]);
         render_pass.set_bind_group(2, &self.render_bind_group, &[]);
-        render_pass.set_bind_group(3, &shadow_cascades.cascades_bind_group.bind_group, &[]);
-        render_pass.set_bind_group(4, &shadow_cascades.shadow_maps_bind_group.bind_group, &[]);
+        render_pass.set_bind_group(3, &shadow_cascades.shadow_maps_bind_group.bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(
             &self.terrain_draw_args_buffer,

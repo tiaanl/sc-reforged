@@ -109,6 +109,13 @@ impl ShadowCascades {
             ..Default::default()
         });
 
+        let gpu_cascades = GpuCascades::default();
+        let cascades_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("shadow_cascades_buffer"),
+            contents: bytemuck::bytes_of(&gpu_cascades),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let shadow_maps_bind_group = {
             let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("shadow_maps_bind_group_layout"),
@@ -129,6 +136,16 @@ impl ShadowCascades {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
 
@@ -144,18 +161,15 @@ impl ShadowCascades {
                         binding: 1,
                         resource: wgpu::BindingResource::Sampler(&shadow_maps_sampler),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: cascades_buffer.as_entire_binding(),
+                    },
                 ],
             });
 
             BindGroup { layout, bind_group }
         };
-
-        let gpu_cascades = GpuCascades::default();
-        let cascades_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("shadow_cascades_buffer"),
-            contents: bytemuck::bytes_of(&gpu_cascades),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
 
         let cascades_bind_group = {
             let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

@@ -19,10 +19,9 @@
 @group(2) @binding(3) var t_water_texture: texture_2d<f32>;
 @group(2) @binding(4) var s_sampler: sampler;
 
-@group(3) @binding(0) var<uniform> u_cascades: Cascades;
-
-@group(4) @binding(0) var t_shadow_maps: texture_depth_2d_array;
-@group(4) @binding(1) var s_shadow_maps: sampler_comparison;
+@group(3) @binding(0) var t_shadow_maps: texture_depth_2d_array;
+@group(3) @binding(1) var s_shadow_maps: sampler_comparison;
+@group(3) @binding(2) var<uniform> u_cascades: Cascades;
 
 fn get_node_world_position(node: terrain::Node) -> vec3<f32> {
     return vec3<f32>(
