@@ -24,7 +24,7 @@ pub struct Model {
     /// A list of all the [Mesh]s contained in this model.
     pub meshes: Vec<Mesh>,
     /// A collection of collision boxes in the model, each associated with a specific node.
-    pub _collision_boxes: Vec<CollisionBox>,
+    pub collision_boxes: Vec<CollisionBox>,
     /// A bounding sphere surrounding all the vertices in the model.
     pub bounding_sphere: BoundingSphere,
     /// Look up node indices according to original node names.
@@ -64,11 +64,20 @@ pub struct Vertex {
 #[derive(Debug)]
 pub struct CollisionBox {
     /// An index to the [ModelNode] this mesh is attached to.
-    pub _node_index: NodeIndex,
+    pub node_index: NodeIndex,
     /// Minimum values for the bounding box.
-    pub _min: Vec3,
+    pub min: Vec3,
     /// Maximum values for the bounding box.
-    pub _max: Vec3,
+    pub max: Vec3,
+}
+
+impl CollisionBox {
+    pub fn center_and_half_extent(&self) -> (Vec3, Vec3) {
+        let center = (self.min + self.max) * 0.5;
+        let half_extent = (self.max - self.min) * 0.5;
+
+        (center, half_extent.max(Vec3::splat(1e-5)))
+    }
 }
 
 impl TryFrom<smf::Model> for Model {
@@ -159,9 +168,9 @@ impl TryFrom<smf::Model> for Model {
 
             for smf_collision_box in smf_node.bounding_boxes.iter() {
                 collision_boxes.push(CollisionBox {
-                    _node_index: node_index as u32,
-                    _min: smf_collision_box.min,
-                    _max: smf_collision_box.max,
+                    node_index: node_index as u32,
+                    min: smf_collision_box.min,
+                    max: smf_collision_box.max,
                 });
             }
         }
@@ -194,7 +203,7 @@ impl TryFrom<smf::Model> for Model {
         Ok(Model {
             skeleton,
             meshes,
-            _collision_boxes: collision_boxes,
+            collision_boxes,
             bounding_sphere,
             _names: names,
         })

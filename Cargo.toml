@@ -32,6 +32,8 @@ tracing = { version = "0.1.40", default-features = false, features = ["release_m
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["ansi", "fmt"] }
 tracy-client = { version = "0.18" }
 walkdir = { version = "2.5.0", default-features = false }
+rapier3d = { version = "0.28.0", features = ["debug-render"] }
+nalgebra = { version = "0.34.0", features = ["convert-glam030"] }
 
 [build-dependencies]
 naga_oil = { version = "0.17" }

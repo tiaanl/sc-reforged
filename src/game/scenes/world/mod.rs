@@ -13,6 +13,7 @@ use crate::{
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
+        physics::Physics,
         scenes::world::{
             actions::PlayerAction, game_mode::GameMode, overlay_renderer::OverlayRenderer,
         },
@@ -97,6 +98,8 @@ pub struct WorldScene {
     gizmos_renderer: GizmosRenderer,
 
     render_overlay: bool,
+
+    physics: Physics,
 }
 
 impl WorldScene {
@@ -168,6 +171,8 @@ impl WorldScene {
             e
         };
 
+        let mut physics = Physics::new();
+
         let environment = GpuEnvironment::default();
         let ambient_color = Vec3::splat(0.3);
 
@@ -236,6 +241,7 @@ impl WorldScene {
             &main_camera.gpu_camera.bind_group_layout,
             &environment_bind_group_layout,
             &shadow_cascades,
+            &mut physics,
         )?;
 
         let mut objects = objects::Objects::new(
@@ -258,6 +264,7 @@ impl WorldScene {
                     object_type,
                     &object.name,
                     &object.title,
+                    &mut physics,
                 ) {
                     tracing::error!("Could not load model: {}", err);
                 }
@@ -314,6 +321,8 @@ impl WorldScene {
             gizmos_renderer,
 
             render_overlay: false,
+
+            physics,
         })
     }
 
@@ -426,7 +435,9 @@ impl Scene for WorldScene {
             .controller
             .update_camera(&mut self.debug_camera.camera);
 
-        self.objects.update(delta_time);
+        self.physics.step();
+
+        self.objects.update(delta_time, &self.physics);
     }
 
     fn render(&mut self, frame: &mut Frame) {
@@ -659,6 +670,9 @@ impl Scene for WorldScene {
                 self.gizmos_renderer
                     .render(frame, view_camera_bind_group, &vertices);
             }
+
+            // Render out the physics data.
+            // self.physics.debug_render(&mut self.gizmos_vertices);
 
             self.gizmos_renderer
                 .render(frame, view_camera_bind_group, &self.gizmos_vertices);

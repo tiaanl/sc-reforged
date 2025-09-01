@@ -1,5 +1,6 @@
 use ahash::HashSet;
 use glam::{Quat, Vec3};
+use rapier3d::prelude::{ColliderHandle, RigidBodyHandle};
 
 use crate::{
     engine::{prelude::Transform, storage::Handle},
@@ -7,6 +8,7 @@ use crate::{
         animations::{Sequencer, sequences},
         config::ObjectType,
         model::Model,
+        physics::Physics,
         renderer::{ModelRenderer, RenderInstance},
     },
 };
@@ -27,11 +29,28 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn update(&mut self, delta_time: f32, model_renderer: &mut ModelRenderer) {
+    pub fn update(
+        &mut self,
+        delta_time: f32,
+        model_renderer: &mut ModelRenderer,
+        physics: &Physics,
+    ) {
         match self.detail {
             ObjectDetail::Scenery {
-                render_instance, ..
+                render_instance,
+                rigid_body_handle,
+                ..
             } => {
+                if let Some(rigid_body) = physics.get_rigid_body(rigid_body_handle) {
+                    let isometry = rigid_body.position();
+
+                    let transform = Transform {
+                        translation: isometry.translation.into(),
+                        rotation: isometry.rotation.into(),
+                    };
+                    self.transform = transform;
+                }
+
                 model_renderer.update_instance(render_instance, |updater| {
                     updater.set_transform(self.transform.to_mat4());
                 });
@@ -144,6 +163,8 @@ pub enum ObjectDetail {
     Scenery {
         model: Handle<Model>,
         render_instance: Handle<RenderInstance>,
+        rigid_body_handle: RigidBodyHandle,
+        collider_handles: Vec<ColliderHandle>,
     },
     Bipedal {
         body_model: Handle<Model>,

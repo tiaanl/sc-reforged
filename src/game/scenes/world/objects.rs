@@ -14,6 +14,7 @@ use crate::{
         math::Frustum,
         model::Model,
         models::models,
+        physics::Physics,
         renderer::ModelRenderer,
         scenes::world::{
             actions::PlayerAction,
@@ -59,6 +60,7 @@ impl Objects {
         object_type: ObjectType,
         model_name: &str,
         title: &str,
+        physics: &mut Physics,
     ) -> Result<(), AssetError> {
         let new_entity_id = self.objects.len() as u32;
 
@@ -97,16 +99,51 @@ impl Objects {
                 }
             }
 
-            _ => {
+            ObjectType::Scenery
+            | ObjectType::SceneryAlarm
+            | ObjectType::SceneryBush
+            | ObjectType::SceneryFragile
+            | ObjectType::SceneryLit
+            | ObjectType::SceneryShadowed
+            | ObjectType::SceneryStripLight
+            | ObjectType::SceneryTree
+            | ObjectType::FourByFour => {
+                // Dynamic physics
                 let model = models().load_object_model(model_name)?;
                 let render_instance = self.model_renderer.add_render_instance(
                     model,
                     transform.to_mat4(),
                     new_entity_id,
                 )?;
+
+                let rigid_body_handle = physics.insert_object(transform.clone(), true);
+                let collider_handles = physics.attach_model(rigid_body_handle, model);
+
                 ObjectDetail::Scenery {
                     model,
                     render_instance,
+                    rigid_body_handle,
+                    collider_handles,
+                }
+            }
+
+            _ => {
+                // Fixed physics
+                let model = models().load_object_model(model_name)?;
+                let render_instance = self.model_renderer.add_render_instance(
+                    model,
+                    transform.to_mat4(),
+                    new_entity_id,
+                )?;
+
+                let rigid_body_handle = physics.insert_object(transform.clone(), false);
+                let collider_handles = physics.attach_model(rigid_body_handle, model);
+
+                ObjectDetail::Scenery {
+                    model,
+                    render_instance,
+                    rigid_body_handle,
+                    collider_handles,
                 }
             }
         };
@@ -125,10 +162,9 @@ impl Objects {
         Ok(())
     }
 
-    pub fn update(&mut self, delta_time: f32) {
-        // Update sequencers.
+    pub fn update(&mut self, delta_time: f32, physics: &Physics) {
         self.objects.iter_mut().for_each(|object| {
-            object.update(delta_time, &mut self.model_renderer);
+            object.update(delta_time, &mut self.model_renderer, physics);
         });
     }
 
@@ -218,6 +254,60 @@ impl Objects {
             if object.draw_bounding_spheres {
                 Self::render_bounding_sphere(object, model, vertices);
             }
+
+            /*
+            let indices: [(usize, usize); 12] = [
+                // bottom face (z = min.z)
+                (0, 1),
+                (1, 3),
+                (3, 2),
+                (2, 0),
+                // top face (z = max.z)
+                (4, 5),
+                (5, 7),
+                (7, 6),
+                (6, 4),
+                // vertical edges
+                (0, 4),
+                (1, 5),
+                (2, 6),
+                (3, 7),
+            ];
+
+            const COLOR: Vec4 = Vec4::new(1.0, 0.0, 1.0, 1.0);
+
+            // Render colliders.
+            for collision_box in model.collision_boxes.iter() {
+                let local_transform = model.skeleton.local_transform(collision_box.node_index);
+
+                let transform = object.transform.to_mat4() * local_transform;
+
+                let min = collision_box.min;
+                let max = collision_box.max;
+
+                let corners = [
+                    Vec3::new(min.x, min.y, min.z),
+                    Vec3::new(max.x, min.y, min.z),
+                    Vec3::new(min.x, max.y, min.z),
+                    Vec3::new(max.x, max.y, min.z),
+                    Vec3::new(min.x, min.y, max.z),
+                    Vec3::new(max.x, min.y, max.z),
+                    Vec3::new(min.x, max.y, max.z),
+                    Vec3::new(max.x, max.y, max.z),
+                ];
+
+                for (start, end) in indices {
+                    vertices.push(GizmoVertex::new(
+                        transform.transform_point3(corners[start]),
+                        COLOR,
+                    ));
+                    vertices.push(GizmoVertex::new(
+                        transform.transform_point3(corners[end]),
+                        COLOR,
+                    ));
+                }
+            }
+            */
         }
     }
 

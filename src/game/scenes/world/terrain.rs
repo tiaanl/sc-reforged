@@ -11,7 +11,8 @@ use crate::{
     },
     game::{
         config::CampaignDef, data_dir::data_dir, geometry_buffers::GeometryBuffers,
-        height_map::HeightMap, image::images, math::BoundingSphere, shadows::ShadowCascades,
+        height_map::HeightMap, image::images, math::BoundingSphere, physics::Physics,
+        shadows::ShadowCascades,
     },
     wgsl_shader,
 };
@@ -201,6 +202,7 @@ impl Terrain {
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         environment_bind_group_layout: &wgpu::BindGroupLayout,
         shadow_cascades: &ShadowCascades,
+        physics: &mut Physics,
     ) -> Result<Self, AssetError> {
         let renderer = renderer();
 
@@ -232,6 +234,12 @@ impl Terrain {
             info!("Loading terrain height map: {}", path.display());
             data_dir().load_height_map(path)?
         };
+
+        physics.insert_terrain_collider(
+            &height_map,
+            terrain_mapping.nominal_edge_size,
+            terrain_mapping.altitude_map_height_base,
+        );
 
         let chunk_instances = Self::build_chunk_instances(
             &height_map,
