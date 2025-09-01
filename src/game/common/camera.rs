@@ -110,12 +110,12 @@ impl Camera {
     }
 
     #[inline]
-    fn calculate_projection(&self) -> Mat4 {
+    pub fn calculate_projection(&self) -> Mat4 {
         Mat4::perspective_lh(self.fov, self.aspect_ratio, self.near, self.far)
     }
 
     #[inline]
-    fn calculate_view(&self) -> Mat4 {
+    pub fn calculate_view(&self) -> Mat4 {
         let target = self.position + self.rotation * Self::FORWARD;
         Mat4::look_at_lh(self.position, target, self.rotation * Self::UP)
     }

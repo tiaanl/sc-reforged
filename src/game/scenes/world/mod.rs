@@ -8,12 +8,11 @@ use crate::{
     },
     game::{
         animations::track::Track,
-        camera::{self, Controller, GpuCamera},
+        camera::{self, Controller},
         compositor::Compositor,
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
-        math::ViewProjection,
         scenes::world::{
             actions::PlayerAction, game_mode::GameMode, overlay_renderer::OverlayRenderer,
         },
@@ -47,8 +46,6 @@ struct GpuEnvironment {
 
     pub fog_color: [f32; 4],
     pub fog_params: [f32; 4],
-
-    pub sun_proj_view: Mat4,
 }
 
 /// Wrap all the data for controlling the camera.
@@ -77,7 +74,6 @@ pub struct WorldScene {
     geometry_buffers: GeometryBuffers,
     compositor: Compositor,
     shadow_render_target: RenderTarget,
-    light_gpu_camera: GpuCamera,
 
     overlay_renderer: OverlayRenderer,
 
@@ -217,8 +213,7 @@ impl WorldScene {
                     }],
                 });
 
-        let shadow_cascades =
-            ShadowCascades::new(&renderer().device, 4, Self::SHADOW_MAP_RESOLUTION);
+        let shadow_cascades = ShadowCascades::new(&renderer().device, Self::SHADOW_MAP_RESOLUTION);
 
         let geometry_buffers = GeometryBuffers::new(&renderer().device, renderer().surface.size());
 
@@ -229,8 +224,6 @@ impl WorldScene {
             UVec2::new(Self::SHADOW_MAP_RESOLUTION, Self::SHADOW_MAP_RESOLUTION),
             wgpu::TextureFormat::Depth32Float,
         );
-
-        let light_gpu_camera = GpuCamera::new(&renderer().device);
 
         let compositor = Compositor::new(
             &geometry_buffers.bind_group_layout,
@@ -295,10 +288,9 @@ impl WorldScene {
             objects,
 
             shadow_cascades,
-            shadow_cascades_lambda: 0.8,
+            shadow_cascades_lambda: 0.5,
             geometry_buffers,
             shadow_render_target,
-            light_gpu_camera,
             compositor,
 
             overlay_renderer,
@@ -358,7 +350,6 @@ impl WorldScene {
             sun_color: sun_color.extend(self.ambient_color.y).to_array(),
             fog_color: fog_color.extend(self.ambient_color.z).to_array(),
             fog_params: [fog_near, fog_far, 0.0, 0.0],
-            sun_proj_view: Mat4::IDENTITY,
         }
     }
 }
@@ -469,26 +460,6 @@ impl Scene for WorldScene {
             sun_dir,
             self.shadow_cascades_lambda,
         );
-
-        let light_view_projection = {
-            let planes = self.main_camera.camera.view_slice_planes(1, 0.5);
-            let view_projection = fit_directional_light(
-                sun_dir,                     // Sun direction
-                &planes[0],                  // near corners
-                &planes[1],                  // far corners
-                Self::SHADOW_MAP_RESOLUTION, // shadow map resolution
-                50.0,                        // XY guard band in world units
-                50.0,                        // near guard
-                50.0,                        // far guard
-                true,                        // texel snapping
-            );
-
-            self.light_gpu_camera.upload(&view_projection, Vec3::ZERO);
-
-            view_projection
-        };
-
-        self.environment.sun_proj_view = light_view_projection.mat;
 
         renderer().queue.write_buffer(
             &self.environment_buffer,
@@ -671,24 +642,6 @@ impl Scene for WorldScene {
             self.terrain.render_gizmos(&mut self.gizmos_vertices);
             self.objects.render_gizmos(&mut self.gizmos_vertices);
 
-            // Render the light cascades.
-            if false {
-                self.gizmos_vertices
-                    .extend(GizmosRenderer::create_view_projection(
-                        &light_view_projection,
-                        Vec4::new(0.0, 1.0, 1.0, 1.0),
-                    ));
-
-                for cascade in self.shadow_cascades.cascades.iter() {
-                    let color = Vec4::new(1.0, 0.0, 0.0, 1.0);
-                    self.gizmos_vertices
-                        .extend(GizmosRenderer::create_view_projection(
-                            &cascade.view_projection,
-                            color,
-                        ));
-                }
-            }
-
             // Render the main camera frustum when we're looking through the debug camera.
             if self.view_debug_camera {
                 self.gizmos_vertices
@@ -819,84 +772,4 @@ impl Scene for WorldScene {
 
         self.objects.debug_panel(ctx);
     }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn fit_directional_light(
-    sun_dir: Vec3, // direction from sun toward world
-    corners_near: &[Vec3; 4],
-    corners_far: &[Vec3; 4],
-    shadow_res: u32, // e.g. 2048
-    guard_xy: f32,   // extra margin around frustum in world units
-    guard_z_near: f32,
-    guard_z_far: f32,
-    texel_snap: bool,
-) -> ViewProjection {
-    // Build light view
-    let forward = sun_dir.normalize();
-    let mut up = Vec3::Z;
-    if forward.abs_diff_eq(up, 1e-4) {
-        up = Vec3::Y;
-    }
-
-    // Place eye at frustum center - some distance back along light dir
-    let center = corners_near
-        .iter()
-        .chain(corners_far)
-        .copied()
-        .reduce(|a, b| a + b)
-        .unwrap()
-        / 8.0;
-    let eye = center - forward * 10_000.0; // far enough to see everything
-    let view = Mat4::look_at_lh(eye, center, up);
-
-    // Transform corners into light space
-    let mut min_x = f32::INFINITY;
-    let mut max_x = f32::NEG_INFINITY;
-    let mut min_y = f32::INFINITY;
-    let mut max_y = f32::NEG_INFINITY;
-    let mut min_z = f32::INFINITY;
-    let mut max_z = f32::NEG_INFINITY;
-
-    for &p in corners_near.iter().chain(corners_far) {
-        let point = view.transform_point3(p);
-        min_x = min_x.min(point.x);
-        max_x = max_x.max(point.x);
-        min_y = min_y.min(point.y);
-        max_y = max_y.max(point.y);
-        min_z = min_z.min(point.z);
-        max_z = max_z.max(point.z);
-    }
-
-    // Add guard bands
-    min_x -= guard_xy;
-    max_x += guard_xy;
-    min_y -= guard_xy;
-    max_y += guard_xy;
-    min_z -= guard_z_near;
-    max_z += guard_z_far;
-
-    if texel_snap && shadow_res > 0 {
-        let w = max_x - min_x;
-        let h = max_y - min_y;
-        let step_x = w / shadow_res as f32;
-        let step_y = h / shadow_res as f32;
-
-        let cx = 0.5 * (min_x + max_x);
-        let cy = 0.5 * (min_y + max_y);
-        let cx_snapped = (cx / step_x).floor() * step_x;
-        let cy_snapped = (cy / step_y).floor() * step_y;
-
-        let half_w = 0.5 * w;
-        let half_h = 0.5 * h;
-        min_x = cx_snapped - half_w;
-        max_x = cx_snapped + half_w;
-        min_y = cy_snapped - half_h;
-        max_y = cy_snapped + half_h;
-    }
-
-    // Ortho projection (LH, depth 0..1 for wgpu)
-    let projection = Mat4::orthographic_lh(min_x, max_x, min_y, max_y, min_z, max_z);
-
-    ViewProjection::from_projection_view(projection, view)
 }

@@ -1,4 +1,4 @@
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Vec4};
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -46,9 +46,8 @@ pub struct ShadowCascades {
 }
 
 impl ShadowCascades {
-    pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-
     pub const MAX_CASCADES: usize = 4;
+    pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
     pub fn depth_stencil_state() -> wgpu::DepthStencilState {
         wgpu::DepthStencilState {
@@ -64,18 +63,22 @@ impl ShadowCascades {
         }
     }
 
-    pub fn new(device: &wgpu::Device, count: u32, resolution: u32) -> Self {
-        debug_assert!(count > 0 && count as usize <= Self::MAX_CASCADES);
+    pub fn new(device: &wgpu::Device, resolution: u32) -> Self {
         debug_assert!(resolution > 0);
 
-        tracing::info!("Creating {count} shadow cascades at {resolution}x{resolution}.");
+        tracing::info!(
+            "Creating {} shadow cascades at {resolution}x{resolution}.",
+            Self::MAX_CASCADES
+        );
 
-        let cascades = (0..count).map(|i| Cascade::new(device, i)).collect();
+        let cascades = (0..Self::MAX_CASCADES)
+            .map(|i| Cascade::new(device, i as u32))
+            .collect();
 
         let size = wgpu::Extent3d {
             width: resolution,
             height: resolution,
-            depth_or_array_layers: count,
+            depth_or_array_layers: Self::MAX_CASCADES as u32,
         };
 
         let shadow_maps = device.create_texture(&wgpu::TextureDescriptor {
@@ -93,7 +96,7 @@ impl ShadowCascades {
             label: Some("shadow_maps_texture_view"),
             dimension: Some(wgpu::TextureViewDimension::D2Array),
             base_array_layer: 0,
-            array_layer_count: Some(count),
+            array_layer_count: Some(Self::MAX_CASCADES as u32),
             ..Default::default()
         });
 
@@ -242,6 +245,7 @@ impl ShadowCascades {
 
         self.full_view_projection = self.fit_directional_light(
             light_direction,
+            camera,
             corners,
             self.resolution,
             guard_xy,
@@ -257,6 +261,7 @@ impl ShadowCascades {
         for (index, corners) in slice_planes.windows(2).enumerate() {
             let view_projection = self.fit_directional_light(
                 light_direction,
+                camera,
                 corners,
                 self.resolution,
                 guard_xy,
@@ -278,25 +283,56 @@ impl ShadowCascades {
             .write_buffer(&self.cascades_buffer, 0, bytemuck::bytes_of(&gpu_cascades));
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn fit_directional_light(
         &self,
         sun_dir: Vec3, // direction from sun toward world
-        corners: &[[Vec3; 4]],
-        shadow_res: u32, // e.g. 2048
-        guard_xy: f32,   // extra margin around frustum in world units
+        camera: &Camera,
+        corners: &[[Vec3; 4]], // [near4, far4] of the slice in WORLD
+        shadow_res: u32,       // e.g. 2048
+        guard_xy: f32,         // extra margin around frustum in world units
         guard_z_near: f32,
         guard_z_far: f32,
     ) -> ViewProjection {
         debug_assert!(corners.len() == 2);
 
-        // Build light view
-        let forward = sun_dir.normalize();
-        let mut up = Vec3::Z;
-        if forward.abs_diff_eq(up, 1e-4) {
-            up = Vec3::Y;
+        // --- Camera-aligned light basis -----------------------------------------
+        // Camera world axes (match on-screen orientation)
+        let inv_view = camera.calculate_view().inverse();
+        let camera_right = inv_view.col(0).truncate(); // world-space right
+        let camera_up = inv_view.col(1).truncate(); // world-space up
+
+        // Light forward along the sun (LH: +Z forward)
+        let light_forward = sun_dir.normalize();
+
+        // Project camera axes into plane orthogonal to light_forward
+        let mut light_right = camera_right - light_forward * camera_right.dot(light_forward);
+        if light_right.length_squared() < 1e-8 {
+            // If degenerate, fall back to camera_up
+            light_right = camera_up - light_forward * camera_up.dot(light_forward);
+        }
+        if light_right.length_squared() < 1e-8 {
+            // Final fallback: pick any vector not parallel to forward
+            let aux = if light_forward.abs_diff_eq(Vec3::Z, 1e-4) {
+                Vec3::X
+            } else {
+                Vec3::Z
+            };
+            light_right = aux - light_forward * aux.dot(light_forward);
+        }
+        light_right = light_right.normalize();
+
+        // LH basis: up = forward × right
+        let mut light_up = light_forward.cross(light_right);
+        if light_up.length_squared() < 1e-8 {
+            // Extremely rare; enforce orthonormality
+            light_up = light_forward.cross(Vec3::X).normalize();
+            light_right = light_up.cross(light_forward).normalize();
+        } else {
+            light_up = light_up.normalize();
         }
 
-        // Place eye at frustum center - some distance back along light dir
+        // Slice center as the "eye" for tight/stable depth
         let center = corners[0]
             .iter()
             .chain(&corners[1])
@@ -304,10 +340,21 @@ impl ShadowCascades {
             .reduce(|a, b| a + b)
             .unwrap()
             / 8.0;
-        let eye = center - forward * 10_000.0; // far enough to see everything
-        let view = Mat4::look_at_lh(eye, center, up);
 
-        // Transform corners into light space
+        // Build view from basis and eye (LH; columns = right, up, forward, translation)
+        let view = Mat4::from_cols(
+            Vec4::new(light_right.x, light_up.x, light_forward.x, 0.0),
+            Vec4::new(light_right.y, light_up.y, light_forward.y, 0.0),
+            Vec4::new(light_right.z, light_up.z, light_forward.z, 0.0),
+            Vec4::new(
+                -light_right.dot(center),
+                -light_up.dot(center),
+                -light_forward.dot(center),
+                1.0,
+            ),
+        );
+
+        // --- Fit AABB of the slice in this camera-aligned light space ------------
         let mut min_x = f32::INFINITY;
         let mut max_x = f32::NEG_INFINITY;
         let mut min_y = f32::INFINITY;
@@ -316,30 +363,31 @@ impl ShadowCascades {
         let mut max_z = f32::NEG_INFINITY;
 
         for &p in corners[0].iter().chain(&corners[1]) {
-            let point = view.transform_point3(p);
-            min_x = min_x.min(point.x);
-            max_x = max_x.max(point.x);
-            min_y = min_y.min(point.y);
-            max_y = max_y.max(point.y);
-            min_z = min_z.min(point.z);
-            max_z = max_z.max(point.z);
+            let q = view.transform_point3(p);
+            min_x = min_x.min(q.x);
+            max_x = max_x.max(q.x);
+            min_y = min_y.min(q.y);
+            max_y = max_y.max(q.y);
+            min_z = min_z.min(q.z);
+            max_z = max_z.max(q.z);
         }
 
-        // Add guard bands
+        // --- Guard bands ----------------------------------------------------------
         min_x -= guard_xy;
         max_x += guard_xy;
         min_y -= guard_xy;
         max_y += guard_xy;
-        min_z -= guard_z_near;
-        max_z += guard_z_far;
+        min_z -= guard_z_near; // toward the light origin
+        max_z += guard_z_far; // away from the origin
 
+        // --- Texel snapping (stabilize when camera pans) -------------------------
         {
-            // Texel snap.
-            let w = max_x - min_x;
-            let h = max_y - min_y;
+            let w = (max_x - min_x).max(1e-6);
+            let h = (max_y - min_y).max(1e-6);
             let step_x = w / shadow_res as f32;
             let step_y = h / shadow_res as f32;
 
+            // Snap the center to the texel grid; preserve size
             let cx = 0.5 * (min_x + max_x);
             let cy = 0.5 * (min_y + max_y);
             let cx_snapped = (cx / step_x).floor() * step_x;
@@ -353,7 +401,7 @@ impl ShadowCascades {
             max_y = cy_snapped + half_h;
         }
 
-        // Ortho projection (LH, depth 0..1 for wgpu)
+        // --- Ortho projection (LH, z ∈ [0,1] for wgpu) ---------------------------
         let projection = Mat4::orthographic_lh(min_x, max_x, min_y, max_y, min_z, max_z);
 
         ViewProjection::from_projection_view(projection, view)

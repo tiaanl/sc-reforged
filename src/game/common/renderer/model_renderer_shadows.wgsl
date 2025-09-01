@@ -1,7 +1,7 @@
 #import world::camera
 #import world::animation
 
-@group(0) @binding(0) var<uniform> u_cascades: array<mat4x4<f32>, 4>;
+@group(0) @binding(0) var<uniform> u_cascades: array<mat4x4<f32>, shadows::MAX_CASCADES>;
 
 @group(1) @binding(0) var t_positions: texture_2d<f32>;
 @group(1) @binding(1) var t_rotations: texture_2d<f32>;

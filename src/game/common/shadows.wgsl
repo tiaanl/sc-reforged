@@ -1,7 +1,9 @@
 #define_import_path shadows
 
+const MAX_CASCADES: u32 = 4;  // Must sync with ShadowCascades::MAX_CASCADES.
+
 struct Cascades {
-    cascades: array<mat4x4<f32>, 4>,
+    cascades: array<mat4x4<f32>, MAX_CASCADES>,
     count: u32,
 }
 
