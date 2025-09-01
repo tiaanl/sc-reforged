@@ -39,8 +39,10 @@ pub struct ShadowCascades {
     shadow_buffers: wgpu::Texture,
     /// GPU buffer holding the cascades data.
     cascades_buffer: wgpu::Buffer,
+    /// Holds the layout for the `cascades_bind_group_layout`.
+    pub cascades_bind_group_layout: wgpu::BindGroupLayout,
     /// Holds all the data needed for rendering shadows.
-    pub bind_group: wgpu::BindGroup,
+    pub cascades_bind_group: wgpu::BindGroup,
 }
 
 impl ShadowCascades {
@@ -114,55 +116,28 @@ impl ShadowCascades {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("shadow_cascades_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
+        let cascades_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("shadow_cascades_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Depth,
-                        view_dimension: wgpu::TextureViewDimension::D2Array,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
-                },
-            ],
-        });
+                }],
+            });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let cascades_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("shadow_cascades_bind_group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&shadow_buffers_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: cascades_buffer.as_entire_binding(),
-                },
-            ],
+            layout: &cascades_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: cascades_buffer.as_entire_binding(),
+            }],
         });
 
         Self {
@@ -171,7 +146,8 @@ impl ShadowCascades {
             cascades,
             cascades_buffer,
             shadow_buffers,
-            bind_group,
+            cascades_bind_group_layout,
+            cascades_bind_group,
         }
     }
 

@@ -14,10 +14,13 @@ fn main() {
 }
 
 const COMMON: &[&str] = &[
+    // First
     "src/game/common/renderer/math.wgsl",
+    // Rest
     "src/game/common/camera.wgsl",
     "src/game/common/fullscreen.wgsl",
     "src/game/common/geometry_buffers.wgsl",
+    "src/game/common/shadows.wgsl",
     "src/game/common/renderer/animation.wgsl",
     "src/game/scenes/world/environment.wgsl",
     "src/game/scenes/world/terrain_data.wgsl",

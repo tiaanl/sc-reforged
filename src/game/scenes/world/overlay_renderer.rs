@@ -1,6 +1,6 @@
 use crate::{
     engine::{prelude::Frame, renderer::renderer},
-    game::geometry_buffers::GeometryBuffers,
+    game::{geometry_buffers::GeometryBuffers, shadows::ShadowCascades},
     wgsl_shader,
 };
 
@@ -11,7 +11,7 @@ pub struct OverlayRenderer {
 impl OverlayRenderer {
     pub fn new(
         camera_bind_group_layout: &wgpu::BindGroupLayout,
-        environment_bind_group_layout: &wgpu::BindGroupLayout,
+        shadow_cascades: &ShadowCascades,
         geometry_buffers: &GeometryBuffers,
     ) -> Self {
         let module = renderer()
@@ -24,7 +24,7 @@ impl OverlayRenderer {
                 label: Some("overlay"),
                 bind_group_layouts: &[
                     camera_bind_group_layout,
-                    environment_bind_group_layout,
+                    &shadow_cascades.cascades_bind_group_layout,
                     &geometry_buffers.bind_group_layout,
                 ],
                 push_constant_ranges: &[],
@@ -65,7 +65,7 @@ impl OverlayRenderer {
         &mut self,
         frame: &mut Frame,
         camera_bind_group: &wgpu::BindGroup,
-        environment_bind_group: &wgpu::BindGroup,
+        shadow_cascades: &ShadowCascades,
         geometry_buffers: &GeometryBuffers,
     ) {
         let mut render_pass = frame
@@ -87,7 +87,7 @@ impl OverlayRenderer {
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, environment_bind_group, &[]);
+        render_pass.set_bind_group(1, &shadow_cascades.cascades_bind_group, &[]);
         render_pass.set_bind_group(2, &geometry_buffers.bind_group, &[]);
         render_pass.draw(0..3, 0..1);
     }

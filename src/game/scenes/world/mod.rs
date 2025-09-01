@@ -283,7 +283,7 @@ impl WorldScene {
 
         let overlay_renderer = OverlayRenderer::new(
             &main_camera.gpu_camera.bind_group_layout,
-            &environment_bind_group_layout,
+            &shadow_cascades,
             &geometry_buffers,
         );
 
@@ -655,7 +655,7 @@ impl Scene for WorldScene {
             self.overlay_renderer.render(
                 frame,
                 &self.main_camera.gpu_camera.bind_group,
-                &self.environment_bind_group,
+                &self.shadow_cascades,
                 &self.geometry_buffers,
             );
         } else {

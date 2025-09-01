@@ -1124,7 +1124,7 @@ impl Terrain {
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.set_bind_group(1, environment_bind_group, &[]);
         render_pass.set_bind_group(2, &self.render_bind_group, &[]);
-        render_pass.set_bind_group(3, &shadow_cascades.bind_group, &[]);
+        render_pass.set_bind_group(3, &shadow_cascades.cascades_bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(
             &self.terrain_draw_args_buffer,

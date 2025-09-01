@@ -39,3 +39,29 @@ fn transform_from_position_and_rotation(position: vec3<f32>, rotation: vec4<f32>
         vec4<f32>(position, 1.0),
     );
 }
+
+fn position_in_frustum(view_projection: mat4x4<f32>, position: vec3<f32>) -> bool {
+    let projected = view_projection * vec4<f32>(position, 1.0);
+
+    // Must be in front of the camera.
+    if (projected.w <= 0.0) {
+        return false;
+    }
+
+    let ndc = projected.xyz / projected.w;
+
+    let inside_xy =
+        all(ndc.xy >= vec2<f32>(-1.0 - EPSILON)) &&
+        all(ndc.xy <= vec2<f32>(1.0 + EPSILON));
+    if !inside_xy {
+        return false;
+    }
+
+    let inside_z = (ndc.z >= 0.0 - EPSILON) && (ndc.z <= 1.0 + EPSILON);
+    if !inside_z {
+        return false;
+    }
+
+    return true;
+}
+
