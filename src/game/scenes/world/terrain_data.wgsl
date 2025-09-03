@@ -13,6 +13,17 @@ struct TerrainData {
     water_trans_high: f32,
 }
 
+struct ChunkInstance {
+    center: vec3<f32>,
+    radius: f32,
+
+    min_elevation: f32,
+    max_elevation: f32,
+
+    lod: u32,
+    flags: u32,
+}
+
 fn ceil_div_u32(a: u32, b: u32) -> u32 {
     // assert!(b > 0);
     return (a + b - 1u) / b;

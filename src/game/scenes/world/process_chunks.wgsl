@@ -1,16 +1,10 @@
-#import world::camera
-#import world::frustum
+#import world::camera::{camera_forward, Camera};
+#import world::frustum::{Frustum, is_sphere_in_frustum};
+#import terrain::ChunkInstance;
 
-struct ChunkInstance {
-    center: vec3<f32>,
-    radius: f32,
-
-    chunk: vec2<i32>,
-    min_elevation: f32,
-    max_elevation: f32,
-
-    lod_index: u32,
-    flags: u32,
+struct LodRange {
+    first_index: u32,
+    index_count: u32,
 }
 
 struct DrawArgs {
@@ -21,12 +15,7 @@ struct DrawArgs {
     first_instance: u32,
 };
 
-struct LodRange {
-    first_index: u32,
-    index_count: u32,
-}
-
-@group(0) @binding(0) var<uniform> u_camera: camera::Camera;
+@group(0) @binding(0) var<uniform> u_camera: Camera;
 
 @group(1) @binding(0) var<uniform> u_environment: environment::Environment;
 
@@ -40,14 +29,14 @@ struct LodRange {
 const MAX_LOD_LEVELS: u32 = 4u;
 const ZERO_DRAW_ARGS: DrawArgs = DrawArgs(0u, 0u, 0u, 0, 0u);
 
-const TERRAIN_LODS: array<LodRange, 4> = array<LodRange, 4>(
+const TERRAIN_LODS = array<LodRange, 4>(
     LodRange(0u, 384u),
     LodRange(384u, 96u),
     LodRange(480u, 24u),
     LodRange(504u, 6u),
 );
 
-const WIREFRAME_LODS: array<LodRange, 4> = array<LodRange, 4>(
+const WIREFRAME_LODS = array<LodRange, 4>(
     LodRange(0u, 512u),
     LodRange(512u, 128u),
     LodRange(640u, 32u),
@@ -61,7 +50,7 @@ fn make_draw_args(range: LodRange, chunk_index: u32) -> DrawArgs {
 fn compute_lod(center_world: vec3<f32>) -> u32 {
     let far = max(u_environment.fog_params.y, 1e-6);
     let inv_step = f32(MAX_LOD_LEVELS) / far;
-    let forward = camera::camera_forward(u_camera);
+    let forward = camera_forward(u_camera);
 
     let forward_distance = max(0.0, dot(center_world - u_camera.position, forward));
     let t = forward_distance * inv_step;
@@ -91,7 +80,7 @@ fn hide_water(chunk_index: u32) {
     u_water_draw_args[chunk_index] = ZERO_DRAW_ARGS;
 }
 
-// ---------- Main ----------
+
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let chunk_index = gid.x;
@@ -100,15 +89,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return;
     }
 
-    let world_frustum = frustum::Frustum(u_camera.frustum);
-    let chunk: ChunkInstance = u_chunk_instances[chunk_index];
+    let world_frustum = Frustum(u_camera.frustum);
+    let chunk = u_chunk_instances[chunk_index];
 
-    // Compute and store LOD
+    // Compute and store the chunk LOD.
     let lod = compute_lod(chunk.center);
-    u_chunk_instances[chunk_index].lod_index = lod;
+    u_chunk_instances[chunk_index].lod = lod;
 
-    // Terrain visibility
-    let terrain_visible = frustum::is_sphere_in_frustum(
+    // Check the chunk visibility.
+    let terrain_visible = is_sphere_in_frustum(
         world_frustum,
         chunk.center,
         chunk.radius,
@@ -119,17 +108,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         hide_terrain_and_wireframe(chunk_index);
     }
 
-    // Water visibility (skip if never visible due to height)
+    // If the water is under the terrain, skip entirely.
     if (u_terrain_data.water_level < chunk.min_elevation) {
         hide_water(chunk_index);
         return;
     }
 
+    // Calculate the bounding sphere for the water chunk.
     let half_chunk = u_terrain_data.nominal_edge_size * f32(terrain::CELLS_PER_CHUNK) * 0.5;
     let water_center = vec3<f32>(chunk.center.xy, u_terrain_data.water_level);
     let water_radius = half_chunk * sqrt(2.0);
 
-    if (frustum::is_sphere_in_frustum(world_frustum, water_center, water_radius)) {
+    if (is_sphere_in_frustum(world_frustum, water_center, water_radius)) {
         write_water(chunk_index, lod);
     } else {
         hide_water(chunk_index);

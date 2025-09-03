@@ -466,7 +466,7 @@ impl ModelRenderer {
                 };
 
                 let Some(ref mesh) = model.opaque_mesh else {
-                    tracing::warn!("No opaque mesh, but in opaque instances!");
+                    // tracing::warn!("No opaque mesh, but in opaque instances!");
                     continue;
                 };
 
@@ -554,7 +554,7 @@ impl ModelRenderer {
                 };
 
                 let Some(ref mesh) = model.opaque_mesh else {
-                    tracing::warn!("No opaque mesh, but in opaque instances!");
+                    // tracing::warn!("No opaque mesh, but in opaque instances!");
                     continue;
                 };
 

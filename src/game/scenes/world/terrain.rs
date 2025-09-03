@@ -101,13 +101,11 @@ struct GpuChunkInstance {
     center: Vec3,
     radius: f32,
 
-    chunk: IVec2,
     min_elevation: f32,
     max_elevation: f32,
 
     lod_index: u32,
     flags: u32,
-    _pad0: [u32; 2],
 }
 
 impl std::fmt::Debug for GpuChunkInstance {
@@ -115,7 +113,6 @@ impl std::fmt::Debug for GpuChunkInstance {
         f.debug_struct("GpuChunkInstance")
             .field("center", &self.center)
             .field("radius", &self.radius)
-            .field("chunk", &self.chunk)
             .field("min_elevation", &self.min_elevation)
             .field("max_elevation", &self.max_elevation)
             .field("flags", &self.flags)
@@ -392,9 +389,20 @@ impl Terrain {
                             },
                             count: None,
                         },
-                        // u_terrain_data
+                        // u_height_map
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        // u_terrain_data
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
                             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Uniform,
@@ -405,7 +413,7 @@ impl Terrain {
                         },
                         // t_terrain_texture
                         wgpu::BindGroupLayoutEntry {
-                            binding: 2,
+                            binding: 3,
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Texture {
                                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -416,7 +424,7 @@ impl Terrain {
                         },
                         // t_water_texture
                         wgpu::BindGroupLayoutEntry {
-                            binding: 3,
+                            binding: 4,
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Texture {
                                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -427,7 +435,7 @@ impl Terrain {
                         },
                         // s_terrain_texture
                         wgpu::BindGroupLayoutEntry {
-                            binding: 4,
+                            binding: 5,
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
@@ -450,26 +458,28 @@ impl Terrain {
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::Buffer(
-                            height_map_buffer.as_entire_buffer_binding(),
-                        ),
+                        resource: height_map_buffer.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
+                        resource: chunk_instances_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
                         resource: wgpu::BindingResource::Buffer(
                             terrain_data_buffer.as_entire_buffer_binding(),
                         ),
                     },
                     wgpu::BindGroupEntry {
-                        binding: 2,
+                        binding: 3,
                         resource: wgpu::BindingResource::TextureView(&terrain_texture_view),
                     },
                     wgpu::BindGroupEntry {
-                        binding: 3,
+                        binding: 4,
                         resource: wgpu::BindingResource::TextureView(&water_texture_view),
                     },
                     wgpu::BindGroupEntry {
-                        binding: 4,
+                        binding: 5,
                         resource: wgpu::BindingResource::Sampler(&sampler),
                     },
                 ],
@@ -565,12 +575,24 @@ impl Terrain {
                 })
         };
 
-        let wireframe_pipeline =
+        let wireframe_pipeline = {
+            let module = renderer
+                .device
+                .create_shader_module(wgsl_shader!("terrain_wireframe"));
+
+            let layout = renderer
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("terrain_pipeline_layout"),
+                    bind_group_layouts: &[camera_bind_group_layout, &bind_group_layout],
+                    push_constant_ranges: &[],
+                });
+
             renderer
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("terrain_wireframe_pipeline"),
-                    layout: Some(&terrain_pipeline_layout),
+                    layout: Some(&layout),
                     vertex: wgpu::VertexState {
                         module: &module,
                         entry_point: Some("vertex_wireframe"),
@@ -591,7 +613,8 @@ impl Terrain {
                     }),
                     multiview: None,
                     cache: None,
-                });
+                })
+        };
 
         // Process chunks
 
@@ -861,12 +884,10 @@ impl Terrain {
                 chunk_instances.push(GpuChunkInstance {
                     center: sphere.center,
                     radius: sphere.radius,
-                    chunk: IVec2::new(chunk_x, chunk_y),
                     min_elevation,
                     max_elevation,
                     lod_index: 0, // Calculated in the process_chunks compute shader.
                     flags,
-                    _pad0: Default::default(),
                 });
             }
         }
@@ -1164,8 +1185,7 @@ impl Terrain {
             wgpu::IndexFormat::Uint32,
         );
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, environment_bind_group, &[]);
-        render_pass.set_bind_group(2, &self.render_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(
             &self.wireframe_draw_args_buffer,

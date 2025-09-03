@@ -7,6 +7,7 @@
     to_alpha_geometry_buffer,
     to_opaque_geometry_buffer,
 };
+#import terrain::ChunkInstance;
 #import shadows::Cascades;
 
 @group(0) @binding(0) var<uniform> u_camera: Camera;
@@ -14,10 +15,11 @@
 @group(1) @binding(0) var<uniform> u_environment: environment::Environment;
 
 @group(2) @binding(0) var<storage, read> u_height_map: array<vec4<f32>>;
-@group(2) @binding(1) var<uniform> u_terrain_data: terrain::TerrainData;
-@group(2) @binding(2) var t_terrain_texture: texture_2d<f32>;
-@group(2) @binding(3) var t_water_texture: texture_2d<f32>;
-@group(2) @binding(4) var s_sampler: sampler;
+@group(1) @binding(1) var<storage, read> u_chunk_instances: array<ChunkInstance>;
+@group(2) @binding(2) var<uniform> u_terrain_data: terrain::TerrainData;
+@group(2) @binding(3) var t_terrain_texture: texture_2d<f32>;
+@group(2) @binding(4) var t_water_texture: texture_2d<f32>;
+@group(2) @binding(5) var s_sampler: sampler;
 
 @group(3) @binding(0) var t_shadow_maps: texture_depth_2d_array;
 @group(3) @binding(1) var s_shadow_maps: sampler_comparison;
