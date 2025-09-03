@@ -11,6 +11,7 @@ use crate::{
         animations::Sequencer,
         config::ObjectType,
         geometry_buffers::GeometryBuffers,
+        image::{BlendMode, images},
         math::Frustum,
         model::Model,
         models::models,
@@ -94,6 +95,42 @@ impl Objects {
                     head_render_instance,
                     order: BipedalOrder::Stand,
                     sequencer: Sequencer::default(),
+                }
+            }
+
+            ObjectType::SceneryLit => {
+                let model = models().load_object_model(model_name)?;
+
+                {
+                    // lightfcone
+                    // lightflare
+                    let model = models().get_mut(model).expect("Just loaded!");
+                    if let Some(index) = model.node_index_by_name("lightfcone") {
+                        for mesh in model.meshes.iter().filter(|mesh| mesh.node_index == index) {
+                            if let Some(image) = images().get_mut(mesh.image) {
+                                // We're changing the blend mode globally, which should be fine.
+                                image.blend_mode = BlendMode::Additive;
+                            }
+                        }
+                    }
+                    if let Some(index) = model.node_index_by_name("lightflare") {
+                        for mesh in model.meshes.iter().filter(|mesh| mesh.node_index == index) {
+                            if let Some(image) = images().get_mut(mesh.image) {
+                                // We're changing the blend mode globally, which should be fine.
+                                image.blend_mode = BlendMode::Additive;
+                            }
+                        }
+                    }
+                }
+
+                let render_instance = self.model_renderer.add_render_instance(
+                    model,
+                    transform.to_mat4(),
+                    new_entity_id,
+                )?;
+                ObjectDetail::SceneryLit {
+                    model,
+                    render_instance,
                 }
             }
 
@@ -203,6 +240,7 @@ impl Objects {
         for object in self.objects.iter() {
             let model = match object.detail {
                 ObjectDetail::Scenery { model, .. } => model,
+                ObjectDetail::SceneryLit { model, .. } => model,
                 ObjectDetail::Bipedal { body_model, .. } => body_model,
             };
 
@@ -321,7 +359,7 @@ impl Objects {
                         );
 
                         match object.detail {
-                            ObjectDetail::Scenery { .. } => {}
+                            ObjectDetail::Scenery { .. } | ObjectDetail::SceneryLit { .. } => {}
                             ObjectDetail::Bipedal {
                                 ref mut sequencer, ..
                             } => {

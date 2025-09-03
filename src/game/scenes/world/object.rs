@@ -31,6 +31,9 @@ impl Object {
         match self.detail {
             ObjectDetail::Scenery {
                 render_instance, ..
+            }
+            | ObjectDetail::SceneryLit {
+                render_instance, ..
             } => {
                 model_renderer.update_instance(render_instance, |updater| {
                     updater.set_transform(self.transform.to_mat4());
@@ -98,6 +101,9 @@ impl Object {
         match self.detail {
             ObjectDetail::Scenery {
                 render_instance, ..
+            }
+            | ObjectDetail::SceneryLit {
+                render_instance, ..
             } => {
                 model_renderer.update_instance(render_instance, |updater| {
                     updater.set_transform(self.transform.to_mat4());
@@ -142,6 +148,10 @@ impl Object {
 
 pub enum ObjectDetail {
     Scenery {
+        model: Handle<Model>,
+        render_instance: Handle<RenderInstance>,
+    },
+    SceneryLit {
         model: Handle<Model>,
         render_instance: Handle<RenderInstance>,
     },

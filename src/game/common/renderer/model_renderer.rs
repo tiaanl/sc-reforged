@@ -109,6 +109,8 @@ pub struct ModelRenderer {
 
     /// The pipeline to render all opaque models.
     opaque_pipeline: wgpu::RenderPipeline,
+    /// The pipeline to render all additive materials.
+    additive_pipeline: wgpu::RenderPipeline,
     /// The pipeline to render all models with an alpha channel.
     alpha_pipeline: wgpu::RenderPipeline,
 
@@ -207,6 +209,40 @@ impl ModelRenderer {
                     cache: None,
                 });
 
+        let additive_pipeline =
+            renderer()
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("model_renderer_additive_render_pipeline"),
+                    layout: Some(&layout),
+                    vertex: wgpu::VertexState {
+                        module: &module,
+                        entry_point: Some("vertex_main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers,
+                    },
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        front_face: wgpu::FrontFace::Cw,
+                        cull_mode: Some(wgpu::Face::Back),
+                        polygon_mode: wgpu::PolygonMode::Fill,
+                        ..wgpu::PrimitiveState::default()
+                    },
+                    depth_stencil: Some(GeometryBuffers::depth_stencil_state(
+                        wgpu::CompareFunction::LessEqual,
+                        false, // No writing to depth buffer.
+                    )),
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module: &module,
+                        entry_point: Some("fragment_opaque"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        targets: GeometryBuffers::additive_targets(),
+                    }),
+                    multiview: None,
+                    cache: None,
+                });
+
         let alpha_pipeline =
             renderer()
                 .device
@@ -254,6 +290,7 @@ impl ModelRenderer {
             render_instances: Storage::default(),
 
             opaque_pipeline,
+            additive_pipeline,
             alpha_pipeline,
 
             shadow_renderer,
@@ -361,6 +398,16 @@ impl ModelRenderer {
                 if mesh.index_count != 0 {
                     result
                         .alpha_instances
+                        .entry(key)
+                        .or_default()
+                        .push(gpu_instance);
+                    total_instances += 1;
+                }
+            }
+            if let Some(ref mesh) = model.additive_mesh {
+                if mesh.index_count != 0 {
+                    result
+                        .additive_instances
                         .entry(key)
                         .or_default()
                         .push(gpu_instance);
@@ -531,6 +578,66 @@ impl ModelRenderer {
             }
         }
 
+        // Additive
+        {
+            let mut render_pass = frame
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("model_renderer_additive_render_pass"),
+                    color_attachments: &geometry_buffers.opaque_attachments(),
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &geometry_buffers.depth.view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+
+            render_pass.set_pipeline(&self.additive_pipeline);
+            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(1, environment_bind_group, &[]);
+            render_pass.set_bind_group(4, &shadow_cascades.shadow_maps_bind_group.bind_group, &[]);
+
+            for (key, gpu_instances) in render_set.additive_instances.iter() {
+                let Some(model) = self.models.get(key.model) else {
+                    tracing::warn!("model lookup failure!");
+                    continue;
+                };
+
+                let Some(animation) = self.animations.get(key.animation) else {
+                    tracing::warn!("animation lookup failure!");
+                    continue;
+                };
+
+                let Some(ref mesh) = model.additive_mesh else {
+                    tracing::warn!("No additive mesh, but in additive instances!");
+                    continue;
+                };
+
+                // TODO: Don't put empty meshes into the instances buffer.
+                if mesh.index_count == 0 {
+                    continue;
+                }
+
+                let instance_range = self.instances_buffer.write(gpu_instances);
+
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                render_pass
+                    .set_vertex_buffer(1, self.instances_buffer.buffer.slice(instance_range));
+                render_pass
+                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
+                render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
+                render_pass.set_bind_group(3, &animation.bind_group, &[]);
+
+                render_pass.draw_indexed(0..mesh.index_count, 0, 0..gpu_instances.len() as u32);
+            }
+        }
+
         // Alpha
         {
             let mut render_pass = frame
@@ -604,6 +711,7 @@ struct RenderSet {
     total_instances: u64,
     opaque_instances: HashMap<RenderSetKey, Vec<GpuInstance>>,
     alpha_instances: HashMap<RenderSetKey, Vec<GpuInstance>>,
+    additive_instances: HashMap<RenderSetKey, Vec<GpuInstance>>,
 }
 
 struct ShadowRenderer {

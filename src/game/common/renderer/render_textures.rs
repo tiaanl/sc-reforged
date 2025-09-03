@@ -10,7 +10,7 @@ use crate::{
 
 /// A texture that can be use for rendering.
 pub struct RenderTexture {
-    pub _blend_mode: BlendMode,
+    pub blend_mode: BlendMode,
     pub texture_view: wgpu::TextureView,
 }
 
@@ -120,7 +120,7 @@ impl RenderTextures {
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let texture = RenderTexture {
-            _blend_mode: image.blend_mode,
+            blend_mode: image.blend_mode,
             texture_view,
         };
 

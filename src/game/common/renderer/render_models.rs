@@ -37,6 +37,8 @@ pub struct RenderModel {
     pub opaque_mesh: Option<GpuIndexedMesh>,
     /// Alpha mesh data if there are any meshes with alpha data.
     pub alpha_mesh: Option<GpuIndexedMesh>,
+    /// Additive mesh data if there are any meshes with alpha data.
+    pub additive_mesh: Option<GpuIndexedMesh>,
     /// A [BoundingSphere] that wraps the entire model. Used for culling.
     pub bounding_sphere: BoundingSphere,
     /// All the textures used by the model.
@@ -71,6 +73,7 @@ impl RenderModels {
 
         let mut opaque_mesh = IndexedMesh::default();
         let mut alpha_mesh = IndexedMesh::default();
+        let mut additive_mesh = IndexedMesh::default();
 
         let mut image_to_index: HashMap<Handle<Image>, u32> = HashMap::default();
 
@@ -107,10 +110,10 @@ impl RenderModels {
 
             let indexed_mesh = IndexedMesh::new(vertices, mesh.mesh.indices.clone());
 
-            let _ = if image.blend_mode == BlendMode::Alpha {
-                alpha_mesh.extend(indexed_mesh)
-            } else {
-                opaque_mesh.extend(indexed_mesh)
+            match image.blend_mode {
+                BlendMode::Opaque | BlendMode::ColorKeyed => opaque_mesh.extend(indexed_mesh),
+                BlendMode::Alpha => alpha_mesh.extend(indexed_mesh),
+                BlendMode::Additive => additive_mesh.extend(indexed_mesh),
             };
         }
 
@@ -130,6 +133,12 @@ impl RenderModels {
             None
         };
 
+        let additive_mesh = if !additive_mesh.is_empty() {
+            Some(additive_mesh.to_gpu())
+        } else {
+            None
+        };
+
         let texture_set = render_textures.create_texture_set(textures);
 
         let rest_pose = animations.create_rest_pose(&model.skeleton);
@@ -137,6 +146,7 @@ impl RenderModels {
         let render_model_handle = self.models.insert(RenderModel {
             opaque_mesh,
             alpha_mesh,
+            additive_mesh,
             bounding_sphere: model.bounding_sphere,
             texture_set,
             rest_pose,

@@ -302,6 +302,32 @@ impl GeometryBuffers {
         ]
     }
 
+    pub fn additive_targets() -> &'static [Option<wgpu::ColorTargetState>] {
+        &[
+            Some(wgpu::ColorTargetState {
+                format: Self::COLOR_FORMAT,
+                blend: Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                }),
+                write_mask: wgpu::ColorWrites::ALL,
+            }),
+            Some(wgpu::ColorTargetState {
+                format: Self::POSITION_ID_FORMAT,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            }),
+        ]
+    }
+
     pub fn alpha_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
         [
             Some(wgpu::RenderPassColorAttachment {
