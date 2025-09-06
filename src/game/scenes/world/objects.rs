@@ -1,6 +1,8 @@
-use std::path::PathBuf;
-
-use ahash::HashSet;
+use bevy_ecs::{
+    event::EventRegistry,
+    prelude as ecs,
+    schedule::{IntoScheduleConfigs, ScheduleLabel},
+};
 
 use crate::{
     engine::{
@@ -11,14 +13,15 @@ use crate::{
         animations::Sequencer,
         config::ObjectType,
         geometry_buffers::GeometryBuffers,
-        image::{BlendMode, images},
         math::Frustum,
         model::Model,
         models::models,
         renderer::ModelRenderer,
         scenes::world::{
             actions::PlayerAction,
-            object::{BipedalOrder, Object, ObjectDetail},
+            object::{BipedalOrder, Object},
+            resources::{DeltaTime, ModelRendererResource, SelectedEntity},
+            systems,
         },
         shadows::ShadowCascades,
         skeleton::Skeleton,
@@ -26,13 +29,12 @@ use crate::{
 };
 
 pub struct Objects {
-    model_renderer: ModelRenderer,
-
-    pub objects: Vec<Object>,
-
-    /// The entity index that the mouse is currently over.
-    selected_object: Option<u32>,
+    world: ecs::World,
+    update_schedule: ecs::Schedule,
 }
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ScheduleLabel)]
+pub struct UpdateSchedule;
 
 impl Objects {
     pub fn new(
@@ -46,11 +48,34 @@ impl Objects {
             shadow_cascades,
         );
 
-        Ok(Self {
-            model_renderer,
+        let mut world = ecs::World::default();
 
-            objects: vec![],
-            selected_object: None,
+        EventRegistry::register_event::<PlayerAction>(&mut world);
+
+        world.insert_resource(DeltaTime(0.0));
+        world.insert_resource(SelectedEntity(None));
+        world.insert_resource(ModelRendererResource(model_renderer));
+
+        let mut update_schedule = ecs::Schedule::new(UpdateSchedule);
+        update_schedule.add_systems(
+            (
+                // Make sure all models have render instances.
+                systems::create_render_instances,
+                // Handle any new orders received by bipedals.
+                systems::handle_new_orders,
+                // Make sure all child transforms have the same transform as their parents.
+                systems::update_child_transforms,
+                // Update the render instances with new transforms.
+                systems::update_render_instances,
+                // Handle [PlayerAction] events.
+                systems::handle_player_actions,
+            )
+                .chain(),
+        );
+
+        Ok(Self {
+            world,
+            update_schedule,
         })
     }
 
@@ -59,117 +84,46 @@ impl Objects {
         transform: Transform,
         object_type: ObjectType,
         model_name: &str,
-        title: &str,
+        _title: &str,
     ) -> Result<(), AssetError> {
-        let new_entity_id = self.objects.len() as u32;
+        let mut entity = self.world.spawn((transform.clone(), object_type));
 
-        let detail = match object_type {
-            ObjectType::Ape | ObjectType::Bipedal => {
+        match object_type {
+            ObjectType::Bipedal => {
                 let body_model = models().load_bipedal_model(model_name)?;
-                let body_render_instance = self.model_renderer.add_render_instance(
-                    body_model,
-                    transform.to_mat4(),
-                    self.objects.len() as u32,
-                )?;
 
-                let head_name = "head_john";
+                // let head_name = "head_john";
+                // let head_model = models().load_model(
+                //     head_name,
+                //     PathBuf::from("models")
+                //         .join("people")
+                //         .join("heads")
+                //         .join(head_name)
+                //         .join(head_name)
+                //         .with_extension("smf"),
+                // )?;
 
-                let head_model = models().load_model(
-                    head_name,
-                    PathBuf::from("models")
-                        .join("people")
-                        .join("heads")
-                        .join(head_name)
-                        .join(head_name)
-                        .with_extension("smf"),
-                )?;
-                let head_render_instance = self.model_renderer.add_render_instance(
-                    head_model,
-                    transform.to_mat4(),
-                    new_entity_id,
-                )?;
-
-                ObjectDetail::Bipedal {
-                    body_model,
-                    body_render_instance,
-                    head_render_instance,
-                    order: BipedalOrder::Stand,
-                    sequencer: Sequencer::default(),
-                }
-            }
-
-            ObjectType::SceneryLit => {
-                let model = models().load_object_model(model_name)?;
-
-                {
-                    // lightfcone
-                    // lightflare
-                    let model = models().get_mut(model).expect("Just loaded!");
-                    if let Some(index) = model.node_index_by_name("lightfcone") {
-                        for mesh in model.meshes.iter().filter(|mesh| mesh.node_index == index) {
-                            if let Some(image) = images().get_mut(mesh.image) {
-                                // We're changing the blend mode globally, which should be fine.
-                                image.blend_mode = BlendMode::Additive;
-                            }
-                        }
-                    }
-                    if let Some(index) = model.node_index_by_name("lightflare") {
-                        for mesh in model.meshes.iter().filter(|mesh| mesh.node_index == index) {
-                            if let Some(image) = images().get_mut(mesh.image) {
-                                // We're changing the blend mode globally, which should be fine.
-                                image.blend_mode = BlendMode::Additive;
-                            }
-                        }
-                    }
-                }
-
-                let render_instance = self.model_renderer.add_render_instance(
-                    model,
-                    transform.to_mat4(),
-                    new_entity_id,
-                )?;
-                ObjectDetail::SceneryLit {
-                    model,
-                    render_instance,
-                }
+                entity.insert((body_model, BipedalOrder::Stand, Sequencer::default()));
             }
 
             _ => {
                 let model = models().load_object_model(model_name)?;
-                let render_instance = self.model_renderer.add_render_instance(
-                    model,
-                    transform.to_mat4(),
-                    new_entity_id,
-                )?;
-                ObjectDetail::Scenery {
-                    model,
-                    render_instance,
-                }
+                entity.insert(model);
             }
-        };
-
-        self.objects.push(Object {
-            title: title.to_string(),
-            object_type,
-            transform,
-            detail,
-
-            draw_debug_bones: false,
-            draw_bounding_spheres: false,
-            selected_bones: HashSet::default(),
-        });
+        }
 
         Ok(())
     }
 
     pub fn update(&mut self, delta_time: f32) {
-        // Update sequencers.
-        self.objects.iter_mut().for_each(|object| {
-            object.update(delta_time, &mut self.model_renderer);
-        });
+        self.world.resource_mut::<DeltaTime>().0 = delta_time;
+        self.update_schedule.run(&mut self.world);
     }
 
     pub fn handle_player_action(&mut self, player_action: &PlayerAction) {
+        self.world.send_event(*player_action);
+
+        /*
         if let Some(selected_object) = self.selected_object {
             match *player_action {
                 PlayerAction::Object { id, .. } => {
@@ -209,11 +163,12 @@ impl Objects {
                 }
             }
         }
+        */
     }
 
     pub fn render_shadow_casters(&mut self, frame: &mut Frame, shadow_cascades: &ShadowCascades) {
-        self.model_renderer
-            .render_shadow_casters(frame, shadow_cascades);
+        let model_renderer = &mut self.world.resource_mut::<ModelRendererResource>().0;
+        model_renderer.render_shadow_casters(frame, shadow_cascades);
     }
 
     pub fn render_objects(
@@ -226,7 +181,10 @@ impl Objects {
         shadow_cascades: &ShadowCascades,
     ) {
         let _z = tracy_client::span!("render objects");
-        self.model_renderer.render(
+
+        let model_renderer = &mut self.world.resource_mut::<ModelRendererResource>().0;
+
+        model_renderer.render(
             frame,
             frustum,
             geometry_buffers,
@@ -236,7 +194,8 @@ impl Objects {
         );
     }
 
-    pub fn render_gizmos(&self, vertices: &mut Vec<GizmoVertex>) {
+    pub fn render_gizmos(&self, _vertices: &mut Vec<GizmoVertex>) {
+        /*
         for object in self.objects.iter() {
             let model = match object.detail {
                 ObjectDetail::Scenery { model, .. } => model,
@@ -257,9 +216,10 @@ impl Objects {
                 Self::render_bounding_sphere(object, model, vertices);
             }
         }
+        */
     }
 
-    fn render_skeleton(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
+    fn _render_skeleton(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
         fn do_node(
             skeleton: &Skeleton,
             transform: Mat4,
@@ -317,7 +277,7 @@ impl Objects {
         // }
     }
 
-    fn render_selected_bones(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
+    fn _render_selected_bones(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
         for bone_index in object.selected_bones.iter() {
             let transform =
                 object.transform.to_mat4() * model.skeleton.local_transform(*bone_index as u32);
@@ -326,7 +286,7 @@ impl Objects {
         }
     }
 
-    fn render_bounding_sphere(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
+    fn _render_bounding_sphere(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
         let world_position =
             object.transform.to_mat4() * Mat4::from_translation(model.bounding_sphere.center);
 
@@ -339,6 +299,46 @@ impl Objects {
 
     #[cfg(feature = "egui")]
     pub fn debug_panel(&mut self, egui: &egui::Context) {
+        if let Some(entity) = self.world.resource::<SelectedEntity>().0 {
+            let selected_entity = self.world.entity(entity);
+
+            egui::Window::new("Object")
+                .resizable(false)
+                .show(egui, |ui| {
+                    ui.set_width(300.0);
+
+                    if let Some(transform) = selected_entity.get::<Transform>() {
+                        ui.heading("Transform");
+
+                        let euler_rot =
+                            Vec3::from(transform.rotation.to_euler(glam::EulerRot::default()));
+
+                        egui::Grid::new("transform_grid").show(ui, |ui| {
+                            ui.set_min_width(ui.available_width());
+
+                            ui.label("Translation");
+                            ui.label(format!("{:0.2}", transform.translation.x));
+                            ui.label(format!("{:0.2}", transform.translation.y));
+                            ui.label(format!("{:0.2}", transform.translation.z));
+                            ui.end_row();
+
+                            ui.label("Rotation");
+                            ui.label(format!("{:0.2}", euler_rot.x));
+                            ui.label(format!("{:0.2}", euler_rot.y));
+                            ui.label(format!("{:0.2}", euler_rot.z));
+                        });
+                    }
+
+                    if let Some(sequencer) = selected_entity.get::<Sequencer>() {
+                        if let Some(state) = sequencer.get_animation_state() {
+                            ui.label("Animation");
+                            ui.label(format!("{:?}", state.animation));
+                        }
+                    }
+                });
+        }
+
+        /*
         if let Some(selected_object) = self.selected_object {
             if let Some(object) = self.objects.get_mut(selected_object as usize) {
                 egui::Window::new("Object")
@@ -349,14 +349,7 @@ impl Objects {
 
                         ui.heading(format!("{} ({:?})", object.title, object.object_type));
 
-                        ui.heading("Transform");
 
-                        let mut euler_rot = Vec3::from(
-                            object
-                                .transform
-                                .rotation
-                                .to_euler(glam::EulerRot::default()),
-                        );
 
                         match object.detail {
                             ObjectDetail::Scenery { .. } | ObjectDetail::SceneryLit { .. } => {}
@@ -381,37 +374,6 @@ impl Objects {
                                     ui.label(format!("Time: {}", animation_state.time));
                                 }
                             }
-                        }
-
-                        fn drag_vec3(
-                            ui: &mut egui::Ui,
-                            label: &str,
-                            value: &mut glam::Vec3,
-                            speed: f32,
-                        ) -> egui::Response {
-                            ui.horizontal(|ui| {
-                                use egui::DragValue;
-
-                                let box_height = ui.text_style_height(&egui::TextStyle::Body);
-
-                                ui.add_sized([60.0, box_height], egui::Label::new(label));
-
-                                let x = ui.add_sized(
-                                    [60.0, box_height],
-                                    DragValue::new(&mut value.x).speed(speed),
-                                );
-                                let y = ui.add_sized(
-                                    [60.0, box_height],
-                                    DragValue::new(&mut value.y).speed(speed),
-                                );
-                                let z = ui.add_sized(
-                                    [60.0, box_height],
-                                    DragValue::new(&mut value.z).speed(speed),
-                                );
-
-                                x | y | z
-                            })
-                            .inner
                         }
 
                         let a = drag_vec3(ui, "Position", &mut object.transform.translation, 1.0);
@@ -476,5 +438,6 @@ impl Objects {
                     });
             }
         }
+        */
     }
 }

@@ -127,7 +127,7 @@ impl RenderAnimations {
         self.animations.insert(RenderAnimation { bind_group })
     }
 
-    pub fn add(
+    pub fn get_or_insert(
         &mut self,
         model_handle: Handle<Model>,
         animation_handle: Handle<Animation>,

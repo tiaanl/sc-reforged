@@ -936,12 +936,7 @@ impl Terrain {
         );
 
         if in_editor && self.render_wireframe {
-            self.render_wireframe(
-                frame,
-                geometry_buffers,
-                camera_bind_group,
-                environment_bind_group,
-            );
+            self.render_wireframe(frame, geometry_buffers, camera_bind_group);
         }
     }
 
@@ -1167,7 +1162,6 @@ impl Terrain {
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
-        environment_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass = frame
             .encoder

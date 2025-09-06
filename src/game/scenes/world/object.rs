@@ -1,4 +1,7 @@
+#![allow(unused)]
+
 use ahash::HashSet;
+use bevy_ecs::prelude as ecs;
 use glam::{Quat, Vec3};
 
 use crate::{
@@ -74,8 +77,8 @@ impl Object {
                 sequencer.update(delta_time);
 
                 if let Some(animation_state) = sequencer.get_animation_state() {
-                    let render_animation =
-                        model_renderer.add_animation(body_model, animation_state.animation);
+                    let render_animation = model_renderer
+                        .get_or_insert_animation(body_model, animation_state.animation);
 
                     model_renderer.update_instance(body_render_instance, |updater| {
                         updater.set_animation(render_animation, animation_state.time);
@@ -164,6 +167,7 @@ pub enum ObjectDetail {
     },
 }
 
+#[derive(ecs::Component)]
 pub enum BipedalOrder {
     Stand,
     MoveTo { target_location: Vec3, speed: f32 },

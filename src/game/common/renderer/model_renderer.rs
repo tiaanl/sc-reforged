@@ -311,12 +311,13 @@ impl ModelRenderer {
         Ok(self.render_instances.insert(render_instance))
     }
 
-    pub fn add_animation(
+    pub fn get_or_insert_animation(
         &mut self,
         model_handle: Handle<model::Model>,
         animation_handle: Handle<Animation>,
     ) -> Handle<RenderAnimation> {
-        self.animations.add(model_handle, animation_handle)
+        self.animations
+            .get_or_insert(model_handle, animation_handle)
     }
 
     pub fn update_instance(

@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use glam::{Mat4, Vec3, Vec4};
 
 /// Represents a view into the world by way of matrices.

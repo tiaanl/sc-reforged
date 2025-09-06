@@ -25,7 +25,9 @@ mod game_mode;
 mod object;
 mod objects;
 mod overlay_renderer;
+mod resources;
 mod strata;
+mod systems;
 mod terrain;
 
 #[derive(Default)]
@@ -393,18 +395,21 @@ impl Scene for WorldScene {
 
                 // Figure out the type of object we clicked on:
                 let player_action = if data.id >= TERRAIN_ENTITY_ID {
-                    PlayerAction::Terrain {
+                    PlayerAction::TerrainClicked {
                         position: data.position,
                     }
                 } else {
-                    PlayerAction::Object {
-                        _position: data.position,
+                    PlayerAction::ObjectClicked {
+                        position: data.position,
                         id: data.id,
                     }
                 };
 
                 self.objects.handle_player_action(&player_action);
             }
+        } else if input.mouse_just_pressed(MouseButton::Right) {
+            self.objects
+                .handle_player_action(&PlayerAction::ClearSelection);
         }
 
         // Advance time of day.
