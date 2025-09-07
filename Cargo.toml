@@ -26,6 +26,7 @@ glam = { version = "0.30", default-features = false, features = ["bytemuck", "st
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg"] }
 naga_oil = { version = "0.17", default-features = false }
 pathdiff = "0.2.3"
+pcx = { version = "0.2.4", default-features = false }
 pollster = { version = "0.4", default-features = false }
 slab = "0.4.9"
 thiserror = { version = "2.0", default-features = false }

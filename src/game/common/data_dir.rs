@@ -40,7 +40,7 @@ impl DataDir {
     }
 
     pub fn load_height_map(&self, path: impl AsRef<Path>) -> Result<HeightMap, AssetError> {
-        HeightMap::from_data(file_system().load(path.as_ref())?)
+        HeightMap::from_pcx(file_system().load(path.as_ref())?)
             .map_err(|err| AssetError::from_io_error(err, path.as_ref()))
     }
 
