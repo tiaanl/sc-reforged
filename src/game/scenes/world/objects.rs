@@ -330,6 +330,7 @@ impl Objects {
                     }
 
                     if let Some(sequencer) = selected_entity.get::<Sequencer>() {
+                        sequencer.debug_panel(ui);
                         if let Some(state) = sequencer.get_animation_state() {
                             ui.label("Animation");
                             ui.label(format!("{:?}", state.animation));

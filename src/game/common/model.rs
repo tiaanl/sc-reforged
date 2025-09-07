@@ -28,12 +28,12 @@ pub struct Model {
     /// A bounding sphere surrounding all the vertices in the model.
     pub bounding_sphere: BoundingSphere,
     /// Look up node indices according to original node names.
-    pub name_lookup: NameLookup,
+    pub _name_lookup: NameLookup,
 }
 
 impl Model {
-    pub fn node_index_by_name(&self, name: &str) -> Option<NodeIndex> {
-        self.name_lookup.get(name).cloned()
+    pub fn _node_index_by_name(&self, name: &str) -> Option<NodeIndex> {
+        self._name_lookup.get(name).cloned()
     }
 }
 
@@ -54,7 +54,7 @@ pub struct Mesh {
     /// The node this mesh belongs to.
     pub node_index: u32,
     /// Name of the texture to use for the material.
-    pub image_name: String,
+    pub _image_name: String,
     /// Handle to the loaded image.
     pub image: Handle<Image>,
     /// Vertex and index data.
@@ -153,7 +153,7 @@ impl TryFrom<smf::Model> for Model {
 
                         Ok(Mesh {
                             node_index: node_index as u32,
-                            image_name: smf_mesh.texture_name.clone(),
+                            _image_name: smf_mesh.texture_name.clone(),
                             image,
                             mesh,
                         })
@@ -205,7 +205,7 @@ impl TryFrom<smf::Model> for Model {
             meshes,
             _collision_boxes: collision_boxes,
             bounding_sphere,
-            name_lookup: names,
+            _name_lookup: names,
         })
     }
 }

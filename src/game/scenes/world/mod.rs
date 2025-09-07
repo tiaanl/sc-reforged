@@ -405,11 +405,11 @@ impl Scene for WorldScene {
                 // Figure out the type of object we clicked on:
                 let player_action = if data.id >= TERRAIN_ENTITY_ID {
                     PlayerAction::TerrainClicked {
-                        position: data.position,
+                        _position: data.position,
                     }
                 } else {
                     PlayerAction::ObjectClicked {
-                        position: data.position,
+                        _position: data.position,
                         id: data.id,
                     }
                 };

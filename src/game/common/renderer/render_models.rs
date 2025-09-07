@@ -113,7 +113,7 @@ impl RenderModels {
             match image.blend_mode {
                 BlendMode::Opaque | BlendMode::ColorKeyed => opaque_mesh.extend(indexed_mesh),
                 BlendMode::Alpha => alpha_mesh.extend(indexed_mesh),
-                BlendMode::Additive => additive_mesh.extend(indexed_mesh),
+                BlendMode::_Additive => additive_mesh.extend(indexed_mesh),
             };
         }
 

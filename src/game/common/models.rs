@@ -108,7 +108,7 @@ impl Models {
         self.models.get(handle)
     }
 
-    pub fn get_mut(&mut self, handle: Handle<Model>) -> Option<&mut Model> {
+    pub fn _get_mut(&mut self, handle: Handle<Model>) -> Option<&mut Model> {
         self.models.get_mut(handle)
     }
 }

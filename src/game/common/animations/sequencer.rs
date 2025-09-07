@@ -120,7 +120,7 @@ impl Sequencer {
     }
 
     #[cfg(feature = "egui")]
-    pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
+    pub fn debug_panel(&self, ui: &mut egui::Ui) {
         for play in self.sequence.iter() {
             match play {
                 Play::Single(animation) => {

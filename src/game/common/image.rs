@@ -25,7 +25,7 @@ pub enum BlendMode {
     /// Use the alpha channel of the texture.
     Alpha,
     /// Adds the values of the texture to the image.
-    Additive,
+    _Additive,
 }
 
 pub struct Image {
@@ -67,7 +67,7 @@ impl Images {
         self.images.get(handle)
     }
 
-    pub fn get_mut(&mut self, handle: Handle<Image>) -> Option<&mut Image> {
+    pub fn _get_mut(&mut self, handle: Handle<Image>) -> Option<&mut Image> {
         self.images.get_mut(handle)
     }
 
