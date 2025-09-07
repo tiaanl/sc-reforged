@@ -1,9 +1,8 @@
 use ahash::HashMap;
-use bevy_ecs::prelude as ecs;
 
 use crate::game::config::parser::ConfigLines;
 
-#[derive(Clone, ecs::Component, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ObjectType {
     Ape,
     Bipedal,

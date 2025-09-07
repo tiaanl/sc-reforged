@@ -25,9 +25,7 @@ mod game_mode;
 mod object;
 mod objects;
 mod overlay_renderer;
-mod resources;
 mod strata;
-mod systems;
 mod terrain;
 
 #[derive(Default)]
@@ -405,7 +403,7 @@ impl Scene for WorldScene {
                 // Figure out the type of object we clicked on:
                 let player_action = if data.id >= TERRAIN_ENTITY_ID {
                     PlayerAction::TerrainClicked {
-                        _position: data.position,
+                        position: data.position,
                     }
                 } else {
                     PlayerAction::ObjectClicked {
@@ -440,7 +438,7 @@ impl Scene for WorldScene {
             .controller
             .update_camera(&mut self.debug_camera.camera);
 
-        self.objects.update(delta_time);
+        self.objects.update(delta_time, &self.terrain.height_map);
     }
 
     fn render(&mut self, frame: &mut Frame) {

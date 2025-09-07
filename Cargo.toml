@@ -18,7 +18,6 @@ wgpu = { version = "24.0", features = ["naga-ir"] }
 winit = { version = "0.30.5" }
 
 ahash = "0.8.12"
-bevy_ecs = { version = "0.16.1", default-features = false, features = ["std"] }
 bytemuck = { version = "1.18.0", default-features = false, features = ["derive"] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 clap = { version = "4.5", features = ["derive"] }

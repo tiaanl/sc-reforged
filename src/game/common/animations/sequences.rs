@@ -54,7 +54,7 @@ impl Sequences {
         Ok(Self { sequences, lookup })
     }
 
-    pub fn _lookup(&self) -> Iter<'_, String, Handle<Sequence>> {
+    pub fn lookup(&self) -> Iter<'_, String, Handle<Sequence>> {
         self.lookup.iter()
     }
 

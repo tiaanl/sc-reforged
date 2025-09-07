@@ -1,14 +1,12 @@
-#![allow(unused)]
-
 use ahash::HashSet;
-use bevy_ecs::prelude as ecs;
-use glam::{Quat, Vec3};
+use glam::{Mat3, Quat, Vec2, Vec3};
 
 use crate::{
     engine::{prelude::Transform, storage::Handle},
     game::{
-        animations::{Sequencer, sequences},
+        animations::Sequencer,
         config::ObjectType,
+        height_map::HeightMap,
         model::Model,
         renderer::{ModelRenderer, RenderInstance},
     },
@@ -30,7 +28,12 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn update(&mut self, delta_time: f32, model_renderer: &mut ModelRenderer) {
+    pub fn update(
+        &mut self,
+        delta_time: f32,
+        height_map: &HeightMap,
+        model_renderer: &mut ModelRenderer,
+    ) {
         match self.detail {
             ObjectDetail::Scenery {
                 render_instance, ..
@@ -43,61 +46,68 @@ impl Object {
                 });
             }
 
-            ObjectDetail::Bipedal {
-                body_model,
-                ref mut sequencer,
-                ref mut order,
-                body_render_instance,
-                head_render_instance,
-            } => {
+            ObjectDetail::Bipedal { ref mut order, .. } => {
                 match *order {
                     BipedalOrder::Stand => {}
                     BipedalOrder::MoveTo {
                         target_location,
                         speed,
                     } => {
-                        // Calculate the direction where we should move to.
-                        let diff = target_location - self.transform.translation;
-                        let distance = diff.length();
-                        if distance < 10.0 {
+                        let current_xy = self.transform.translation.truncate();
+                        let (current_pos, current_normal) =
+                            height_map.world_position_and_normal(current_xy);
+
+                        // Snap to the ground.
+                        self.transform.translation.z = current_pos.z;
+
+                        // Create a vector to the target.
+                        let to_target_xy = target_location - current_xy;
+                        let distance_to_target = to_target_xy.length();
+
+                        // Arrived already?
+                        if distance_to_target <= speed * delta_time {
+                            let (target_pos, _) =
+                                height_map.world_position_and_normal(target_location);
+
+                            self.transform.translation = target_pos;
+
+                            let forward = to_target_xy.extend(0.0).normalize();
+                            let left = forward.cross(Vec3::Z).normalize_or_zero();
+                            let basis = Mat3::from_cols(left, forward, Vec3::Z);
+                            self.transform.rotation = Quat::from_mat3(&basis);
+
+                            // Issue a *stand* order.
                             *order = BipedalOrder::Stand;
-                            if let Some(stand_sequence) = sequences().get_by_name("MSEQ_STAND") {
-                                sequencer.play_sequence(stand_sequence);
-                            } else {
-                                sequencer.stop();
-                            }
                         } else {
-                            let direction = diff.normalize();
-                            self.transform.translation += direction * speed;
-                            self.transform.rotation = Quat::from_rotation_arc(Vec3::Y, direction);
+                            // Desired planar direction, then slide along the terrain tangent.
+                            let desired_dir_world =
+                                Vec3::new(to_target_xy.x, to_target_xy.y, 0.0).normalize();
+
+                            // Project onto the ground plane.
+                            let tangent_dir = (desired_dir_world
+                                - current_normal * desired_dir_world.dot(current_normal))
+                            .normalize_or_zero();
+
+                            // Constant-speed step, clamped to avoid overshooting.
+                            let step_xy = (speed * delta_time).min(distance_to_target);
+                            let new_xy = current_xy + tangent_dir.truncate() * step_xy;
+
+                            // Stick to the ground at the new (x, y) position.
+                            let (new_pos, _) = height_map.world_position_and_normal(new_xy);
+
+                            self.transform.translation = new_pos;
+
+                            let forward = to_target_xy.extend(0.0).normalize();
+                            let left = forward.cross(Vec3::Z).normalize_or_zero();
+                            let basis = Mat3::from_cols(left, forward, Vec3::Z);
+                            self.transform.rotation = Quat::from_mat3(&basis);
                         }
                     }
                 }
-
-                sequencer.update(delta_time);
-
-                if let Some(animation_state) = sequencer.get_animation_state() {
-                    let render_animation = model_renderer
-                        .get_or_insert_animation(body_model, animation_state.animation);
-
-                    model_renderer.update_instance(body_render_instance, |updater| {
-                        updater.set_animation(render_animation, animation_state.time);
-                        updater.set_transform(self.transform.to_mat4());
-                    });
-                    model_renderer.update_instance(head_render_instance, |updater| {
-                        updater.set_animation(render_animation, animation_state.time);
-                        updater.set_transform(self.transform.to_mat4());
-                    });
-                } else {
-                    model_renderer.update_instance(body_render_instance, |updater| {
-                        updater.set_transform(self.transform.to_mat4());
-                    });
-                    model_renderer.update_instance(head_render_instance, |updater| {
-                        updater.set_transform(self.transform.to_mat4());
-                    });
-                }
             }
         }
+
+        self.update_model_renderer(model_renderer);
     }
 
     pub fn update_model_renderer(&self, model_renderer: &mut ModelRenderer) {
@@ -112,38 +122,35 @@ impl Object {
                     updater.set_transform(self.transform.to_mat4());
                 });
             }
-            ObjectDetail::Bipedal { .. } => {}
-        }
-    }
-
-    pub fn interact_with_self(&mut self) {}
-
-    /// Returns true if the object interacted with the other object. Returning false, will let the
-    /// other object be selected.
-    pub fn interact_with(&mut self, _object: &mut Object) -> bool {
-        false
-    }
-
-    pub fn interact_with_terrain(&mut self, position: Vec3) {
-        if let ObjectDetail::Bipedal {
-            ref mut order,
-            ref mut sequencer,
-            ..
-        } = self.detail
-        {
-            tracing::info!("{} -> terrain clicked at {:?}", self.title, position);
-
-            let already_walking = matches!(order, BipedalOrder::MoveTo { .. });
-
-            *order = BipedalOrder::MoveTo {
-                target_location: position,
-                speed: 1.6,
-            };
-
-            if !already_walking {
-                if let Some(walk_sequence) = sequences().get_by_name("MSEQ_WALK") {
-                    sequencer.play_sequence(walk_sequence);
+            ObjectDetail::Bipedal {
+                body_model,
+                body_render_instance,
+                head_render_instance,
+                ref sequencer,
+                ..
+            } => {
+                let mut animation = None;
+                let mut time = 0.0;
+                if let Some(animation_state) = sequencer.get_animation_state() {
+                    animation = Some(
+                        model_renderer
+                            .get_or_insert_animation(body_model, animation_state.animation),
+                    );
+                    time = animation_state.time;
                 }
+
+                model_renderer.update_instance(body_render_instance, |updater| {
+                    updater.set_transform(self.transform.to_mat4());
+                    if let Some(animation) = animation {
+                        updater.set_animation(animation, time);
+                    }
+                });
+                model_renderer.update_instance(head_render_instance, |updater| {
+                    updater.set_transform(self.transform.to_mat4());
+                    if let Some(animation) = animation {
+                        updater.set_animation(animation, time);
+                    }
+                });
             }
         }
     }
@@ -167,8 +174,11 @@ pub enum ObjectDetail {
     },
 }
 
-#[derive(ecs::Component)]
 pub enum BipedalOrder {
     Stand,
-    MoveTo { target_location: Vec3, speed: f32 },
+    MoveTo { target_location: Vec2, speed: f32 },
+}
+
+fn project_onto_plane(v: Vec3, n: Vec3) -> Vec3 {
+    v - n * v.dot(n)
 }

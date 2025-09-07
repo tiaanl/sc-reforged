@@ -1,4 +1,3 @@
-use bevy_ecs::prelude as ecs;
 use std::collections::VecDeque;
 
 use crate::engine::storage::Handle;
@@ -18,7 +17,7 @@ enum Play {
 }
 
 /// Keeps track of a playing sequence.
-#[derive(ecs::Component, Default)]
+#[derive(Default)]
 pub struct Sequencer {
     sequence: VecDeque<Play>,
     time: f32,
