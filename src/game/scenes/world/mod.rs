@@ -99,6 +99,8 @@ pub struct WorldScene {
     gizmos_renderer: GizmosRenderer,
 
     render_overlay: bool,
+
+    pos_and_normal: Option<(Vec3, Vec3)>,
 }
 
 impl WorldScene {
@@ -316,6 +318,8 @@ impl WorldScene {
             gizmos_renderer,
 
             render_overlay: false,
+
+            pos_and_normal: None,
         })
     }
 
@@ -380,6 +384,11 @@ impl Scene for WorldScene {
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
+        self.pos_and_normal = self.geometry_data.as_ref().map(|data| {
+            let world_xy = data.position.truncate();
+            self.terrain.height_map.world_position_and_normal(world_xy)
+        });
+
         if input.key_just_pressed(KeyCode::Backquote) {
             self.game_mode = if self.in_editor() {
                 GameMode::Game
@@ -647,6 +656,13 @@ impl Scene for WorldScene {
             self.terrain.render_gizmos(&mut self.gizmos_vertices);
             self.objects.render_gizmos(&mut self.gizmos_vertices);
 
+            if let Some((pos, normal)) = self.pos_and_normal {
+                let color = Vec4::new(1.0, 0.0, 0.0, 1.0);
+                self.gizmos_vertices.push(GizmoVertex::new(pos, color));
+                self.gizmos_vertices
+                    .push(GizmoVertex::new(pos + normal * 100.0, color));
+            }
+
             // Render the main camera frustum when we're looking through the debug camera.
             if self.view_debug_camera {
                 self.gizmos_vertices
@@ -656,13 +672,15 @@ impl Scene for WorldScene {
                     ));
             }
 
-            if let Some(ref data) = self.geometry_data {
-                // Translation matrix
-                let translation = Mat4::from_translation(data.position);
+            if false {
+                if let Some(ref data) = self.geometry_data {
+                    // Translation matrix
+                    let translation = Mat4::from_translation(data.position);
 
-                let vertices = GizmosRenderer::create_axis(translation, 100.0);
-                self.gizmos_renderer
-                    .render(frame, view_camera_bind_group, &vertices);
+                    let vertices = GizmosRenderer::create_axis(translation, 100.0);
+                    self.gizmos_renderer
+                        .render(frame, view_camera_bind_group, &vertices);
+                }
             }
 
             self.gizmos_renderer

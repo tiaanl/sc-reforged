@@ -43,9 +43,14 @@ impl DataDir {
         &self,
         path: impl AsRef<Path>,
         elevation_scale: f32,
+        cell_size: f32,
     ) -> Result<HeightMap, AssetError> {
-        HeightMap::from_pcx(file_system().load(path.as_ref())?, elevation_scale)
-            .map_err(|err| AssetError::from_io_error(err, path.as_ref()))
+        HeightMap::from_pcx(
+            file_system().load(path.as_ref())?,
+            elevation_scale,
+            cell_size,
+        )
+        .map_err(|err| AssetError::from_io_error(err, path.as_ref()))
     }
 
     pub fn _load_object_templates(&self) -> Result<config::ObjectTemplates, AssetError> {
