@@ -7,11 +7,11 @@ pub struct HeightMap {
     /// X and Y sizes counted in amount of nodes (*not* cells!).
     pub size: UVec2,
     /// Elevation index of each node.
-    pub elevations: Vec<u8>,
+    pub elevations: Vec<f32>,
 }
 
 impl HeightMap {
-    pub fn from_pcx(data: Vec<u8>) -> Result<Self, std::io::Error> {
+    pub fn from_pcx(data: Vec<u8>, elevation_scale: f32) -> Result<Self, std::io::Error> {
         let mut reader = pcx::Reader::from_mem(&data)?;
 
         let size = UVec2::new(reader.width() as u32, reader.height() as u32);
@@ -27,14 +27,16 @@ impl HeightMap {
             reader.next_row_paletted(slice)?;
         }
 
-        elevations.iter_mut().for_each(|i| {
-            *i = u8::MAX - *i;
-        });
-
-        Ok(Self { size, elevations })
+        Ok(Self {
+            size,
+            elevations: elevations
+                .iter()
+                .map(|index| ((u8::MAX - *index) as f32) * elevation_scale)
+                .collect(),
+        })
     }
 
-    pub fn elevation_at(&self, node: IVec2) -> u8 {
+    pub fn elevation_at(&self, node: IVec2) -> f32 {
         let x = node.x.clamp(0, self.size.x as i32 - 1);
         let y = node.y.clamp(0, self.size.y as i32 - 1);
 
@@ -47,18 +49,13 @@ impl HeightMap {
     ///
     /// NOTE: Coordinates outside the height map are clamped to the nearest edge, creating a flat
     /// outer edge to replicate the original behavior.
-    pub fn position_for_vertex(
-        &self,
-        pos: IVec2,
-        nominal_edge_size: f32,
-        elevation_base: f32,
-    ) -> Vec3 {
+    pub fn position_for_vertex(&self, pos: IVec2, nominal_edge_size: f32) -> Vec3 {
         let elevation = self.elevation_at(pos);
 
         Vec3::new(
             pos.x as f32 * nominal_edge_size,
             pos.y as f32 * nominal_edge_size,
-            elevation as f32 * elevation_base,
+            elevation,
         )
     }
 }
