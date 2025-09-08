@@ -155,6 +155,11 @@ pub struct BoundingSphere {
 }
 
 impl BoundingSphere {
+    pub const ZERO: BoundingSphere = BoundingSphere {
+        center: Vec3::ZERO,
+        radius: 0.0,
+    };
+
     pub fn from_positions_ritter<I>(positions: I) -> Self
     where
         I: IntoIterator<Item = Vec3>,

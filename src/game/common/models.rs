@@ -51,6 +51,12 @@ impl Models {
         })
     }
 
+    pub fn add(&mut self, name: impl Into<String>, model: Model) -> Handle<Model> {
+        let handle = self.models.insert(model);
+        self.lookup.insert(name.into(), handle);
+        handle
+    }
+
     pub fn load_object_model(&mut self, name: &str) -> Result<Handle<Model>, AssetError> {
         let path = if let Some(def) = self.model_lod_defs.get(name) {
             PathBuf::from(&def[0].sub_model_model)
@@ -98,17 +104,14 @@ impl Models {
             return Err(AssetError::custom(path, "Model does not contain meshes!"));
         }
 
-        let handle = self.models.insert(model);
-        self.lookup.insert(name.to_owned(), handle);
-
-        Ok(handle)
+        Ok(self.add(name, model))
     }
 
     pub fn get(&self, handle: Handle<Model>) -> Option<&Model> {
         self.models.get(handle)
     }
 
-    pub fn _get_mut(&mut self, handle: Handle<Model>) -> Option<&mut Model> {
+    pub fn get_mut(&mut self, handle: Handle<Model>) -> Option<&mut Model> {
         self.models.get_mut(handle)
     }
 }

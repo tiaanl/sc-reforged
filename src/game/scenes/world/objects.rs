@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use ahash::HashSet;
+
 use crate::{
     engine::{
         gizmos::{GizmoVertex, GizmosRenderer},
@@ -111,6 +113,53 @@ impl Objects {
                     selected_bones: Default::default(),
                 })
             }
+
+            ObjectType::SceneryLit => {
+                let model_handle = models().load_object_model(model_name)?;
+                let model = models().get_mut(model_handle).unwrap();
+
+                // Create a new model with only the light cone.
+                let light_cone_model = match model.node_index_by_name("lightfcone") {
+                    Some(light_cone_index) => {
+                        let mut new_model = Model::from_skeleton(model.skeleton.clone());
+                        // Clone the light cone from the original mesh to the new one. We can use the
+                        // same node index, because we cloned the skeleton.
+                        new_model.clone_meshes(model, light_cone_index, light_cone_index);
+                        // Remove the light cone from the original mesh.
+                        model.clear_meshes(light_cone_index);
+                        Some(models().add(format!("{model_name}_light_cone"), new_model))
+                    }
+                    None => {
+                        tracing::warn!("lightcone node not found on SceneryLit");
+                        None
+                    }
+                };
+
+                // Create the `render_instance` after possibly modifying the original model.
+                let render_instance = self.model_renderer.add_render_instance(
+                    model_handle,
+                    transform.to_mat4(),
+                    new_object_id,
+                )?;
+
+                self.objects.push(Object {
+                    title: title.to_string(),
+                    object_type,
+                    transform,
+                    detail: ObjectDetail::SceneryLit {
+                        on: false,
+
+                        model: model_handle,
+                        render_instance,
+                        light_cone_model,
+                        light_cone_render_instance: None,
+                    },
+                    draw_debug_bones: false,
+                    draw_bounding_spheres: false,
+                    selected_bones: HashSet::default(),
+                });
+            }
+
             _ => {
                 let model = models().load_object_model(model_name)?;
 
@@ -320,55 +369,6 @@ impl Objects {
 
                         ui.heading(format!("{} ({:?})", object.title, object.object_type));
 
-                        match object.detail {
-                            ObjectDetail::Scenery { .. } | ObjectDetail::SceneryLit { .. } => {}
-                            ObjectDetail::Bipedal {
-                                ref mut sequencer, ..
-                            } => {
-                                // Show a few common sequences.
-                                const COMMON: &[&str] = &[
-                                    "MSEQ_STAND",
-                                    "MSEQ_PRONE",
-                                    "MSEQ_CROUCH",
-                                    "MSEQ_ON_BACK",
-                                    "MSEQ_SIT",
-                                ];
-                                for name in COMMON {
-                                    if let Some(seq) = sequences().get_by_name(name) {
-                                        if ui.button(*name).clicked() {
-                                            sequencer.play_sequence(seq);
-                                        }
-                                    } else {
-                                        println!("not found {name}");
-                                    }
-                                }
-
-                                egui::ComboBox::from_label("Sequencer").show_ui(ui, |ui| {
-                                    use crate::game::animations::sequences;
-
-                                    let mut sequences = sequences()
-                                        .lookup()
-                                        .map(|(name, seq)| (name.clone(), *seq))
-                                        .collect::<Vec<_>>();
-                                    sequences.sort_by(|(left, _), (right, _)| left.cmp(right));
-
-                                    for (name, sequence) in sequences.iter() {
-                                        if ui.button(name).clicked() {
-                                            // Safety: Sequence must be there, because we're iterating
-                                            // a known list of sequences.
-                                            sequencer.play_sequence(*sequence);
-                                        }
-                                    }
-                                });
-                                sequencer.debug_panel(ui);
-
-                                if let Some(animation_state) = sequencer.get_animation_state() {
-                                    ui.label(format!("Animation: {}", animation_state.animation));
-                                    ui.label(format!("Time: {}", animation_state.frame));
-                                }
-                            }
-                        }
-
                         let mut euler_rot = Vec3::from(
                             object
                                 .transform
@@ -419,6 +419,8 @@ impl Objects {
                                     object.update_model_renderer(&mut self.model_renderer);
                                 }
                             });
+
+                        object.detail.debug_panel(ui);
 
                         ui.heading("Debug");
                         ui.checkbox(&mut object.draw_debug_bones, "Draw debug bones");

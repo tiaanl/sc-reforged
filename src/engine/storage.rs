@@ -69,6 +69,11 @@ impl<T> Storage<T> {
     }
 
     #[inline]
+    pub fn remove(&mut self, handle: Handle<T>) -> T {
+        self.0.remove(handle.0)
+    }
+
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
         self.0.iter().map(|(h, t)| (Handle(h, PhantomData), t))
     }

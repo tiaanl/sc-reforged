@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::path::PathBuf;
 
 use ahash::HashMap;
@@ -17,7 +19,7 @@ pub type NodeIndex = u32;
 type NameLookup = HashMap<String, NodeIndex>;
 
 /// Model instance data held by each enitty.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Model {
     /// The hierarchical bone structure of the model.
     pub skeleton: Skeleton,
@@ -32,8 +34,43 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn _node_index_by_name(&self, name: &str) -> Option<NodeIndex> {
+    pub fn from_skeleton(skeleton: Skeleton) -> Self {
+        Self {
+            skeleton,
+            meshes: Vec::default(),
+            _collision_boxes: Vec::default(),
+            bounding_sphere: BoundingSphere::ZERO,
+            _name_lookup: HashMap::default(),
+        }
+    }
+
+    /// Find a node index for a mesh with the given name.
+    pub fn node_index_by_name(&self, name: &str) -> Option<NodeIndex> {
         self._name_lookup.get(name).cloned()
+    }
+
+    /// Clone the meshes from another [Model]'s node to this one. *Does not recurse nodes.*
+    pub fn clone_meshes(
+        &mut self,
+        other: &Model,
+        source_node_index: NodeIndex,
+        target_node_index: NodeIndex,
+    ) {
+        self.meshes.extend(
+            other
+                .meshes
+                .iter()
+                .filter(|mesh| mesh.node_index == source_node_index)
+                .map(|mesh| Mesh {
+                    node_index: target_node_index,
+                    ..mesh.clone()
+                }),
+        );
+    }
+
+    /// Remove all the meshes from the specified node.
+    pub fn clear_meshes(&mut self, node_index: NodeIndex) {
+        self.meshes.retain(|mesh| mesh.node_index != node_index);
     }
 }
 
@@ -49,12 +86,12 @@ pub struct Node {
     pub name: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Mesh {
     /// The node this mesh belongs to.
     pub node_index: u32,
     /// Name of the texture to use for the material.
-    pub _image_name: String,
+    pub image_name: String,
     /// Handle to the loaded image.
     pub image: Handle<Image>,
     /// Vertex and index data.
@@ -69,14 +106,14 @@ pub struct Vertex {
     pub node_index: u32,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CollisionBox {
     /// An index to the [ModelNode] this mesh is attached to.
-    pub _node_index: NodeIndex,
+    pub node_index: NodeIndex,
     /// Minimum values for the bounding box.
-    pub _min: Vec3,
+    pub min: Vec3,
     /// Maximum values for the bounding box.
-    pub _max: Vec3,
+    pub max: Vec3,
 }
 
 impl TryFrom<smf::Model> for Model {
@@ -153,7 +190,7 @@ impl TryFrom<smf::Model> for Model {
 
                         Ok(Mesh {
                             node_index: node_index as u32,
-                            _image_name: smf_mesh.texture_name.clone(),
+                            image_name: smf_mesh.texture_name.clone(),
                             image,
                             mesh,
                         })
@@ -168,9 +205,9 @@ impl TryFrom<smf::Model> for Model {
 
             for smf_collision_box in smf_node.bounding_boxes.iter() {
                 collision_boxes.push(CollisionBox {
-                    _node_index: node_index as u32,
-                    _min: smf_collision_box.min,
-                    _max: smf_collision_box.max,
+                    node_index: node_index as u32,
+                    min: smf_collision_box.min,
+                    max: smf_collision_box.max,
                 });
             }
         }
@@ -182,7 +219,7 @@ impl TryFrom<smf::Model> for Model {
                     parent: node.parent,
                     transform: node.transform.clone(),
                     id: node.bone_id,
-                    _name: node.name.clone(),
+                    name: node.name.clone(),
                 })
                 .collect(),
         };

@@ -311,6 +311,11 @@ impl ModelRenderer {
         Ok(self.render_instances.insert(render_instance))
     }
 
+    pub fn remove_model_instance(&mut self, render_instance: Handle<RenderInstance>) {
+        // Just drop the removed instance.
+        let _ = self.render_instances.remove(render_instance);
+    }
+
     pub fn get_or_insert_animation(
         &mut self,
         model_handle: Handle<model::Model>,

@@ -7,7 +7,7 @@ pub struct Bone {
     pub parent: u32,
     pub transform: Transform,
     pub id: u32,
-    pub _name: String,
+    pub name: String,
 }
 
 #[derive(Clone, Debug)]

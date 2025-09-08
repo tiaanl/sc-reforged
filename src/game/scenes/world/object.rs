@@ -35,15 +35,31 @@ impl Object {
         model_renderer: &mut ModelRenderer,
     ) {
         match self.detail {
-            ObjectDetail::Scenery {
-                render_instance, ..
-            }
-            | ObjectDetail::SceneryLit {
-                render_instance, ..
-            } => {
-                model_renderer.update_instance(render_instance, |updater| {
-                    updater.set_transform(self.transform.to_mat4());
-                });
+            ObjectDetail::SceneryLit {
+                on,
+                light_cone_model,
+                ref mut light_cone_render_instance,
+                ..
+            } if light_cone_model.is_some() => {
+                // Light is on, but no render instance.
+                if on && light_cone_render_instance.is_none() {
+                    *light_cone_render_instance = match model_renderer.add_render_instance(
+                        light_cone_model.unwrap(),
+                        self.transform.to_mat4(),
+                        0,
+                    ) {
+                        Ok(render_instance) => Some(render_instance),
+                        Err(err) => {
+                            tracing::warn!("Could not add render instance! {err}");
+                            None
+                        }
+                    };
+                }
+
+                if !on && light_cone_render_instance.is_some() {
+                    model_renderer.remove_model_instance(light_cone_render_instance.unwrap());
+                    *light_cone_render_instance = None;
+                }
             }
 
             ObjectDetail::Bipedal {
@@ -116,6 +132,8 @@ impl Object {
                     }
                 }
             }
+
+            _ => {}
         }
 
         self.update_model_renderer(model_renderer);
@@ -125,13 +143,25 @@ impl Object {
         match self.detail {
             ObjectDetail::Scenery {
                 render_instance, ..
-            }
-            | ObjectDetail::SceneryLit {
-                render_instance, ..
             } => {
                 model_renderer.update_instance(render_instance, |updater| {
                     updater.set_transform(self.transform.to_mat4());
                 });
+            }
+            ObjectDetail::SceneryLit {
+                render_instance,
+                light_cone_render_instance,
+                ..
+            } => {
+                model_renderer.update_instance(render_instance, |updater| {
+                    updater.set_transform(self.transform.to_mat4());
+                });
+
+                if let Some(render_instance) = light_cone_render_instance {
+                    model_renderer.update_instance(render_instance, |updater| {
+                        updater.set_transform(self.transform.to_mat4());
+                    });
+                }
             }
             ObjectDetail::Bipedal {
                 body_model,
@@ -173,8 +203,13 @@ pub enum ObjectDetail {
         render_instance: Handle<RenderInstance>,
     },
     SceneryLit {
+        /// Set to true if the light is on.
+        on: bool,
+
         model: Handle<Model>,
         render_instance: Handle<RenderInstance>,
+        light_cone_model: Option<Handle<Model>>,
+        light_cone_render_instance: Option<Handle<RenderInstance>>,
     },
     Bipedal {
         body_model: Handle<Model>,
@@ -183,6 +218,62 @@ pub enum ObjectDetail {
         order: BipedalOrder,
         sequencer: Sequencer,
     },
+}
+
+impl ObjectDetail {
+    pub fn debug_panel(&mut self, ui: &mut egui::Ui) {
+        match self {
+            ObjectDetail::Scenery { .. } => {}
+
+            ObjectDetail::SceneryLit { on, .. } => {
+                ui.checkbox(on, "On");
+            }
+
+            ObjectDetail::Bipedal { sequencer, .. } => {
+                // Show a few common sequences.
+                const COMMON: &[&str] = &[
+                    "MSEQ_STAND",
+                    "MSEQ_PRONE",
+                    "MSEQ_CROUCH",
+                    "MSEQ_ON_BACK",
+                    "MSEQ_SIT",
+                ];
+                for name in COMMON {
+                    if let Some(seq) = sequences().get_by_name(name) {
+                        if ui.button(*name).clicked() {
+                            sequencer.play_sequence(seq);
+                        }
+                    } else {
+                        println!("not found {name}");
+                    }
+                }
+
+                egui::ComboBox::from_label("Sequencer").show_ui(ui, |ui| {
+                    use crate::game::animations::sequences;
+
+                    let mut sequences = sequences()
+                        .lookup()
+                        .map(|(name, seq)| (name.clone(), *seq))
+                        .collect::<Vec<_>>();
+                    sequences.sort_by(|(left, _), (right, _)| left.cmp(right));
+
+                    for (name, sequence) in sequences.iter() {
+                        if ui.button(name).clicked() {
+                            // Safety: Sequence must be there, because we're iterating
+                            // a known list of sequences.
+                            sequencer.play_sequence(*sequence);
+                        }
+                    }
+                });
+                sequencer.debug_panel(ui);
+
+                if let Some(animation_state) = sequencer.get_animation_state() {
+                    ui.label(format!("Animation: {}", animation_state.animation));
+                    ui.label(format!("Time: {}", animation_state.frame));
+                }
+            }
+        }
+    }
 }
 
 pub enum BipedalOrder {
