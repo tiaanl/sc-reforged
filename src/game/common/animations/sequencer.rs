@@ -7,11 +7,10 @@ use super::{Animation, Sequence, animations, sequences};
 #[derive(Clone, Copy)]
 pub struct AnimationState {
     pub animation: Handle<Animation>,
-    pub time: f32,
+    pub frame: f32,
 }
 
 enum Play {
-    Single(Handle<Animation>),
     Count(Handle<Animation>, i32),
     Loop(Handle<Animation>),
 }
@@ -20,34 +19,27 @@ enum Play {
 #[derive(Default)]
 pub struct Sequencer {
     sequence: VecDeque<Play>,
-    time: f32,
+    frame: f32,
 }
 
 impl Sequencer {
+    const FPS: f32 = 15.0;
+
     pub fn update(&mut self, delta_time: f32) {
         let Some(front) = self.sequence.front_mut() else {
             // There is nothing to play.
-            self.time = 0.0;
+            self.frame = 0.0;
             return;
         };
 
-        self.time += delta_time;
+        self.frame += delta_time * Self::FPS;
 
         match *front {
-            Play::Single(animation) => {
-                let animation = animations().get(animation).expect("Missing animation!");
-                let duration = animation.last_key_frame().unwrap_or_default() as f32;
-                if self.time >= duration {
-                    self.time -= duration;
-                    self.sequence.pop_front();
-                }
-            }
-
             Play::Count(animation, ref mut count) => {
                 let animation = animations().get(animation).expect("Missing animation!");
                 let duration = animation.last_key_frame().unwrap_or_default() as f32;
-                if self.time >= duration {
-                    self.time -= duration;
+                if self.frame >= duration {
+                    self.frame -= duration;
                     *count -= 1;
 
                     if *count == 0 {
@@ -59,9 +51,9 @@ impl Sequencer {
             Play::Loop(animation) => {
                 let animation = animations().get(animation).expect("Missing animation!");
                 let duration = animation.last_key_frame().unwrap_or_default() as f32;
-                self.time = self.time.rem_euclid(duration);
-                if self.time >= duration {
-                    self.time -= duration;
+                self.frame = self.frame.rem_euclid(duration);
+                if self.frame >= duration {
+                    self.frame -= duration;
                 }
             }
         }
@@ -80,13 +72,11 @@ impl Sequencer {
             return;
         };
 
-        tracing::info!("Playing sequence: {}", sequence.name);
-
         for clip in sequence.clips.iter() {
             use crate::game::config::Repeat;
 
             match clip.repeat {
-                Repeat::None => self.sequence.push_back(Play::Single(clip.animation)),
+                Repeat::None => self.sequence.push_back(Play::Count(clip.animation, 1)),
                 Repeat::Infinite => self.sequence.push_back(Play::Loop(clip.animation)),
                 Repeat::Count(count) => self.sequence.push_back(Play::Count(clip.animation, count)),
             }
@@ -95,7 +85,7 @@ impl Sequencer {
 
     pub fn _play_animation(&mut self, animation: Handle<Animation>) {
         self.sequence.clear();
-        self.sequence.push_back(Play::Single(animation));
+        self.sequence.push_back(Play::Count(animation, 1));
     }
 
     pub fn stop(&mut self) {
@@ -109,12 +99,10 @@ impl Sequencer {
         };
 
         match front {
-            Play::Single(animation) | Play::Count(animation, _) | Play::Loop(animation) => {
-                Some(AnimationState {
-                    animation: *animation,
-                    time: self.time,
-                })
-            }
+            Play::Count(animation, _) | Play::Loop(animation) => Some(AnimationState {
+                animation: *animation,
+                frame: self.frame,
+            }),
         }
     }
 
@@ -122,13 +110,6 @@ impl Sequencer {
     pub fn debug_panel(&self, ui: &mut egui::Ui) {
         for play in self.sequence.iter() {
             match play {
-                Play::Single(animation) => {
-                    let key_frame_count = animations()
-                        .get(*animation)
-                        .and_then(|a| a.last_key_frame())
-                        .unwrap_or_default();
-                    play_panel("Single", *animation, key_frame_count, ui);
-                }
                 Play::Count(animation, _) => {
                     let key_frame_count = animations()
                         .get(*animation)

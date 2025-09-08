@@ -1,6 +1,5 @@
 #define_import_path world::animation
 
-const FPS: f32 = 15.0;
 const LOOPING: bool = true;
 
 struct FrameLerp {
@@ -9,11 +8,11 @@ struct FrameLerp {
     t: f32,
 };
 
-fn compute_frame_lerp(global_time: f32, frame_count: u32) -> FrameLerp {
+fn compute_frame_lerp(frame: f32, frame_count: u32) -> FrameLerp {
     let clamped_count = max(frame_count, 1u);
     let last_frame = clamped_count - 1u;
 
-    var fractional_frame = global_time * FPS;
+    var fractional_frame = frame;
     if (LOOPING && clamped_count > 1u) {
         // fractional_frame mod frame_count
         fractional_frame =

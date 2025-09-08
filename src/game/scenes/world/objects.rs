@@ -325,10 +325,34 @@ impl Objects {
                             ObjectDetail::Bipedal {
                                 ref mut sequencer, ..
                             } => {
+                                // Show a few common sequences.
+                                const COMMON: &[&str] = &[
+                                    "MSEQ_STAND",
+                                    "MSEQ_PRONE",
+                                    "MSEQ_CROUCH",
+                                    "MSEQ_ON_BACK",
+                                    "MSEQ_SIT",
+                                ];
+                                for name in COMMON {
+                                    if let Some(seq) = sequences().get_by_name(name) {
+                                        if ui.button(*name).clicked() {
+                                            sequencer.play_sequence(seq);
+                                        }
+                                    } else {
+                                        println!("not found {name}");
+                                    }
+                                }
+
                                 egui::ComboBox::from_label("Sequencer").show_ui(ui, |ui| {
                                     use crate::game::animations::sequences;
 
-                                    for (name, sequence) in sequences().lookup() {
+                                    let mut sequences = sequences()
+                                        .lookup()
+                                        .map(|(name, seq)| (name.clone(), *seq))
+                                        .collect::<Vec<_>>();
+                                    sequences.sort_by(|(left, _), (right, _)| left.cmp(right));
+
+                                    for (name, sequence) in sequences.iter() {
                                         if ui.button(name).clicked() {
                                             // Safety: Sequence must be there, because we're iterating
                                             // a known list of sequences.
@@ -340,7 +364,7 @@ impl Objects {
 
                                 if let Some(animation_state) = sequencer.get_animation_state() {
                                     ui.label(format!("Animation: {}", animation_state.animation));
-                                    ui.label(format!("Time: {}", animation_state.time));
+                                    ui.label(format!("Time: {}", animation_state.frame));
                                 }
                             }
                         }

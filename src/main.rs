@@ -48,8 +48,6 @@ enum App {
         last_mouse_position: Option<UVec2>,
         /// The instant that the last frame started to render.
         last_frame_time: Instant,
-        /// An average FPS.
-        average_fps: f32,
         /// The scene we are currently rendering to the screen.
         scene: Box<dyn Scene>,
     },
@@ -143,7 +141,6 @@ impl winit::application::ApplicationHandler for App {
                     input: InputState::default(),
                     last_mouse_position: None,
                     last_frame_time: Instant::now(),
-                    average_fps: 0.0,
                     scene,
                 };
             }
@@ -172,7 +169,6 @@ impl winit::application::ApplicationHandler for App {
                 input,
                 last_mouse_position,
                 last_frame_time,
-                average_fps,
                 scene,
                 ..
             } => {
@@ -211,7 +207,6 @@ impl winit::application::ApplicationHandler for App {
                             let _z = tracy_client::span!("update");
 
                             let delta_time = last_frame_duration.as_secs_f32();
-                            *average_fps = (*average_fps + (1.0 / delta_time)) / 2.0;
 
                             scene.update(delta_time, input);
                         }
@@ -256,9 +251,8 @@ impl winit::application::ApplicationHandler for App {
                                                 let fps_label = {
                                                     let text = egui::WidgetText::RichText(
                                                         egui::RichText::new(format!(
-                                                            "{:3.1} {:3.1}",
+                                                            "{:3.1}",
                                                             1.0 / last_frame_duration.as_secs_f64(),
-                                                            average_fps,
                                                         )),
                                                     )
                                                     .background_color(

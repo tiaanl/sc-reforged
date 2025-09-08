@@ -147,7 +147,7 @@ impl Object {
                         model_renderer
                             .get_or_insert_animation(body_model, animation_state.animation),
                     );
-                    time = animation_state.time;
+                    time = animation_state.frame;
                 }
 
                 model_renderer.update_instance(body_render_instance, |updater| {
