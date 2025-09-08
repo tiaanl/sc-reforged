@@ -12,6 +12,7 @@ use crate::{
         config::ObjectType,
         geometry_buffers::GeometryBuffers,
         height_map::HeightMap,
+        image::BlendMode,
         math::Frustum,
         model::Model,
         models::models,
@@ -125,6 +126,10 @@ impl Objects {
                         // Clone the light cone from the original mesh to the new one. We can use the
                         // same node index, because we cloned the skeleton.
                         new_model.clone_meshes(model, light_cone_index, light_cone_index);
+                        for mesh in new_model.meshes.iter_mut() {
+                            mesh.blend_mode = BlendMode::Additive;
+                        }
+
                         // Remove the light cone from the original mesh.
                         model.clear_meshes(light_cone_index);
                         Some(models().add(format!("{model_name}_light_cone"), new_model))

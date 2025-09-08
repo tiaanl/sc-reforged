@@ -25,7 +25,7 @@ pub enum BlendMode {
     /// Use the alpha channel of the texture.
     Alpha,
     /// Adds the values of the texture to the image.
-    _Additive,
+    Additive,
 }
 
 pub struct Image {

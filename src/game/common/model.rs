@@ -8,7 +8,7 @@ use shadow_company_tools::smf;
 use crate::{
     engine::{prelude::*, storage::Handle},
     game::{
-        image::{Image, images},
+        image::{BlendMode, Image, images},
         math::BoundingSphere,
         skeleton::{Bone, Skeleton},
     },
@@ -94,6 +94,8 @@ pub struct Mesh {
     pub image_name: String,
     /// Handle to the loaded image.
     pub image: Handle<Image>,
+    /// The blend mode to render the image with. (Defaults to the image blend mode).
+    pub blend_mode: BlendMode,
     /// Vertex and index data.
     pub mesh: IndexedMesh<Vertex>,
 }
@@ -188,10 +190,13 @@ impl TryFrom<smf::Model> for Model {
 
                         let image = images().load_image(path)?;
 
+                        let blend_mode = images().get(image).unwrap().blend_mode;
+
                         Ok(Mesh {
                             node_index: node_index as u32,
                             image_name: smf_mesh.texture_name.clone(),
                             image,
+                            blend_mode,
                             mesh,
                         })
                     })

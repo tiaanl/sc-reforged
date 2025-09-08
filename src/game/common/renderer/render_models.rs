@@ -9,7 +9,7 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
-        image::{BlendMode, Image, images},
+        image::{BlendMode, Image},
         math::BoundingSphere,
         model::Model,
         models::models,
@@ -92,9 +92,6 @@ impl RenderModels {
                 }
             };
 
-            // Safety: We just created a texture successfully, so the image *MUST* exist already.
-            let image = images().get(mesh.image).unwrap();
-
             let vertices = mesh
                 .mesh
                 .vertices
@@ -110,10 +107,10 @@ impl RenderModels {
 
             let indexed_mesh = IndexedMesh::new(vertices, mesh.mesh.indices.clone());
 
-            match image.blend_mode {
+            match mesh.blend_mode {
                 BlendMode::Opaque | BlendMode::ColorKeyed => opaque_mesh.extend(indexed_mesh),
                 BlendMode::Alpha => alpha_mesh.extend(indexed_mesh),
-                BlendMode::_Additive => additive_mesh.extend(indexed_mesh),
+                BlendMode::Additive => additive_mesh.extend(indexed_mesh),
             };
         }
 
