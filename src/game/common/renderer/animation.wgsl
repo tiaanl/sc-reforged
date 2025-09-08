@@ -1,6 +1,6 @@
 #define_import_path world::animation
 
-const FPS: f32 = 30.0;
+const FPS: f32 = 15.0;
 const LOOPING: bool = true;
 
 struct FrameLerp {

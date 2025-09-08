@@ -4,7 +4,7 @@ use glam::{Mat3, Quat, Vec2, Vec3};
 use crate::{
     engine::{prelude::Transform, storage::Handle},
     game::{
-        animations::Sequencer,
+        animations::{Sequencer, sequences},
         config::ObjectType,
         height_map::HeightMap,
         model::Model,
@@ -46,7 +46,13 @@ impl Object {
                 });
             }
 
-            ObjectDetail::Bipedal { ref mut order, .. } => {
+            ObjectDetail::Bipedal {
+                ref mut order,
+                ref mut sequencer,
+                ..
+            } => {
+                sequencer.update(delta_time);
+
                 match *order {
                     BipedalOrder::Stand => {}
                     BipedalOrder::MoveTo {
@@ -78,6 +84,11 @@ impl Object {
 
                             // Issue a *stand* order.
                             *order = BipedalOrder::Stand;
+                            if let Some(stand_sequence) = sequences().get_by_name("MSEQ_STAND") {
+                                sequencer.play_sequence(stand_sequence);
+                            } else {
+                                tracing::warn!("Could not play sequence MSEQ_STAND");
+                            }
                         } else {
                             // Desired planar direction, then slide along the terrain tangent.
                             let desired_dir_world =

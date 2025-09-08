@@ -6,7 +6,7 @@ use crate::{
         prelude::*,
     },
     game::{
-        animations::Sequencer,
+        animations::{Sequencer, sequences},
         config::ObjectType,
         geometry_buffers::GeometryBuffers,
         height_map::HeightMap,
@@ -74,7 +74,7 @@ impl Objects {
 
                 let head_model_name = "head_john";
                 let head_model = models().load_model(
-                    model_name,
+                    head_model_name,
                     PathBuf::from("models")
                         .join("people")
                         .join("heads")
@@ -159,10 +159,21 @@ impl Objects {
                 // for the biped to move there.
                 if let Some(selected_id) = self.selected_object {
                     if let Some(object) = self.objects.get_mut(selected_id as usize) {
-                        if let ObjectDetail::Bipedal { ref mut order, .. } = object.detail {
+                        if let ObjectDetail::Bipedal {
+                            ref mut order,
+                            ref mut sequencer,
+                            ..
+                        } = object.detail
+                        {
                             *order = BipedalOrder::MoveTo {
                                 target_location: position.truncate(),
-                                speed: 1_000.0,
+                                speed: 200.0,
+                            };
+
+                            if let Some(walk_sequence) = sequences().get_by_name("MSEQ_WALK") {
+                                sequencer.play_sequence(walk_sequence);
+                            } else {
+                                tracing::warn!("Could not play MSEQ_WALK");
                             }
                         }
                     }
