@@ -72,7 +72,7 @@ impl Models {
         self.load_model(name, path)
     }
 
-    pub fn load_bipedal_model(&mut self, name: &str) -> Result<Handle<Model>, AssetError> {
+    pub fn _load_bipedal_model(&mut self, name: &str) -> Result<Handle<Model>, AssetError> {
         // TODO: No LOD's for bipedal models?
 
         let path = PathBuf::from("models")

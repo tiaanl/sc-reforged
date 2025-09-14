@@ -30,7 +30,7 @@ impl Sequences {
 
         for config_sequence in motion_sequences.sequences.iter() {
             let mut sequence = Sequence {
-                name: config_sequence.name.clone(),
+                _name: config_sequence.name.clone(),
                 clips: Vec::default(),
             };
 

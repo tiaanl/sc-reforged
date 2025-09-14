@@ -7,5 +7,5 @@ pub enum PlayerAction {
     /// User clicked on the given object, at the given position.
     ObjectClicked { _position: Vec3, id: u32 },
     /// User clicked on the terrain at the given position.
-    TerrainClicked { position: Vec3 },
+    TerrainClicked { _position: Vec3 },
 }

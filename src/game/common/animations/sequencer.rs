@@ -88,7 +88,7 @@ impl Sequencer {
         self.sequence.push_back(Play::Count(animation, 1));
     }
 
-    pub fn stop(&mut self) {
+    pub fn _stop(&mut self) {
         self.sequence.clear();
     }
 

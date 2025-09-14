@@ -1,14 +1,9 @@
 use std::path::PathBuf;
 
-use ahash::HashSet;
-
 use crate::{
-    engine::{
-        gizmos::{GizmoVertex, GizmosRenderer},
-        prelude::*,
-    },
+    engine::{gizmos::GizmoVertex, prelude::*},
     game::{
-        animations::{Sequencer, sequences},
+        animations::Sequencer,
         config::ObjectType,
         geometry_buffers::GeometryBuffers,
         height_map::HeightMap,
@@ -19,15 +14,14 @@ use crate::{
         renderer::ModelRenderer,
         scenes::world::{
             actions::PlayerAction,
-            object::{BipedalOrder, Object, ObjectDetail},
+            object::{Bipedal, BipedalOrder, Object, ObjectLike, Scenery, SceneryLit},
         },
         shadows::ShadowCascades,
-        skeleton::Skeleton,
     },
 };
 
 pub struct Objects {
-    objects: Vec<Object>,
+    objects: Vec<Box<dyn ObjectLike>>,
     model_renderer: ModelRenderer,
 
     selected_object: Option<u32>,
@@ -98,21 +92,23 @@ impl Objects {
                     new_object_id,
                 )?;
 
-                self.objects.push(Object {
-                    title: title.to_string(),
-                    object_type,
-                    transform,
-                    detail: ObjectDetail::Bipedal {
-                        body_model,
-                        body_render_instance,
-                        head_render_instance,
-                        order: BipedalOrder::Stand,
-                        sequencer: Sequencer::default(),
+                self.objects.push(Box::new(Bipedal {
+                    object: Object {
+                        title: title.to_string(),
+                        object_type,
+                        transform,
+                        draw_debug_bones: false,
+                        draw_bounding_spheres: false,
                     },
-                    draw_debug_bones: false,
-                    draw_bounding_spheres: false,
-                    selected_bones: Default::default(),
-                })
+                    body_model,
+                    body_render_instance,
+                    head_model,
+                    head_render_instance,
+                    order: BipedalOrder::Stand,
+                    sequencer: Sequencer::default(),
+
+                    render_skeleton: false,
+                }));
             }
 
             ObjectType::SceneryLit => {
@@ -147,22 +143,22 @@ impl Objects {
                     new_object_id,
                 )?;
 
-                self.objects.push(Object {
-                    title: title.to_string(),
-                    object_type,
-                    transform,
-                    detail: ObjectDetail::SceneryLit {
-                        on: false,
-
+                self.objects.push(Box::new(SceneryLit {
+                    scenery: Scenery {
+                        object: Object {
+                            title: title.to_string(),
+                            object_type,
+                            transform,
+                            draw_debug_bones: false,
+                            draw_bounding_spheres: false,
+                        },
                         model: model_handle,
                         render_instance,
-                        light_cone_model,
-                        light_cone_render_instance: None,
                     },
-                    draw_debug_bones: false,
-                    draw_bounding_spheres: false,
-                    selected_bones: HashSet::default(),
-                });
+                    on: false,
+                    light_cone_model,
+                    light_cone_render_instance: None,
+                }));
             }
 
             _ => {
@@ -174,18 +170,17 @@ impl Objects {
                     new_object_id,
                 )?;
 
-                self.objects.push(Object {
-                    title: title.to_string(),
-                    object_type,
-                    transform,
-                    detail: ObjectDetail::Scenery {
-                        model,
-                        render_instance,
+                self.objects.push(Box::new(Scenery {
+                    object: Object {
+                        title: title.to_string(),
+                        object_type,
+                        transform,
+                        draw_debug_bones: false,
+                        draw_bounding_spheres: false,
                     },
-                    draw_debug_bones: false,
-                    draw_bounding_spheres: false,
-                    selected_bones: Default::default(),
-                })
+                    model,
+                    render_instance,
+                }));
             }
         }
 
@@ -205,12 +200,17 @@ impl Objects {
                 self.selected_object = None;
             }
             PlayerAction::ObjectClicked { id, .. } => {
-                // Set a new selected object.
-                self.selected_object = Some(id);
+                if let Some(_object) = self.objects.get(id as usize) {
+                    // if object.is_player_controlled() {
+                    // Set a new selected object.
+                    self.selected_object = Some(id);
+                    // }
+                }
             }
-            PlayerAction::TerrainClicked { position } => {
+            PlayerAction::TerrainClicked { .. } => {
                 // If the player clicked on the terrain and has a biped selected, issue an order
                 // for the biped to move there.
+                /*
                 if let Some(selected_id) = self.selected_object {
                     if let Some(object) = self.objects.get_mut(selected_id as usize) {
                         if let ObjectDetail::Bipedal {
@@ -232,6 +232,7 @@ impl Objects {
                         }
                     }
                 }
+                */
             }
         }
     }
@@ -263,6 +264,8 @@ impl Objects {
 
     pub fn render_gizmos(&self, vertices: &mut Vec<GizmoVertex>) {
         for object in self.objects.iter() {
+            object.render_gizmos(vertices);
+            /*
             let model = match object.detail {
                 ObjectDetail::Scenery { model, .. } => model,
                 ObjectDetail::SceneryLit { model, .. } => model,
@@ -277,89 +280,8 @@ impl Objects {
                 Self::render_skeleton(object, model, vertices);
                 Self::render_selected_bones(object, model, vertices);
             }
-
-            if object.draw_bounding_spheres {
-                Self::render_bounding_sphere(object, model, vertices);
-            }
+            */
         }
-    }
-
-    fn render_skeleton(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
-        fn do_node(
-            skeleton: &Skeleton,
-            transform: Mat4,
-            bone_index: u32,
-            vertices: &mut Vec<GizmoVertex>,
-            depth: usize,
-        ) {
-            const COLORS: &[Vec4] = &[
-                Vec4::new(1.0, 0.0, 0.0, 1.0),
-                Vec4::new(0.0, 1.0, 0.0, 1.0),
-                Vec4::new(0.0, 0.0, 1.0, 1.0),
-                Vec4::new(1.0, 1.0, 0.0, 1.0),
-                Vec4::new(1.0, 0.0, 1.0, 1.0),
-                Vec4::new(1.0, 1.0, 1.0, 1.0),
-            ];
-
-            let color = COLORS[depth % COLORS.len()];
-
-            for (child_index, child_node) in skeleton
-                .bones
-                .iter()
-                .enumerate()
-                .filter(|(_, bone)| bone.parent == bone_index)
-            {
-                let start_position = transform.transform_point3(Vec3::ZERO);
-
-                let end_transform = transform * child_node.transform.to_mat4();
-                let end_position = end_transform.transform_point3(Vec3::ZERO);
-
-                vertices.push(GizmoVertex::new(start_position, color));
-                vertices.push(GizmoVertex::new(end_position, color));
-
-                // if depth == 0 {
-                //     continue;
-                // }
-
-                do_node(
-                    skeleton,
-                    end_transform,
-                    child_index as u32,
-                    vertices,
-                    depth + 1,
-                );
-            }
-        }
-
-        // if let Some(animation_state) = object.sequencer.get_animation_state() {
-        //     if let Some(animation) = animations().get(animation_state.animation) {
-        //         let skeleton =
-        //             animation.sample_pose(animation_state.time, 30.0, &model.skeleton, true);
-        //         do_node(&skeleton, object.transform.to_mat4(), 0, vertices, 0);
-        //     }
-        // } else {
-        do_node(&model.skeleton, object.transform.to_mat4(), 0, vertices, 0);
-        // }
-    }
-
-    fn render_selected_bones(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
-        for bone_index in object.selected_bones.iter() {
-            let transform =
-                object.transform.to_mat4() * model.skeleton.local_transform(*bone_index as u32);
-
-            vertices.extend(GizmosRenderer::create_iso_sphere(transform, 10.0, 8));
-        }
-    }
-
-    fn render_bounding_sphere(object: &Object, model: &Model, vertices: &mut Vec<GizmoVertex>) {
-        let world_position =
-            object.transform.to_mat4() * Mat4::from_translation(model.bounding_sphere.center);
-
-        vertices.extend(GizmosRenderer::create_iso_sphere(
-            world_position,
-            model.bounding_sphere.radius,
-            32,
-        ));
     }
 
     #[cfg(feature = "egui")]
@@ -372,64 +294,7 @@ impl Objects {
                     .show(egui, |ui| {
                         ui.set_width(300.0);
 
-                        ui.heading(format!("{} ({:?})", object.title, object.object_type));
-
-                        let mut euler_rot = Vec3::from(
-                            object
-                                .transform
-                                .rotation
-                                .to_euler(glam::EulerRot::default()),
-                        );
-
-                        fn drag_vec3(
-                            ui: &mut egui::Ui,
-                            label: &str,
-                            value: &mut Vec3,
-                            step: f32,
-                        ) -> egui::Response {
-                            use egui::Widget;
-                            use egui::widgets::DragValue;
-
-                            ui.label(label);
-
-                            let x = DragValue::new(&mut value.x).speed(step).ui(ui);
-                            let y = DragValue::new(&mut value.y).speed(step).ui(ui);
-                            let z = DragValue::new(&mut value.z).speed(step).ui(ui);
-
-                            x | y | z
-                        }
-
-                        egui::Grid::new("object_detail")
-                            .num_columns(4)
-                            .show(ui, |ui| {
-                                let a = drag_vec3(
-                                    ui,
-                                    "Position",
-                                    &mut object.transform.translation,
-                                    1.0,
-                                );
-
-                                ui.end_row();
-
-                                let b = drag_vec3(ui, "Rotation", &mut euler_rot, 0.01);
-
-                                if (a | b).changed() {
-                                    object.transform.rotation = Quat::from_euler(
-                                        glam::EulerRot::default(),
-                                        euler_rot.x,
-                                        euler_rot.y,
-                                        euler_rot.z,
-                                    );
-
-                                    object.update_model_renderer(&mut self.model_renderer);
-                                }
-                            });
-
-                        object.detail.debug_panel(ui);
-
-                        ui.heading("Debug");
-                        ui.checkbox(&mut object.draw_debug_bones, "Draw debug bones");
-                        ui.checkbox(&mut object.draw_bounding_spheres, "Draw bounding spheres");
+                        object.debug_panel(ui);
                     });
             }
         }
