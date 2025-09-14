@@ -28,15 +28,16 @@ const COMMON: &[&str] = &[
 ];
 
 const SHADERS: &[&str] = &[
-    "src/game/common/compositor.wgsl",
-    "src/game/common/renderer/model_renderer.wgsl",
-    "src/game/common/renderer/model_renderer_shadows.wgsl",
-    "src/game/scenes/world/overlay.wgsl",
-    "src/game/scenes/world/terrain.wgsl",
-    "src/game/scenes/world/terrain_wireframe.wgsl",
     "src/engine/gizmos.wgsl",
-    "src/game/scenes/world/strata.wgsl",
+    "src/game/common/compositor.wgsl",
+    "src/game/common/renderer/model_renderer_shadows.wgsl",
+    "src/game/common/renderer/model_renderer.wgsl",
+    "src/game/common/sky.wgsl",
+    "src/game/scenes/world/overlay.wgsl",
     "src/game/scenes/world/process_chunks.wgsl",
+    "src/game/scenes/world/strata.wgsl",
+    "src/game/scenes/world/terrain_wireframe.wgsl",
+    "src/game/scenes/world/terrain.wgsl",
 ];
 
 fn compile_shaders() {

@@ -109,7 +109,7 @@ fn fragment_terrain(vertex: VertexOutput) -> OpaqueGeometryBuffers {
 
     let normal = vertex.normal;
     let world_position = vertex.world_position;
-    let distance_to_camera = length(u_camera.position - world_position);
+    let distance_to_camera = length(u_camera.position.xyz - world_position);
 
     var visibility = 1.0;
 
@@ -174,7 +174,7 @@ fn fragment_water(vertex: VertexOutput) -> AlphaGeometryBuffers {
     let base_color = textureSample(t_water_texture, s_sampler, vertex.tex_coord).rgb;
 
     let world_position = vertex.world_position;
-    let distance_to_camera = length(u_camera.position - world_position);
+    let distance_to_camera = length(u_camera.position.xyz - world_position);
 
     let diffuse = diffuse_with_fog(
         u_environment,

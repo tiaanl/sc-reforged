@@ -72,7 +72,7 @@ fn fragment_main(vertex: VertexOutput) -> geometry_buffers::OpaqueGeometryBuffer
     let world_position = vertex.world_position;
     let world_normal = vertex.normal;
 
-    let distance = length(world_position - u_camera.position);
+    let distance = length(world_position - u_camera.position.xyz);
 
     let diffuse = environment::diffuse_with_fog(
         u_environment,

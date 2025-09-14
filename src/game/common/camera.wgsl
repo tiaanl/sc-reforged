@@ -2,9 +2,9 @@
 
 struct Camera {
     mat_proj_view: mat4x4<f32>,
-    position: vec3<f32>,
-    _padding: f32,
     frustum: array<vec4<f32>, 6>,
+    position: vec4<f32>,  // x, y, z, fov
+    forward: vec4<f32>,   // x, y, z, aspect_ratio
 }
 
 fn camera_forward(camera: Camera) -> vec3<f32> {

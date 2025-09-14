@@ -125,8 +125,9 @@ impl Camera {
 #[repr(C)]
 pub struct CameraBuffer {
     pub proj_view: Mat4,
-    pub position: Vec4,
     pub frustum: [Vec4; 6],
+    pub position: Vec4, // x, y, z, fov
+    pub forward: Vec4,  // x, y, z, aspect
 }
 
 pub struct GpuCamera {
@@ -174,14 +175,22 @@ impl GpuCamera {
         }
     }
 
-    pub fn upload(&self, view_projection: &ViewProjection, position: Vec3) {
+    pub fn upload(
+        &self,
+        view_projection: &ViewProjection,
+        position: Vec3,
+        forward: Vec3,
+        fov: f32,
+        aspect_ratio: f32,
+    ) {
         let data = CameraBuffer {
             proj_view: view_projection.mat,
-            position: position.extend(1.0),
             frustum: view_projection
                 .frustum()
                 .planes
                 .map(|p| p.normal.extend(p.distance)),
+            position: position.extend(fov),
+            forward: forward.extend(aspect_ratio),
         };
         renderer()
             .queue

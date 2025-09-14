@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use terrain::Terrain;
 use wgpu::util::DeviceExt;
 
@@ -13,10 +15,12 @@ use crate::{
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
+        image::images,
         scenes::world::{
             actions::PlayerAction, game_mode::GameMode, overlay_renderer::OverlayRenderer,
         },
         shadows::ShadowCascades,
+        sky_renderer::SkyRenderer,
     },
 };
 
@@ -74,6 +78,8 @@ pub struct WorldScene {
     geometry_buffers: GeometryBuffers,
     compositor: Compositor,
     shadow_render_target: RenderTarget,
+
+    sky_renderer: SkyRenderer,
 
     overlay_renderer: OverlayRenderer,
 
@@ -266,6 +272,30 @@ impl WorldScene {
             }
         }
 
+        let sky_renderer = {
+            let device = &renderer().device;
+            let queue = &renderer().queue;
+
+            let mut sky_renderer =
+                SkyRenderer::new(device, &main_camera.gpu_camera.bind_group_layout);
+
+            for sky_texture in campaign.sky_textures.iter() {
+                // Kind of hacky, but OK.
+                if sky_texture.name.eq_ignore_ascii_case("unused.bmp") {
+                    continue;
+                }
+
+                let image = images().load_image(
+                    PathBuf::from("textures")
+                        .join("object")
+                        .join(&sky_texture.name),
+                )?;
+                sky_renderer.set_sky_texture(device, queue, sky_texture.index, image);
+            }
+
+            sky_renderer
+        };
+
         let overlay_renderer = OverlayRenderer::new(
             &main_camera.gpu_camera.bind_group_layout,
             &shadow_cascades,
@@ -294,6 +324,8 @@ impl WorldScene {
             geometry_buffers,
             shadow_render_target,
             compositor,
+
+            sky_renderer,
 
             overlay_renderer,
 
@@ -443,12 +475,21 @@ impl Scene for WorldScene {
 
     fn render(&mut self, frame: &mut Frame) {
         let main_view_projection = {
-            let view_projection = self.main_camera.camera.calculate_view_projection();
-            let position = self.main_camera.camera.position;
+            let camera = &self.main_camera.camera;
 
-            self.main_camera
-                .gpu_camera
-                .upload(&view_projection, position);
+            let view_projection = camera.calculate_view_projection();
+            let forward = view_projection.mat.project_point3(Vec3::Y).normalize();
+            let position = camera.position;
+            let fov = camera.fov;
+            let aspect_ratio = camera.aspect_ratio;
+
+            self.main_camera.gpu_camera.upload(
+                &view_projection,
+                position,
+                forward,
+                fov,
+                aspect_ratio,
+            );
 
             view_projection
         };
@@ -456,12 +497,21 @@ impl Scene for WorldScene {
         let main_camera_frustum = main_view_projection.frustum();
 
         let _debug_view_projection = {
-            let view_projection = self.debug_camera.camera.calculate_view_projection();
-            let position = self.debug_camera.camera.position;
+            let camera = &self.debug_camera.camera;
 
-            self.debug_camera
-                .gpu_camera
-                .upload(&view_projection, position);
+            let view_projection = camera.calculate_view_projection();
+            let position = camera.position;
+            let forward = view_projection.mat.project_point3(Vec3::Y).normalize();
+            let fov = camera.fov;
+            let aspect_ratio = camera.aspect_ratio;
+
+            self.debug_camera.gpu_camera.upload(
+                &view_projection,
+                position,
+                forward,
+                fov,
+                aspect_ratio,
+            );
 
             view_projection
         };
@@ -588,8 +638,10 @@ impl Scene for WorldScene {
 
         let _z = tracy_client::span!("render shadow map");
 
-        self.objects
-            .render_shadow_casters(frame, &self.shadow_cascades);
+        if true {
+            self.objects
+                .render_shadow_casters(frame, &self.shadow_cascades);
+        }
 
         // --- Color pass ---
 
@@ -599,7 +651,14 @@ impl Scene for WorldScene {
             &self.main_camera.gpu_camera.bind_group
         };
 
-        {
+        // --- Sky box ---
+        self.sky_renderer.render(
+            frame,
+            &self.geometry_buffers,
+            &self.main_camera.gpu_camera.bind_group,
+        );
+
+        if true {
             // Render Opaque geometry first.
             self.terrain.render(
                 frame,
@@ -678,6 +737,85 @@ impl Scene for WorldScene {
                     let vertices = GizmosRenderer::create_axis(translation, 100.0);
                     self.gizmos_renderer
                         .render(frame, view_camera_bind_group, &vertices);
+                }
+            }
+
+            // Render sky box.
+            {
+                let blue = Vec4::new(0.0, 0.0, 1.0, 1.0);
+
+                const RADIUS_MID: f32 = 17_100.0;
+                const RADIUS_FAR: f32 = 25_650.0;
+
+                // Use the horizontal fov to calculate the edges.
+                let half_angle = ((self.main_camera.camera.fov * 0.5).tan()
+                    * self.main_camera.camera.aspect_ratio)
+                    .atan();
+                // Add some overscan.
+                let half_angle = half_angle * 1.08;
+
+                // Rotate forward_xy around +Z by ±`half_angle` to get the two edge directions.
+                let rot_neg = Quat::from_axis_angle(Vec3::Z, -half_angle);
+                let rot_pos = Quat::from_axis_angle(Vec3::Z, half_angle);
+
+                // Get the world forward from the camera.
+                let forward_world = self.main_camera.camera.rotation.mul_vec3(Vec3::Y);
+                let forward_xy = {
+                    let v = Vec2::new(forward_world.x, forward_world.y);
+                    let len = v.length();
+                    if len > 1e-6 { v / len } else { Vec2::Y }
+                };
+
+                let edge0 = (rot_neg.mul_vec3(forward_xy.extend(0.0))).truncate(); // Left edge.
+                let edge1 = (rot_pos.mul_vec3(forward_xy.extend(0.0))).truncate(); // Right edge.
+
+                // Build the ring points.
+                let cam_pos = self.main_camera.camera.position.truncate();
+                let mid0 = cam_pos + edge0 * RADIUS_MID;
+                let mid1 = cam_pos + edge1 * RADIUS_MID;
+                let far0 = cam_pos + edge0 * RADIUS_FAR;
+                let far1 = cam_pos + edge1 * RADIUS_FAR;
+
+                const Z_APEX_HIGH: f32 = 7_500.0;
+                const Z_RING_HIGH: f32 = 2_500.0;
+                const Z_FAR_HIGH: f32 = 0.0;
+                const Z_OFFSET_LOW: f32 = -100.0;
+
+                // Top apex.
+                let apex_high = Vec3::new(cam_pos.x, cam_pos.y, Z_APEX_HIGH);
+                let mid0_high = Vec3::new(mid0.x, mid0.y, Z_RING_HIGH);
+                let mid1_high = Vec3::new(mid1.x, mid1.y, Z_RING_HIGH);
+                let far0_high = Vec3::new(far0.x, far0.y, Z_FAR_HIGH);
+                let far1_high = Vec3::new(far1.x, far1.y, Z_FAR_HIGH);
+
+                let high = [apex_high, mid0_high, mid1_high, far0_high, far1_high];
+
+                let apex_low = apex_high + Vec3::Z * Z_OFFSET_LOW;
+                let mid0_low = mid0_high + Vec3::Z * Z_OFFSET_LOW;
+                let mid1_low = mid1_high + Vec3::Z * Z_OFFSET_LOW;
+                let far0_low = far0_high + Vec3::Z * Z_OFFSET_LOW;
+                let far1_low = far1_high + Vec3::Z * Z_OFFSET_LOW;
+                let low = [apex_low, mid0_low, mid1_low, far0_low, far1_low];
+
+                let indices = [0usize, 2, 1, 1, 2, 4, 1, 4, 3];
+
+                for a in indices.windows(3) {
+                    self.gizmos_vertices.extend(vec![
+                        GizmoVertex::new(high[a[0]], blue),
+                        GizmoVertex::new(high[a[1]], blue),
+                        GizmoVertex::new(high[a[1]], blue),
+                        GizmoVertex::new(high[a[2]], blue),
+                        GizmoVertex::new(high[a[2]], blue),
+                        GizmoVertex::new(high[a[0]], blue),
+                    ]);
+                    self.gizmos_vertices.extend(vec![
+                        GizmoVertex::new(low[a[0]], blue),
+                        GizmoVertex::new(low[a[1]], blue),
+                        GizmoVertex::new(low[a[1]], blue),
+                        GizmoVertex::new(low[a[2]], blue),
+                        GizmoVertex::new(low[a[2]], blue),
+                        GizmoVertex::new(low[a[0]], blue),
+                    ]);
                 }
             }
 

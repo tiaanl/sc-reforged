@@ -273,7 +273,9 @@ impl ShadowCascades {
             debug_assert!(cascade.index == index as u32);
 
             cascade.view_projection = view_projection.clone();
-            cascade.gpu_camera.upload(&view_projection, Vec3::ZERO);
+            cascade
+                .gpu_camera
+                .upload(&view_projection, Vec3::ZERO, Vec3::Y, 0.0, 0.0);
 
             gpu_cascades.light_view_projection[index] = view_projection.mat.to_cols_array();
         }

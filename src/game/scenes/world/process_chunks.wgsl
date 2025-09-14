@@ -52,7 +52,7 @@ fn compute_lod(center_world: vec3<f32>) -> u32 {
     let inv_step = f32(MAX_LOD_LEVELS) / far;
     let forward = camera_forward(u_camera);
 
-    let forward_distance = max(0.0, dot(center_world - u_camera.position, forward));
+    let forward_distance = max(0.0, dot(center_world - u_camera.position.xyz, forward));
     let t = forward_distance * inv_step;
     return u32(clamp(i32(floor(t)), 0, i32(MAX_LOD_LEVELS - 1u)));
 }

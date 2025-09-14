@@ -2,7 +2,7 @@ use glam::{Vec2, Vec3};
 
 use crate::game::config::parser::{ConfigLine, ConfigLines};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ViewInitial {
     pub from: Vec2,
     pub to: Vec2,
@@ -33,6 +33,7 @@ TOD_DATA_FOG_G   0.022    0.070    0.111    0.111    0.200    0.350    0.365    
 TOD_DATA_FOG_B   0.022    0.050    0.089    0.089    0.200    0.350    0.320    0.290    0.510    0.470   0.440   0.440   0.440    0.400    0.440   0.400   0.400   0.400   0.400   0.300   0.089   0.089   0.040   0.022
 */
 
+#[derive(Debug)]
 pub struct TimeOfDayEntry {
     pub sun_dir: Vec3,
     pub sun_color: Vec3,
@@ -53,12 +54,24 @@ impl Default for TimeOfDayEntry {
     }
 }
 
-#[derive(Default)]
+// SKY_TEXTURE_TO_USE [i] [texturename] [trans_delay] [world_to_tvert_scalar] [world_to_tverts_sc_trans]
+#[derive(Debug, Default)]
+pub struct SkyTexture {
+    pub index: i32,
+    pub name: String,
+    pub _trans_delay: i32,
+    pub _world_to_tvert_scalar: f32,
+    pub _world_to_tverts_sc_trans: f32,
+}
+
+#[derive(Debug, Default)]
 pub struct Campaign {
     pub view_initial: ViewInitial,
     pub mtf_name: Option<String>,
 
     pub time_of_day: [TimeOfDayEntry; 24],
+
+    pub sky_textures: Vec<SkyTexture>,
 }
 
 impl From<ConfigLines> for Campaign {
@@ -145,6 +158,18 @@ impl From<ConfigLines> for Campaign {
                             campaign.time_of_day[i].fog_color.z = param;
                         }
                     }
+                }
+
+                "SKY_TEXTURE_TO_USE" => {
+                    // SKY_TEXTURE_TO_USE 0 sky_cloud1.bmp 32000 0.00012 0.00002
+                    let sky_texture = SkyTexture {
+                        index: line.param(0),
+                        name: line.param(1),
+                        _trans_delay: line.param(2),
+                        _world_to_tvert_scalar: line.param(3),
+                        _world_to_tverts_sc_trans: line.param(4),
+                    };
+                    campaign.sky_textures.push(sky_texture);
                 }
 
                 _ => tracing::warn!("Invalid key for Campaign: {}", line.key),

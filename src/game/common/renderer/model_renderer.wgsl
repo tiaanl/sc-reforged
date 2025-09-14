@@ -87,7 +87,7 @@ fn lit_color(vertex: VertexOutput) -> vec4<f32> {
 
     let world_position = vertex.world_position;
     let normal = vertex.normal;
-    let camera_distance = length(world_position - u_camera.position);
+    let camera_distance = length(world_position - u_camera.position.xyz);
 
     var visibility = 1.0;
 

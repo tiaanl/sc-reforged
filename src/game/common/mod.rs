@@ -12,3 +12,4 @@ pub mod models;
 pub mod renderer;
 pub mod shadows;
 pub mod skeleton;
+pub mod sky_renderer;
