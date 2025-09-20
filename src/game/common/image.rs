@@ -16,16 +16,17 @@ use crate::{
     global,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[repr(u8)]
 pub enum BlendMode {
     /// No blending.
-    Opaque,
+    Opaque = 0,
     /// Color keyed (use black as the key).
-    ColorKeyed,
+    ColorKeyed = 1,
     /// Use the alpha channel of the texture.
-    Alpha,
+    Alpha = 2,
     /// Adds the values of the texture to the image.
-    Additive,
+    Additive = 3,
 }
 
 pub struct Image {

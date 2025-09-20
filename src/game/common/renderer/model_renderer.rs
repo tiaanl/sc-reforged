@@ -125,7 +125,7 @@ impl ModelRenderer {
         shadow_cascades: &ShadowCascades,
     ) -> Self {
         let textures = render_textures::RenderTextures::new();
-        let models = RenderModels::default();
+        let models = RenderModels::new();
         let animations = RenderAnimations::default();
 
         // Default for 1024 instances for now.
@@ -142,7 +142,7 @@ impl ModelRenderer {
                 bind_group_layouts: &[
                     camera_bind_group_layout,
                     environment_bind_group_layout,
-                    &textures.texture_set_bind_group_layout,
+                    &textures.texture_data_bind_group_layout,
                     animations.bind_group_layout(),
                     &shadow_cascades.shadow_maps_bind_group.layout,
                 ],
@@ -154,11 +154,11 @@ impl ModelRenderer {
                 array_stride: std::mem::size_of::<RenderVertex>() as wgpu::BufferAddress,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
-                    0 => Float32x3, // position
-                    1 => Float32x3, // normal
-                    2 => Float32x2, // tex_coord
-                    3 => Uint32, // node_index
-                    4 => Uint32, // texture_index
+                    0 => Float32x4, // position: [f32; 4]
+                    1 => Float32x4, // normal: [f32; 4]
+                    2 => Float32x2, // tex_coord: [f32; 2]
+                    3 => Uint32, // node_index: u32
+                    4 => Uint32, // _pad0: u32
                 ],
             },
             wgpu::VertexBufferLayout {
@@ -305,7 +305,7 @@ impl ModelRenderer {
     ) -> Result<Handle<RenderInstance>, AssetError> {
         let render_model =
             self.models
-                .add_model(&mut self.textures, &mut self.animations, model_handle)?;
+                .get_or_create(&mut self.textures, &mut self.animations, model_handle)?;
 
         let render_instance = RenderInstance::new(render_model, entity_id, transform);
         Ok(self.render_instances.insert(render_instance))
@@ -356,19 +356,19 @@ impl ModelRenderer {
         let mut total_instances = 0;
 
         for (_, instance) in self.render_instances.iter() {
-            let Some(model) = self.models.get(instance.render_model) else {
+            let Some(render_model) = self.models.get(instance.render_model) else {
                 tracing::warn!("Missing render model.");
                 continue;
             };
 
             let center = instance
                 .transform
-                .transform_point3(model.bounding_sphere.center);
+                .transform_point3(render_model.bounding_sphere.center);
 
             // Move the bounding sphere to the location of the model.
             let bounding_sphere = BoundingSphere {
                 center,
-                radius: model.bounding_sphere.radius,
+                radius: render_model.bounding_sphere.radius,
             };
 
             if !frustum.intersects_bounding_sphere(&bounding_sphere) {
@@ -379,7 +379,7 @@ impl ModelRenderer {
             let animation = if let Some(ref animation) = instance.animation {
                 *animation
             } else {
-                RenderInstanceAnimation::from_animation(model.rest_pose)
+                RenderInstanceAnimation::from_animation(render_model.rest_pose)
             };
 
             let key = RenderSetKey {
@@ -393,32 +393,34 @@ impl ModelRenderer {
                 animation_time: animation.time,
                 _padding: Default::default(),
             };
-            result
-                .opaque_instances
-                .entry(key)
-                .or_default()
-                .push(gpu_instance);
-            total_instances += 1;
 
-            if let Some(ref mesh) = model.alpha_mesh {
-                if mesh.index_count != 0 {
-                    result
-                        .alpha_instances
-                        .entry(key)
-                        .or_default()
-                        .push(gpu_instance);
-                    total_instances += 1;
-                }
+            if !render_model.opaque_range.is_empty()
+                || !render_model.additive_range.is_empty()
+                || !render_model.alpha_range.is_empty()
+            {
+                total_instances += 1;
             }
-            if let Some(ref mesh) = model.additive_mesh {
-                if mesh.index_count != 0 {
-                    result
-                        .additive_instances
-                        .entry(key)
-                        .or_default()
-                        .push(gpu_instance);
-                    total_instances += 1;
-                }
+
+            if !render_model.opaque_range.is_empty() {
+                result
+                    .opaque_instances
+                    .entry(key)
+                    .or_default()
+                    .push(gpu_instance);
+            }
+            if !render_model.alpha_range.is_empty() {
+                result
+                    .alpha_instances
+                    .entry(key)
+                    .or_default()
+                    .push(gpu_instance);
+            }
+            if !render_model.additive_range.is_empty() {
+                result
+                    .additive_instances
+                    .entry(key)
+                    .or_default()
+                    .push(gpu_instance);
             }
         }
 
@@ -453,6 +455,11 @@ impl ModelRenderer {
                 });
 
             render_pass.set_pipeline(&self.shadow_renderer.pipeline);
+            render_pass.set_vertex_buffer(0, self.models.vertices_buffer_slice());
+            render_pass.set_index_buffer(
+                self.models.indices_buffer_slice(),
+                wgpu::IndexFormat::Uint32,
+            );
             render_pass.set_bind_group(0, &self.shadow_renderer.bind_group, &[]);
             render_pass.set_push_constants(
                 wgpu::ShaderStages::VERTEX,
@@ -461,7 +468,7 @@ impl ModelRenderer {
             );
 
             for (key, gpu_instances) in render_set.opaque_instances.iter() {
-                let Some(model) = self.models.get(key.model) else {
+                let Some(render_model) = self.models.get(key.model) else {
                     tracing::warn!("model lookup failure!");
                     continue;
                 };
@@ -470,16 +477,6 @@ impl ModelRenderer {
                     tracing::warn!("animation lookup failure!");
                     continue;
                 };
-
-                let Some(ref mesh) = model.opaque_mesh else {
-                    // tracing::warn!("No opaque mesh, but in opaque instances!");
-                    continue;
-                };
-
-                // TODO: Don't put empty meshes into the instances buffer.
-                if mesh.index_count == 0 {
-                    continue;
-                }
 
                 // Create the buffer with instances.
                 let instances_buffer =
@@ -491,14 +488,15 @@ impl ModelRenderer {
                             usage: wgpu::BufferUsages::VERTEX,
                         });
 
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-
                 render_pass.set_bind_group(1, &animation.bind_group, &[]);
+                render_pass.set_vertex_buffer(1, instances_buffer.slice(..));
 
-                render_pass.draw_indexed(0..mesh.index_count, 0, 0..gpu_instances.len() as u32);
+                // Only draw opaque for shadow casting.
+                render_pass.draw_indexed(
+                    render_model.opaque_range.clone(),
+                    0,
+                    0..gpu_instances.len() as u32,
+                );
             }
         }
     }
@@ -544,12 +542,21 @@ impl ModelRenderer {
                 });
 
             render_pass.set_pipeline(&self.opaque_pipeline);
+
+            render_pass.set_vertex_buffer(0, self.models.vertices_buffer_slice());
+            render_pass.set_index_buffer(
+                self.models.indices_buffer_slice(),
+                wgpu::IndexFormat::Uint32,
+            );
+
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.set_bind_group(1, environment_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.textures.texture_data_bind_group, &[]);
             render_pass.set_bind_group(4, &shadow_cascades.shadow_maps_bind_group.bind_group, &[]);
+            render_pass.set_bind_group(5, &self.textures.texture_data_bind_group, &[]);
 
             for (key, gpu_instances) in render_set.opaque_instances.iter() {
-                let Some(model) = self.models.get(key.model) else {
+                let Some(render_model) = self.models.get(key.model) else {
                     tracing::warn!("model lookup failure!");
                     continue;
                 };
@@ -559,33 +566,23 @@ impl ModelRenderer {
                     continue;
                 };
 
-                let Some(ref mesh) = model.opaque_mesh else {
-                    // tracing::warn!("No opaque mesh, but in opaque instances!");
-                    continue;
-                };
-
-                // TODO: Don't put empty meshes into the instances buffer.
-                if mesh.index_count == 0 {
-                    continue;
-                }
-
                 let instance_range = self.instances_buffer.write(gpu_instances);
 
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass
                     .set_vertex_buffer(1, self.instances_buffer.buffer.slice(instance_range));
-                render_pass
-                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
-                render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
                 render_pass.set_bind_group(3, &animation.bind_group, &[]);
 
-                render_pass.draw_indexed(0..mesh.index_count, 0, 0..gpu_instances.len() as u32);
+                render_pass.draw_indexed(
+                    render_model.opaque_range.clone(),
+                    0,
+                    0..gpu_instances.len() as u32,
+                );
             }
         }
 
         // Additive
-        {
+        if false {
             let mut render_pass = frame
                 .encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -607,9 +604,10 @@ impl ModelRenderer {
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.set_bind_group(1, environment_bind_group, &[]);
             render_pass.set_bind_group(4, &shadow_cascades.shadow_maps_bind_group.bind_group, &[]);
+            render_pass.set_bind_group(5, &self.textures.texture_data_bind_group, &[]);
 
             for (key, gpu_instances) in render_set.additive_instances.iter() {
-                let Some(model) = self.models.get(key.model) else {
+                let Some(render_model) = self.models.get(key.model) else {
                     tracing::warn!("model lookup failure!");
                     continue;
                 };
@@ -619,33 +617,24 @@ impl ModelRenderer {
                     continue;
                 };
 
-                let Some(ref mesh) = model.additive_mesh else {
-                    tracing::warn!("No additive mesh, but in additive instances!");
-                    continue;
-                };
-
-                // TODO: Don't put empty meshes into the instances buffer.
-                if mesh.index_count == 0 {
-                    continue;
-                }
-
                 let instance_range = self.instances_buffer.write(gpu_instances);
 
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass
                     .set_vertex_buffer(1, self.instances_buffer.buffer.slice(instance_range));
-                render_pass
-                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
-                render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
+                // render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
                 render_pass.set_bind_group(3, &animation.bind_group, &[]);
 
-                render_pass.draw_indexed(0..mesh.index_count, 0, 0..gpu_instances.len() as u32);
+                render_pass.draw_indexed(
+                    render_model.additive_range.clone(),
+                    0,
+                    0..gpu_instances.len() as u32,
+                );
             }
         }
 
         // Alpha
-        {
+        if false {
             let mut render_pass = frame
                 .encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -667,9 +656,10 @@ impl ModelRenderer {
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.set_bind_group(1, environment_bind_group, &[]);
             render_pass.set_bind_group(4, &shadow_cascades.shadow_maps_bind_group.bind_group, &[]);
+            render_pass.set_bind_group(5, &self.textures.texture_data_bind_group, &[]);
 
             for (key, gpu_instances) in render_set.alpha_instances.iter() {
-                let Some(model) = self.models.get(key.model) else {
+                let Some(render_model) = self.models.get(key.model) else {
                     tracing::warn!("model lookup failure!");
                     continue;
                 };
@@ -679,28 +669,19 @@ impl ModelRenderer {
                     continue;
                 };
 
-                let Some(ref mesh) = model.alpha_mesh else {
-                    tracing::warn!("No alpha mesh, but in alpha instances!");
-                    continue;
-                };
-
-                // TODO: Don't put empty meshes into the instances buffer.
-                if mesh.index_count == 0 {
-                    continue;
-                }
-
                 let instances_range = self.instances_buffer.write(gpu_instances);
 
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass
                     .set_vertex_buffer(1, self.instances_buffer.buffer.slice(instances_range));
-                render_pass
-                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
-                render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
+                // render_pass.set_bind_group(2, &model.texture_set.bind_group, &[]);
                 render_pass.set_bind_group(3, &animation.bind_group, &[]);
 
-                render_pass.draw_indexed(0..mesh.index_count, 0, 0..gpu_instances.len() as u32);
+                render_pass.draw_indexed(
+                    render_model.alpha_range.clone(),
+                    0,
+                    0..gpu_instances.len() as u32,
+                );
             }
         }
     }

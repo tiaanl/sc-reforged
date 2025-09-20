@@ -2,18 +2,27 @@ use wgpu::util::DeviceExt;
 
 use crate::engine::renderer::renderer;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct IndexedMesh<V> {
     pub vertices: Vec<V>,
     pub indices: Vec<u32>,
 }
 
+impl<V> std::fmt::Debug for IndexedMesh<V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IndexedMesh")
+            .field("vertices", &self.vertices.len())
+            .field("indices", &self.indices.len())
+            .finish()
+    }
+}
+
 impl<V: Copy> IndexedMesh<V> {
-    pub fn new(vertices: Vec<V>, indices: Vec<u32>) -> Self {
+    pub fn _new(vertices: Vec<V>, indices: Vec<u32>) -> Self {
         Self { vertices, indices }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn _is_empty(&self) -> bool {
         self.vertices.is_empty() || self.indices.is_empty()
     }
 

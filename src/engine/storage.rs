@@ -25,6 +25,12 @@ impl<T> PartialEq for Handle<T> {
 
 impl<T> Eq for Handle<T> {}
 
+impl<T> PartialOrd for Handle<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
 impl<T> std::fmt::Debug for Handle<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Handle").field(&self.0).finish()

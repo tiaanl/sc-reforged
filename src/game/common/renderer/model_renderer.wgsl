@@ -7,8 +7,9 @@
 
 @group(1) @binding(0) var<uniform> u_environment: environment::Environment;
 
-@group(2) @binding(0) var t_textures: binding_array<texture_2d<f32>>;
-@group(2) @binding(1) var s_sampler: sampler;
+@group(2) @binding(0) var texture_buckets: binding_array<texture_2d_array<f32>>;
+@group(2) @binding(1) var<storage, read> texture_data: array<TextureData>;
+@group(2) @binding(2) var texture_sampler: sampler;
 
 @group(3) @binding(0) var t_positions: texture_2d<f32>;
 @group(3) @binding(1) var t_rotations: texture_2d<f32>;
@@ -17,12 +18,17 @@
 @group(4) @binding(1) var s_shadow_maps: sampler_comparison;
 @group(4) @binding(2) var<uniform> u_cascades: Cascades;
 
+struct TextureData {
+    bucket: u32,
+    layer: u32,
+}
+
 struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
+    @location(0) position: vec4<f32>,
+    @location(1) normal: vec4<f32>,
     @location(2) tex_coord: vec2<f32>,
-    @interpolate(flat) @location(3) node_index: u32,
-    @interpolate(flat) @location(4) texture_index: u32,
+    @location(3) node_index: u32,
+    @location(4) texture_data_index: u32,
 };
 
 struct InstanceInput {
@@ -30,7 +36,7 @@ struct InstanceInput {
     @location(6) col1: vec4<f32>,
     @location(7) col2: vec4<f32>,
     @location(8) col3: vec4<f32>,
-    @interpolate(flat) @location(9) entity_id: u32,
+    @location(9) entity_id: u32,
     @location(10) time: f32,
 };
 
@@ -39,8 +45,8 @@ struct VertexOutput {
     @location(0) tex_coord: vec2<f32>,
     @location(1) world_position: vec3<f32>,
     @location(2) normal: vec3<f32>,
-    @interpolate(flat) @location(3) entity_id: u32,
-    @interpolate(flat) @location(4) texture_index: u32,
+    @location(3) entity_id: u32,
+    @location(4) texture_data_index: u32,
 };
 
 @vertex
@@ -60,13 +66,13 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     );
     let world_transform = model_matrix * local_transform;
 
-    let world_position = world_transform * vec4<f32>(vertex.position, 1.0);
+    let world_position = world_transform * vertex.position;
     let normal_matrix = mat3x3<f32>(
         world_transform[0].xyz,
         world_transform[1].xyz,
         world_transform[2].xyz,
     );
-    let world_normal = math::normalize_safe(normal_matrix * vertex.normal);
+    let world_normal = math::normalize_safe(normal_matrix * vertex.normal.xyz);
 
     let view_projection = u_camera.mat_proj_view;
     let clip_position = view_projection * world_position;
@@ -77,13 +83,18 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
         world_position.xyz,
         world_normal,
         instance.entity_id,
-        vertex.texture_index,
+        vertex.texture_data_index,
     );
 }
 
 fn lit_color(vertex: VertexOutput) -> vec4<f32> {
-    let texture = t_textures[vertex.texture_index];
-    let base_color = textureSample(texture, s_sampler, vertex.tex_coord);
+    let t_data = texture_data[vertex.texture_data_index];
+    let base_color = textureSample(
+        texture_buckets[t_data.bucket],
+        texture_sampler,
+        vertex.tex_coord,
+        t_data.layer,
+    );
 
     let world_position = vertex.world_position;
     let normal = vertex.normal;

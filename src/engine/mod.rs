@@ -10,6 +10,7 @@ pub mod shaders;
 pub mod storage;
 
 pub mod dirty;
+pub mod growing_buffer;
 pub mod tracked;
 pub mod transform;
 
