@@ -763,7 +763,11 @@ impl Scene for WorldScene {
                 let forward_xy = {
                     let v = Vec2::new(forward_world.x, forward_world.y);
                     let len = v.length();
-                    if len > 1e-6 { v / len } else { Vec2::Y }
+                    if len > 1e-6 {
+                        v / len
+                    } else {
+                        Vec2::Y
+                    }
                 };
 
                 let edge0 = (rot_neg.mul_vec3(forward_xy.extend(0.0))).truncate(); // Left edge.

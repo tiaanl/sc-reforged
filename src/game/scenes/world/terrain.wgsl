@@ -15,7 +15,7 @@
 @group(1) @binding(0) var<uniform> u_environment: environment::Environment;
 
 @group(2) @binding(0) var<storage, read> u_height_map: array<vec4<f32>>;
-@group(1) @binding(1) var<storage, read> u_chunk_instances: array<ChunkInstance>;
+@group(2) @binding(1) var<storage, read> u_chunk_instances: array<ChunkInstance>;
 @group(2) @binding(2) var<uniform> u_terrain_data: terrain::TerrainData;
 @group(2) @binding(3) var t_terrain_texture: texture_2d<f32>;
 @group(2) @binding(4) var t_water_texture: texture_2d<f32>;
@@ -25,16 +25,76 @@
 @group(3) @binding(1) var s_shadow_maps: sampler_comparison;
 @group(3) @binding(2) var<uniform> u_cascades: Cascades;
 
-fn get_node_world_position(node: terrain::Node) -> vec3<f32> {
-    return vec3<f32>(
-        f32(node.x) * u_terrain_data.nominal_edge_size,
-        f32(node.y) * u_terrain_data.nominal_edge_size,
-        u_height_map[node.index].w,
-    );
+fn get_node_normal_and_height(abs_node_coord: vec2<u32>) -> vec4<f32> {
+    let index = abs_node_coord.y * (u_terrain_data.size.x + 1) + abs_node_coord.x;
+    return u_height_map[index];
 }
 
-fn get_node_normal(node: terrain::Node) -> vec3<f32> {
-    return u_height_map[node.index].xyz;
+fn stitched_normal_and_height(
+    chunk_lod: u32,
+    chunk_coord: vec2<u32>,
+    node_coord: vec2<u32>,
+    abs_node_coord: vec2<u32>,
+) -> vec4<f32> {
+    var normal_and_height = get_node_normal_and_height(abs_node_coord);
+
+    let last = terrain::CELLS_PER_CHUNK >> chunk_lod;
+
+    // If last is one, the amount of cells in this chunk is 1, so no stitching is required.
+    if last == 1u {
+       return normal_and_height;
+    }
+
+    let scale = 1u << chunk_lod;
+    let chunks_size = u_terrain_data.size / terrain::CELLS_PER_CHUNK;
+
+    // Check if neighbors are valid.
+    let has_neg_x = chunk_coord.x > 0u;
+    let has_pos_x = (chunk_coord.x + 1u) < chunks_size.x;
+    let has_neg_y = chunk_coord.y > 0u;
+    let has_pos_y = (chunk_coord.y + 1u) < chunks_size.y;
+
+    // -X
+    if node_coord.x == 0u && has_neg_x {
+        let nidx = (chunk_coord.y * chunks_size.x) + (chunk_coord.x - 1u);
+        if u_chunk_instances[nidx].lod > chunk_lod && (node_coord.y & 1u) == 1u {
+            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(0u, scale));
+            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(0u, scale));
+            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
+        }
+    }
+
+    // +X
+    if node_coord.x == last && has_pos_x {
+        let nidx = (chunk_coord.y * chunks_size.x) + (chunk_coord.x + 1u);
+        if u_chunk_instances[nidx].lod > chunk_lod && (node_coord.y & 1u) == 1u {
+            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(0u, scale));
+            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(0u, scale));
+            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
+        }
+    }
+
+    // -Y
+    if node_coord.y == 0u && has_neg_y {
+        let nidx = ((chunk_coord.y - 1u) * chunks_size.x) + chunk_coord.x;
+        if u_chunk_instances[nidx].lod > chunk_lod && (node_coord.x & 1u) == 1u {
+            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(scale, 0u));
+            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(scale, 0u));
+            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
+        }
+    }
+
+    // +Y
+    if node_coord.y == last && has_pos_y {
+        let nidx = ((chunk_coord.y + 1u) * chunks_size.x) + chunk_coord.x;
+        if u_chunk_instances[nidx].lod > chunk_lod && (node_coord.x & 1u) == 1u {
+            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(scale, 0u));
+            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(scale, 0u));
+            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
+        }
+    }
+
+    return normal_and_height;
 }
 
 struct VertexOutput {
@@ -46,39 +106,69 @@ struct VertexOutput {
 
 @vertex
 fn vertex_terrain(
-    @builtin(instance_index) chunk_index: u32,
-    @builtin(vertex_index) node_index: u32,
+    @builtin(instance_index) instance_index: u32,
+    @builtin(vertex_index) vertex_index: u32,
 ) -> VertexOutput {
-    let node = terrain::get_node(u_terrain_data, chunk_index, node_index);
-    let world_position = get_node_world_position(node);
-    let normal = get_node_normal(node);
+    let chunk = u_chunk_instances[instance_index];
+
+    let chunk_coord = terrain::get_chunk_coord_from_instance_index(u_terrain_data, instance_index);
+    let node_coord = terrain::get_node_coord_from_vertex_index(vertex_index);
+
+    let scale = 1u << chunk.lod;
+    let abs_node_coord = chunk_coord * terrain::CELLS_PER_CHUNK + node_coord * scale;
+
+    let stitched = stitched_normal_and_height(
+        chunk.lod,
+        chunk_coord,
+        node_coord,
+        abs_node_coord,
+    );
+
+    let world_position = vec3<f32>(
+        f32(abs_node_coord.x) * u_terrain_data.nominal_edge_size,
+        f32(abs_node_coord.y) * u_terrain_data.nominal_edge_size,
+        stitched.w,
+    );
+
+    let node_normal = stitched.xyz;
 
     let clip_position = u_camera.mat_proj_view * vec4(world_position, 1.0);
 
     let tex_coord = vec2<f32>(
-        f32(node.x) / f32(u_terrain_data.size.x),
-        f32(node.y) / f32(u_terrain_data.size.y),
+        f32(abs_node_coord.x) / f32(u_terrain_data.size.x),
+        f32(abs_node_coord.y) / f32(u_terrain_data.size.y),
     );
 
     return VertexOutput(
         clip_position,
         world_position,
-        normal,
+        node_normal,
         tex_coord,
     );
 }
 
 @vertex
 fn vertex_water(
-    @builtin(instance_index) chunk_index: u32,
-    @builtin(vertex_index) node_index: u32,
+    @builtin(instance_index) instance_index: u32,
+    @builtin(vertex_index) vertex_index: u32,
 ) -> VertexOutput {
-    let node = terrain::get_node(u_terrain_data, chunk_index, node_index);
-    let world_position = get_node_world_position(node);
+    let chunk = u_chunk_instances[instance_index];
+
+    let chunk_coord = terrain::get_chunk_coord_from_instance_index(u_terrain_data, instance_index);
+    let node_coord = terrain::get_node_coord_from_vertex_index(vertex_index);
+
+    let scale = 1u << chunk.lod;
+    let abs_node_coord = chunk_coord * terrain::CELLS_PER_CHUNK + node_coord * scale;
+
+    let node = terrain::get_node(u_terrain_data, instance_index, vertex_index);
+    let world_position = vec3<f32>(
+        f32(abs_node_coord.x) * u_terrain_data.nominal_edge_size,
+        f32(abs_node_coord.y) * u_terrain_data.nominal_edge_size,
+        u_terrain_data.water_level,
+    );
 
     // Clip uses the actual water surface height
-    let water_position = vec3<f32>(world_position.xy, u_terrain_data.water_level);
-    let clip_position = u_camera.mat_proj_view * vec4<f32>(water_position, 1.0);
+    let clip_position = u_camera.mat_proj_view * vec4<f32>(world_position, 1.0);
 
     // Simple tiling for now
     let tex_coord = vec2<f32>(f32(node.x) / 8.0, f32(node.y) / 8.0);
@@ -92,16 +182,6 @@ fn vertex_water(
 }
 
 const TERRAIN_ENTITY_ID: u32 = 1u << 16u;
-
-fn project_to_light_ndc(light_vp: mat4x4<f32>, world_position: vec3<f32>) -> vec3<f32> {
-  let light_clip_position = light_vp * vec4<f32>(world_position, 1.0);
-  // If behind the light camera, early out with outside value
-  if (light_clip_position.w <= 0.0) {
-    // Return something outside so bounds check fails
-    return vec3<f32>(2.0, 2.0, 2.0);
-  }
-  return light_clip_position.xyz / light_clip_position.w;
-}
 
 @fragment
 fn fragment_terrain(vertex: VertexOutput) -> OpaqueGeometryBuffers {
@@ -192,16 +272,34 @@ fn fragment_water(vertex: VertexOutput) -> AlphaGeometryBuffers {
 
 @vertex
 fn vertex_wireframe(
-    @builtin(instance_index) chunk_index: u32,
-    @builtin(vertex_index) node_index: u32,
+    @builtin(instance_index) instance_index: u32,
+    @builtin(vertex_index) vertex_index: u32,
 ) -> @builtin(position) vec4<f32> {
-    let node = terrain::get_node(u_terrain_data, chunk_index, node_index);
-    let world_position = get_node_world_position(node);
+    let chunk = u_chunk_instances[instance_index];
+    let chunk_coord = terrain::get_chunk_coord_from_instance_index(u_terrain_data, instance_index);
+    let node_coord = terrain::get_node_coord_from_vertex_index(vertex_index);
+
+    let scale = 1u << chunk.lod;
+    let abs_node_coord = chunk_coord * terrain::CELLS_PER_CHUNK + node_coord * scale;
+
+    let stitched = stitched_normal_and_height(
+        chunk.lod,
+        chunk_coord,
+        node_coord,
+        abs_node_coord,
+    );
+
+
+    var world_position = vec3<f32>(
+        f32(abs_node_coord.x) * u_terrain_data.nominal_edge_size,
+        f32(abs_node_coord.y) * u_terrain_data.nominal_edge_size,
+        stitched.w,
+    );
 
     return u_camera.mat_proj_view * vec4<f32>(world_position, 1.0);
 }
 
 @fragment
 fn fragment_wireframe() -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0, 1.0, 0.0, 1.0);
+    return vec4<f32>(0.0, 1.0, 0.0, 1.0);
 }

@@ -36,7 +36,6 @@ const SHADERS: &[&str] = &[
     "src/game/scenes/world/overlay.wgsl",
     "src/game/scenes/world/process_chunks.wgsl",
     "src/game/scenes/world/strata.wgsl",
-    "src/game/scenes/world/terrain_wireframe.wgsl",
     "src/game/scenes/world/terrain.wgsl",
 ];
 

@@ -40,14 +40,13 @@ impl ChunkMesh {
 
         for level in 0..=Terrain::LOD_MAX {
             let cell_count = Terrain::CELLS_PER_CHUNK >> level;
-            let scale = 1 << level;
 
             for y in 0..cell_count {
                 for x in 0..cell_count {
-                    let i0 = (y * Terrain::VERTICES_PER_CHUNK + x) * scale;
-                    let i1 = (y * Terrain::VERTICES_PER_CHUNK + (x + 1)) * scale;
-                    let i2 = ((y + 1) * Terrain::VERTICES_PER_CHUNK + (x + 1)) * scale;
-                    let i3 = ((y + 1) * Terrain::VERTICES_PER_CHUNK + x) * scale;
+                    let i0 = y * Terrain::VERTICES_PER_CHUNK + x;
+                    let i1 = y * Terrain::VERTICES_PER_CHUNK + (x + 1);
+                    let i2 = (y + 1) * Terrain::VERTICES_PER_CHUNK + (x + 1);
+                    let i3 = (y + 1) * Terrain::VERTICES_PER_CHUNK + x;
 
                     indices.extend_from_slice(&[i0, i1, i2, i2, i3, i0]);
                     wireframe_indices.extend_from_slice(&[i0, i1, i1, i2, i2, i3, i3, i0]);
@@ -166,7 +165,6 @@ pub struct Terrain {
     nodes: Vec<Vec4>,
 
     render_wireframe: bool,
-    lod_level: usize,
 
     normals_lookup: Vec<Vec3>,
 
@@ -553,13 +551,17 @@ impl Terrain {
         let wireframe_pipeline = {
             let module = renderer
                 .device
-                .create_shader_module(wgsl_shader!("terrain_wireframe"));
+                .create_shader_module(wgsl_shader!("terrain"));
 
             let layout = renderer
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("terrain_pipeline_layout"),
-                    bind_group_layouts: &[camera_bind_group_layout, &bind_group_layout],
+                    bind_group_layouts: &[
+                        camera_bind_group_layout,
+                        environment_bind_group_layout,
+                        &bind_group_layout,
+                    ],
                     push_constant_ranges: &[],
                 });
 
@@ -773,7 +775,6 @@ impl Terrain {
 
             render_bind_group,
             render_wireframe: false,
-            lod_level: 0,
             normals_lookup,
 
             chunk_instances,
@@ -907,7 +908,12 @@ impl Terrain {
         );
 
         if in_editor && self.render_wireframe {
-            self.render_wireframe(frame, geometry_buffers, camera_bind_group);
+            self.render_wireframe(
+                frame,
+                geometry_buffers,
+                camera_bind_group,
+                environment_bind_group,
+            );
         }
     }
 
@@ -1004,18 +1010,6 @@ impl Terrain {
                 self.terrain_data.water_trans_high = high.clamp(0.0, 1.0);
             }
         });
-
-        for level in 0..=Self::LOD_MAX as usize {
-            if ui
-                .add(egui::widgets::RadioButton::new(
-                    self.lod_level == level,
-                    format!("level {level}"),
-                ))
-                .clicked()
-            {
-                self.lod_level = level;
-            }
-        }
     }
 }
 
@@ -1128,6 +1122,7 @@ impl Terrain {
         frame: &mut Frame,
         geometry_buffers: &GeometryBuffers,
         camera_bind_group: &wgpu::BindGroup,
+        environment_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass = frame
             .encoder
@@ -1145,7 +1140,8 @@ impl Terrain {
             wgpu::IndexFormat::Uint32,
         );
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.render_bind_group, &[]);
+        render_pass.set_bind_group(1, environment_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.render_bind_group, &[]);
 
         render_pass.multi_draw_indexed_indirect(
             &self.wireframe_draw_args_buffer,
