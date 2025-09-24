@@ -160,11 +160,18 @@ fn vertex_water(
     let scale = 1u << chunk.lod;
     let abs_node_coord = chunk_coord * terrain::CELLS_PER_CHUNK + node_coord * scale;
 
+    let stitched = stitched_normal_and_height(
+        chunk.lod,
+        chunk_coord,
+        node_coord,
+        abs_node_coord,
+    );
+
     let node = terrain::get_node(u_terrain_data, instance_index, vertex_index);
     let world_position = vec3<f32>(
         f32(abs_node_coord.x) * u_terrain_data.nominal_edge_size,
         f32(abs_node_coord.y) * u_terrain_data.nominal_edge_size,
-        u_terrain_data.water_level,
+        stitched.w,
     );
 
     // Clip uses the actual water surface height
