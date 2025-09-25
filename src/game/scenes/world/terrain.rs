@@ -123,6 +123,9 @@ pub struct Terrain {
     /// Height data for the terrain.
     pub height_map: HeightMap,
 
+    /// Length of each cell's side in world units.
+    pub nominal_edge_size: f32,
+
     /// The total amount of chunks of the terrain.
     total_chunks: u32,
 
@@ -752,6 +755,7 @@ impl Terrain {
 
         Ok(Self {
             height_map,
+            nominal_edge_size: terrain_mapping.nominal_edge_size,
             total_chunks,
 
             terrain_pipeline,

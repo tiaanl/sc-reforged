@@ -136,7 +136,7 @@ impl Plane {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct BoundingBox {
     pub min: Vec3,
     pub max: Vec3,

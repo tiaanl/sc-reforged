@@ -16,6 +16,7 @@ use crate::{
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
         image::images,
+        quad_tree::QuadTree,
         scenes::world::{
             actions::PlayerAction, game_mode::GameMode, overlay_renderer::OverlayRenderer,
         },
@@ -30,7 +31,7 @@ mod object;
 mod objects;
 mod overlay_renderer;
 mod strata;
-mod terrain;
+pub mod terrain;
 
 #[derive(Default)]
 struct DayNightCycle {
@@ -71,6 +72,7 @@ pub struct WorldScene {
 
     terrain: Terrain,
     objects: objects::Objects,
+    quad_tree: QuadTree,
 
     // Render
     shadow_cascades: ShadowCascades,
@@ -252,6 +254,8 @@ impl WorldScene {
             &shadow_cascades,
         )?;
 
+        let quad_tree = QuadTree::from_terrain(&terrain);
+
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;
 
@@ -318,6 +322,7 @@ impl WorldScene {
 
             terrain,
             objects,
+            quad_tree,
 
             shadow_cascades,
             shadow_cascades_lambda: 0.5,
@@ -822,6 +827,10 @@ impl Scene for WorldScene {
                     ]);
                 }
             }
+
+            // self.quad_tree.render_gizmos(&mut self.gizmos_vertices);
+            self.quad_tree
+                .render_gizmos_in_frustum(&main_camera_frustum, &mut self.gizmos_vertices);
 
             self.gizmos_renderer
                 .render(frame, view_camera_bind_group, &self.gizmos_vertices);
