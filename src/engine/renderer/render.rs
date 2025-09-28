@@ -30,6 +30,9 @@ impl BufferLayout for () {
 }
 
 impl Renderer {
+    /// How many frames should be kept in flight before blocking the CPU from submitting work.
+    pub const FRAMES_IN_FLIGHT: usize = 3;
+
     const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
     pub fn new(window: Arc<winit::window::Window>) -> Self {

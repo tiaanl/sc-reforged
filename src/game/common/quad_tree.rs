@@ -26,7 +26,7 @@ struct Node {
     children: [Option<NodeId>; 4],
 
     /// If this is a leaf node, stores the terrain chunk index it wraps.
-    _chunk_index: Option<usize>,
+    chunk_index: Option<u32>,
 
     /// Set to true if this is a leaf node.
     is_leaf: bool,
@@ -91,13 +91,13 @@ impl QuadTree {
         result
     }
 
-    pub fn _chunk_indices_in_frustum(&self, frustum: &Frustum) -> Vec<usize> {
+    pub fn chunk_indices_in_frustum(&self, frustum: &Frustum) -> Vec<u32> {
         let mut out = Vec::new();
-        self._collect_visible_chunks(self.root, frustum, &mut out);
+        self.collect_visible_chunks(self.root, frustum, &mut out);
         out
     }
 
-    fn _collect_visible_chunks(&self, node_id: NodeId, frustum: &Frustum, out: &mut Vec<usize>) {
+    fn collect_visible_chunks(&self, node_id: NodeId, frustum: &Frustum, out: &mut Vec<u32>) {
         let node = &self.nodes[node_id];
 
         let aabb = BoundingBox {
@@ -110,12 +110,12 @@ impl QuadTree {
         }
 
         if node.is_leaf {
-            if let Some(idx) = node._chunk_index {
+            if let Some(idx) = node.chunk_index {
                 out.push(idx);
             }
         } else {
             for child_id in node.children.iter().flatten() {
-                self._collect_visible_chunks(*child_id, frustum, out);
+                self.collect_visible_chunks(*child_id, frustum, out);
             }
         }
     }
@@ -150,8 +150,8 @@ impl QuadTree {
             min_z,
             max_z,
             children: [None, None, None, None],
-            _chunk_index: if is_leaf {
-                Some((chunk_min.y * self.chunks_size.x + chunk_min.x) as usize)
+            chunk_index: if is_leaf {
+                Some(chunk_min.y * self.chunks_size.x + chunk_min.x)
             } else {
                 None
             },
@@ -274,16 +274,11 @@ impl QuadTree {
         frustum: &Frustum,
         gizmo_vertices: &mut Vec<GizmoVertex>,
     ) {
-        let mut total = 0;
         for (_, node) in self.nodes.iter() {
             if !frustum.intersects_bounding_box(&node.bounding_box()) {
                 continue;
             }
-            if node.is_leaf {
-                total += 1;
-            }
             self.render_node(node, gizmo_vertices);
         }
-        println!("total: {total}");
     }
 }

@@ -8,10 +8,16 @@ use crate::{
     engine::{
         gizmos::{GizmoVertex, GizmosRenderer},
         prelude::*,
+        storage::Handle,
     },
     game::{
-        config::CampaignDef, data_dir::data_dir, geometry_buffers::GeometryBuffers,
-        height_map::HeightMap, image::images, math::BoundingSphere, shadows::ShadowCascades,
+        config::CampaignDef,
+        data_dir::data_dir,
+        geometry_buffers::GeometryBuffers,
+        height_map::HeightMap,
+        image::{Image, images},
+        math::BoundingSphere,
+        shadows::ShadowCascades,
     },
     wgsl_shader,
 };
@@ -123,8 +129,29 @@ pub struct Terrain {
     /// Height data for the terrain.
     pub height_map: HeightMap,
 
+    /// Normals for each node in the [HeightMap].
+    pub normals: Vec<Vec3>,
+
     /// Length of each cell's side in world units.
     pub nominal_edge_size: f32,
+
+    /// Elevation of water.
+    pub water_elevation: f32,
+
+    /// Depth at which water alpha in calulated between `water_trans_low` and `water_trans_high`.
+    pub water_trans_depth: f32,
+
+    /// High value for water transparency range.
+    pub water_trans_low: f32,
+
+    /// Low value for water transparency range.
+    pub water_trans_high: f32,
+
+    /// The image to use for the terrain.
+    pub terrain_image: Handle<Image>,
+
+    /// The image to use for the water.
+    pub water_image: Handle<Image>,
 
     /// The total amount of chunks of the terrain.
     total_chunks: u32,
@@ -204,25 +231,36 @@ impl Terrain {
 
         let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
 
-        let water_level =
+        let water_elevation =
             terrain_mapping.water_level as f32 * terrain_mapping.altitude_map_height_base;
+        let water_trans_depth = terrain_mapping.water_trans_depth;
+        let water_trans_low = terrain_mapping.water_trans_low as f32 / u8::MAX as f32;
+        let water_trans_high = terrain_mapping.water_trans_high as f32 / u8::MAX as f32;
 
-        let terrain_texture_view = {
+        let (terrain_image, terrain_texture_view) = {
             let path = PathBuf::from("trnhigh")
                 .join(format!("{}.jpg", terrain_mapping.texture_map_base_name));
             info!("Loading high detail terrain texture: {}", path.display());
 
-            let image = images().load_image_direct(&path)?;
-            renderer.create_texture_view("terrain_texture", &image.data)
+            let handle = images().load_image(&path)?;
+            (
+                handle,
+                renderer
+                    .create_texture_view("terrain_texture", &images().get(handle).unwrap().data),
+            )
         };
 
-        let water_texture_view = {
-            let image = images().load_image_direct(
+        let (water_image, water_texture_view) = {
+            let handle = images().load_image(
                 PathBuf::from("textures")
                     .join("image_processor")
                     .join("water2.bmp"),
             )?;
-            renderer.create_texture_view("water", &image.data)
+
+            (
+                handle,
+                renderer.create_texture_view("water", &images().get(handle).unwrap().data),
+            )
         };
 
         let height_map = {
@@ -330,7 +368,7 @@ impl Terrain {
             size: height_map.size,
             nominal_edge_size: terrain_mapping.nominal_edge_size,
             altitude_map_height_base: terrain_mapping.altitude_map_height_base,
-            water_level,
+            water_level: water_elevation,
 
             water_trans_depth: terrain_mapping.water_trans_depth,
             water_trans_low: terrain_mapping.water_trans_low as f32 / 256.0,
@@ -755,7 +793,19 @@ impl Terrain {
 
         Ok(Self {
             height_map,
+
+            normals,
+
             nominal_edge_size: terrain_mapping.nominal_edge_size,
+
+            water_elevation,
+            water_trans_depth,
+            water_trans_low,
+            water_trans_high,
+
+            terrain_image,
+            water_image,
+
             total_chunks,
 
             terrain_pipeline,

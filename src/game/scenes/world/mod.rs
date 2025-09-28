@@ -32,6 +32,7 @@ mod objects;
 mod overlay_renderer;
 mod strata;
 pub mod terrain;
+mod terrain_renderer;
 
 #[derive(Default)]
 struct DayNightCycle {
@@ -80,6 +81,7 @@ pub struct WorldScene {
     geometry_buffers: GeometryBuffers,
     compositor: Compositor,
     shadow_render_target: RenderTarget,
+    terrain_renderer: terrain_renderer::TerrainRenderer,
 
     sky_renderer: SkyRenderer,
 
@@ -311,6 +313,13 @@ impl WorldScene {
         let fps_history = vec![0.0; 100];
         let fps_history_cursor = 0;
 
+        let terrain_renderer = terrain_renderer::TerrainRenderer::new(
+            &terrain,
+            &main_camera.gpu_camera.bind_group_layout,
+            &environment_bind_group_layout,
+            &shadow_cascades,
+        );
+
         Ok(Self {
             game_mode: GameMode::Editor,
 
@@ -329,6 +338,7 @@ impl WorldScene {
             geometry_buffers,
             shadow_render_target,
             compositor,
+            terrain_renderer,
 
             sky_renderer,
 
@@ -639,6 +649,38 @@ impl Scene for WorldScene {
             self.shadow_cascades.clear_buffers(&mut frame.encoder);
         }
 
+        // Frustum culling.
+
+        let terrain_snapshot = {
+            let camera_pos = self.main_camera.camera.position;
+
+            let visible_indices = self
+                .quad_tree
+                .chunk_indices_in_frustum(&main_camera_frustum);
+
+            let lods: ahash::HashMap<u32, u32> =
+                ahash::HashMap::from_iter(visible_indices.iter().map(|chunk_index| {
+                    //
+                    let center = self.terrain.height_map.chunks[*chunk_index as usize]
+                        .bounding_box
+                        .center();
+                    let distance_to_camera = (camera_pos - center).length();
+
+                    (*chunk_index, 0)
+                }));
+
+            let chunks = visible_indices
+                .iter()
+                .map(|chunk_index| terrain_renderer::ChunkSnapshot {
+                    index: *chunk_index,
+                    lod: 0,
+                    lod_flags: terrain_renderer::LodFlags::empty(),
+                })
+                .collect();
+
+            terrain_renderer::TerrainSnapshot { chunks }
+        };
+
         // --- Shadow pass ---
 
         let _z = tracy_client::span!("render shadow map");
@@ -665,14 +707,22 @@ impl Scene for WorldScene {
 
         if true {
             // Render Opaque geometry first.
-            self.terrain.render(
+            // self.terrain.render(
+            //     frame,
+            //     self.in_editor(),
+            //     &self.geometry_buffers,
+            //     &self.shadow_cascades,
+            //     view_camera_bind_group,
+            //     &self.environment_bind_group,
+            //     &self.main_camera.gpu_camera.bind_group, // Always the main camera.
+            // );
+            self.terrain_renderer.render_terrain(
                 frame,
-                self.in_editor(),
                 &self.geometry_buffers,
-                &self.shadow_cascades,
                 view_camera_bind_group,
                 &self.environment_bind_group,
-                &self.main_camera.gpu_camera.bind_group, // Always the main camera.
+                &self.shadow_cascades,
+                &terrain_snapshot,
             );
 
             self.objects.render_objects(
@@ -685,12 +735,12 @@ impl Scene for WorldScene {
             );
 
             // Now render alpha geoometry.
-            self.terrain.render_water(
-                frame,
-                &self.geometry_buffers,
-                view_camera_bind_group,
-                &self.environment_bind_group,
-            );
+            // self.terrain.render_water(
+            //     frame,
+            //     &self.geometry_buffers,
+            //     view_camera_bind_group,
+            //     &self.environment_bind_group,
+            // );
         }
 
         if self.in_editor() && self.render_overlay {
