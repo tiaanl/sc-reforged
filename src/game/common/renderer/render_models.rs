@@ -82,11 +82,11 @@ impl RenderModels {
         }
     }
 
-    pub fn vertices_buffer_slice(&self) -> wgpu::BufferSlice {
+    pub fn vertices_buffer_slice(&self) -> wgpu::BufferSlice<'_> {
         self.vertices_buffer.buffer_slice()
     }
 
-    pub fn indices_buffer_slice(&self) -> wgpu::BufferSlice {
+    pub fn indices_buffer_slice(&self) -> wgpu::BufferSlice<'_> {
         self.indices_buffer.buffer_slice()
     }
 

@@ -37,7 +37,7 @@ impl<T: NoUninit> GrowingBuffer<T> {
         }
     }
 
-    pub fn buffer_slice(&self) -> wgpu::BufferSlice {
+    pub fn buffer_slice(&self) -> wgpu::BufferSlice<'_> {
         self.buffer.slice(..)
     }
 

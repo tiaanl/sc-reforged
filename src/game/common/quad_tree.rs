@@ -274,16 +274,11 @@ impl QuadTree {
         frustum: &Frustum,
         gizmo_vertices: &mut Vec<GizmoVertex>,
     ) {
-        let mut total = 0;
         for (_, node) in self.nodes.iter() {
             if !frustum.intersects_bounding_box(&node.bounding_box()) {
                 continue;
             }
-            if node.is_leaf {
-                total += 1;
-            }
             self.render_node(node, gizmo_vertices);
         }
-        println!("total: {total}");
     }
 }
