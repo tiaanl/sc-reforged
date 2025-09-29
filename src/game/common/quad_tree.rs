@@ -29,7 +29,7 @@ struct Node {
     _chunk_index: Option<usize>,
 
     /// Set to true if this is a leaf node.
-    is_leaf: bool,
+    _is_leaf: bool,
 
     _level: u32,
 }
@@ -109,7 +109,7 @@ impl QuadTree {
             return;
         }
 
-        if node.is_leaf {
+        if node._is_leaf {
             if let Some(idx) = node._chunk_index {
                 out.push(idx);
             }
@@ -155,7 +155,7 @@ impl QuadTree {
             } else {
                 None
             },
-            is_leaf,
+            _is_leaf: is_leaf,
             _level: level,
         };
 
@@ -258,7 +258,7 @@ impl QuadTree {
     pub fn _render_gizmos(&self, gizmo_vertices: &mut Vec<GizmoVertex>) {
         let node = self.nodes.get(self.root).unwrap();
 
-        if node.is_leaf {
+        if node._is_leaf {
             self.render_node(node, gizmo_vertices);
         }
 

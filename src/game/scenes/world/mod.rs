@@ -9,7 +9,6 @@ use crate::{
         prelude::*,
     },
     game::{
-        animations::track::Track,
         camera::{self, Controller},
         compositor::Compositor,
         config::{CampaignDef, ObjectType},
@@ -18,7 +17,16 @@ use crate::{
         image::images,
         quad_tree::QuadTree,
         scenes::world::{
-            actions::PlayerAction, game_mode::GameMode, overlay_renderer::OverlayRenderer,
+            actions::PlayerAction,
+            game_mode::GameMode,
+            overlay_renderer::OverlayRenderer,
+            render_world::RenderWorld,
+            sim_world::SimWorld,
+            systems::{
+                Time, free_camera_system::FreeCameraSystem, system_extract, system_post_update,
+                system_pre_update, system_prepare, system_update,
+                top_down_camera_system::TopDownCameraSystem,
+            },
         },
         shadows::ShadowCascades,
         sky_renderer::SkyRenderer,
@@ -30,18 +38,11 @@ mod game_mode;
 mod object;
 mod objects;
 mod overlay_renderer;
+mod render_world;
+mod sim_world;
 mod strata;
+mod systems;
 pub mod terrain;
-
-#[derive(Default)]
-struct DayNightCycle {
-    sun_dir: Track<Vec3>,
-    sun_color: Track<Vec3>,
-
-    fog_distance: Track<f32>,
-    fog_near_fraction: Track<f32>,
-    fog_color: Track<Vec3>,
-}
 
 #[derive(Clone, Copy, Default, bytemuck::NoUninit)]
 #[repr(C)]
@@ -62,6 +63,13 @@ struct Camera<C: camera::Controller> {
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
+    sim_world: SimWorld,
+    render_worlds: [RenderWorld; 3],
+
+    // Systems
+    main_camera_system: TopDownCameraSystem,
+    debug_camera_system: FreeCameraSystem,
+
     game_mode: GameMode,
 
     view_debug_camera: bool,
@@ -84,9 +92,6 @@ pub struct WorldScene {
     sky_renderer: SkyRenderer,
 
     overlay_renderer: OverlayRenderer,
-
-    time_of_day: f32,
-    day_night_cycle: DayNightCycle,
 
     environment: GpuEnvironment,
     ambient_color: Vec3,
@@ -162,20 +167,22 @@ impl WorldScene {
 
         let time_of_day = 12.0;
         let day_night_cycle = {
-            let mut e = DayNightCycle::default();
+            use sim_world::DayNightCycle;
+
+            let mut result = DayNightCycle::default();
 
             campaign.time_of_day.iter().enumerate().for_each(|(i, t)| {
                 let index = i as u32;
 
-                e.sun_dir.insert(index, t.sun_dir);
-                e.sun_color.insert(index, t.sun_color);
+                result.sun_dir.insert(index, t.sun_dir);
+                result.sun_color.insert(index, t.sun_color);
 
-                e.fog_distance.insert(index, t.fog_distance);
-                e.fog_near_fraction.insert(index, t.fog_near_fraction);
-                e.fog_color.insert(index, t.fog_color);
+                result.fog_distance.insert(index, t.fog_distance);
+                result.fog_near_fraction.insert(index, t.fog_near_fraction);
+                result.fog_color.insert(index, t.fog_color);
             });
 
-            e
+            result
         };
 
         let environment = GpuEnvironment::default();
@@ -311,7 +318,27 @@ impl WorldScene {
         let fps_history = vec![0.0; 100];
         let fps_history_cursor = 0;
 
+        let sim_world = SimWorld {
+            cameras: [camera::Camera::default(), camera::Camera::default()],
+            time_of_day,
+            day_night_cycle,
+        };
+
+        let render_worlds = [
+            RenderWorld::new(renderer()),
+            RenderWorld::new(renderer()),
+            RenderWorld::new(renderer()),
+        ];
+
+        let main_camera_system = TopDownCameraSystem::new(SimWorld::MAIN_CAMERA_INDEX, 1000.0, 0.2);
+        let debug_camera_system = FreeCameraSystem::new(SimWorld::DEBUG_CAMERA_INDEX, 1000.0, 0.2);
+
         Ok(Self {
+            sim_world,
+            render_worlds,
+            main_camera_system,
+            debug_camera_system,
+
             game_mode: GameMode::Editor,
 
             view_debug_camera: false,
@@ -334,8 +361,6 @@ impl WorldScene {
 
             overlay_renderer,
 
-            time_of_day,
-            day_night_cycle,
             environment,
             ambient_color,
 
@@ -363,26 +388,21 @@ impl WorldScene {
     }
 
     fn calculate_environment(&self, time_of_day: f32) -> GpuEnvironment {
-        let sun_dir = self
-            .day_night_cycle
-            .sun_dir
-            .sample_sub_frame(time_of_day, true);
-        let sun_color = self
-            .day_night_cycle
+        let day_night_cycle = &self.sim_world.day_night_cycle;
+
+        let sun_dir = day_night_cycle.sun_dir.sample_sub_frame(time_of_day, true);
+        let sun_color = day_night_cycle
             .sun_color
             .sample_sub_frame(time_of_day, true);
 
-        let fog_far = self
-            .day_night_cycle
+        let fog_far = day_night_cycle
             .fog_distance
             .sample_sub_frame(time_of_day, true);
         let fog_near = fog_far
-            * self
-                .day_night_cycle
+            * day_night_cycle
                 .fog_near_fraction
                 .sample_sub_frame(time_of_day, true);
-        let fog_color = self
-            .day_night_cycle
+        let fog_color = day_night_cycle
             .fog_color
             .sample_sub_frame(time_of_day, true);
 
@@ -419,6 +439,32 @@ impl Scene for WorldScene {
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
+        // Run systems
+        {
+            let time = Time { delta_time };
+
+            // PreUpdate
+            system_pre_update(
+                &mut self.main_camera_system,
+                &mut self.sim_world,
+                &time,
+                input,
+            );
+            system_pre_update(
+                &mut self.debug_camera_system,
+                &mut self.sim_world,
+                &time,
+                input,
+            );
+
+            // Update
+            system_update(&mut self.main_camera_system, &mut self.sim_world, &time);
+
+            // PostUpdate
+            system_post_update(&mut self.main_camera_system, &mut self.sim_world);
+            system_post_update(&mut self.debug_camera_system, &mut self.sim_world);
+        }
+
         self.pos_and_normal = self.geometry_data.as_ref().map(|data| {
             let world_xy = data.position.truncate();
             self.terrain.height_map.world_position_and_normal(world_xy)
@@ -458,7 +504,7 @@ impl Scene for WorldScene {
 
         // Advance time of day.
         // self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
-        self.environment = self.calculate_environment(self.time_of_day);
+        self.environment = self.calculate_environment(self.sim_world.time_of_day);
 
         // Set the camera far plane to max distance of the fog.
         self.main_camera.camera.far = self.environment.fog_params[1];
@@ -479,6 +525,20 @@ impl Scene for WorldScene {
     }
 
     fn render(&mut self, frame: &mut Frame) {
+        let render_world = &mut self.render_worlds[0];
+
+        {
+            // Extract
+            system_extract(&mut self.main_camera_system, &self.sim_world, render_world);
+            system_extract(&mut self.debug_camera_system, &self.sim_world, render_world);
+
+            // Prepare
+            system_prepare(&mut self.main_camera_system, render_world, renderer());
+            system_prepare(&mut self.debug_camera_system, render_world, renderer());
+
+            // Queue
+        }
+
         let main_view_projection = {
             let camera = &self.main_camera.camera;
 
@@ -868,7 +928,10 @@ impl Scene for WorldScene {
                 ui.heading("Environment");
                 ui.horizontal(|ui| {
                     ui.label("Time of day");
-                    ui.add(Slider::new(&mut self.time_of_day, 0.0..=24.0).drag_value_speed(0.01));
+                    ui.add(
+                        Slider::new(&mut self.sim_world.time_of_day, 0.0..=24.0)
+                            .drag_value_speed(0.01),
+                    );
                 });
 
                 ui.add(Slider::new(&mut self.shadow_cascades_lambda, 0.0..=1.0));
