@@ -54,6 +54,7 @@ impl ViewProjection {
     }
 }
 
+#[derive(Default)]
 pub struct Frustum {
     pub planes: [Plane; 6],
 }
@@ -105,7 +106,7 @@ impl Ray {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Plane {
     pub normal: Vec3,
     pub distance: f32,

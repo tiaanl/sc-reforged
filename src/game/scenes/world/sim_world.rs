@@ -1,6 +1,10 @@
 use glam::Vec3;
 
-use crate::game::{animations::track::Track, camera::Camera};
+use crate::game::{
+    animations::track::Track,
+    camera::Camera,
+    math::{Frustum, ViewProjection},
+};
 
 /// Holds data for the sun and fog values throughout the day and night.
 #[derive(Default)]
@@ -13,9 +17,18 @@ pub struct DayNightCycle {
     pub fog_color: Track<Vec3>,
 }
 
+#[derive(Default)]
+pub struct ComputedCamera {
+    pub view_proj: ViewProjection,
+    pub frustum: Frustum,
+    pub position: Vec3,
+    pub forward: Vec3,
+}
+
 /// Holds all the data for the world we are simulating.
 pub struct SimWorld {
     pub cameras: [Camera; Self::CAMERA_COUNT],
+    pub computed_cameras: [ComputedCamera; Self::CAMERA_COUNT],
 
     pub time_of_day: f32,
     pub day_night_cycle: DayNightCycle,

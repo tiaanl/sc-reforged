@@ -21,10 +21,12 @@ use crate::{
             game_mode::GameMode,
             overlay_renderer::OverlayRenderer,
             render_world::RenderWorld,
-            sim_world::SimWorld,
+            sim_world::{ComputedCamera, SimWorld},
             systems::{
-                System, Time, day_night_cycle_system::DayNightCycleSystem,
-                free_camera_system::FreeCameraSystem, top_down_camera_system::TopDownCameraSystem,
+                System, Time, camera_system::CameraSystem,
+                day_night_cycle_system::DayNightCycleSystem,
+                free_camera_controller::FreeCameraController,
+                top_down_camera_controller::TopDownCameraController,
             },
         },
         shadows::ShadowCascades,
@@ -319,6 +321,7 @@ impl WorldScene {
 
         let sim_world = SimWorld {
             cameras: [camera::Camera::default(), camera::Camera::default()],
+            computed_cameras: [ComputedCamera::default(), ComputedCamera::default()],
             time_of_day,
             day_night_cycle,
         };
@@ -330,15 +333,13 @@ impl WorldScene {
         ];
 
         let systems: Vec<Box<dyn System>> = vec![
-            Box::new(TopDownCameraSystem::new(
+            Box::new(CameraSystem::new(
                 SimWorld::MAIN_CAMERA_INDEX,
-                1000.0,
-                0.2,
+                TopDownCameraController::new(1000.0, 0.2),
             )),
-            Box::new(FreeCameraSystem::new(
+            Box::new(CameraSystem::new(
                 SimWorld::DEBUG_CAMERA_INDEX,
-                1000.0,
-                0.2,
+                FreeCameraController::new(1000.0, 0.2),
             )),
             Box::new(DayNightCycleSystem),
         ];
