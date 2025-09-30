@@ -23,9 +23,8 @@ use crate::{
             render_world::RenderWorld,
             sim_world::SimWorld,
             systems::{
-                Time, free_camera_system::FreeCameraSystem, system_extract, system_post_update,
-                system_pre_update, system_prepare, system_update,
-                top_down_camera_system::TopDownCameraSystem,
+                System, Time, day_night_cycle_system::DayNightCycleSystem,
+                free_camera_system::FreeCameraSystem, top_down_camera_system::TopDownCameraSystem,
             },
         },
         shadows::ShadowCascades,
@@ -67,8 +66,7 @@ pub struct WorldScene {
     render_worlds: [RenderWorld; Self::RENDER_FRAME_COUNT],
 
     // Systems
-    main_camera_system: TopDownCameraSystem,
-    debug_camera_system: FreeCameraSystem,
+    systems: Vec<Box<dyn System>>,
 
     game_mode: GameMode,
 
@@ -331,14 +329,24 @@ impl WorldScene {
             RenderWorld::new(renderer()),
         ];
 
-        let main_camera_system = TopDownCameraSystem::new(SimWorld::MAIN_CAMERA_INDEX, 1000.0, 0.2);
-        let debug_camera_system = FreeCameraSystem::new(SimWorld::DEBUG_CAMERA_INDEX, 1000.0, 0.2);
+        let systems: Vec<Box<dyn System>> = vec![
+            Box::new(TopDownCameraSystem::new(
+                SimWorld::MAIN_CAMERA_INDEX,
+                1000.0,
+                0.2,
+            )),
+            Box::new(FreeCameraSystem::new(
+                SimWorld::DEBUG_CAMERA_INDEX,
+                1000.0,
+                0.2,
+            )),
+            Box::new(DayNightCycleSystem),
+        ];
 
         Ok(Self {
             sim_world,
             render_worlds,
-            main_camera_system,
-            debug_camera_system,
+            systems,
 
             game_mode: GameMode::Editor,
 
@@ -445,25 +453,19 @@ impl Scene for WorldScene {
             let time = Time { delta_time };
 
             // PreUpdate
-            system_pre_update(
-                &mut self.main_camera_system,
-                &mut self.sim_world,
-                &time,
-                input,
-            );
-            system_pre_update(
-                &mut self.debug_camera_system,
-                &mut self.sim_world,
-                &time,
-                input,
-            );
+            for system in self.systems.iter_mut() {
+                system.pre_update(&mut self.sim_world, &time, input);
+            }
 
             // Update
-            system_update(&mut self.main_camera_system, &mut self.sim_world, &time);
+            for system in self.systems.iter_mut() {
+                system.update(&mut self.sim_world, &time);
+            }
 
             // PostUpdate
-            system_post_update(&mut self.main_camera_system, &mut self.sim_world);
-            system_post_update(&mut self.debug_camera_system, &mut self.sim_world);
+            for system in self.systems.iter_mut() {
+                system.post_update(&mut self.sim_world);
+            }
         }
 
         self.pos_and_normal = self.geometry_data.as_ref().map(|data| {
@@ -530,14 +532,19 @@ impl Scene for WorldScene {
 
         {
             // Extract
-            system_extract(&mut self.main_camera_system, &self.sim_world, render_world);
-            system_extract(&mut self.debug_camera_system, &self.sim_world, render_world);
+            for system in self.systems.iter_mut() {
+                system.extract(&self.sim_world, render_world);
+            }
 
             // Prepare
-            system_prepare(&mut self.main_camera_system, render_world, renderer());
-            system_prepare(&mut self.debug_camera_system, render_world, renderer());
+            for system in self.systems.iter_mut() {
+                system.prepare(render_world, renderer());
+            }
 
             // Queue
+            for system in self.systems.iter_mut() {
+                system.queue(render_world, frame);
+            }
         }
 
         let main_view_projection = {

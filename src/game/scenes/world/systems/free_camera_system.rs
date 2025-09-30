@@ -8,12 +8,10 @@ use crate::{
         scenes::world::{
             render_world::RenderWorld,
             sim_world::SimWorld,
-            systems::{Extract, PostUpdate, Prepare},
+            systems::{System, Time},
         },
     },
 };
-
-use super::{PreUpdate, Time};
 
 pub struct FreeCameraControls {
     mouse_button: MouseButton,
@@ -88,7 +86,7 @@ impl FreeCameraSystem {
     }
 }
 
-impl PreUpdate for FreeCameraSystem {
+impl System for FreeCameraSystem {
     fn pre_update(&mut self, _sim_world: &mut SimWorld, time: &Time, input_state: &InputState) {
         let delta = if input_state.key_pressed(KeyCode::ShiftLeft)
             || input_state.key_pressed(KeyCode::ShiftRight)
@@ -127,18 +125,14 @@ impl PreUpdate for FreeCameraSystem {
             }
         }
     }
-}
 
-impl PostUpdate for FreeCameraSystem {
     fn post_update(&mut self, sim_world: &mut SimWorld) {
         let camera = &mut sim_world.cameras[self.camera_index];
 
         camera.position = self.position;
         camera.rotation = self.rotation();
     }
-}
 
-impl Extract for FreeCameraSystem {
     fn extract(&mut self, sim_world: &SimWorld, render_world: &mut RenderWorld) {
         let source = &sim_world.cameras[self.camera_index];
 
@@ -157,9 +151,7 @@ impl Extract for FreeCameraSystem {
         target.position = source.position.extend(1.0).to_array();
         target.forward = forward.extend(0.0).to_array();
     }
-}
 
-impl Prepare for FreeCameraSystem {
     fn prepare(
         &mut self,
         render_world: &mut RenderWorld,

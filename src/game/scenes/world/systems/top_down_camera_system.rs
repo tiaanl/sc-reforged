@@ -4,10 +4,7 @@ use winit::{event::MouseButton, keyboard::KeyCode};
 use crate::game::{
     animations::Interpolate,
     camera::Camera,
-    scenes::world::{
-        sim_world::SimWorld,
-        systems::{Extract, PostUpdate, PreUpdate, Prepare, Update},
-    },
+    scenes::world::{sim_world::SimWorld, systems::System},
 };
 
 pub struct TopDownCameraControls {
@@ -108,7 +105,7 @@ impl TopDownCameraSystem {
     }
 }
 
-impl PreUpdate for TopDownCameraSystem {
+impl System for TopDownCameraSystem {
     fn pre_update(
         &mut self,
         _sim_world: &mut SimWorld,
@@ -164,25 +161,19 @@ impl PreUpdate for TopDownCameraSystem {
             self.desired.position.z += input_state.wheel_delta() * move_delta * 3.0;
         }
     }
-}
 
-impl Update for TopDownCameraSystem {
     fn update(&mut self, _sim_world: &mut SimWorld, time: &super::Time) {
         // Interpolate the desired closer to the target.
         self.current = Interpolate::interpolate(self.current, self.desired, 0.1 * time.delta_time);
     }
-}
 
-impl PostUpdate for TopDownCameraSystem {
     fn post_update(&mut self, sim_world: &mut SimWorld) {
         let camera = &mut sim_world.cameras[self.camera_index];
 
         camera.position = self.current.position;
         camera.rotation = self.current.rotation();
     }
-}
 
-impl Extract for TopDownCameraSystem {
     fn extract(
         &mut self,
         sim_world: &SimWorld,
@@ -206,9 +197,7 @@ impl Extract for TopDownCameraSystem {
         target.position = source.position.extend(1.0).to_array();
         target.forward = forward.extend(0.0).to_array();
     }
-}
 
-impl Prepare for TopDownCameraSystem {
     fn prepare(
         &mut self,
         render_world: &mut crate::game::scenes::world::render_world::RenderWorld,
