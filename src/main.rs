@@ -46,6 +46,8 @@ enum App {
         input: InputState,
         /// The last position the mouse was on the window client area.
         last_mouse_position: Option<UVec2>,
+        /// The index of the current frame being rendered.
+        frame_index: usize,
         /// The instant that the last frame started to render.
         last_frame_time: Instant,
         /// The scene we are currently rendering to the screen.
@@ -140,6 +142,7 @@ impl winit::application::ApplicationHandler for App {
                     egui_integration,
                     input: InputState::default(),
                     last_mouse_position: None,
+                    frame_index: 0,
                     last_frame_time: Instant::now(),
                     scene,
                 };
@@ -168,6 +171,7 @@ impl winit::application::ApplicationHandler for App {
                 egui_integration,
                 input,
                 last_mouse_position,
+                frame_index,
                 last_frame_time,
                 scene,
                 ..
@@ -228,7 +232,11 @@ impl winit::application::ApplicationHandler for App {
                                 },
                             );
 
-                            let mut frame = Frame { encoder, surface };
+                            let mut frame = Frame {
+                                encoder,
+                                surface,
+                                frame_index: *frame_index,
+                            };
 
                             {
                                 scene.render(&mut frame);
@@ -289,6 +297,8 @@ impl winit::application::ApplicationHandler for App {
 
                             // Frame is done rendering.
                             tracy_client::frame_mark();
+
+                            *frame_index += 1;
 
                             window.request_redraw();
                         }

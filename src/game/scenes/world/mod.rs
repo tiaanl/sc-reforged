@@ -64,7 +64,7 @@ struct Camera<C: camera::Controller> {
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
     sim_world: SimWorld,
-    render_worlds: [RenderWorld; 3],
+    render_worlds: [RenderWorld; Self::RENDER_FRAME_COUNT],
 
     // Systems
     main_camera_system: TopDownCameraSystem,
@@ -115,6 +115,7 @@ pub struct WorldScene {
 }
 
 impl WorldScene {
+    const RENDER_FRAME_COUNT: usize = 3;
     const SHADOW_MAP_RESOLUTION: u32 = 2048;
 
     pub fn new(campaign_def: CampaignDef) -> Result<Self, AssetError> {
@@ -525,7 +526,7 @@ impl Scene for WorldScene {
     }
 
     fn render(&mut self, frame: &mut Frame) {
-        let render_world = &mut self.render_worlds[0];
+        let render_world = &mut self.render_worlds[frame.frame_index % Self::RENDER_FRAME_COUNT];
 
         {
             // Extract

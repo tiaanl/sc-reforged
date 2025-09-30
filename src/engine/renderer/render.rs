@@ -206,4 +206,7 @@ pub struct Frame {
 
     /// The window surface.
     pub surface: wgpu::TextureView,
+
+    /// The index of the frame being rendered.
+    pub frame_index: usize,
 }
