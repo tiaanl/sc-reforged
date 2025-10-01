@@ -1,4 +1,4 @@
-use glam::{Quat, Vec3};
+use glam::Vec3;
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 use crate::{
@@ -47,13 +47,13 @@ struct CameraData {
     pub pitch: f32,
 }
 
-impl CameraData {
-    #[inline]
-    fn rotation(&self) -> Quat {
-        Quat::from_rotation_z(self.yaw.to_radians())
-            * Quat::from_rotation_x(self.pitch.to_radians())
-    }
-}
+// impl CameraData {
+//     #[inline]
+//     fn rotation(&self) -> Quat {
+//         Quat::from_rotation_z(self.yaw.to_radians())
+//             * Quat::from_rotation_x(self.pitch.to_radians())
+//     }
+// }
 
 impl Interpolate for CameraData {
     fn interpolate(left: Self, right: Self, n: f32) -> Self {
@@ -65,7 +65,15 @@ impl Interpolate for CameraData {
     }
 }
 
+#[derive(Default)]
+struct Input {
+    /// Direction the player wants to move the camera, relative to the current forward direction.
+    move_direction: Vec3,
+}
+
 pub struct TopDownCameraController {
+    /// The input the player added this frame.
+    input: Input,
     /// The speed at which movements will be calculated.
     movement_speed: f32,
     /// The speed at which rotations will be calculated.
@@ -81,6 +89,7 @@ pub struct TopDownCameraController {
 impl TopDownCameraController {
     pub fn new(movement_speed: f32, rotation_speed: f32) -> Self {
         Self {
+            input: Input::default(),
             movement_speed,
             rotation_speed,
             desired: Default::default(),
@@ -89,23 +98,51 @@ impl TopDownCameraController {
         }
     }
 
-    pub fn move_forward(&mut self, distance: f32) {
-        self.desired.position +=
-            Quat::from_rotation_z(self.current.yaw.to_radians()) * Camera::FORWARD * distance;
-    }
+    // pub fn move_forward(&mut self, distance: f32) {
+    //     self.desired.position +=
+    //         Quat::from_rotation_z(self.current.yaw.to_radians()) * Camera::FORWARD * distance;
+    // }
 
-    pub fn move_right(&mut self, distance: f32) {
-        self.desired.position +=
-            Quat::from_rotation_z(self.current.yaw.to_radians()) * Camera::RIGHT * distance;
-    }
+    // pub fn move_right(&mut self, distance: f32) {
+    //     self.desired.position +=
+    //         Quat::from_rotation_z(self.current.yaw.to_radians()) * Camera::RIGHT * distance;
+    // }
 
-    pub fn move_up(&mut self, distance: f32) {
-        self.desired.position += Camera::UP * distance;
-    }
+    // pub fn move_up(&mut self, distance: f32) {
+    //     self.desired.position += Camera::UP * distance;
+    // }
 }
 
 impl CameraController for TopDownCameraController {
-    fn handle_input(&mut self, _camera: &mut Camera, input_state: &InputState, delta_time: f32) {
+    fn handle_input(&mut self, input_state: &InputState) {
+        self.input.move_direction = {
+            let mut move_direction = Vec3::ZERO;
+
+            if input_state.key_pressed(self.controls.forward) {
+                move_direction += Camera::FORWARD;
+            }
+            if input_state.key_pressed(self.controls.backward) {
+                move_direction -= Camera::FORWARD;
+            }
+
+            if input_state.key_pressed(self.controls.right) {
+                move_direction += Camera::RIGHT;
+            }
+            if input_state.key_pressed(self.controls.left) {
+                move_direction -= Camera::RIGHT;
+            }
+
+            if input_state.key_pressed(self.controls.up) {
+                move_direction += Camera::UP;
+            }
+            if input_state.key_pressed(self.controls.down) {
+                move_direction -= Camera::UP;
+            }
+
+            move_direction
+        };
+
+        /*
         let move_delta = if input_state.key_pressed(KeyCode::ShiftLeft)
             || input_state.key_pressed(KeyCode::ShiftRight)
         {
@@ -154,9 +191,14 @@ impl CameraController for TopDownCameraController {
         if input_state.wheel_delta() != 0.0 {
             self.desired.position.z += input_state.wheel_delta() * move_delta * 3.0;
         }
+        */
     }
 
-    fn update(&mut self, _camera: &mut Camera, delta_time: f32) {
+    fn update(&mut self, camera: &mut Camera, delta_time: f32) {
+        self.desired.position += self.input.move_direction * self.movement_speed * delta_time;
+
         self.current = Interpolate::interpolate(self.current, self.desired, 0.1 * delta_time);
+
+        camera.position = self.current.position;
     }
 }

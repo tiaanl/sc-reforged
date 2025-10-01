@@ -18,7 +18,7 @@ pub struct Time {
 #[allow(unused_variables)]
 pub trait System {
     /// Stage: Gather signals & schedule work for this frame.
-    fn pre_update(&mut self, sim_world: &mut SimWorld, time: &Time, input_state: &InputState) {}
+    fn pre_update(&mut self, sim_world: &SimWorld, input_state: &InputState) {}
 
     /// Stage: Authoritative game state changes.
     fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {}

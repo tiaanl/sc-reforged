@@ -14,8 +14,11 @@ use crate::{
 
 #[allow(unused_variables)]
 pub trait CameraController {
-    fn handle_input(&mut self, camera: &mut Camera, input_state: &InputState, delta_time: f32) {}
-    fn update(&mut self, _camera: &mut Camera, delta_time: f32) {}
+    /// Gather input intent by the user.
+    fn handle_input(&mut self, input_state: &InputState) {}
+
+    /// Update the target camera with the gathered user intent.
+    fn update(&mut self, camera: &mut Camera, delta_time: f32) {}
 }
 
 pub struct CameraSystem<C>
@@ -50,10 +53,8 @@ impl<C> System for CameraSystem<C>
 where
     C: CameraController,
 {
-    fn pre_update(&mut self, sim_world: &mut SimWorld, time: &Time, input_state: &InputState) {
-        let camera = &mut sim_world.cameras[self.camera_index];
-        self.controller
-            .handle_input(camera, input_state, time.delta_time);
+    fn pre_update(&mut self, _sim_world: &SimWorld, input_state: &InputState) {
+        self.controller.handle_input(input_state);
     }
 
     fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
@@ -64,7 +65,7 @@ where
         let view_proj = source.calculate_view_projection();
         let frustum = view_proj.frustum();
         let position = source.position;
-        let forward = view_proj.mat.project_point3(Camera::FORWARD).normalize();
+        let forward = (source.rotation * Camera::FORWARD).normalize();
 
         sim_world.computed_cameras[self.camera_index] = ComputedCamera {
             view_proj,

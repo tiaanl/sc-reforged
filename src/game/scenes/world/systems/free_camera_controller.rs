@@ -1,4 +1,4 @@
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec2, Vec3};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 use crate::{
@@ -8,29 +8,48 @@ use crate::{
 
 pub struct FreeCameraControls {
     mouse_button: MouseButton,
+
     forward: KeyCode,
     back: KeyCode,
     right: KeyCode,
     left: KeyCode,
     up: KeyCode,
     down: KeyCode,
+
+    accelerate: KeyCode,
 }
 
 impl Default for FreeCameraControls {
     fn default() -> Self {
         Self {
             mouse_button: MouseButton::Right,
+
             forward: KeyCode::KeyW,
             back: KeyCode::KeyS,
             right: KeyCode::KeyD,
             left: KeyCode::KeyA,
             up: KeyCode::KeyE,
             down: KeyCode::KeyQ,
+
+            accelerate: KeyCode::ShiftLeft,
         }
     }
 }
 
+/// Input state that can be changed by the user.
+#[derive(Default)]
+struct Input {
+    /// Directional input made by the user.
+    direction: Vec3,
+    /// Whether the movement accelerator is held down.
+    accelerator: bool,
+    /// Amount of mouse delta input.
+    mouse_delta: Vec2,
+}
+
 pub struct FreeCameraController {
+    /// User input this frame.
+    input: Input,
     /// Current yaw angle of the camera in *degrees*.
     pub yaw: f32,
     /// Current pitch angle of the camera in *degrees*.
@@ -46,6 +65,7 @@ pub struct FreeCameraController {
 impl FreeCameraController {
     pub fn new(movement_speed: f32, mouse_sensitivity: f32) -> Self {
         Self {
+            input: Input::default(),
             yaw: 0.0,
             pitch: 0.0,
             movement_speed,
@@ -53,63 +73,62 @@ impl FreeCameraController {
             controls: FreeCameraControls::default(),
         }
     }
-
-    #[inline]
-    fn rotation(&self) -> Quat {
-        Quat::from_rotation_z(self.yaw.to_radians())
-            * Quat::from_rotation_x(self.pitch.to_radians())
-    }
-
-    pub fn move_forward(&mut self, position: &mut Vec3, distance: f32) {
-        *position += self.rotation() * Camera::FORWARD * distance;
-    }
-
-    pub fn move_right(&mut self, position: &mut Vec3, distance: f32) {
-        *position += self.rotation() * Camera::RIGHT * distance;
-    }
-
-    pub fn move_up(&mut self, position: &mut Vec3, distance: f32) {
-        *position += self.rotation() * Camera::UP * distance;
-    }
 }
 
 impl CameraController for FreeCameraController {
-    fn handle_input(&mut self, camera: &mut Camera, input_state: &InputState, delta_time: f32) {
-        let delta = if input_state.key_pressed(KeyCode::ShiftLeft)
-            || input_state.key_pressed(KeyCode::ShiftRight)
-        {
-            self.movement_speed * 2.0
-        } else {
-            self.movement_speed
-        } * delta_time;
+    fn handle_input(&mut self, input_state: &InputState) {
+        let mut input = Input::default();
 
-        if input_state.key_pressed(self.controls.forward) {
-            self.move_forward(&mut camera.position, delta);
-        }
-        if input_state.key_pressed(self.controls.back) {
-            self.move_forward(&mut camera.position, -delta);
-        }
-        if input_state.key_pressed(self.controls.right) {
-            self.move_right(&mut camera.position, delta);
-        }
-        if input_state.key_pressed(self.controls.left) {
-            self.move_right(&mut camera.position, -delta);
-        }
-        if input_state.key_pressed(self.controls.up) {
-            self.move_up(&mut camera.position, delta);
-        }
-        if input_state.key_pressed(self.controls.down) {
-            self.move_up(&mut camera.position, -delta);
-        }
+        input.direction = {
+            let mut direction = Vec3::ZERO;
+
+            if input_state.key_pressed(self.controls.forward) {
+                direction += Camera::FORWARD;
+            }
+            if input_state.key_pressed(self.controls.back) {
+                direction -= Camera::FORWARD
+            }
+
+            if input_state.key_pressed(self.controls.right) {
+                direction += Camera::RIGHT;
+            }
+            if input_state.key_pressed(self.controls.left) {
+                direction -= Camera::RIGHT;
+            }
+
+            if input_state.key_pressed(self.controls.up) {
+                direction += Camera::UP;
+            }
+            if input_state.key_pressed(self.controls.down) {
+                direction -= Camera::UP;
+            }
+
+            direction
+        };
+
+        input.accelerator = input_state.key_pressed(self.controls.accelerate);
 
         if input_state.mouse_pressed(self.controls.mouse_button) {
             if let Some(delta) = input_state.mouse_delta() {
-                let delta = delta * self.mouse_sensitivity;
-                if delta.x != 0.0 || delta.y != 0.0 {
-                    self.yaw += delta.x;
-                    self.pitch -= delta.y;
-                }
+                input.mouse_delta = delta;
             }
         }
+
+        self.input = input;
+    }
+
+    fn update(&mut self, camera: &mut Camera, delta_time: f32) {
+        // Set the new rotation.
+        self.yaw += self.input.mouse_delta.x * self.mouse_sensitivity;
+        self.pitch -= self.input.mouse_delta.y * self.mouse_sensitivity;
+
+        let rotation = Quat::from_rotation_z(self.yaw.to_radians())
+            * Quat::from_rotation_x(self.pitch.to_radians());
+
+        // Translate the direction to the new forward direction.
+        let position = rotation * self.input.direction;
+
+        camera.rotation = rotation;
+        camera.position += position * delta_time;
     }
 }

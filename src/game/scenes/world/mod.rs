@@ -455,7 +455,7 @@ impl Scene for WorldScene {
 
             // PreUpdate
             for system in self.systems.iter_mut() {
-                system.pre_update(&mut self.sim_world, &time, input);
+                system.pre_update(&self.sim_world, input);
             }
 
             // Update
