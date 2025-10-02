@@ -39,3 +39,16 @@ impl SimWorld {
     pub const MAIN_CAMERA_INDEX: usize = 0;
     pub const DEBUG_CAMERA_INDEX: usize = 1;
 }
+
+/*
+angola            320 x 320   40 x 40
+angola_2          288 x 288   36 x 36
+angola_tutorial   160 x 160   20 x 20
+caribbean         288 x 288   36 x 36
+ecuador           288 x 288   36 x 36
+kola              320 x 320   40 x 40
+kola_2            320 x 320   40 x 40
+peru              168 x 256   21 x 32
+romania           256 x 256   32 x 32
+training          64 x 64     8 x 8
+*/
