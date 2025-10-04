@@ -23,13 +23,13 @@ impl NewHeightMap {
     }
 
     #[inline]
-    fn node_at(&self, coord: UVec2) -> Vec4 {
+    pub fn node_at(&self, coord: UVec2) -> Vec4 {
         let coord = coord.clamp(UVec2::ZERO, self.size - UVec2::ONE);
         self.nodes[coord.y as usize * self.size.x as usize + coord.x as usize]
     }
 
     #[inline]
-    fn world_position_at(&self, coord: UVec2) -> Vec3 {
+    pub fn world_position_at(&self, coord: UVec2) -> Vec3 {
         let altitude = self.node_at(coord).w;
 
         Vec3::new(

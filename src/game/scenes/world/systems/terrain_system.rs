@@ -260,17 +260,6 @@ impl TerrainSystem {
 }
 
 impl System for TerrainSystem {
-    fn pre_update(&mut self, context: &mut PreUpdateContext) {
-        // Figure out which chunks should be rendered.
-        let mut chunks = vec![];
-        for y in 0..self.chunks_dim.y {
-            for x in 0..self.chunks_dim.x {
-                chunks.push(uvec2(x, y));
-            }
-        }
-        std::mem::swap(&mut context.sim_world.visible_chunks, &mut chunks);
-    }
-
     fn extract(&mut self, context: &mut ExtractContext) {
         context.render_world.terrain_chunk_instances = context
             .sim_world

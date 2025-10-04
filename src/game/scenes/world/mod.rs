@@ -15,19 +15,20 @@ use crate::{
         data_dir::data_dir,
         geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
         image::images,
-        quad_tree::QuadTree,
         scenes::world::{
             actions::PlayerAction,
             game_mode::GameMode,
             new_terrain::NewTerrain,
             overlay_renderer::OverlayRenderer,
+            quad_tree::QuadTree,
             render_world::RenderWorld,
             sim_world::{ComputedCamera, SimWorld},
             systems::{
                 ExtractContext, NewSystemContext, PostUpdateContext, PreUpdateContext,
                 PrepareContext, QueueContext, RenderStore, System, Time, UpdateContext,
-                camera_system::CameraSystem, day_night_cycle_system::DayNightCycleSystem,
-                terrain_system::TerrainSystem, top_down_camera_controller::TopDownCameraController,
+                camera_system::CameraSystem, cull_system::CullSystem,
+                day_night_cycle_system::DayNightCycleSystem, terrain_system::TerrainSystem,
+                top_down_camera_controller::TopDownCameraController,
             },
         },
         shadows::ShadowCascades,
@@ -42,6 +43,7 @@ mod new_terrain;
 mod object;
 mod objects;
 mod overlay_renderer;
+mod quad_tree;
 mod render_world;
 mod sim_world;
 mod strata;
@@ -266,7 +268,7 @@ impl WorldScene {
             &shadow_cascades,
         )?;
 
-        let quad_tree = QuadTree::from_terrain(&terrain);
+        let quad_tree = QuadTree::default();
 
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;
@@ -323,21 +325,11 @@ impl WorldScene {
         let fps_history = vec![0.0; 100];
         let fps_history_cursor = 0;
 
-        let sim_world = SimWorld {
-            camera: camera::Camera::new(
-                Vec3::ZERO,
-                Quat::IDENTITY,
-                45.0_f32.to_radians(),
-                1.0,
-                10.0,
-                13_300.0,
-            ),
-            computed_camera: ComputedCamera::default(),
-            time_of_day,
-            day_night_cycle,
-            terrain: {
-                let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
-                let height_map = {
+        let sim_world = {
+            let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
+
+            let height_map = {
+                {
                     let path =
                         PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
                     tracing::info!("Loading terrain height map: {}", path.display());
@@ -346,14 +338,36 @@ impl WorldScene {
                         terrain_mapping.altitude_map_height_base,
                         terrain_mapping.nominal_edge_size,
                     )?
-                };
+                }
+            };
 
+            let terrain = {
                 let terrain_texture =
                     data_dir().load_terrain_texture(&terrain_mapping.texture_map_base_name)?;
 
                 NewTerrain::new(height_map, terrain_texture)
-            },
-            visible_chunks: Vec::default(),
+            };
+
+            let quad_tree = QuadTree::from_new_terrain(&terrain);
+
+            SimWorld {
+                camera: camera::Camera::new(
+                    Vec3::ZERO,
+                    Quat::IDENTITY,
+                    45.0_f32.to_radians(),
+                    1.0,
+                    10.0,
+                    13_300.0,
+                ),
+                computed_camera: ComputedCamera::default(),
+                time_of_day,
+                day_night_cycle,
+
+                quad_tree,
+
+                terrain,
+                visible_chunks: Vec::default(),
+            }
         };
 
         let mut render_store = RenderStore::default();
@@ -390,6 +404,7 @@ impl WorldScene {
                     100.0,
                 )
             })),
+            Box::new(CullSystem),
             Box::new(TerrainSystem::new(&mut context)),
         ];
 

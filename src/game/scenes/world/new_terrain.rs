@@ -1,10 +1,18 @@
+use glam::{UVec2, uvec2};
+
 use crate::{
     engine::storage::Handle,
-    game::{image::Image, scenes::world::new_height_map::NewHeightMap},
+    game::{image::Image, math::BoundingBox, scenes::world::new_height_map::NewHeightMap},
 };
+
+pub struct Chunk {
+    pub bounding_box: BoundingBox,
+}
 
 pub struct NewTerrain {
     pub height_map: NewHeightMap,
+    pub chunk_dim: UVec2,
+    pub chunks: Vec<Chunk>,
     pub terrain_texture: Handle<Image>,
     // pub water_image: Option<Handle<Image>>,
 }
@@ -18,9 +26,51 @@ impl NewTerrain {
     pub const NODES_PER_CHUNK: u32 = Self::CELLS_PER_CHUNK + 1;
 
     pub fn new(height_map: NewHeightMap, terrain_texture: Handle<Image>) -> Self {
+        let chunk_dim = uvec2(
+            height_map.size.x.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
+            height_map.size.y.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
+        );
+
+        let chunks = Self::build_chunks(&height_map, chunk_dim);
+
         Self {
             height_map,
+            chunk_dim,
+            chunks,
             terrain_texture,
         }
+    }
+
+    pub fn chunk_at(&self, coord: UVec2) -> Option<&Chunk> {
+        self.chunks
+            .get(coord.y as usize * self.chunk_dim.x as usize + coord.x as usize)
+    }
+
+    fn build_chunks(height_map: &NewHeightMap, chunk_dim: UVec2) -> Vec<Chunk> {
+        let mut chunks = Vec::with_capacity(chunk_dim.x as usize * chunk_dim.y as usize);
+
+        for y in 0..chunk_dim.y {
+            for x in 0..chunk_dim.x {
+                let start = uvec2(x * Self::CELLS_PER_CHUNK, y * Self::CELLS_PER_CHUNK);
+                let end = start + UVec2::splat(Self::CELLS_PER_CHUNK);
+
+                let mut min = height_map.world_position_at(start);
+                let mut max = height_map.world_position_at(end);
+
+                for yy in start.y..=end.y {
+                    for xx in start.x..=end.x {
+                        let altitude = height_map.node_at(uvec2(xx, yy)).w;
+                        min.z = min.z.min(altitude);
+                        max.z = max.z.max(altitude);
+                    }
+                }
+
+                chunks.push(Chunk {
+                    bounding_box: BoundingBox { min, max },
+                })
+            }
+        }
+
+        chunks
     }
 }

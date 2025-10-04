@@ -4,7 +4,7 @@ use crate::game::{
     animations::track::Track,
     camera::Camera,
     math::{Frustum, ViewProjection},
-    scenes::world::new_terrain::NewTerrain,
+    scenes::world::{new_terrain::NewTerrain, quad_tree::QuadTree},
 };
 
 /// Holds data for the sun and fog values throughout the day and night.
@@ -29,11 +29,13 @@ pub struct ComputedCamera {
 /// Holds all the data for the world we are simulating.
 pub struct SimWorld {
     pub camera: Camera,
-
     pub computed_camera: ComputedCamera,
 
     pub time_of_day: f32,
     pub day_night_cycle: DayNightCycle,
+
+    /// Used for determining visible elements in the world.
+    pub quad_tree: QuadTree,
 
     pub terrain: NewTerrain,
     /// The visible chunks for the current frame.
