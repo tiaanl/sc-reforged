@@ -1,4 +1,4 @@
-use glam::Vec3;
+use glam::{Quat, Vec3};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 use crate::{
@@ -18,6 +18,8 @@ pub struct TopDownCameraControls {
     pub down: KeyCode,
     pub look_up: KeyCode,
     pub look_down: KeyCode,
+    pub look_left: KeyCode,
+    pub look_right: KeyCode,
     pub rotate_mouse_button: MouseButton,
 }
 
@@ -32,12 +34,14 @@ impl Default for TopDownCameraControls {
             down: KeyCode::PageDown,
             look_up: KeyCode::Home,
             look_down: KeyCode::End,
+            look_left: KeyCode::KeyQ,
+            look_right: KeyCode::KeyE,
             rotate_mouse_button: MouseButton::Right,
         }
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 struct CameraData {
     /// The position of the camera.
     position: Vec3,
@@ -46,14 +50,6 @@ struct CameraData {
     /// Current pitch angle of the camera in *degrees*.
     pub pitch: f32,
 }
-
-// impl CameraData {
-//     #[inline]
-//     fn rotation(&self) -> Quat {
-//         Quat::from_rotation_z(self.yaw.to_radians())
-//             * Quat::from_rotation_x(self.pitch.to_radians())
-//     }
-// }
 
 impl Interpolate for CameraData {
     fn interpolate(left: Self, right: Self, n: f32) -> Self {
@@ -69,11 +65,13 @@ impl Interpolate for CameraData {
 struct Input {
     /// Direction the player wants to move the camera, relative to the current forward direction.
     move_direction: Vec3,
+    /// Direction the player wants to set the pitch of the camera.
+    pitch_direction: f32,
+    /// Direction the player wants to set the yaw of the camera.
+    yaw_direction: f32,
 }
 
 pub struct TopDownCameraController {
-    /// The input the player added this frame.
-    input: Input,
     /// The speed at which movements will be calculated.
     movement_speed: f32,
     /// The speed at which rotations will be calculated.
@@ -87,35 +85,32 @@ pub struct TopDownCameraController {
 }
 
 impl TopDownCameraController {
-    pub fn new(movement_speed: f32, rotation_speed: f32) -> Self {
+    pub fn new(
+        position: Vec3,
+        yaw: f32,
+        pitch: f32,
+        movement_speed: f32,
+        rotation_speed: f32,
+    ) -> Self {
+        let initial = CameraData {
+            position,
+            yaw,
+            pitch,
+        };
+
         Self {
-            input: Input::default(),
             movement_speed,
             rotation_speed,
-            desired: Default::default(),
-            current: Default::default(),
+            desired: initial,
+            current: initial,
             controls: Default::default(),
         }
     }
 
-    // pub fn move_forward(&mut self, distance: f32) {
-    //     self.desired.position +=
-    //         Quat::from_rotation_z(self.current.yaw.to_radians()) * Camera::FORWARD * distance;
-    // }
+    fn gather_input(&self, input_state: &InputState) -> Input {
+        let mut input = Input::default();
 
-    // pub fn move_right(&mut self, distance: f32) {
-    //     self.desired.position +=
-    //         Quat::from_rotation_z(self.current.yaw.to_radians()) * Camera::RIGHT * distance;
-    // }
-
-    // pub fn move_up(&mut self, distance: f32) {
-    //     self.desired.position += Camera::UP * distance;
-    // }
-}
-
-impl CameraController for TopDownCameraController {
-    fn handle_input(&mut self, input_state: &InputState) {
-        self.input.move_direction = {
+        input.move_direction = {
             let mut move_direction = Vec3::ZERO;
 
             if input_state.key_pressed(self.controls.forward) {
@@ -142,40 +137,33 @@ impl CameraController for TopDownCameraController {
             move_direction
         };
 
+        input.pitch_direction = {
+            let mut pitch_direction = 0.0;
+
+            if input_state.key_pressed(self.controls.look_up) {
+                pitch_direction += 1.0;
+            }
+            if input_state.key_pressed(self.controls.look_down) {
+                pitch_direction -= 1.0;
+            }
+
+            pitch_direction
+        };
+
+        input.yaw_direction = {
+            let mut yaw_direction = 0.0;
+
+            if input_state.key_pressed(self.controls.look_left) {
+                yaw_direction -= 1.0;
+            }
+            if input_state.key_pressed(self.controls.look_right) {
+                yaw_direction += 1.0;
+            }
+
+            yaw_direction
+        };
+
         /*
-        let move_delta = if input_state.key_pressed(KeyCode::ShiftLeft)
-            || input_state.key_pressed(KeyCode::ShiftRight)
-        {
-            self.movement_speed * 5.0
-        } else {
-            self.movement_speed
-        } * delta_time;
-
-        if input_state.key_pressed(self.controls.forward) {
-            self.move_forward(move_delta);
-        }
-        if input_state.key_pressed(self.controls.backward) {
-            self.move_forward(-move_delta);
-        }
-        if input_state.key_pressed(self.controls.right) {
-            self.move_right(move_delta);
-        }
-        if input_state.key_pressed(self.controls.left) {
-            self.move_right(-move_delta);
-        }
-        if input_state.key_pressed(self.controls.up) {
-            self.move_up(move_delta);
-        }
-        if input_state.key_pressed(self.controls.down) {
-            self.move_up(-move_delta);
-        }
-        if input_state.key_pressed(self.controls.look_up) {
-            self.desired.pitch += delta_time * 360.0_f32.to_radians() * 10.0;
-        }
-        if input_state.key_pressed(self.controls.look_down) {
-            self.desired.pitch -= delta_time * 360.0_f32.to_radians() * 10.0;
-        }
-
         if input_state.mouse_pressed(self.controls.rotate_mouse_button) {
             if let Some(delta) = input_state.mouse_delta() {
                 let delta = delta * self.rotation_speed;
@@ -192,13 +180,35 @@ impl CameraController for TopDownCameraController {
             self.desired.position.z += input_state.wheel_delta() * move_delta * 3.0;
         }
         */
+
+        input
     }
 
-    fn update(&mut self, camera: &mut Camera, delta_time: f32) {
-        self.desired.position += self.input.move_direction * self.movement_speed * delta_time;
-
-        self.current = Interpolate::interpolate(self.current, self.desired, 0.1 * delta_time);
-
+    fn update_camera(&mut self, move_rotation: Quat, camera: &mut Camera) {
         camera.position = self.current.position;
+        camera.rotation = move_rotation * Quat::from_rotation_x(self.current.pitch.to_radians());
+    }
+}
+
+impl CameraController for TopDownCameraController {
+    fn handle_input(
+        &mut self,
+        target_camera: &mut Camera,
+        input_state: &InputState,
+        delta_time: f32,
+    ) {
+        let input = self.gather_input(input_state);
+
+        let move_rotation = Quat::from_rotation_z(self.current.yaw.to_radians());
+
+        self.desired.position +=
+            (move_rotation * input.move_direction) * self.movement_speed * delta_time;
+
+        self.desired.pitch += input.pitch_direction * self.rotation_speed * delta_time;
+        self.desired.yaw += input.yaw_direction * self.rotation_speed * delta_time;
+
+        self.current = Interpolate::interpolate(self.current, self.desired, 0.1);
+
+        self.update_camera(move_rotation, target_camera);
     }
 }

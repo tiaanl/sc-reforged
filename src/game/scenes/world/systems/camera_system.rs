@@ -1,5 +1,3 @@
-use glam::{Quat, Vec3};
-
 use crate::{
     engine::input::InputState,
     game::{
@@ -7,30 +5,25 @@ use crate::{
         scenes::world::{
             render_world::RenderWorld,
             sim_world::{ComputedCamera, SimWorld},
-            systems::{System, Time},
+            systems::{ExtractContext, PreUpdateContext, PrepareContext, System},
         },
     },
 };
 
-#[allow(unused_variables)]
 pub trait CameraController {
     /// Gather input intent by the user.
-    fn handle_input(&mut self, input_state: &InputState) {}
-
-    /// Update the target camera with the gathered user intent.
-    fn update(&mut self, camera: &mut Camera, delta_time: f32) {}
+    fn handle_input(
+        &mut self,
+        target_camera: &mut Camera,
+        input_state: &InputState,
+        delta_time: f32,
+    );
 }
 
 pub struct CameraSystem<C>
 where
     C: CameraController,
 {
-    /// Index of the camera to control.
-    camera_index: usize,
-    /// World position of the camera.
-    pub position: Vec3,
-    /// Rotation of the camera.
-    pub rotation: Quat,
     /// The controller used to manipulate the camera.
     pub controller: C,
 }
@@ -39,46 +32,19 @@ impl<C> CameraSystem<C>
 where
     C: CameraController,
 {
-    pub fn new(camera_index: usize, controller: C) -> Self {
-        Self {
-            camera_index,
-            position: Vec3::ZERO,
-            rotation: Quat::IDENTITY,
-            controller,
-        }
+    pub fn new(controller: C) -> Self {
+        Self { controller }
     }
 }
 
-impl<C> System for CameraSystem<C>
+impl<C> CameraSystem<C>
 where
     C: CameraController,
 {
-    fn pre_update(&mut self, _sim_world: &SimWorld, input_state: &InputState) {
-        self.controller.handle_input(input_state);
-    }
+    fn extract_camera(sim_world: &SimWorld, render_world: &mut RenderWorld) {
+        let source = &sim_world.computed_camera;
+        let target = &mut render_world.camera_env;
 
-    fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
-        let source = &mut sim_world.cameras[self.camera_index];
-
-        self.controller.update(source, time.delta_time);
-
-        let view_proj = source.calculate_view_projection();
-        let frustum = view_proj.frustum();
-        let position = source.position;
-        let forward = (source.rotation * Camera::FORWARD).normalize();
-
-        sim_world.computed_cameras[self.camera_index] = ComputedCamera {
-            view_proj,
-            frustum,
-            position,
-            forward,
-        };
-    }
-
-    fn extract(&mut self, sim_world: &SimWorld, render_world: &mut RenderWorld) {
-        let source = &sim_world.computed_cameras[self.camera_index];
-
-        let target = &mut render_world.cameras[self.camera_index];
         target.proj_view = source.view_proj.mat.to_cols_array_2d();
         target.frustum = source
             .frustum
@@ -88,15 +54,59 @@ where
         target.forward = source.forward.extend(0.0).to_array();
     }
 
-    fn prepare(
-        &mut self,
-        render_world: &mut RenderWorld,
-        renderer: &crate::engine::prelude::Renderer,
-    ) {
-        let offset = (std::mem::size_of::<Camera>() * self.camera_index) as wgpu::BufferAddress;
-        let data = bytemuck::bytes_of(&render_world.cameras[self.camera_index]);
-        renderer
-            .queue
-            .write_buffer(&render_world.camera_buffer, offset, data);
+    fn extract_environment(sim_world: &SimWorld, render_world: &mut RenderWorld) {
+        let target = &mut render_world.camera_env;
+
+        let time_of_day = sim_world.time_of_day;
+        let source = &sim_world.day_night_cycle;
+
+        let sun_dir = source.sun_dir.sample_sub_frame(time_of_day, true);
+        let sun_color = source.sun_color.sample_sub_frame(time_of_day, true);
+
+        let fog_distance = source.fog_distance.sample_sub_frame(time_of_day, true);
+        let fog_near_fraction = source.fog_near_fraction.sample_sub_frame(time_of_day, true);
+        let fog_color = source.fog_color.sample_sub_frame(time_of_day, true);
+
+        target.sun_dir = sun_dir.extend(0.0).to_array();
+        target.sun_color = sun_color.extend(1.0).to_array();
+        target.fog_color = fog_color.extend(1.0).to_array();
+        target.fog_distance = fog_distance;
+        target.fog_near_fraction = fog_near_fraction;
+    }
+}
+
+impl<C> System for CameraSystem<C>
+where
+    C: CameraController,
+{
+    fn pre_update(&mut self, context: &mut PreUpdateContext) {
+        let camera = &mut context.sim_world.camera;
+        self.controller
+            .handle_input(camera, &context.input_state, context.time.delta_time);
+
+        let view_proj = camera.calculate_view_projection();
+        let frustum = view_proj.frustum();
+        let position = camera.position;
+        let forward = (camera.rotation * Camera::FORWARD).normalize();
+
+        context.sim_world.computed_camera = ComputedCamera {
+            view_proj,
+            frustum,
+            position,
+            forward,
+        };
+    }
+
+    fn extract(&mut self, context: &mut ExtractContext) {
+        Self::extract_camera(context.sim_world, context.render_world);
+        Self::extract_environment(context.sim_world, context.render_world);
+    }
+
+    fn prepare(&mut self, context: &mut PrepareContext) {
+        context.renderer.queue.write_buffer(
+            &context.render_world.camera_env_buffer,
+            0,
+            bytemuck::bytes_of(&context.render_world.camera_env),
+        );
     }
 }

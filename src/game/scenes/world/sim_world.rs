@@ -1,9 +1,10 @@
-use glam::Vec3;
+use glam::{UVec2, Vec3};
 
 use crate::game::{
     animations::track::Track,
     camera::Camera,
     math::{Frustum, ViewProjection},
+    scenes::world::new_terrain::NewTerrain,
 };
 
 /// Holds data for the sun and fog values throughout the day and night.
@@ -27,17 +28,16 @@ pub struct ComputedCamera {
 
 /// Holds all the data for the world we are simulating.
 pub struct SimWorld {
-    pub cameras: [Camera; Self::CAMERA_COUNT],
-    pub computed_cameras: [ComputedCamera; Self::CAMERA_COUNT],
+    pub camera: Camera,
+
+    pub computed_camera: ComputedCamera,
 
     pub time_of_day: f32,
     pub day_night_cycle: DayNightCycle,
-}
 
-impl SimWorld {
-    pub const CAMERA_COUNT: usize = 2;
-    pub const MAIN_CAMERA_INDEX: usize = 0;
-    pub const DEBUG_CAMERA_INDEX: usize = 1;
+    pub terrain: NewTerrain,
+    /// The visible chunks for the current frame.
+    pub visible_chunks: Vec<UVec2>,
 }
 
 /*

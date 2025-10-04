@@ -37,6 +37,7 @@ const SHADERS: &[&str] = &[
     "src/game/scenes/world/process_chunks.wgsl",
     "src/game/scenes/world/strata.wgsl",
     "src/game/scenes/world/terrain.wgsl",
+    "src/game/scenes/world/systems/new_terrain.wgsl",
 ];
 
 fn compile_shaders() {

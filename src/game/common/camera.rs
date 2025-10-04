@@ -40,6 +40,7 @@ impl Camera {
         }
     }
 
+    #[inline]
     pub fn calculate_view_projection(&self) -> ViewProjection {
         ViewProjection::from_projection_view(self.calculate_projection(), self.calculate_view())
     }

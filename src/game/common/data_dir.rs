@@ -4,10 +4,14 @@ use shadow_company_tools::bmf;
 
 use crate::{
     engine::assets::AssetError,
+    engine::storage::Handle,
     game::{
-        config::{self, TerrainMapping, parser::ConfigLines},
+        common::image::Image,
+        config::{self, parser::ConfigLines, TerrainMapping},
         file_system::file_system,
         height_map::HeightMap,
+        image::images,
+        scenes::world::new_height_map::NewHeightMap,
     },
     global,
 };
@@ -39,6 +43,11 @@ impl DataDir {
         self.load_config(path)
     }
 
+    #[inline]
+    pub fn load_terrain_texture(&self, name: &str) -> Result<Handle<Image>, AssetError> {
+        images().load_image(PathBuf::from("trnhigh").join(name).with_extension("jpg"))
+    }
+
     pub fn load_height_map(
         &self,
         path: impl AsRef<Path>,
@@ -51,6 +60,43 @@ impl DataDir {
             cell_size,
         )
         .map_err(|err| AssetError::from_io_error(err, path.as_ref()))
+    }
+
+    pub fn load_new_height_map(
+        &self,
+        path: impl AsRef<Path>,
+        elevation_scale: f32,
+        cell_size: f32,
+    ) -> Result<NewHeightMap, AssetError> {
+        use glam::UVec2;
+
+        let data = file_system().load(path.as_ref())?;
+
+        let mut reader = pcx::Reader::from_mem(&data)
+            .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
+
+        let size = UVec2::new(reader.width() as u32, reader.height() as u32);
+        if !reader.is_paletted() {
+            return Err(AssetError::custom(path, "PCX file not not paletted!"));
+        }
+
+        let mut elevations = vec![0_u8; size.x as usize * size.y as usize];
+        for row in 0..size.y {
+            let start = row as usize * size.x as usize;
+            let end = (row as usize + 1) * size.x as usize;
+            let slice = &mut elevations[start..end];
+            reader
+                .next_row_paletted(slice)
+                .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
+        }
+
+        Ok(NewHeightMap::from_iter(
+            size,
+            cell_size,
+            elevations
+                .iter()
+                .map(|e| (u8::MAX - *e) as f32 * elevation_scale),
+        ))
     }
 
     pub fn _load_object_templates(&self) -> Result<config::ObjectTemplates, AssetError> {

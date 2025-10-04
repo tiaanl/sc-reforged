@@ -19,14 +19,15 @@ use crate::{
         scenes::world::{
             actions::PlayerAction,
             game_mode::GameMode,
+            new_terrain::NewTerrain,
             overlay_renderer::OverlayRenderer,
             render_world::RenderWorld,
             sim_world::{ComputedCamera, SimWorld},
             systems::{
-                System, Time, camera_system::CameraSystem,
-                day_night_cycle_system::DayNightCycleSystem,
-                free_camera_controller::FreeCameraController,
-                top_down_camera_controller::TopDownCameraController,
+                ExtractContext, NewSystemContext, PostUpdateContext, PreUpdateContext,
+                PrepareContext, QueueContext, RenderStore, System, Time, UpdateContext,
+                camera_system::CameraSystem, day_night_cycle_system::DayNightCycleSystem,
+                terrain_system::TerrainSystem, top_down_camera_controller::TopDownCameraController,
             },
         },
         shadows::ShadowCascades,
@@ -36,6 +37,8 @@ use crate::{
 
 pub mod actions;
 mod game_mode;
+pub mod new_height_map;
+mod new_terrain;
 mod object;
 mod objects;
 mod overlay_renderer;
@@ -66,6 +69,7 @@ struct Camera<C: camera::Controller> {
 pub struct WorldScene {
     sim_world: SimWorld,
     render_worlds: [RenderWorld; Self::RENDER_FRAME_COUNT],
+    render_store: RenderStore,
 
     // Systems
     systems: Vec<Box<dyn System>>,
@@ -320,33 +324,80 @@ impl WorldScene {
         let fps_history_cursor = 0;
 
         let sim_world = SimWorld {
-            cameras: [camera::Camera::default(), camera::Camera::default()],
-            computed_cameras: [ComputedCamera::default(), ComputedCamera::default()],
+            camera: camera::Camera::new(
+                Vec3::ZERO,
+                Quat::IDENTITY,
+                45.0_f32.to_radians(),
+                1.0,
+                10.0,
+                13_300.0,
+            ),
+            computed_camera: ComputedCamera::default(),
             time_of_day,
             day_night_cycle,
+            terrain: {
+                let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
+                let height_map = {
+                    let path =
+                        PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
+                    tracing::info!("Loading terrain height map: {}", path.display());
+                    data_dir().load_new_height_map(
+                        path,
+                        terrain_mapping.altitude_map_height_base,
+                        terrain_mapping.nominal_edge_size,
+                    )?
+                };
+
+                let terrain_texture =
+                    data_dir().load_terrain_texture(&terrain_mapping.texture_map_base_name)?;
+
+                NewTerrain::new(height_map, terrain_texture)
+            },
+            visible_chunks: Vec::default(),
         };
 
+        let mut render_store = RenderStore::default();
+
         let render_worlds = [
-            RenderWorld::new(renderer()),
-            RenderWorld::new(renderer()),
-            RenderWorld::new(renderer()),
+            RenderWorld::new(0, renderer(), &mut render_store),
+            RenderWorld::new(1, renderer(), &mut render_store),
+            RenderWorld::new(2, renderer(), &mut render_store),
         ];
 
+        let mut context = NewSystemContext {
+            renderer: renderer(),
+            render_store: &mut render_store,
+            sim_world: &sim_world,
+        };
+
         let systems: Vec<Box<dyn System>> = vec![
-            Box::new(CameraSystem::new(
-                SimWorld::MAIN_CAMERA_INDEX,
-                TopDownCameraController::new(1000.0, 0.2),
-            )),
-            Box::new(CameraSystem::new(
-                SimWorld::DEBUG_CAMERA_INDEX,
-                FreeCameraController::new(1000.0, 0.2),
-            )),
             Box::new(DayNightCycleSystem),
+            Box::new(CameraSystem::new({
+                let camera_from = campaign.view_initial.from.extend(2500.0);
+                let camera_to = campaign.view_initial.to.extend(0.0);
+
+                let dir = (camera_to - camera_from).normalize();
+
+                let flat = Vec2::new(dir.x, dir.y);
+                let yaw = (-dir.x).atan2(dir.y).to_degrees();
+                let pitch = dir.z.atan2(flat.length()).to_degrees();
+
+                TopDownCameraController::new(
+                    camera_from,
+                    -yaw.to_degrees(),
+                    pitch.to_degrees(),
+                    1000.0,
+                    100.0,
+                )
+            })),
+            Box::new(TerrainSystem::new(&mut context)),
         ];
 
         Ok(Self {
             sim_world,
             render_worlds,
+            render_store,
+
             systems,
 
             game_mode: GameMode::Editor,
@@ -436,6 +487,8 @@ impl Scene for WorldScene {
         let aspect = width / height.max(1.0);
         self.main_camera.camera.aspect_ratio = aspect;
         self.debug_camera.camera.aspect_ratio = aspect;
+
+        self.sim_world.camera.aspect_ratio = aspect;
     }
 
     fn event(&mut self, event: SceneEvent) {
@@ -454,18 +507,36 @@ impl Scene for WorldScene {
             let time = Time { delta_time };
 
             // PreUpdate
-            for system in self.systems.iter_mut() {
-                system.pre_update(&self.sim_world, input);
+            {
+                let mut context = PreUpdateContext {
+                    sim_world: &mut self.sim_world,
+                    time: &time,
+                    input_state: input,
+                };
+                for system in self.systems.iter_mut() {
+                    system.pre_update(&mut context);
+                }
             }
 
             // Update
-            for system in self.systems.iter_mut() {
-                system.update(&mut self.sim_world, &time);
+            {
+                let mut context = UpdateContext {
+                    sim_world: &mut self.sim_world,
+                    time: &time,
+                };
+                for system in self.systems.iter_mut() {
+                    system.update(&mut context);
+                }
             }
 
             // PostUpdate
-            for system in self.systems.iter_mut() {
-                system.post_update(&mut self.sim_world);
+            {
+                let mut context = PostUpdateContext {
+                    sim_world: &mut self.sim_world,
+                };
+                for system in self.systems.iter_mut() {
+                    system.post_update(&mut context);
+                }
             }
         }
 
@@ -533,21 +604,42 @@ impl Scene for WorldScene {
 
         {
             // Extract
-            for system in self.systems.iter_mut() {
-                system.extract(&self.sim_world, render_world);
+            {
+                let mut context = ExtractContext {
+                    sim_world: &self.sim_world,
+                    render_world,
+                };
+                for system in self.systems.iter_mut() {
+                    system.extract(&mut context);
+                }
             }
 
             // Prepare
-            for system in self.systems.iter_mut() {
-                system.prepare(render_world, renderer());
+            {
+                let mut context = PrepareContext {
+                    render_world,
+                    renderer: renderer(),
+                    render_store: &mut self.render_store,
+                };
+                for system in self.systems.iter_mut() {
+                    system.prepare(&mut context);
+                }
             }
 
             // Queue
-            for system in self.systems.iter_mut() {
-                system.queue(render_world, frame);
+            {
+                let mut context = QueueContext {
+                    render_world,
+                    frame,
+                    render_store: &mut self.render_store,
+                };
+                for system in self.systems.iter_mut() {
+                    system.queue(&mut context);
+                }
             }
         }
 
+        /*
         let main_view_projection = {
             let camera = &self.main_camera.camera;
 
@@ -795,24 +887,24 @@ impl Scene for WorldScene {
             }
 
             // Render the main camera frustum when we're looking through the debug camera.
-            if self.view_debug_camera {
-                self.gizmos_vertices
-                    .extend(GizmosRenderer::create_view_projection(
-                        &main_view_projection,
-                        Vec4::new(1.0, 0.0, 1.0, 1.0),
-                    ));
-            }
+            // if self.view_debug_camera {
+            //     self.gizmos_vertices
+            //         .extend(GizmosRenderer::create_view_projection(
+            //             &main_view_projection,
+            //             Vec4::new(1.0, 0.0, 1.0, 1.0),
+            //         ));
+            // }
 
-            if false {
-                if let Some(ref data) = self.geometry_data {
-                    // Translation matrix
-                    let translation = Mat4::from_translation(data.position);
+            // if false {
+            //     if let Some(ref data) = self.geometry_data {
+            //         // Translation matrix
+            //         let translation = Mat4::from_translation(data.position);
 
-                    let vertices = GizmosRenderer::create_axis(translation, 100.0);
-                    self.gizmos_renderer
-                        .render(frame, view_camera_bind_group, &vertices);
-                }
-            }
+            //         let vertices = GizmosRenderer::create_axis(translation, 100.0);
+            //         self.gizmos_renderer
+            //             .render(frame, view_camera_bind_group, &vertices);
+            //     }
+            // }
 
             // Render sky box.
             {
@@ -894,11 +986,11 @@ impl Scene for WorldScene {
             }
 
             // self.quad_tree.render_gizmos(&mut self.gizmos_vertices);
-            self.quad_tree
-                .render_gizmos_in_frustum(&main_camera_frustum, &mut self.gizmos_vertices);
+            // self.quad_tree
+            //     .render_gizmos_in_frustum(&main_camera_frustum, &mut self.gizmos_vertices);
 
-            self.gizmos_renderer
-                .render(frame, view_camera_bind_group, &self.gizmos_vertices);
+            // self.gizmos_renderer
+            //     .render(frame, view_camera_bind_group, &self.gizmos_vertices);
         }
 
         let now = std::time::Instant::now();
@@ -907,6 +999,7 @@ impl Scene for WorldScene {
 
         self.fps_history[self.fps_history_cursor] = render_time.as_secs_f32();
         self.fps_history_cursor = (self.fps_history_cursor + 1) % self.fps_history.len();
+        */
     }
 
     fn post_render(&mut self) {

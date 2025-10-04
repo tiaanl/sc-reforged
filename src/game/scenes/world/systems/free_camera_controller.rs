@@ -76,7 +76,12 @@ impl FreeCameraController {
 }
 
 impl CameraController for FreeCameraController {
-    fn handle_input(&mut self, input_state: &InputState) {
+    fn handle_input(
+        &mut self,
+        target_camera: &mut Camera,
+        input_state: &InputState,
+        delta_time: f32,
+    ) {
         let mut input = Input::default();
 
         input.direction = {
@@ -114,10 +119,6 @@ impl CameraController for FreeCameraController {
             }
         }
 
-        self.input = input;
-    }
-
-    fn update(&mut self, camera: &mut Camera, delta_time: f32) {
         // Set the new rotation.
         self.yaw += self.input.mouse_delta.x * self.mouse_sensitivity;
         self.pitch -= self.input.mouse_delta.y * self.mouse_sensitivity;
@@ -128,7 +129,7 @@ impl CameraController for FreeCameraController {
         // Translate the direction to the new forward direction.
         let position = rotation * self.input.direction;
 
-        camera.rotation = rotation;
-        camera.position += position * delta_time;
+        target_camera.rotation = rotation;
+        target_camera.position += position * delta_time;
     }
 }
