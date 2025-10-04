@@ -64,8 +64,6 @@ impl QuadTree {
             (chunk_max.y - chunk_min.y).max(1),
         );
 
-        println!("size: {size}");
-
         let is_leaf = size.x == 1 && size.y == 1;
 
         let mut min = Vec3::INFINITY;
