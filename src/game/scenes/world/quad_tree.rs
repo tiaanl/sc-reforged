@@ -30,7 +30,7 @@ pub struct Node {
 }
 
 impl Node {
-    fn bounding_box(&self) -> BoundingBox {
+    pub fn bounding_box(&self) -> BoundingBox {
         BoundingBox {
             min: self.min.extend(self.min_z),
             max: self.max.extend(self.max_z),

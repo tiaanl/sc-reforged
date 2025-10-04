@@ -1,10 +1,13 @@
 use glam::{UVec2, Vec3};
 
-use crate::game::{
-    animations::track::Track,
-    camera::Camera,
-    math::{Frustum, ViewProjection},
-    scenes::world::{new_terrain::NewTerrain, quad_tree::QuadTree},
+use crate::{
+    engine::gizmos::GizmoVertex,
+    game::{
+        animations::track::Track,
+        camera::Camera,
+        math::{Frustum, ViewProjection},
+        scenes::world::{new_terrain::NewTerrain, quad_tree::QuadTree},
+    },
 };
 
 /// Holds data for the sun and fog values throughout the day and night.
@@ -40,6 +43,8 @@ pub struct SimWorld {
     pub terrain: NewTerrain,
     /// The visible chunks for the current frame.
     pub visible_chunks: Vec<UVec2>,
+
+    pub gizmo_vertices: Vec<GizmoVertex>,
 }
 
 /*

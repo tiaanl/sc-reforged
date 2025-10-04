@@ -1,0 +1,111 @@
+use crate::{
+    engine::{gizmos::GizmoVertex, prelude::BufferLayout},
+    game::scenes::world::{render_world::RenderWorld, systems::NewSystemContext},
+    wgsl_shader,
+};
+
+use super::{PrepareContext, System};
+
+pub struct GizmoSystem {
+    pipeline: wgpu::RenderPipeline,
+}
+
+impl GizmoSystem {
+    pub fn new(context: &mut NewSystemContext) -> Self {
+        let device = &context.renderer.device;
+
+        let module = device.create_shader_module(wgsl_shader!("gizmos"));
+
+        let camera_bind_group_layout = context
+            .render_store
+            .get_bind_group_layout(RenderWorld::CAMERA_BIND_GROUP_LAYOUT_ID)
+            .expect("Camera bind group layout required!");
+
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("gizmos_pipeline_layout"),
+            bind_group_layouts: &[camera_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("gizmos_render_pipeline"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &module,
+                entry_point: Some("vertex_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[GizmoVertex::layout()],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &module,
+                entry_point: Some("fragment_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: context.renderer.surface.format(),
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview: None,
+            cache: None,
+        });
+
+        Self { pipeline }
+    }
+}
+
+impl System for GizmoSystem {
+    fn extract(&mut self, context: &mut super::ExtractContext) {
+        // Move all the sim world vertices to the render world vertices.
+        context.render_world.gizmo_vertices.clear();
+        std::mem::swap(
+            &mut context.sim_world.gizmo_vertices,
+            &mut context.render_world.gizmo_vertices,
+        );
+    }
+
+    fn prepare(&mut self, context: &mut PrepareContext) {
+        context.render_world.ensure_gizmo_vertices_capacity(
+            &context.renderer.device,
+            context.render_world.gizmo_vertices.len() as u32,
+        );
+
+        let data = bytemuck::cast_slice(&context.render_world.gizmo_vertices);
+        context
+            .renderer
+            .queue
+            .write_buffer(&context.render_world.gizmo_vertices_buffer, 0, data);
+    }
+
+    fn queue(&mut self, context: &mut super::QueueContext) {
+        let super::QueueContext { render_world, .. } = context;
+
+        let mut render_pass =
+            context
+                .frame
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("gizmos_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &context.frame.surface,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                });
+
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_vertex_buffer(0, render_world.gizmo_vertices_buffer.slice(..));
+        render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
+        render_pass.draw(0..(render_world.gizmo_vertices.len() as u32), 0..1);
+    }
+}

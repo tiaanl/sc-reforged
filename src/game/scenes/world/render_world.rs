@@ -1,6 +1,9 @@
 use bytemuck::NoUninit;
 
-use crate::{engine::prelude::Renderer, game::scenes::world::systems::RenderStore};
+use crate::{
+    engine::{gizmos::GizmoVertex, prelude::Renderer},
+    game::scenes::world::systems::RenderStore,
+};
 
 #[derive(Clone, Copy, Debug, Default, NoUninit)]
 #[repr(C)]
@@ -40,6 +43,10 @@ pub struct RenderWorld {
     pub terrain_chunk_instances_buffer: wgpu::Buffer,
     /// Current capacity of the `terrain_chunk_instance_buffer`.
     pub terrain_chunk_instances_buffer_capacity: u32,
+
+    pub gizmo_vertices: Vec<GizmoVertex>,
+    pub gizmo_vertices_buffer: wgpu::Buffer,
+    pub gizmo_vertices_buffer_capacity: u32,
 }
 
 impl RenderWorld {
@@ -98,10 +105,20 @@ impl RenderWorld {
 
         let terrain_chunk_instances = Vec::default();
         let terrain_chunk_instances_buffer_capacity = 1 << 7;
-        let terrain_chunk_instances_buffer = Self::create_terrain_chunk_instance_buffer(
+        let terrain_chunk_instances_buffer = Self::create_buffer_with_capacity::<ChunkInstanceData>(
             &renderer.device,
             index,
+            "terrain_chunk_instances",
             terrain_chunk_instances_buffer_capacity,
+        );
+
+        let gizmo_vertices = Vec::default();
+        let gizmo_vertices_buffer_capacity = 1024;
+        let gizmo_vertices_buffer = Self::create_buffer_with_capacity::<GizmoVertex>(
+            &renderer.device,
+            index,
+            "gizmo_vertices_buffer",
+            gizmo_vertices_buffer_capacity,
         );
 
         Self {
@@ -114,13 +131,17 @@ impl RenderWorld {
             terrain_chunk_instances,
             terrain_chunk_instances_buffer,
             terrain_chunk_instances_buffer_capacity,
+
+            gizmo_vertices,
+            gizmo_vertices_buffer,
+            gizmo_vertices_buffer_capacity,
         }
     }
 
     /// Ensure that we can hold the required amount of instances.
-    pub fn ensure_terrain_chunk_instance_capacity(&mut self, device: &wgpu::Device, count: u32) {
-        if self.terrain_chunk_instances_buffer_capacity < count {
-            let new_size = count.next_power_of_two();
+    pub fn ensure_terrain_chunk_instance_capacity(&mut self, device: &wgpu::Device, capacity: u32) {
+        if self.terrain_chunk_instances_buffer_capacity < capacity {
+            let new_size = capacity.next_power_of_two();
 
             tracing::warn!(
                 "Resizing terrain chunk instances buffer ({}) to {}",
@@ -129,19 +150,51 @@ impl RenderWorld {
             );
 
             self.terrain_chunk_instances_buffer =
-                Self::create_terrain_chunk_instance_buffer(device, self.index, new_size)
+                Self::create_buffer_with_capacity::<ChunkInstanceData>(
+                    device,
+                    self.index,
+                    "terrain_chunk_instances",
+                    new_size,
+                );
+
+            self.terrain_chunk_instances_buffer_capacity = new_size;
         }
     }
 
-    fn create_terrain_chunk_instance_buffer(
+    pub fn ensure_gizmo_vertices_capacity(&mut self, device: &wgpu::Device, capacity: u32) {
+        if self.gizmo_vertices_buffer_capacity < capacity {
+            let new_size = capacity.next_power_of_two();
+
+            tracing::warn!(
+                "Resizing gizmo vertices buffer ({}) to {}",
+                self.index,
+                new_size
+            );
+
+            self.gizmo_vertices_buffer = Self::create_buffer_with_capacity::<GizmoVertex>(
+                device,
+                self.index,
+                "gizmo_vertices",
+                new_size,
+            );
+
+            self.gizmo_vertices_buffer_capacity = new_size;
+        }
+    }
+
+    fn create_buffer_with_capacity<T>(
         device: &wgpu::Device,
         index: usize,
-        count: u32,
-    ) -> wgpu::Buffer {
-        let size = std::mem::size_of::<ChunkInstanceData>() as u64 * count as u64;
+        name: &str,
+        capacity: u32,
+    ) -> wgpu::Buffer
+    where
+        T: bytemuck::NoUninit,
+    {
+        let size = std::mem::size_of::<T>() as u64 * capacity as u64;
 
         device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(&format!("terrain_chunk_instance_data:{index}")),
+            label: Some(&format!("{name}:{index}")),
             size,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,

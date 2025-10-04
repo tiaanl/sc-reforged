@@ -1,4 +1,4 @@
-use glam::{UVec2, uvec2};
+use glam::UVec2;
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -7,10 +7,7 @@ use crate::{
         scenes::world::{
             new_terrain::NewTerrain,
             render_world::{ChunkInstanceData, RenderWorld},
-            systems::{
-                ExtractContext, NewSystemContext, PreUpdateContext, PrepareContext, QueueContext,
-                System,
-            },
+            systems::{ExtractContext, NewSystemContext, PrepareContext, QueueContext, System},
         },
     },
     wgsl_shader,
@@ -18,7 +15,7 @@ use crate::{
 
 pub struct TerrainSystem {
     /// Dimensions of the terrain in chunks.
-    chunks_dim: UVec2,
+    _chunks_dim: UVec2,
 
     /// Buffer holding indices to render a single chunk at various LOD's.
     chunk_indices_buffer: wgpu::Buffer,
@@ -247,7 +244,7 @@ impl TerrainSystem {
         };
 
         Self {
-            chunks_dim,
+            _chunks_dim: chunks_dim,
 
             chunk_indices_buffer,
             _chunk_wireframe_indices_buffer: chunk_wireframe_indices_buffer,

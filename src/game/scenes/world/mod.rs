@@ -27,8 +27,8 @@ use crate::{
                 ExtractContext, NewSystemContext, PostUpdateContext, PreUpdateContext,
                 PrepareContext, QueueContext, RenderStore, System, Time, UpdateContext,
                 camera_system::CameraSystem, cull_system::CullSystem,
-                day_night_cycle_system::DayNightCycleSystem, terrain_system::TerrainSystem,
-                top_down_camera_controller::TopDownCameraController,
+                day_night_cycle_system::DayNightCycleSystem, gizmo_system::GizmoSystem,
+                terrain_system::TerrainSystem, top_down_camera_controller::TopDownCameraController,
             },
         },
         shadows::ShadowCascades,
@@ -367,6 +367,8 @@ impl WorldScene {
 
                 terrain,
                 visible_chunks: Vec::default(),
+
+                gizmo_vertices: Vec::with_capacity(1024),
             }
         };
 
@@ -404,8 +406,9 @@ impl WorldScene {
                     100.0,
                 )
             })),
-            Box::new(CullSystem),
+            Box::new(CullSystem::default()),
             Box::new(TerrainSystem::new(&mut context)),
+            Box::new(GizmoSystem::new(&mut context)),
         ];
 
         Ok(Self {
@@ -621,7 +624,7 @@ impl Scene for WorldScene {
             // Extract
             {
                 let mut context = ExtractContext {
-                    sim_world: &self.sim_world,
+                    sim_world: &mut self.sim_world,
                     render_world,
                 };
                 for system in self.systems.iter_mut() {
@@ -1025,12 +1028,14 @@ impl Scene for WorldScene {
     }
 
     #[cfg(feature = "egui")]
-    fn debug_panel(&mut self, ctx: &egui::Context) {
+    fn debug_panel(&mut self, ctx: &egui::Context, frame_index: usize) {
         use egui::widgets::Slider;
 
         if !self.in_editor() {
             return;
         }
+
+        let render_world = &mut self.render_worlds[frame_index % Self::RENDER_FRAME_COUNT];
 
         egui::Window::new("World")
             .default_open(true)
@@ -1122,6 +1127,10 @@ impl Scene for WorldScene {
             ui.horizontal(|ui| {
                 ui.label("Visible chunks");
                 ui.label(format!("{}", self.sim_world.visible_chunks.len()));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Gizmo vertices");
+                ui.label(format!("{}", render_world.gizmo_vertices.len()));
             });
         });
 

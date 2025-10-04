@@ -1,7 +1,12 @@
 use glam::{Mat4, Vec3, Vec4};
 use wgpu::{util::DeviceExt, vertex_attr_array};
 
-use crate::{Frame, engine::prelude::renderer, game::math::ViewProjection, wgsl_shader};
+use crate::{
+    Frame,
+    engine::prelude::renderer,
+    game::math::{BoundingBox, ViewProjection},
+    wgsl_shader,
+};
 
 use super::renderer::BufferLayout;
 
@@ -211,6 +216,51 @@ impl GizmosRenderer {
         for &(from, to) in EDGES {
             result.push(v[from]);
             result.push(v[to]);
+        }
+
+        result
+    }
+
+    pub fn create_bounding_box(bounding_box: &BoundingBox, color: Vec4) -> Vec<GizmoVertex> {
+        let min: Vec3 = bounding_box.min;
+        let max: Vec3 = bounding_box.max;
+
+        // 8 corners of the box
+        let corners = [
+            Vec3::new(min.x, min.y, min.z),
+            Vec3::new(max.x, min.y, min.z),
+            Vec3::new(max.x, max.y, min.z),
+            Vec3::new(min.x, max.y, min.z),
+            Vec3::new(min.x, min.y, max.z),
+            Vec3::new(max.x, min.y, max.z),
+            Vec3::new(max.x, max.y, max.z),
+            Vec3::new(min.x, max.y, max.z),
+        ];
+
+        // Each pair defines a line segment (edge)
+        const EDGES: &[(usize, usize)] = &[
+            // bottom face
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 0),
+            // top face
+            (4, 5),
+            (5, 6),
+            (6, 7),
+            (7, 4),
+            // vertical edges
+            (0, 4),
+            (1, 5),
+            (2, 6),
+            (3, 7),
+        ];
+
+        let mut result = Vec::with_capacity(EDGES.len() * 2);
+
+        for (a, b) in EDGES {
+            result.push(GizmoVertex::new(corners[*a], color));
+            result.push(GizmoVertex::new(corners[*b], color));
         }
 
         result

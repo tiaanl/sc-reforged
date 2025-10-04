@@ -282,7 +282,7 @@ impl winit::application::ApplicationHandler for App {
                                         );
 
                                         // Debug stuff from the scene.
-                                        scene.debug_panel(ctx);
+                                        scene.debug_panel(ctx, frame.frame_index);
                                     },
                                 );
                             }

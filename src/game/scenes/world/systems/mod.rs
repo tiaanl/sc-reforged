@@ -12,6 +12,7 @@ pub mod camera_system;
 pub mod cull_system;
 pub mod day_night_cycle_system;
 pub mod free_camera_controller;
+pub mod gizmo_system;
 pub mod terrain_system;
 pub mod top_down_camera_controller;
 
@@ -41,7 +42,7 @@ pub struct PostUpdateContext<'a> {
 }
 
 pub struct ExtractContext<'a> {
-    pub sim_world: &'a SimWorld,
+    pub sim_world: &'a mut SimWorld,
     pub render_world: &'a mut RenderWorld,
 }
 
