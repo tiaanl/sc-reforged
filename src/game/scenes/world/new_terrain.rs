@@ -1,4 +1,4 @@
-use glam::{UVec2, uvec2};
+use glam::{IVec2, UVec2, ivec2, uvec2};
 
 use crate::{
     engine::storage::Handle,
@@ -43,9 +43,12 @@ impl NewTerrain {
         }
     }
 
-    pub fn chunk_at(&self, coord: UVec2) -> Option<&Chunk> {
-        self.chunks
-            .get(coord.y as usize * self.chunk_dim.x as usize + coord.x as usize)
+    pub fn chunk_at(&self, coord: IVec2) -> Option<&Chunk> {
+        let coord = coord
+            .clamp(IVec2::ZERO, self.chunk_dim.as_ivec2())
+            .as_uvec2();
+        let index = coord.y as usize * self.chunk_dim.x as usize + coord.x as usize;
+        self.chunks.get(index)
     }
 
     fn build_chunks(height_map: &NewHeightMap, chunk_dim: UVec2) -> Vec<Chunk> {
@@ -53,15 +56,15 @@ impl NewTerrain {
 
         for y in 0..chunk_dim.y {
             for x in 0..chunk_dim.x {
-                let start = uvec2(x * Self::CELLS_PER_CHUNK, y * Self::CELLS_PER_CHUNK);
-                let end = start + UVec2::splat(Self::CELLS_PER_CHUNK);
+                let start = uvec2(x * Self::CELLS_PER_CHUNK, y * Self::CELLS_PER_CHUNK).as_ivec2();
+                let end = start + IVec2::splat(Self::CELLS_PER_CHUNK as i32);
 
                 let mut min = height_map.world_position_at(start);
                 let mut max = height_map.world_position_at(end);
 
                 for yy in start.y..=end.y {
                     for xx in start.x..=end.x {
-                        let altitude = height_map.node_at(uvec2(xx, yy)).w;
+                        let altitude = height_map.node_at(ivec2(xx, yy)).w;
                         min.z = min.z.min(altitude);
                         max.z = max.z.max(altitude);
                     }

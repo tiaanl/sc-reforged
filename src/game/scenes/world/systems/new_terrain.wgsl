@@ -33,7 +33,8 @@ struct InstanceInput {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_position: vec3<f32>,
-    @location(1) tex_coord: vec2<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) tex_coord: vec2<f32>,
 }
 
 fn get_node(coord: vec2<u32>) -> vec4<f32> {
@@ -42,98 +43,77 @@ fn get_node(coord: vec2<u32>) -> vec4<f32> {
     return u_height_map[index];
 }
 
-/*
+const NORTH_FLAG: u32 = (1u << 0u);
+const EAST_FLAG: u32 = (1u << 1u);
+const SOUTH_FLAG: u32 = (1u << 2u);
+const WEST_FLAG: u32 = (1u << 3u);
+
 fn get_stitched_node(
-    chunk_lod: u32,
     chunk_coord: vec2<u32>,
     node_coord: vec2<u32>,
+    abs_node_coord: vec2<u32>,
+    chunk: InstanceInput,
 ) -> vec4<f32> {
-    let abs_node_coord = chunk_coord + (node_coord << chunk_lod);
-
     var normal_and_height = get_node(abs_node_coord);
 
-    let last = terrain::CELLS_PER_CHUNK >> chunk_lod;
+    let last = terrain::CELLS_PER_CHUNK >> chunk.lod;
 
     // If last is one, the amount of cells in this chunk is 1, so no stitching is required.
     if last == 1u {
        return normal_and_height;
     }
 
-    let scale = 1u << chunk_lod;
-    let chunks_size = u_terrain_data.cells_dim / terrain::CELLS_PER_CHUNK;
+    let scale = 1u << chunk.lod;
 
-    // Check if neighbors are valid.
-    let has_neg_x = chunk_coord.x > 0u;
-    let has_pos_x = (chunk_coord.x + 1u) < chunks_size.x;
-    let has_neg_y = chunk_coord.y > 0u;
-    let has_pos_y = (chunk_coord.y + 1u) < chunks_size.y;
+    let do_east = node_coord.x == 0u && (chunk.flags & EAST_FLAG) != 0u;
+    let do_west = node_coord.x == last && (chunk.flags & WEST_FLAG) != 0u;
+    let do_south = node_coord.y == 0u && (chunk.flags & SOUTH_FLAG) != 0u;
+    let do_north = node_coord.y == last && (chunk.flags & NORTH_FLAG) != 0u;
 
-    // -X
-    if node_coord.x == 0u && has_neg_x {
-        let nidx = (chunk_coord.y * chunks_size.x) + (chunk_coord.x - 1u);
-        if u_height_map[nidx].lod > chunk_lod && (node_coord.y & 1u) == 1u {
-            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(0u, scale));
-            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(0u, scale));
-            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
-        }
+    // -X / +X
+    if (do_east || do_west) && (node_coord.y & 1u) != 0u {
+        let a = get_node(abs_node_coord - vec2<u32>(0u, scale));
+        let b = get_node(abs_node_coord + vec2<u32>(0u, scale));
+        normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
     }
 
-    // +X
-    if node_coord.x == last && has_pos_x {
-        let nidx = (chunk_coord.y * chunks_size.x) + (chunk_coord.x + 1u);
-        if u_height_map[nidx].lod > chunk_lod && (node_coord.y & 1u) == 1u {
-            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(0u, scale));
-            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(0u, scale));
-            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
-        }
-    }
-
-    // -Y
-    if node_coord.y == 0u && has_neg_y {
-        let nidx = ((chunk_coord.y - 1u) * chunks_size.x) + chunk_coord.x;
-        if u_height_map[nidx].lod > chunk_lod && (node_coord.x & 1u) == 1u {
-            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(scale, 0u));
-            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(scale, 0u));
-            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
-        }
-    }
-
-    // +Y
-    if node_coord.y == last && has_pos_y {
-        let nidx = ((chunk_coord.y + 1u) * chunks_size.x) + chunk_coord.x;
-        if u_height_map[nidx].lod > chunk_lod && (node_coord.x & 1u) == 1u {
-            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(scale, 0u));
-            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(scale, 0u));
-            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
-        }
+    // -Y / +Y
+    if (do_south || do_north) && (node_coord.x & 1u) != 0u {
+        let a = get_node(abs_node_coord - vec2<u32>(scale, 0u));
+        let b = get_node(abs_node_coord + vec2<u32>(scale, 0u));
+        normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
     }
 
     return normal_and_height;
 }
-*/
 
 @vertex
 fn vertex_terrain(
     @builtin(vertex_index) vertex_index: u32,
     chunk: InstanceInput,
 ) -> VertexOutput {
-    let chunk_coord = chunk.coord;
-
     let node_coord = vec2<u32>(
-        (vertex_index % 9) << chunk.lod,
-        (vertex_index / 9) << chunk.lod,
+        vertex_index % 9,
+        vertex_index / 9,
     );
 
-    let abs_node_coord = chunk_coord * 8 + node_coord;
+    let abs_node_coord = chunk.coord * 8 +
+        vec2<u32>(node_coord.x << chunk.lod, node_coord.y << chunk.lod);
 
-    let node = get_node(abs_node_coord);
-    // let node = get_stitched_node(chunk.lod, chunk_coord, node_coord);
+    let node = get_stitched_node(
+        chunk.coord,
+        node_coord,
+        abs_node_coord,
+        chunk,
+    );
 
     let world_position = vec3<f32>(
         f32(abs_node_coord.x) * u_terrain_data.cell_size,
         f32(abs_node_coord.y) * u_terrain_data.cell_size,
-        node.w,
+        node.w, // Height from the height map.
     );
+
+    let normal = node.xyz;  // Normal from the height map.
 
     let clip_position = u_camera_env.proj_view * vec4<f32>(world_position, 1.0);
 
@@ -145,6 +125,7 @@ fn vertex_terrain(
     return VertexOutput(
         clip_position,
         world_position,
+        normal,
         tex_coord,
     );
 }
@@ -157,7 +138,7 @@ fn fragment_terrain(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     let d = diffuse_with_fog(
         u_camera_env,
-        vec3<f32>(0.0, 0.0, 1.0),
+        vertex.normal,
         base_color.rgb,
         distance,
         1.0,
@@ -200,11 +181,10 @@ fn diffuse_with_fog(
 ) -> vec3<f32> {
     let lit_color = diffuse(env, normal, base_color, visibility);
 
-    let fog_factor = linear_fog_factor(
-        env.fog_near_fraction, // near
-        env.fog_distance, // far
-        distance,
-    );
+    let fog_near = env.fog_distance * env.fog_near_fraction;
+    let fog_far = env.fog_distance;
+
+    let fog_factor = linear_fog_factor(fog_near, fog_far, distance);
 
     return mix(lit_color, env.fog_color.rgb, fog_factor);
 }

@@ -1,4 +1,4 @@
-use glam::{UVec2, Vec2, Vec3, Vec4, uvec2};
+use glam::{IVec2, Vec2, Vec3, Vec4, ivec2};
 use slab::Slab;
 
 use crate::{
@@ -26,7 +26,7 @@ pub struct Node {
     /// Each of the possible 4 children that makes up the quad tree.
     children: [Option<NodeId>; 4],
     /// If this node is a leaf and wraps a single terrain chunk, it holds the chunk coord.
-    pub chunk_coord: Option<UVec2>,
+    pub chunk_coord: Option<IVec2>,
 }
 
 impl Node {
@@ -48,7 +48,7 @@ impl QuadTree {
     pub fn from_new_terrain(terrain: &NewTerrain) -> Self {
         let mut result = Self::default();
 
-        result.root = result.build_new_node(terrain, UVec2::ZERO, terrain.chunk_dim);
+        result.root = result.build_new_node(terrain, IVec2::ZERO, terrain.chunk_dim.as_ivec2());
 
         result
     }
@@ -56,10 +56,10 @@ impl QuadTree {
     fn build_new_node(
         &mut self,
         terrain: &NewTerrain,
-        chunk_min: UVec2,
-        chunk_max: UVec2,
+        chunk_min: IVec2,
+        chunk_max: IVec2,
     ) -> NodeId {
-        let size = UVec2::new(
+        let size = ivec2(
             (chunk_max.x - chunk_min.x).max(1),
             (chunk_max.y - chunk_min.y).max(1),
         );
@@ -71,7 +71,7 @@ impl QuadTree {
 
         for y in chunk_min.y..chunk_max.y {
             for x in chunk_min.x..chunk_max.x {
-                if let Some(chunk) = terrain.chunk_at(uvec2(x, y)) {
+                if let Some(chunk) = terrain.chunk_at(ivec2(x, y)) {
                     min = min.min(chunk.bounding_box.min);
                     max = max.max(chunk.bounding_box.max);
                 }
@@ -92,10 +92,10 @@ impl QuadTree {
             let mid = (chunk_min + chunk_max) / 2;
 
             let child_rects = [
-                [uvec2(chunk_min.x, mid.y), uvec2(mid.x, chunk_max.y)], // Top-left
-                [uvec2(mid.x, mid.y), uvec2(chunk_max.x, chunk_max.y)], // Top-right
-                [uvec2(chunk_min.x, chunk_min.y), uvec2(mid.x, mid.y)], // Bottom-left
-                [uvec2(mid.x, chunk_min.y), uvec2(chunk_max.x, mid.y)], // Bottom-right
+                [ivec2(chunk_min.x, mid.y), ivec2(mid.x, chunk_max.y)], // Top-left
+                [ivec2(mid.x, mid.y), ivec2(chunk_max.x, chunk_max.y)], // Top-right
+                [ivec2(chunk_min.x, chunk_min.y), ivec2(mid.x, mid.y)], // Bottom-left
+                [ivec2(mid.x, chunk_min.y), ivec2(chunk_max.x, mid.y)], // Bottom-right
             ];
 
             for (i, child) in node.children.iter_mut().enumerate() {

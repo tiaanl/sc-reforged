@@ -1,4 +1,4 @@
-use glam::{UVec2, Vec3};
+use glam::{IVec2, Vec3};
 
 use crate::{
     engine::gizmos::GizmoVertex,
@@ -42,7 +42,7 @@ pub struct SimWorld {
 
     pub terrain: NewTerrain,
     /// The visible chunks for the current frame.
-    pub visible_chunks: Vec<UVec2>,
+    pub visible_chunks: Vec<IVec2>,
 
     pub gizmo_vertices: Vec<GizmoVertex>,
 }

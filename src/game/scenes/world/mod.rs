@@ -402,7 +402,7 @@ impl WorldScene {
                     camera_from,
                     -yaw.to_degrees(),
                     pitch.to_degrees(),
-                    1000.0,
+                    2000.0,
                     100.0,
                 )
             })),

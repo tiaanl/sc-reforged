@@ -1,5 +1,5 @@
 use ahash::HashMap;
-use glam::{UVec2, Vec3};
+use glam::{IVec2, UVec2, Vec3, ivec2};
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -28,7 +28,7 @@ pub struct TerrainSystem {
     pipeline: wgpu::RenderPipeline,
 
     /// A *transient* cache of LOD's for the current frame.
-    chunk_lod_cache: HashMap<UVec2, u32>,
+    chunk_lod_cache: HashMap<IVec2, u32>,
 }
 
 impl TerrainSystem {
@@ -312,7 +312,7 @@ impl System for TerrainSystem {
             .visible_chunks
             .iter()
             .map(|coord| {
-                let mut lod_at = |coord: UVec2| {
+                let mut lod_at = |coord: IVec2| {
                     context.sim_world.terrain.chunk_at(coord).map(|chunk| {
                         *self.chunk_lod_cache.entry(coord).or_insert({
                             let center = chunk.bounding_box.center();
@@ -323,10 +323,20 @@ impl System for TerrainSystem {
 
                 let center_lod = lod_at(*coord).expect("Center chunk is always valid!");
 
+                let mut flags = 0_u32;
+                let neighbors = [ivec2(0, 1), ivec2(-1, 0), ivec2(0, -1), ivec2(1, 0)]
+                    .map(|offset| lod_at(*coord + offset));
+                for (i, neighbor_lod) in neighbors.iter().enumerate() {
+                    // A higher LOD means the resolution is lower, so we check greater than here.
+                    if neighbor_lod.unwrap_or(center_lod) > center_lod {
+                        flags |= 1 << i;
+                    }
+                }
+
                 ChunkInstanceData {
-                    coord: coord.to_array(),
+                    coord: coord.as_uvec2().to_array(),
                     lod: center_lod,
-                    flags: 0,
+                    flags,
                 }
             })
             .collect();

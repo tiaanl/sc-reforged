@@ -1,4 +1,4 @@
-use glam::{UVec2, Vec3, Vec4, uvec2};
+use glam::{IVec2, UVec2, Vec3, Vec4, ivec2};
 
 pub struct NewHeightMap {
     /// Amount of nodes in the height map.
@@ -23,13 +23,13 @@ impl NewHeightMap {
     }
 
     #[inline]
-    pub fn node_at(&self, coord: UVec2) -> Vec4 {
-        let coord = coord.clamp(UVec2::ZERO, self.size - UVec2::ONE);
+    pub fn node_at(&self, coord: IVec2) -> Vec4 {
+        let coord = coord.clamp(IVec2::ZERO, self.size.as_ivec2() - IVec2::ONE);
         self.nodes[coord.y as usize * self.size.x as usize + coord.x as usize]
     }
 
     #[inline]
-    pub fn world_position_at(&self, coord: UVec2) -> Vec3 {
+    pub fn world_position_at(&self, coord: IVec2) -> Vec3 {
         let altitude = self.node_at(coord).w;
 
         Vec3::new(
@@ -40,15 +40,26 @@ impl NewHeightMap {
     }
 
     fn recalculate_normals(&mut self) {
-        for y in 1..self.size.y - 1 {
-            for x in 1..self.size.x - 1 {
-                let center = self.world_position_at(uvec2(x, y));
+        let size = self.size.as_ivec2();
+
+        // Force normals on the edges to be straight up. This is what the game does.
+        for y in 0..size.y {
+            for x in 0..size.x {
+                if x == 0 || y == 0 || x == size.x - 1 || y == size.y - 1 {
+                    let node = &mut self.nodes[y as usize * size.x as usize + x as usize];
+                    node.x = 0.0;
+                    node.y = 0.0;
+                    node.z = 1.0;
+                    continue;
+                }
+
+                let center = self.world_position_at(ivec2(x, y));
 
                 let [north, east, south, west] = [
-                    UVec2::new(x, y + 1),
-                    UVec2::new(x - 1, y),
-                    UVec2::new(x, y - 1),
-                    UVec2::new(x + 1, y),
+                    ivec2(x, y + 1),
+                    ivec2(x - 1, y),
+                    ivec2(x, y - 1),
+                    ivec2(x + 1, y),
                 ]
                 .map(|coord| (center - self.world_position_at(coord)).normalize());
 
@@ -59,7 +70,7 @@ impl NewHeightMap {
 
                 let n = (n0 + n1 + n2 + n3).normalize();
 
-                let node = &mut self.nodes[y as usize * self.size.x as usize + x as usize];
+                let node = &mut self.nodes[y as usize * size.x as usize + x as usize];
                 node.x = n.x;
                 node.y = n.y;
                 node.z = n.z;
