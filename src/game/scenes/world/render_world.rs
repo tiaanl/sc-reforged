@@ -13,12 +13,13 @@ pub struct CameraEnvironment {
     pub position: [f32; 4], // x, y, z, 1
     pub forward: [f32; 4],  // x, y, z, 0
 
-    pub sun_dir: [f32; 4],   // x, y, z, 0
-    pub sun_color: [f32; 4], // r, g, b, 1
-    pub fog_color: [f32; 4], // r, g, b, 1
+    pub sun_dir: [f32; 4],       // x, y, z, 0
+    pub sun_color: [f32; 4],     // r, g, b, 1
+    pub ambient_color: [f32; 4], // r, g, b, 1
+    pub fog_color: [f32; 4],     // r, g, b, 1
     pub fog_distance: f32,
     pub fog_near_fraction: f32,
-    pub _pad: [u32; 2],
+    pub _pad: [u32; 6],
 }
 
 #[derive(Clone, Copy, Default, NoUninit)]

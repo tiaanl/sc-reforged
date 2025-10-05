@@ -4,9 +4,10 @@ struct CameraEnv {
     position: vec4<f32>,
     forward: vec4<f32>,
 
-    sun_dir: vec4<f32>,   // x, y, z, 0
-    sun_color: vec4<f32>, // r, g, b, 1
-    fog_color: vec4<f32>, // r, g, b, 1
+    sun_dir: vec4<f32>,       // x, y, z, 0
+    sun_color: vec4<f32>,     // r, g, b, 1
+    ambient_color: vec4<f32>, // r, g, b, 1
+    fog_color: vec4<f32>,     // r, g, b, 1
     fog_distance: f32,
     fog_near_fraction: f32,
 }
@@ -118,8 +119,8 @@ fn vertex_terrain(
     let clip_position = u_camera_env.proj_view * vec4<f32>(world_position, 1.0);
 
     let tex_coord = vec2<f32>(
-        f32(abs_node_coord.x) / f32(u_terrain_data.cells_dim.x),
-        f32(abs_node_coord.y) / f32(u_terrain_data.cells_dim.y),
+        f32(abs_node_coord.x) / f32(u_terrain_data.cells_dim.x + 1),
+        f32(abs_node_coord.y) / f32(u_terrain_data.cells_dim.y + 1),
     );
 
     return VertexOutput(
@@ -163,7 +164,7 @@ fn diffuse(
     let sun_light = env.sun_color.rgb * n_dot_l * visibility;
 
     // Ambient term (not shadowed)
-    let ambient = vec3<f32>(env.sun_dir.w, env.sun_color.w, env.fog_color.w);
+    let ambient = env.ambient_color.rgb;
     let ambient_color = env.sun_color.rgb * ambient;
 
     let lighting = sun_light + ambient_color;

@@ -1,3 +1,5 @@
+use glam::vec4;
+
 use crate::{
     engine::input::InputState,
     game::{
@@ -63,12 +65,15 @@ where
         let sun_dir = source.sun_dir.sample_sub_frame(time_of_day, true);
         let sun_color = source.sun_color.sample_sub_frame(time_of_day, true);
 
+        let ambient_color = vec4(0.3, 0.3, 0.3, 1.0);
+
         let fog_distance = source.fog_distance.sample_sub_frame(time_of_day, true);
         let fog_near_fraction = source.fog_near_fraction.sample_sub_frame(time_of_day, true);
         let fog_color = source.fog_color.sample_sub_frame(time_of_day, true);
 
         target.sun_dir = sun_dir.extend(0.0).to_array();
         target.sun_color = sun_color.extend(1.0).to_array();
+        target.ambient_color = ambient_color.to_array();
         target.fog_color = fog_color.extend(1.0).to_array();
         target.fog_distance = fog_distance;
         target.fog_near_fraction = fog_near_fraction;
