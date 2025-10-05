@@ -1125,6 +1125,10 @@ impl Scene for WorldScene {
 
         egui::Window::new("Stats").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                ui.label("Frame index");
+                ui.label(format!("{frame_index}"));
+            });
+            ui.horizontal(|ui| {
                 ui.label("Visible chunks");
                 ui.label(format!("{}", self.sim_world.visible_chunks.len()));
             });
