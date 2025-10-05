@@ -42,23 +42,92 @@ fn get_node(coord: vec2<u32>) -> vec4<f32> {
     return u_height_map[index];
 }
 
+/*
+fn get_stitched_node(
+    chunk_lod: u32,
+    chunk_coord: vec2<u32>,
+    node_coord: vec2<u32>,
+) -> vec4<f32> {
+    let abs_node_coord = chunk_coord + (node_coord << chunk_lod);
+
+    var normal_and_height = get_node(abs_node_coord);
+
+    let last = terrain::CELLS_PER_CHUNK >> chunk_lod;
+
+    // If last is one, the amount of cells in this chunk is 1, so no stitching is required.
+    if last == 1u {
+       return normal_and_height;
+    }
+
+    let scale = 1u << chunk_lod;
+    let chunks_size = u_terrain_data.cells_dim / terrain::CELLS_PER_CHUNK;
+
+    // Check if neighbors are valid.
+    let has_neg_x = chunk_coord.x > 0u;
+    let has_pos_x = (chunk_coord.x + 1u) < chunks_size.x;
+    let has_neg_y = chunk_coord.y > 0u;
+    let has_pos_y = (chunk_coord.y + 1u) < chunks_size.y;
+
+    // -X
+    if node_coord.x == 0u && has_neg_x {
+        let nidx = (chunk_coord.y * chunks_size.x) + (chunk_coord.x - 1u);
+        if u_height_map[nidx].lod > chunk_lod && (node_coord.y & 1u) == 1u {
+            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(0u, scale));
+            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(0u, scale));
+            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
+        }
+    }
+
+    // +X
+    if node_coord.x == last && has_pos_x {
+        let nidx = (chunk_coord.y * chunks_size.x) + (chunk_coord.x + 1u);
+        if u_height_map[nidx].lod > chunk_lod && (node_coord.y & 1u) == 1u {
+            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(0u, scale));
+            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(0u, scale));
+            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
+        }
+    }
+
+    // -Y
+    if node_coord.y == 0u && has_neg_y {
+        let nidx = ((chunk_coord.y - 1u) * chunks_size.x) + chunk_coord.x;
+        if u_height_map[nidx].lod > chunk_lod && (node_coord.x & 1u) == 1u {
+            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(scale, 0u));
+            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(scale, 0u));
+            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
+        }
+    }
+
+    // +Y
+    if node_coord.y == last && has_pos_y {
+        let nidx = ((chunk_coord.y + 1u) * chunks_size.x) + chunk_coord.x;
+        if u_height_map[nidx].lod > chunk_lod && (node_coord.x & 1u) == 1u {
+            let a = get_node_normal_and_height(abs_node_coord - vec2<u32>(scale, 0u));
+            let b = get_node_normal_and_height(abs_node_coord + vec2<u32>(scale, 0u));
+            normal_and_height = vec4<f32>(normalize(a.xyz + b.xyz), 0.5 * (a.w + b.w));
+        }
+    }
+
+    return normal_and_height;
+}
+*/
+
 @vertex
 fn vertex_terrain(
     @builtin(vertex_index) vertex_index: u32,
     chunk: InstanceInput,
 ) -> VertexOutput {
-    let camera = u_camera_env;
-
     let chunk_coord = chunk.coord;
 
     let node_coord = vec2<u32>(
-        vertex_index % 9,
-        vertex_index / 9,
+        (vertex_index % 9) << chunk.lod,
+        (vertex_index / 9) << chunk.lod,
     );
 
     let abs_node_coord = chunk_coord * 8 + node_coord;
 
     let node = get_node(abs_node_coord);
+    // let node = get_stitched_node(chunk.lod, chunk_coord, node_coord);
 
     let world_position = vec3<f32>(
         f32(abs_node_coord.x) * u_terrain_data.cell_size,
@@ -66,7 +135,7 @@ fn vertex_terrain(
         node.w,
     );
 
-    let clip_position = camera.proj_view * vec4<f32>(world_position, 1.0);
+    let clip_position = u_camera_env.proj_view * vec4<f32>(world_position, 1.0);
 
     let tex_coord = vec2<f32>(
         f32(abs_node_coord.x) / f32(u_terrain_data.cells_dim.x),

@@ -18,10 +18,12 @@ pub struct NewTerrain {
 }
 
 impl NewTerrain {
+    /// Number of LOD levels.
+    pub const LOD_COUNT: u32 = 4;
     /// Maximum level of detail downsampling. cell_count = (1 << LOD_MAX)
-    pub const LOD_MAX: u32 = 3;
+    pub const LOD_MAX: u32 = Self::LOD_COUNT - 1;
     /// Amount of cells in a chunk.
-    pub const CELLS_PER_CHUNK: u32 = 8;
+    pub const CELLS_PER_CHUNK: u32 = 1 << Self::LOD_MAX;
     /// Amount of nodes in a chunk.
     pub const NODES_PER_CHUNK: u32 = Self::CELLS_PER_CHUNK + 1;
 

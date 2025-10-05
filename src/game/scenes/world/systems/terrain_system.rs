@@ -1,4 +1,5 @@
-use glam::UVec2;
+use ahash::HashMap;
+use glam::{UVec2, Vec3};
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -25,9 +26,16 @@ pub struct TerrainSystem {
     terrain_bind_group: wgpu::BindGroup,
     /// Pipeline to render the terrain chunks.
     pipeline: wgpu::RenderPipeline,
+
+    /// A *transient* cache of LOD's for the current frame.
+    chunk_lod_cache: HashMap<UVec2, u32>,
 }
 
 impl TerrainSystem {
+    const INDEX_RANGES: [std::ops::Range<u32>; 4] = [0..384, 384..480, 480..504, 504..510];
+    const WIREFRAME_INDEX_RANGES: [std::ops::Range<u32>; 4] =
+        [0..512, 512..640, 640..672, 672..680];
+
     pub fn new(context: &mut NewSystemContext) -> Self {
         let NewSystemContext {
             renderer,
@@ -252,22 +260,81 @@ impl TerrainSystem {
             terrain_bind_group,
 
             pipeline,
+
+            chunk_lod_cache: HashMap::default(),
         }
+    }
+
+    /// Build a list of instances per LOD.
+    /// `chunk_instances` *must* be sorted by LOD.
+    fn build_draw_commands(
+        chunk_instances: &[ChunkInstanceData],
+        ranges: &[std::ops::Range<u32>],
+    ) -> [(std::ops::Range<u32>, std::ops::Range<u32>); NewTerrain::LOD_COUNT as usize] {
+        // TODO: This is probably not needed.
+        debug_assert!(chunk_instances.is_sorted_by_key(|instance| instance.lod));
+
+        let mut counts = [0_u32; NewTerrain::LOD_COUNT as usize];
+
+        // Count the number of each LOD.
+        for instance in chunk_instances {
+            let lod = instance.lod.min(NewTerrain::LOD_MAX) as usize;
+            counts[lod] += 1;
+        }
+
+        // Create starting indices by accumulating the LOD counts.
+        let mut offsets = [0_u32; NewTerrain::LOD_COUNT as usize];
+        let mut acc = 0;
+        for i in 0..counts.len() {
+            offsets[i] = acc;
+            acc += counts[i];
+        }
+
+        [
+            (ranges[0].clone(), offsets[0]..offsets[0] + counts[0]),
+            (ranges[1].clone(), offsets[1]..offsets[1] + counts[1]),
+            (ranges[2].clone(), offsets[2]..offsets[2] + counts[2]),
+            (ranges[3].clone(), offsets[3]..offsets[3] + counts[3]),
+        ]
     }
 }
 
 impl System for TerrainSystem {
     fn extract(&mut self, context: &mut ExtractContext) {
+        self.chunk_lod_cache.clear();
+
+        let camera_position = context.sim_world.computed_camera.position;
+        let camera_forward = context.sim_world.computed_camera.forward;
+        let camera_far = context.sim_world.camera.far;
+
         context.render_world.terrain_chunk_instances = context
             .sim_world
             .visible_chunks
             .iter()
-            .map(|coord| ChunkInstanceData {
-                coord: coord.to_array(),
-                lod: 0,
-                flags: 0,
+            .map(|coord| {
+                let mut lod_at = |coord: UVec2| {
+                    context.sim_world.terrain.chunk_at(coord).map(|chunk| {
+                        *self.chunk_lod_cache.entry(coord).or_insert({
+                            let center = chunk.bounding_box.center();
+                            calculate_lod(camera_position, camera_forward, camera_far, center)
+                        })
+                    })
+                };
+
+                let center_lod = lod_at(*coord).expect("Center chunk is always valid!");
+
+                ChunkInstanceData {
+                    coord: coord.to_array(),
+                    lod: center_lod,
+                    flags: 0,
+                }
             })
             .collect();
+
+        context
+            .render_world
+            .terrain_chunk_instances
+            .sort_unstable_by_key(|instance| instance.lod);
     }
 
     fn prepare(&mut self, context: &mut PrepareContext) {
@@ -323,10 +390,34 @@ impl System for TerrainSystem {
         render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
         render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
-        let vertex_count: u32 = 384;
-        let instance_count: u32 = render_world.terrain_chunk_instances.len() as u32;
-        render_pass.draw_indexed(0..vertex_count, 0, 0..instance_count);
+        let draw_commands =
+            Self::build_draw_commands(&render_world.terrain_chunk_instances, &Self::INDEX_RANGES);
+
+        for (indices, instances) in draw_commands {
+            if instances.is_empty() {
+                continue;
+            }
+            render_pass.draw_indexed(indices, 0, instances);
+        }
     }
+}
+
+fn calculate_lod(
+    camera_position: Vec3,
+    camera_forward: Vec3,
+    camera_far: f32,
+    chunk_center: Vec3,
+) -> u32 {
+    let far = camera_far.max(1e-6);
+    let inv_step = NewTerrain::LOD_MAX as f32 / far;
+
+    let forward_distance = (chunk_center - camera_position)
+        .dot(camera_forward)
+        .max(0.0);
+
+    let t = forward_distance * inv_step;
+
+    (t.floor() as i32).clamp(0, (NewTerrain::LOD_MAX - 1) as i32) as u32
 }
 
 struct ChunkIndices {
