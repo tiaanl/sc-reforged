@@ -28,7 +28,8 @@ use crate::{
                 PrepareContext, QueueContext, RenderStore, System, Time, UpdateContext,
                 camera_system::CameraSystem, cull_system::CullSystem,
                 day_night_cycle_system::DayNightCycleSystem, gizmo_system::GizmoSystem,
-                terrain_system::TerrainSystem, top_down_camera_controller::TopDownCameraController,
+                strata_system::StrataSystem, terrain_system::TerrainSystem,
+                top_down_camera_controller::TopDownCameraController,
             },
         },
         shadows::ShadowCascades,
@@ -402,12 +403,13 @@ impl WorldScene {
                     camera_from,
                     -yaw.to_degrees(),
                     pitch.to_degrees(),
-                    2000.0,
+                    10_000.0,
                     100.0,
                 )
             })),
             Box::new(CullSystem::default()),
             Box::new(TerrainSystem::new(&mut context)),
+            Box::new(StrataSystem::new(&mut context)),
             Box::new(GizmoSystem::new(&mut context)),
         ];
 

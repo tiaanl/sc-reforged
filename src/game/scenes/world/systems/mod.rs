@@ -13,6 +13,7 @@ pub mod cull_system;
 pub mod day_night_cycle_system;
 pub mod free_camera_controller;
 pub mod gizmo_system;
+pub mod strata_system;
 pub mod terrain_system;
 pub mod top_down_camera_controller;
 
@@ -89,8 +90,8 @@ macro_rules! impl_render_store_item {
     ($get_name:ident, $insert_name:ident, $var:ident, $ty:ty) => {
         impl RenderStore {
             #[inline]
-            pub fn $get_name(&self, id: &'static str) -> Option<&$ty> {
-                self.$var.get(id)
+            pub fn $get_name(&self, id: &'static str) -> Option<$ty> {
+                self.$var.get(id).cloned()
             }
 
             pub fn $insert_name(&mut self, id: &'static str, value: $ty) {

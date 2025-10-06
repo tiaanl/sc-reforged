@@ -68,26 +68,20 @@ impl std::fmt::Debug for GpuIndexedMesh {
 }
 
 impl<V: bytemuck::NoUninit> IndexedMesh<V> {
-    pub fn to_gpu(&self) -> GpuIndexedMesh {
+    pub fn to_gpu(&self, device: &wgpu::Device) -> GpuIndexedMesh {
         debug_assert!(!self.vertices.is_empty(), "Uploading empty vertex buffer.");
         debug_assert!(!self.indices.is_empty(), "Uploading empty index buffer.");
 
-        let renderer = renderer();
-
-        let vertex_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("mesh_vertex_buffer"),
-                contents: bytemuck::cast_slice(&self.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-        let index_buffer = renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("mesh_index_buffer"),
-                contents: bytemuck::cast_slice(&self.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("mesh_vertex_buffer"),
+            contents: bytemuck::cast_slice(&self.vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("mesh_index_buffer"),
+            contents: bytemuck::cast_slice(&self.indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
 
         GpuIndexedMesh {
             vertex_buffer,

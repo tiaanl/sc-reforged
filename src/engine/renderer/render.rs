@@ -52,6 +52,7 @@ impl Renderer {
 
         let supported = adapter.features();
         let required = wgpu::Features::MULTI_DRAW_INDIRECT
+            | wgpu::Features::POLYGON_MODE_LINE
             | wgpu::Features::PUSH_CONSTANTS
             | wgpu::Features::TEXTURE_BINDING_ARRAY
             | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;

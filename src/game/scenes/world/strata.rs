@@ -78,7 +78,7 @@ impl Strata {
                 }
             }
 
-            mesh.to_gpu()
+            mesh.to_gpu(&renderer.device)
         };
 
         let (instances_buffer, instances_count) = {

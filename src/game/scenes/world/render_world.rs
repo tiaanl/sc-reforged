@@ -53,6 +53,9 @@ pub struct RenderWorld {
 impl RenderWorld {
     pub const CAMERA_BIND_GROUP_LAYOUT_ID: &str = "camera_bind_group_layout";
 
+    pub const TERRAIN_BIND_GROUP_LAYOUT_ID: &str = "terrain_bind_group_layout";
+    pub const TERRAIN_BIND_GROUP_ID: &str = "terrain_bind_group";
+
     pub fn new(index: usize, renderer: &Renderer, render_store: &mut RenderStore) -> Self {
         // Make sure the camera bind group layout is in the store.
         if render_store
@@ -97,7 +100,7 @@ impl RenderWorld {
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(&format!("cmaera_bind_group_{index}")),
-                layout: camera_bind_group_layout,
+                layout: &camera_bind_group_layout,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: camera_env_buffer.as_entire_binding(),

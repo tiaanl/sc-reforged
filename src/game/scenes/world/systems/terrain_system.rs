@@ -22,8 +22,6 @@ pub struct TerrainSystem {
     chunk_indices_buffer: wgpu::Buffer,
     /// Buffer holding indices to render a wireframe over a single chunk of various LOD's.
     _chunk_wireframe_indices_buffer: wgpu::Buffer,
-    /// Bind group for all terrain rendering resources.
-    terrain_bind_group: wgpu::BindGroup,
     /// Pipeline to render the terrain chunks.
     pipeline: wgpu::RenderPipeline,
 
@@ -147,6 +145,14 @@ impl TerrainSystem {
                     ],
                 });
 
+        render_store.store_bind_group_layout(
+            RenderWorld::TERRAIN_BIND_GROUP_LAYOUT_ID,
+            terrain_bind_group_layout,
+        );
+        let terrain_bind_group_layout = render_store
+            .get_bind_group_layout(RenderWorld::TERRAIN_BIND_GROUP_LAYOUT_ID)
+            .unwrap();
+
         let terrain_bind_group = renderer
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
@@ -171,6 +177,8 @@ impl TerrainSystem {
                     },
                 ],
             });
+
+        render_store.store_bind_group(RenderWorld::TERRAIN_BIND_GROUP_ID, terrain_bind_group);
 
         let (chunk_indices_buffer, chunk_wireframe_indices_buffer) = {
             let chunk_indices = ChunkIndices::default();
@@ -209,7 +217,7 @@ impl TerrainSystem {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("terrain_pipeline_layout"),
-                    bind_group_layouts: &[camera_bind_group_layout, &terrain_bind_group_layout],
+                    bind_group_layouts: &[&camera_bind_group_layout, &terrain_bind_group_layout],
                     push_constant_ranges: &[],
                 });
 
@@ -256,8 +264,6 @@ impl TerrainSystem {
 
             chunk_indices_buffer,
             _chunk_wireframe_indices_buffer: chunk_wireframe_indices_buffer,
-
-            terrain_bind_group,
 
             pipeline,
 
@@ -398,7 +404,13 @@ impl System for TerrainSystem {
             wgpu::IndexFormat::Uint32,
         );
         render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
+
+        if let Some(bind_group) = context
+            .render_store
+            .get_bind_group(RenderWorld::TERRAIN_BIND_GROUP_ID)
+        {
+            render_pass.set_bind_group(1, &bind_group, &[]);
+        }
 
         let draw_commands =
             Self::build_draw_commands(&render_world.terrain_chunk_instances, &Self::INDEX_RANGES);

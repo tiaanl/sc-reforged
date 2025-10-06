@@ -148,6 +148,51 @@ fn fragment_terrain(vertex: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(d, 1.0);
 }
 
+struct StrataVertexInput {
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) node_coord: vec2<u32>,
+}
+
+struct StrataVertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) normal: vec3<f32>,
+    @location(1) node_coord: vec2<u32>,
+}
+
+@vertex
+fn strata_vertex(input: StrataVertexInput, @builtin(vertex_index) vertex_index: u32) -> StrataVertexOutput {
+    let node_coord = input.node_coord;
+
+    let node = get_node(node_coord);
+
+    var z = input.position.z;
+    if (vertex_index & 1u) != 0 {
+        z = node.w;
+    }
+
+    let world_position = vec3<f32>(
+        input.position.x * 200.0,
+        input.position.y * 200.0,
+        z,
+    );
+
+    let clip_position = u_camera_env.proj_view * vec4<f32>(world_position, 1.0);
+
+    return StrataVertexOutput(
+        clip_position,
+        input.normal,
+        node_coord,
+    );
+}
+
+@fragment
+fn strata_fragment(vertex: StrataVertexOutput) -> @location(0) vec4<f32> {
+    let lit = diffuse(u_camera_env, vertex.normal, vec3<f32>(1.0, 0.0, 0.0), 1.0);
+
+    return vec4<f32>(lit, 1.0);
+}
+
 /// Diffuse + ambient lighting, modulated by shadow visibility.
 fn diffuse(
     env: CameraEnv,
