@@ -28,8 +28,7 @@ use crate::{
                 PrepareContext, QueueContext, RenderStore, System, Time, UpdateContext,
                 camera_system::CameraSystem, cull_system::CullSystem,
                 day_night_cycle_system::DayNightCycleSystem, gizmo_system::GizmoSystem,
-                strata_system::StrataSystem, terrain_system::TerrainSystem,
-                top_down_camera_controller::TopDownCameraController,
+                terrain_system::TerrainSystem, top_down_camera_controller::TopDownCameraController,
             },
         },
         shadows::ShadowCascades,
@@ -409,7 +408,6 @@ impl WorldScene {
             })),
             Box::new(CullSystem::default()),
             Box::new(TerrainSystem::new(&mut context)),
-            Box::new(StrataSystem::new(&mut context)),
             Box::new(GizmoSystem::new(&mut context)),
         ];
 
@@ -1133,6 +1131,10 @@ impl Scene for WorldScene {
             ui.horizontal(|ui| {
                 ui.label("Visible chunks");
                 ui.label(format!("{}", self.sim_world.visible_chunks.len()));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Visible strata");
+                ui.label(format!("{}", render_world.strata_instances.len()));
             });
             ui.horizontal(|ui| {
                 ui.label("Gizmo vertices");

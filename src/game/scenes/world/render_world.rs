@@ -39,11 +39,23 @@ pub struct RenderWorld {
     pub camera_env_buffer: wgpu::Buffer,
     pub camera_env_bind_group: wgpu::BindGroup,
 
+    /// A list of terrain chunks to render.
     pub terrain_chunk_instances: Vec<ChunkInstanceData>,
-    /// A buffer containing instance data for chunks to be rendered per frame.
+    /// A list of strata blocks to render.  This is a different list from `terrain_chunk_instances`,
+    /// because strata's only render on the edge chunks.
+    pub strata_instances: Vec<ChunkInstanceData>,
+    /// Amount of instances per side. [south, west, north, east]
+    pub strata_instances_side_count: [u32; 4],
+
+    /// Buffer holding terrain chunk instance data for chunks to be rendered per frame.
     pub terrain_chunk_instances_buffer: wgpu::Buffer,
-    /// Current capacity of the `terrain_chunk_instance_buffer`.
+    /// Current capacity of `terrain_chunk_instance_buffer`.
     pub terrain_chunk_instances_buffer_capacity: u32,
+
+    /// Buffer holding instance data for strata to be rendered per frame.
+    pub strata_instances_buffer: wgpu::Buffer,
+    /// Current capacity of the `strata_chunk_instance_buffer`.
+    pub strata_instances_buffer_capacity: u32,
 
     pub gizmo_vertices: Vec<GizmoVertex>,
     pub gizmo_vertices_buffer: wgpu::Buffer,
@@ -52,9 +64,6 @@ pub struct RenderWorld {
 
 impl RenderWorld {
     pub const CAMERA_BIND_GROUP_LAYOUT_ID: &str = "camera_bind_group_layout";
-
-    pub const TERRAIN_BIND_GROUP_LAYOUT_ID: &str = "terrain_bind_group_layout";
-    pub const TERRAIN_BIND_GROUP_ID: &str = "terrain_bind_group";
 
     pub fn new(index: usize, renderer: &Renderer, render_store: &mut RenderStore) -> Self {
         // Make sure the camera bind group layout is in the store.
@@ -114,6 +123,17 @@ impl RenderWorld {
             index,
             "terrain_chunk_instances",
             terrain_chunk_instances_buffer_capacity,
+            wgpu::BufferUsages::VERTEX,
+        );
+
+        let strata_instances_buffer_capacity = 1 << 7;
+        let strata_instances = Vec::with_capacity(strata_instances_buffer_capacity as usize);
+        let strata_instances_buffer = Self::create_buffer_with_capacity::<ChunkInstanceData>(
+            &renderer.device,
+            index,
+            "strata_instances",
+            strata_instances_buffer_capacity,
+            wgpu::BufferUsages::VERTEX,
         );
 
         let gizmo_vertices = Vec::default();
@@ -123,6 +143,7 @@ impl RenderWorld {
             index,
             "gizmo_vertices_buffer",
             gizmo_vertices_buffer_capacity,
+            wgpu::BufferUsages::VERTEX,
         );
 
         Self {
@@ -133,8 +154,14 @@ impl RenderWorld {
             camera_env_bind_group,
 
             terrain_chunk_instances,
+            strata_instances,
+            strata_instances_side_count: [0; 4],
+
             terrain_chunk_instances_buffer,
             terrain_chunk_instances_buffer_capacity,
+
+            strata_instances_buffer,
+            strata_instances_buffer_capacity,
 
             gizmo_vertices,
             gizmo_vertices_buffer,
@@ -159,9 +186,33 @@ impl RenderWorld {
                     self.index,
                     "terrain_chunk_instances",
                     new_size,
+                    wgpu::BufferUsages::VERTEX,
                 );
 
             self.terrain_chunk_instances_buffer_capacity = new_size;
+        }
+    }
+
+    /// Ensure that we can hold the required amount of instances.
+    pub fn ensure_strata_instance_capacity(&mut self, device: &wgpu::Device, capacity: u32) {
+        if self.strata_instances_buffer_capacity < capacity {
+            let new_size = capacity.next_power_of_two();
+
+            tracing::warn!(
+                "Resizing strata instances buffer ({}) to {}",
+                self.index,
+                new_size
+            );
+
+            self.strata_instances_buffer = Self::create_buffer_with_capacity::<ChunkInstanceData>(
+                device,
+                self.index,
+                "strata_instances",
+                new_size,
+                wgpu::BufferUsages::VERTEX,
+            );
+
+            self.strata_instances_buffer_capacity = new_size;
         }
     }
 
@@ -180,6 +231,7 @@ impl RenderWorld {
                 self.index,
                 "gizmo_vertices",
                 new_size,
+                wgpu::BufferUsages::VERTEX,
             );
 
             self.gizmo_vertices_buffer_capacity = new_size;
@@ -191,6 +243,7 @@ impl RenderWorld {
         index: usize,
         name: &str,
         capacity: u32,
+        usages: wgpu::BufferUsages,
     ) -> wgpu::Buffer
     where
         T: bytemuck::NoUninit,
@@ -200,7 +253,7 @@ impl RenderWorld {
         device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(&format!("{name}:{index}")),
             size,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            usage: usages | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         })
     }

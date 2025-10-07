@@ -13,7 +13,6 @@ pub mod cull_system;
 pub mod day_night_cycle_system;
 pub mod free_camera_controller;
 pub mod gizmo_system;
-pub mod strata_system;
 pub mod terrain_system;
 pub mod top_down_camera_controller;
 

@@ -18,12 +18,14 @@ struct TerrainData {
     cells_dim: vec2<u32>,
     chunks_dim: vec2<u32>,
     cell_size: f32,
+    strata_descent: f32,
 }
 
 @group(1) @binding(0) var<uniform> u_terrain_data: TerrainData;
 @group(1) @binding(1) var<storage, read> u_height_map: array<vec4<f32>>;
 @group(1) @binding(2) var u_terrain_texture: texture_2d<f32>;
-@group(1) @binding(3) var u_terrain_sampler: sampler;
+@group(1) @binding(3) var u_strata_texture: texture_2d<f32>;
+@group(1) @binding(4) var u_terrain_sampler: sampler;
 
 struct InstanceInput {
     @location(0) coord: vec2<u32>,
@@ -149,48 +151,78 @@ fn fragment_terrain(vertex: VertexOutput) -> @location(0) vec4<f32> {
 }
 
 struct StrataVertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) node_coord: vec2<u32>,
-}
-
-struct StrataVertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) normal: vec3<f32>,
-    @location(1) node_coord: vec2<u32>,
+    @location(3) normal: vec3<f32>,
+    @location(4) node_coord: vec2<u32>,
 }
 
 @vertex
-fn strata_vertex(input: StrataVertexInput, @builtin(vertex_index) vertex_index: u32) -> StrataVertexOutput {
+fn strata_vertex(
+    chunk: InstanceInput,
+    input: StrataVertexInput,
+    @builtin(vertex_index) vertex_index: u32,
+) -> VertexOutput {
     let node_coord = input.node_coord;
 
-    let node = get_node(node_coord);
+    let abs_node_coord = chunk.coord * 8 + node_coord;
 
-    var z = input.position.z;
-    if (vertex_index & 1u) != 0 {
-        z = node.w;
-    }
-
-    let world_position = vec3<f32>(
-        input.position.x * 200.0,
-        input.position.y * 200.0,
-        z,
+    let node = get_stitched_node(
+        chunk.coord,
+        node_coord,
+        abs_node_coord,
+        chunk,
     );
+
+    let is_top = (vertex_index & 1u) != 0u;
+    let top_z = node.w;
+    let bottom_z = u_terrain_data.strata_descent;
+    let z = select(bottom_z, top_z, is_top);
+
+    let cell_size = u_terrain_data.cell_size;
+    let world_position = vec3<f32>(f32(abs_node_coord.x) * cell_size, f32(abs_node_coord.y) * cell_size, z);
 
     let clip_position = u_camera_env.proj_view * vec4<f32>(world_position, 1.0);
 
-    return StrataVertexOutput(
+    let side = (chunk.flags >> 8u) & 3u;
+
+    // U runs along the edge: X for south/north, y for east/west.
+    let edge_index_u: u32 = select(node_coord.x, node_coord.y, (side & 1u) != 0u);
+
+    // Flip U on north(2) and east(3) so texture flows consistently clockwise.
+    let flip_u = (side == 0u) || (side == 1u);
+    let cells_per_chunk: u32 = u_terrain_data.cells_dim.x / u_terrain_data.chunks_dim.x;
+    let edge_index_u_flipped: u32 = select(edge_index_u, (cells_per_chunk - edge_index_u), flip_u);
+
+    // Normalize to [0,1] across the edge length.
+    let u = f32(edge_index_u_flipped) / f32(cells_per_chunk);
+
+    let v = z / (f32(cells_per_chunk) * cell_size);
+
+    let tex_coord = vec2<f32>(u, v);
+
+    return VertexOutput(
         clip_position,
+        world_position,
         input.normal,
-        node_coord,
+        tex_coord,
     );
 }
 
 @fragment
-fn strata_fragment(vertex: StrataVertexOutput) -> @location(0) vec4<f32> {
-    let lit = diffuse(u_camera_env, vertex.normal, vec3<f32>(1.0, 0.0, 0.0), 1.0);
+fn strata_fragment(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    let base_color = textureSample(u_strata_texture, u_terrain_sampler, vertex.tex_coord);
 
-    return vec4<f32>(lit, 1.0);
+    let distance = length(vertex.world_position - u_camera_env.position.xyz);
+
+    let d = diffuse_with_fog(
+        u_camera_env,
+        vertex.normal,
+        base_color.rgb,
+        distance,
+        1.0,
+    );
+
+    return vec4<f32>(d, 1.0);
+
 }
 
 /// Diffuse + ambient lighting, modulated by shadow visibility.
