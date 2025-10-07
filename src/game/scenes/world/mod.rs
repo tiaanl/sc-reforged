@@ -26,9 +26,10 @@ use crate::{
             systems::{
                 ExtractContext, NewSystemContext, PostUpdateContext, PreUpdateContext,
                 PrepareContext, QueueContext, RenderStore, System, Time, UpdateContext,
-                camera_system::CameraSystem, cull_system::CullSystem,
-                day_night_cycle_system::DayNightCycleSystem, gizmo_system::GizmoSystem,
-                terrain_system::TerrainSystem, top_down_camera_controller::TopDownCameraController,
+                camera_system::CameraSystem, clear_render_targets::ClearRenderTargets,
+                cull_system::CullSystem, day_night_cycle_system::DayNightCycleSystem,
+                gizmo_system::GizmoSystem, terrain_system::TerrainSystem,
+                top_down_camera_controller::TopDownCameraController,
             },
         },
         shadows::ShadowCascades,
@@ -407,6 +408,7 @@ impl WorldScene {
                 )
             })),
             Box::new(CullSystem::default()),
+            Box::new(ClearRenderTargets),
             Box::new(TerrainSystem::new(&mut context)),
             Box::new(GizmoSystem::new(&mut context)),
         ];

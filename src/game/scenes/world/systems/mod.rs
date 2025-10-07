@@ -9,6 +9,7 @@ use crate::{
 };
 
 pub mod camera_system;
+pub mod clear_render_targets;
 pub mod cull_system;
 pub mod day_night_cycle_system;
 pub mod free_camera_controller;
