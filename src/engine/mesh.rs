@@ -1,7 +1,5 @@
 use wgpu::util::DeviceExt;
 
-use crate::engine::renderer::renderer;
-
 #[derive(Clone)]
 pub struct IndexedMesh<V> {
     pub vertices: Vec<V>,
