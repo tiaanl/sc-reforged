@@ -87,7 +87,13 @@ where
     fn pre_update(&mut self, context: &mut PreUpdateContext) {
         let camera = &mut context.sim_world.camera;
         self.controller
-            .handle_input(camera, &context.input_state, context.time.delta_time);
+            .handle_input(camera, context.input_state, context.time.delta_time);
+
+        camera.far = context
+            .sim_world
+            .day_night_cycle
+            .fog_distance
+            .sample_sub_frame(context.sim_world.time_of_day, true);
 
         let view_proj = camera.calculate_view_projection();
         let frustum = view_proj.frustum();

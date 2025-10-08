@@ -90,6 +90,8 @@ pub struct WorldScene {
     quad_tree: QuadTree,
 
     // Render
+    depth_buffer: wgpu::TextureView,
+
     shadow_cascades: ShadowCascades,
     shadow_cascades_lambda: f32,
     geometry_buffers: GeometryBuffers,
@@ -373,6 +375,8 @@ impl WorldScene {
             }
         };
 
+        let depth_buffer = Self::create_depth_buffer(&renderer().device, renderer().surface.size());
+
         let mut render_store = RenderStore::default();
 
         let render_worlds = [
@@ -432,6 +436,7 @@ impl WorldScene {
             objects,
             quad_tree,
 
+            depth_buffer,
             shadow_cascades,
             shadow_cascades_lambda: 0.5,
             geometry_buffers,
@@ -494,11 +499,34 @@ impl WorldScene {
             fog_params: [fog_near, fog_far, 0.0, 0.0],
         }
     }
+
+    fn create_depth_buffer(device: &wgpu::Device, size: UVec2) -> wgpu::TextureView {
+        let size = wgpu::Extent3d {
+            width: size.x.max(1),
+            height: size.y.max(1),
+            depth_or_array_layers: 1,
+        };
+
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("depth_buffer"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
+    }
 }
 
 impl Scene for WorldScene {
     fn resize(&mut self) {
         let size = renderer().surface.size();
+
+        self.depth_buffer = Self::create_depth_buffer(&renderer().device, size);
 
         // Replace the buffers with new ones.
         self.geometry_buffers = GeometryBuffers::new(&renderer().device, size);
@@ -651,6 +679,7 @@ impl Scene for WorldScene {
                 let mut context = QueueContext {
                     render_world,
                     frame,
+                    depth_buffer: &self.depth_buffer,
                     render_store: &mut self.render_store,
                 };
                 for system in self.systems.iter_mut() {

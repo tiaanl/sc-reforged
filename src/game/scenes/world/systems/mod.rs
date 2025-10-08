@@ -56,6 +56,7 @@ pub struct PrepareContext<'a> {
 pub struct QueueContext<'a> {
     pub render_world: &'a RenderWorld,
     pub frame: &'a mut Frame,
+    pub depth_buffer: &'a wgpu::TextureView,
     pub render_store: &'a RenderStore,
 }
 
