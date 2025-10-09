@@ -1,12 +1,16 @@
 use glam::{IVec2, Vec3};
 
 use crate::{
-    engine::gizmos::GizmoVertex,
+    engine::{gizmos::GizmoVertex, storage::Handle},
     game::{
         animations::track::Track,
         camera::Camera,
         math::{Frustum, ViewProjection},
-        scenes::world::{new_objects::NewObjects, new_terrain::NewTerrain, quad_tree::QuadTree},
+        scenes::world::{
+            new_objects::{NewObject, NewObjects},
+            new_terrain::NewTerrain,
+            quad_tree::QuadTree,
+        },
     },
 };
 
@@ -45,6 +49,9 @@ pub struct SimWorld {
     pub visible_chunks: Vec<IVec2>,
 
     pub objects: NewObjects,
+
+    /// A list of visible objects this frame.
+    pub visible_objects: Vec<Handle<NewObject>>,
 
     pub gizmo_vertices: Vec<GizmoVertex>,
 }

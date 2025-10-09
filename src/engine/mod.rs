@@ -1,5 +1,4 @@
 pub mod assets;
-pub mod bind_group;
 pub mod gizmos;
 mod global;
 pub mod input;

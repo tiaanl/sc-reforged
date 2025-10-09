@@ -32,5 +32,12 @@ impl CullSystem {
                     ));
             });
         }
+
+        sim_world.visible_objects = sim_world
+            .objects
+            .objects
+            .iter()
+            .map(|(handle, _)| handle)
+            .collect();
     }
 }

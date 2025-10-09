@@ -3,7 +3,9 @@ use crate::{
         gizmos::GizmoVertex,
         prelude::{BufferLayout, Frame, Renderer},
     },
-    game::scenes::world::{render_world::RenderWorld, sim_world::SimWorld, systems::RenderStore},
+    game::scenes::world::{
+        render_store::RenderStore, render_world::RenderWorld, sim_world::SimWorld,
+    },
     wgsl_shader,
 };
 

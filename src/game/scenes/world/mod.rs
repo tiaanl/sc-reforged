@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use glam::vec3;
 use terrain::Terrain;
 use wgpu::util::DeviceExt;
 
@@ -23,9 +22,9 @@ use crate::{
             new_terrain::NewTerrain,
             overlay_renderer::OverlayRenderer,
             quad_tree::QuadTree,
+            render_store::RenderStore,
             render_world::RenderWorld,
             sim_world::{ComputedCamera, SimWorld},
-            systems::RenderStore,
         },
         shadows::ShadowCascades,
         sky_renderer::SkyRenderer,
@@ -41,6 +40,7 @@ mod object;
 mod objects;
 mod overlay_renderer;
 mod quad_tree;
+mod render_store;
 mod render_world;
 mod sim_world;
 mod strata;
@@ -350,8 +350,24 @@ impl WorldScene {
             let quad_tree = QuadTree::from_new_terrain(&terrain);
 
             let mut objects = NewObjects::default();
-            objects.spawn(Transform::from_translation(Vec3::ZERO), 1_000.0);
-            objects.spawn(Transform::from_translation(Vec3::ONE * 1_000.0), 500.0);
+
+            if let Some(ref mtf_name) = campaign.mtf_name {
+                let mtf = data_dir().load_mtf(mtf_name)?;
+
+                for object in mtf.objects.iter() {
+                    let object_type = ObjectType::from_string(&object.typ)
+                        .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
+
+                    let _ = objects.spawn(
+                        Transform::from_translation(object.position)
+                            .with_euler_rotation(object.rotation),
+                        100.0,
+                        object_type,
+                        &object.name,
+                        &object.title,
+                    );
+                }
+            }
 
             SimWorld {
                 camera: camera::Camera::new(
@@ -372,6 +388,7 @@ impl WorldScene {
                 visible_chunks: Vec::default(),
 
                 objects,
+                visible_objects: Vec::default(),
 
                 gizmo_vertices: Vec::with_capacity(1024),
             }
@@ -1074,6 +1091,10 @@ impl Scene for WorldScene {
             ui.horizontal(|ui| {
                 ui.label("Visible chunks");
                 ui.label(format!("{}", self.sim_world.visible_chunks.len()));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Visible objects");
+                ui.label(format!("{}", self.sim_world.visible_objects.len()));
             });
             ui.horizontal(|ui| {
                 ui.label("Visible strata");

@@ -10,9 +10,9 @@ use crate::{
         image::images,
         scenes::world::{
             new_terrain::NewTerrain,
+            render_store::RenderStore,
             render_world::{ChunkInstanceData, RenderWorld},
             sim_world::SimWorld,
-            systems::RenderStore,
         },
     },
     wgsl_shader,

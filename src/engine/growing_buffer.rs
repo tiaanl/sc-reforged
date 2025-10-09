@@ -51,7 +51,7 @@ impl<T: NoUninit> GrowingBuffer<T> {
     pub fn slice<S: std::ops::RangeBounds<wgpu::BufferAddress>>(
         &self,
         range: S,
-    ) -> wgpu::BufferSlice {
+    ) -> wgpu::BufferSlice<'_> {
         self.buffer.slice(range)
     }
 

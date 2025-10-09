@@ -20,7 +20,7 @@ pub struct TopDownCameraControls {
     pub look_down: KeyCode,
     pub look_left: KeyCode,
     pub look_right: KeyCode,
-    pub rotate_mouse_button: MouseButton,
+    pub _rotate_mouse_button: MouseButton,
 }
 
 impl Default for TopDownCameraControls {
@@ -36,7 +36,7 @@ impl Default for TopDownCameraControls {
             look_down: KeyCode::End,
             look_left: KeyCode::KeyQ,
             look_right: KeyCode::KeyE,
-            rotate_mouse_button: MouseButton::Right,
+            _rotate_mouse_button: MouseButton::Right,
         }
     }
 }
@@ -108,60 +108,58 @@ impl TopDownCameraController {
     }
 
     fn gather_input(&self, input_state: &InputState) -> Input {
-        let mut input = Input::default();
+        Input {
+            move_direction: {
+                let mut move_direction = Vec3::ZERO;
 
-        input.move_direction = {
-            let mut move_direction = Vec3::ZERO;
+                if input_state.key_pressed(self.controls.forward) {
+                    move_direction += Camera::FORWARD;
+                }
+                if input_state.key_pressed(self.controls.backward) {
+                    move_direction -= Camera::FORWARD;
+                }
 
-            if input_state.key_pressed(self.controls.forward) {
-                move_direction += Camera::FORWARD;
-            }
-            if input_state.key_pressed(self.controls.backward) {
-                move_direction -= Camera::FORWARD;
-            }
+                if input_state.key_pressed(self.controls.right) {
+                    move_direction += Camera::RIGHT;
+                }
+                if input_state.key_pressed(self.controls.left) {
+                    move_direction -= Camera::RIGHT;
+                }
 
-            if input_state.key_pressed(self.controls.right) {
-                move_direction += Camera::RIGHT;
-            }
-            if input_state.key_pressed(self.controls.left) {
-                move_direction -= Camera::RIGHT;
-            }
+                if input_state.key_pressed(self.controls.up) {
+                    move_direction += Camera::UP;
+                }
+                if input_state.key_pressed(self.controls.down) {
+                    move_direction -= Camera::UP;
+                }
 
-            if input_state.key_pressed(self.controls.up) {
-                move_direction += Camera::UP;
-            }
-            if input_state.key_pressed(self.controls.down) {
-                move_direction -= Camera::UP;
-            }
+                move_direction
+            },
+            pitch_direction: {
+                let mut pitch_direction = 0.0;
 
-            move_direction
-        };
+                if input_state.key_pressed(self.controls.look_up) {
+                    pitch_direction += 1.0;
+                }
+                if input_state.key_pressed(self.controls.look_down) {
+                    pitch_direction -= 1.0;
+                }
 
-        input.pitch_direction = {
-            let mut pitch_direction = 0.0;
+                pitch_direction
+            },
+            yaw_direction: {
+                let mut yaw_direction = 0.0;
 
-            if input_state.key_pressed(self.controls.look_up) {
-                pitch_direction += 1.0;
-            }
-            if input_state.key_pressed(self.controls.look_down) {
-                pitch_direction -= 1.0;
-            }
+                if input_state.key_pressed(self.controls.look_left) {
+                    yaw_direction -= 1.0;
+                }
+                if input_state.key_pressed(self.controls.look_right) {
+                    yaw_direction += 1.0;
+                }
 
-            pitch_direction
-        };
-
-        input.yaw_direction = {
-            let mut yaw_direction = 0.0;
-
-            if input_state.key_pressed(self.controls.look_left) {
-                yaw_direction -= 1.0;
-            }
-            if input_state.key_pressed(self.controls.look_right) {
-                yaw_direction += 1.0;
-            }
-
-            yaw_direction
-        };
+                yaw_direction
+            },
+        }
 
         /*
         if input_state.mouse_pressed(self.controls.rotate_mouse_button) {
@@ -180,8 +178,6 @@ impl TopDownCameraController {
             self.desired.position.z += input_state.wheel_delta() * move_delta * 3.0;
         }
         */
-
-        input
     }
 
     fn update_camera(&mut self, move_rotation: Quat, camera: &mut Camera) {

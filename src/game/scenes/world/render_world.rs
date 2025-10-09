@@ -2,7 +2,7 @@ use bytemuck::NoUninit;
 
 use crate::{
     engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, prelude::Renderer},
-    game::scenes::world::systems::RenderStore,
+    game::scenes::world::render_store::RenderStore,
 };
 
 #[derive(Clone, Copy, Debug, Default, NoUninit)]

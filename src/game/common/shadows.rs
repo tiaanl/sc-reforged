@@ -2,7 +2,7 @@ use glam::{Mat4, Vec3, Vec4};
 use wgpu::util::DeviceExt;
 
 use crate::{
-    engine::{bind_group::BindGroup, prelude::renderer},
+    engine::prelude::renderer,
     game::{
         camera::{Camera, GpuCamera},
         math::ViewProjection,
@@ -26,6 +26,11 @@ impl Cascade {
             gpu_camera: GpuCamera::new(device),
         }
     }
+}
+
+pub struct BindGroup {
+    pub layout: wgpu::BindGroupLayout,
+    pub bind_group: wgpu::BindGroup,
 }
 
 pub struct ShadowCascades {

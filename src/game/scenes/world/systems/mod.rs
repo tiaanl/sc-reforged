@@ -8,7 +8,7 @@ use crate::{
     game::{
         config::Campaign,
         scenes::world::{
-            render_world::RenderWorld, sim_world::SimWorld,
+            render_store::RenderStore, render_world::RenderWorld, sim_world::SimWorld,
             systems::top_down_camera_controller::TopDownCameraController,
         },
     },
@@ -29,19 +29,6 @@ pub struct Time {
 }
 
 /// Shared resources between rendering in the systems and the [RenderWorld].
-pub struct RenderStore {
-    pub camera_bind_group_layout: wgpu::BindGroupLayout,
-}
-
-impl RenderStore {
-    pub fn new(renderer: &Renderer) -> Self {
-        let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(renderer);
-        Self {
-            camera_bind_group_layout,
-        }
-    }
-}
-
 pub struct Systems {
     camera_system: camera_system::CameraSystem<TopDownCameraController>,
     culling: cull_system::CullSystem,
