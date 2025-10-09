@@ -405,7 +405,7 @@ impl WorldScene {
 
                 TopDownCameraController::new(
                     camera_from,
-                    -yaw.to_degrees(),
+                    yaw.to_degrees(),
                     pitch.to_degrees(),
                     10_000.0,
                     100.0,
