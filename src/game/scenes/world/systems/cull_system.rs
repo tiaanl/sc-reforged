@@ -20,7 +20,7 @@ impl CullSystem {
             }
         });
 
-        if self.debug_visible_terrain_chunks || true {
+        if self.debug_visible_terrain_chunks {
             sim_world.quad_tree.with_nodes_in_frustum(frustum, |node| {
                 let bb = node.bounding_box();
 

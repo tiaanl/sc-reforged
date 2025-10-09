@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use glam::vec3;
 use terrain::Terrain;
 use wgpu::util::DeviceExt;
 
@@ -18,6 +19,7 @@ use crate::{
         scenes::world::{
             actions::PlayerAction,
             game_mode::GameMode,
+            new_objects::NewObjects,
             new_terrain::NewTerrain,
             overlay_renderer::OverlayRenderer,
             quad_tree::QuadTree,
@@ -33,6 +35,7 @@ use crate::{
 pub mod actions;
 mod game_mode;
 pub mod new_height_map;
+mod new_objects;
 mod new_terrain;
 mod object;
 mod objects;
@@ -346,6 +349,10 @@ impl WorldScene {
 
             let quad_tree = QuadTree::from_new_terrain(&terrain);
 
+            let mut objects = NewObjects::default();
+            objects.spawn(Transform::from_translation(Vec3::ZERO), 1_000.0);
+            objects.spawn(Transform::from_translation(Vec3::ONE * 1_000.0), 500.0);
+
             SimWorld {
                 camera: camera::Camera::new(
                     Vec3::ZERO,
@@ -363,6 +370,8 @@ impl WorldScene {
 
                 terrain,
                 visible_chunks: Vec::default(),
+
+                objects,
 
                 gizmo_vertices: Vec::with_capacity(1024),
             }

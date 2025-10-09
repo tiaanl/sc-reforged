@@ -6,7 +6,7 @@ use crate::{
         animations::track::Track,
         camera::Camera,
         math::{Frustum, ViewProjection},
-        scenes::world::{new_terrain::NewTerrain, quad_tree::QuadTree},
+        scenes::world::{new_objects::NewObjects, new_terrain::NewTerrain, quad_tree::QuadTree},
     },
 };
 
@@ -43,6 +43,8 @@ pub struct SimWorld {
     pub terrain: NewTerrain,
     /// The visible chunks for the current frame.
     pub visible_chunks: Vec<IVec2>,
+
+    pub objects: NewObjects,
 
     pub gizmo_vertices: Vec<GizmoVertex>,
 }
