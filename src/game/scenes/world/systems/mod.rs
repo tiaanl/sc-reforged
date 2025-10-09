@@ -1,4 +1,3 @@
-use ahash::HashMap;
 use glam::vec2;
 
 use crate::{
@@ -28,41 +27,19 @@ pub struct Time {
     pub delta_time: f32,
 }
 
-#[derive(Default)]
+/// Shared resources between rendering in the systems and the [RenderWorld].
 pub struct RenderStore {
-    bind_group_layouts: HashMap<&'static str, wgpu::BindGroupLayout>,
-    bind_groups: HashMap<&'static str, wgpu::BindGroup>,
+    pub camera_bind_group_layout: wgpu::BindGroupLayout,
 }
 
-macro_rules! impl_render_store_item {
-    ($get_name:ident, $insert_name:ident, $var:ident, $ty:ty) => {
-        impl RenderStore {
-            #[inline]
-            pub fn $get_name(&self, id: &'static str) -> Option<$ty> {
-                self.$var.get(id).cloned()
-            }
-
-            pub fn $insert_name(&mut self, id: &'static str, value: $ty) {
-                if self.$var.insert(id, value).is_some() {
-                    tracing::warn!("Replacing item: {id}");
-                }
-            }
+impl RenderStore {
+    pub fn new(renderer: &Renderer) -> Self {
+        let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(renderer);
+        Self {
+            camera_bind_group_layout,
         }
-    };
+    }
 }
-
-impl_render_store_item!(
-    get_bind_group_layout,
-    store_bind_group_layout,
-    bind_group_layouts,
-    wgpu::BindGroupLayout
-);
-impl_render_store_item!(
-    get_bind_group,
-    store_bind_group,
-    bind_groups,
-    wgpu::BindGroup
-);
 
 pub struct Systems {
     camera_system: camera_system::CameraSystem<TopDownCameraController>,

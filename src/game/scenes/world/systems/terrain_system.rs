@@ -238,15 +238,14 @@ impl TerrainSystem {
             .device
             .create_shader_module(wgsl_shader!("new_terrain"));
 
-        let camera_bind_group_layout = render_store
-            .get_bind_group_layout(RenderWorld::CAMERA_BIND_GROUP_LAYOUT_ID)
-            .expect("Requires camera bind_group_layout");
-
         let layout = renderer
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain_pipeline_layout"),
-                bind_group_layouts: &[&camera_bind_group_layout, &terrain_bind_group_layout],
+                bind_group_layouts: &[
+                    &render_store.camera_bind_group_layout,
+                    &terrain_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             });
 

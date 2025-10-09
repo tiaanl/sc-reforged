@@ -17,13 +17,9 @@ impl GizmoSystem {
 
         let module = device.create_shader_module(wgsl_shader!("gizmos"));
 
-        let camera_bind_group_layout = render_store
-            .get_bind_group_layout(RenderWorld::CAMERA_BIND_GROUP_LAYOUT_ID)
-            .expect("Camera bind group layout required!");
-
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("gizmos_pipeline_layout"),
-            bind_group_layouts: &[&camera_bind_group_layout],
+            bind_group_layouts: &[&render_store.camera_bind_group_layout],
             push_constant_ranges: &[],
         });
 

@@ -370,12 +370,12 @@ impl WorldScene {
 
         let depth_buffer = Self::create_depth_buffer(&renderer().device, renderer().surface.size());
 
-        let mut render_store = RenderStore::default();
+        let render_store = RenderStore::new(renderer());
 
         let render_worlds = [
-            RenderWorld::new(0, renderer(), &mut render_store),
-            RenderWorld::new(1, renderer(), &mut render_store),
-            RenderWorld::new(2, renderer(), &mut render_store),
+            RenderWorld::new(0, renderer(), &render_store),
+            RenderWorld::new(1, renderer(), &render_store),
+            RenderWorld::new(2, renderer(), &render_store),
         ];
 
         let systems = systems::Systems::new(renderer(), &render_store, &sim_world, &campaign);

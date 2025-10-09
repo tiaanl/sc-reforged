@@ -64,41 +64,7 @@ pub struct RenderWorld {
 }
 
 impl RenderWorld {
-    pub const CAMERA_BIND_GROUP_LAYOUT_ID: &str = "camera_bind_group_layout";
-
-    pub fn new(index: usize, renderer: &Renderer, render_store: &mut RenderStore) -> Self {
-        // Make sure the camera bind group layout is in the store.
-        if render_store
-            .get_bind_group_layout(Self::CAMERA_BIND_GROUP_LAYOUT_ID)
-            .is_none()
-        {
-            let bind_group_layout =
-                renderer
-                    .device
-                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                        label: Some(Self::CAMERA_BIND_GROUP_LAYOUT_ID),
-                        entries: &[wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        }],
-                    });
-
-            render_store
-                .store_bind_group_layout(Self::CAMERA_BIND_GROUP_LAYOUT_ID, bind_group_layout);
-        }
-
-        // SAFETY: We can unwrap here, because we ensured the bind group layout is in the store
-        //         above.
-        let camera_bind_group_layout = render_store
-            .get_bind_group_layout(Self::CAMERA_BIND_GROUP_LAYOUT_ID)
-            .unwrap();
-
+    pub fn new(index: usize, renderer: &Renderer, render_store: &RenderStore) -> Self {
         let camera_env_buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("cameras"),
             size: std::mem::size_of::<CameraEnvironment>() as wgpu::BufferAddress,
@@ -110,7 +76,7 @@ impl RenderWorld {
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(&format!("cmaera_bind_group_{index}")),
-                layout: &camera_bind_group_layout,
+                layout: &render_store.camera_bind_group_layout,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: camera_env_buffer.as_entire_binding(),
@@ -257,5 +223,23 @@ impl RenderWorld {
             usage: usages | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         })
+    }
+
+    pub fn create_camera_bind_group_layout(renderer: &Renderer) -> wgpu::BindGroupLayout {
+        renderer
+            .device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("camera_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            })
     }
 }
