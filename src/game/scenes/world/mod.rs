@@ -40,6 +40,7 @@ mod object;
 mod objects;
 mod overlay_renderer;
 mod quad_tree;
+pub mod render_model;
 mod render_store;
 mod render_world;
 mod sim_world;

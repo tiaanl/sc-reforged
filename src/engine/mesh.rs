@@ -24,6 +24,17 @@ impl<V: Copy> IndexedMesh<V> {
         self.vertices.is_empty() || self.indices.is_empty()
     }
 
+    pub fn map<O, F>(&self, f: F) -> IndexedMesh<O>
+    where
+        O: Copy,
+        F: FnMut(&V) -> O,
+    {
+        IndexedMesh {
+            vertices: self.vertices.iter().map(f).collect(),
+            indices: self.indices.clone(),
+        }
+    }
+
     pub fn extend(&mut self, mesh: Self) -> std::ops::Range<u32> {
         let vertex_offset = self.vertices.len() as u32;
 
