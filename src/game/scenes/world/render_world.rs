@@ -30,6 +30,7 @@ pub struct ChunkInstanceData {
     pub flags: u32,
 }
 
+/// Set of data that changes on each frame.
 pub struct RenderWorld {
     /// The [RenderWorld] index.
     pub index: usize,

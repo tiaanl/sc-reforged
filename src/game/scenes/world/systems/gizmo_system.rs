@@ -1,23 +1,23 @@
 use crate::{
-    engine::{gizmos::GizmoVertex, prelude::BufferLayout},
-    game::scenes::world::{render_world::RenderWorld, systems::NewSystemContext},
+    engine::{
+        gizmos::GizmoVertex,
+        prelude::{BufferLayout, Frame, Renderer},
+    },
+    game::scenes::world::{render_world::RenderWorld, sim_world::SimWorld, systems::RenderStore},
     wgsl_shader,
 };
-
-use super::{PrepareContext, System};
 
 pub struct GizmoSystem {
     pipeline: wgpu::RenderPipeline,
 }
 
 impl GizmoSystem {
-    pub fn new(context: &mut NewSystemContext) -> Self {
-        let device = &context.renderer.device;
+    pub fn new(renderer: &Renderer, render_store: &RenderStore) -> Self {
+        let device = &renderer.device;
 
         let module = device.create_shader_module(wgsl_shader!("gizmos"));
 
-        let camera_bind_group_layout = context
-            .render_store
+        let camera_bind_group_layout = render_store
             .get_bind_group_layout(RenderWorld::CAMERA_BIND_GROUP_LAYOUT_ID)
             .expect("Camera bind group layout required!");
 
@@ -47,7 +47,7 @@ impl GizmoSystem {
                 entry_point: Some("fragment_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: context.renderer.surface.format(),
+                    format: renderer.surface.format(),
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -60,48 +60,44 @@ impl GizmoSystem {
     }
 }
 
-impl System for GizmoSystem {
-    fn extract(&mut self, context: &mut super::ExtractContext) {
+impl GizmoSystem {
+    pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
         // Move all the sim world vertices to the render world vertices.
-        context.render_world.gizmo_vertices.clear();
+        render_world.gizmo_vertices.clear();
         std::mem::swap(
-            &mut context.sim_world.gizmo_vertices,
-            &mut context.render_world.gizmo_vertices,
+            &mut sim_world.gizmo_vertices,
+            &mut render_world.gizmo_vertices,
         );
     }
 
-    fn prepare(&mut self, context: &mut PrepareContext) {
-        context.render_world.ensure_gizmo_vertices_capacity(
-            &context.renderer.device,
-            context.render_world.gizmo_vertices.len() as u32,
+    pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {
+        render_world.ensure_gizmo_vertices_capacity(
+            &renderer.device,
+            render_world.gizmo_vertices.len() as u32,
         );
 
-        let data = bytemuck::cast_slice(&context.render_world.gizmo_vertices);
-        context
-            .renderer
+        let data = bytemuck::cast_slice(&render_world.gizmo_vertices);
+
+        renderer
             .queue
-            .write_buffer(&context.render_world.gizmo_vertices_buffer, 0, data);
+            .write_buffer(&render_world.gizmo_vertices_buffer, 0, data);
     }
 
-    fn queue(&mut self, context: &mut super::QueueContext) {
-        let super::QueueContext { render_world, .. } = context;
-
-        let mut render_pass =
-            context
-                .frame
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("gizmos_render_pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &context.frame.surface,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    ..Default::default()
-                });
+    pub fn queue(&mut self, render_world: &RenderWorld, frame: &mut Frame) {
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("gizmos_render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, render_world.gizmo_vertices_buffer.slice(..));

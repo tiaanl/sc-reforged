@@ -23,14 +23,7 @@ use crate::{
             quad_tree::QuadTree,
             render_world::RenderWorld,
             sim_world::{ComputedCamera, SimWorld},
-            systems::{
-                ExtractContext, NewSystemContext, PostUpdateContext, PreUpdateContext,
-                PrepareContext, QueueContext, RenderStore, System, Time, UpdateContext,
-                camera_system::CameraSystem, clear_render_targets::ClearRenderTargets,
-                cull_system::CullSystem, day_night_cycle_system::DayNightCycleSystem,
-                gizmo_system::GizmoSystem, terrain_system::TerrainSystem,
-                top_down_camera_controller::TopDownCameraController,
-            },
+            systems::RenderStore,
         },
         shadows::ShadowCascades,
         sky_renderer::SkyRenderer,
@@ -75,7 +68,7 @@ pub struct WorldScene {
     render_store: RenderStore,
 
     // Systems
-    systems: Vec<Box<dyn System>>,
+    systems: systems::Systems,
 
     game_mode: GameMode,
 
@@ -385,37 +378,7 @@ impl WorldScene {
             RenderWorld::new(2, renderer(), &mut render_store),
         ];
 
-        let mut context = NewSystemContext {
-            renderer: renderer(),
-            render_store: &mut render_store,
-            sim_world: &sim_world,
-        };
-
-        let systems: Vec<Box<dyn System>> = vec![
-            Box::new(DayNightCycleSystem),
-            Box::new(CameraSystem::new({
-                let camera_from = campaign.view_initial.from.extend(2500.0);
-                let camera_to = campaign.view_initial.to.extend(0.0);
-
-                let dir = (camera_to - camera_from).normalize();
-
-                let flat = Vec2::new(dir.x, dir.y);
-                let yaw = (-dir.x).atan2(dir.y).to_degrees();
-                let pitch = dir.z.atan2(flat.length()).to_degrees();
-
-                TopDownCameraController::new(
-                    camera_from,
-                    yaw.to_degrees(),
-                    pitch.to_degrees(),
-                    10_000.0,
-                    100.0,
-                )
-            })),
-            Box::new(CullSystem::default()),
-            Box::new(ClearRenderTargets),
-            Box::new(TerrainSystem::new(&mut context)),
-            Box::new(GizmoSystem::new(&mut context)),
-        ];
+        let systems = systems::Systems::new(renderer(), &render_store, &sim_world, &campaign);
 
         Ok(Self {
             sim_world,
@@ -552,40 +515,9 @@ impl Scene for WorldScene {
     fn update(&mut self, delta_time: f32, input: &InputState) {
         // Run systems
         {
-            let time = Time { delta_time };
-
-            // PreUpdate
-            {
-                let mut context = PreUpdateContext {
-                    sim_world: &mut self.sim_world,
-                    time: &time,
-                    input_state: input,
-                };
-                for system in self.systems.iter_mut() {
-                    system.pre_update(&mut context);
-                }
-            }
-
-            // Update
-            {
-                let mut context = UpdateContext {
-                    sim_world: &mut self.sim_world,
-                    time: &time,
-                };
-                for system in self.systems.iter_mut() {
-                    system.update(&mut context);
-                }
-            }
-
-            // PostUpdate
-            {
-                let mut context = PostUpdateContext {
-                    sim_world: &mut self.sim_world,
-                };
-                for system in self.systems.iter_mut() {
-                    system.post_update(&mut context);
-                }
-            }
+            let time = systems::Time { delta_time };
+            self.systems.input(&mut self.sim_world, &time, input);
+            self.systems.update(&mut self.sim_world, &time);
         }
 
         self.pos_and_normal = self.geometry_data.as_ref().map(|data| {
@@ -650,42 +582,13 @@ impl Scene for WorldScene {
     fn render(&mut self, frame: &mut Frame) {
         let render_world = &mut self.render_worlds[frame.frame_index % Self::RENDER_FRAME_COUNT];
 
+        // Systems
         {
-            // Extract
-            {
-                let mut context = ExtractContext {
-                    sim_world: &mut self.sim_world,
-                    render_world,
-                };
-                for system in self.systems.iter_mut() {
-                    system.extract(&mut context);
-                }
-            }
-
-            // Prepare
-            {
-                let mut context = PrepareContext {
-                    render_world,
-                    renderer: renderer(),
-                    render_store: &mut self.render_store,
-                };
-                for system in self.systems.iter_mut() {
-                    system.prepare(&mut context);
-                }
-            }
-
-            // Queue
-            {
-                let mut context = QueueContext {
-                    render_world,
-                    frame,
-                    depth_buffer: &self.depth_buffer,
-                    render_store: &mut self.render_store,
-                };
-                for system in self.systems.iter_mut() {
-                    system.queue(&mut context);
-                }
-            }
+            self.systems.extract(&mut self.sim_world, render_world);
+            self.systems
+                .prepare(render_world, renderer(), &mut self.render_store);
+            self.systems
+                .queue(render_world, frame, &self.depth_buffer, &self.render_store);
         }
 
         /*

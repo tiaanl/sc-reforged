@@ -1,13 +1,13 @@
 use glam::vec4;
 
 use crate::{
-    engine::input::InputState,
+    engine::{input::InputState, prelude::Renderer},
     game::{
         camera::Camera,
         scenes::world::{
             render_world::RenderWorld,
             sim_world::{ComputedCamera, SimWorld},
-            systems::{ExtractContext, PreUpdateContext, PrepareContext, System},
+            systems::Time,
         },
     },
 };
@@ -80,27 +80,27 @@ where
     }
 }
 
-impl<C> System for CameraSystem<C>
+impl<C> CameraSystem<C>
 where
     C: CameraController,
 {
-    fn pre_update(&mut self, context: &mut PreUpdateContext) {
-        let camera = &mut context.sim_world.camera;
-        self.controller
-            .handle_input(camera, context.input_state, context.time.delta_time);
+    pub fn input(&mut self, sim_world: &mut SimWorld, time: &Time, input_state: &InputState) {
+        let camera = &mut sim_world.camera;
 
-        camera.far = context
-            .sim_world
+        self.controller
+            .handle_input(camera, input_state, time.delta_time);
+
+        camera.far = sim_world
             .day_night_cycle
             .fog_distance
-            .sample_sub_frame(context.sim_world.time_of_day, true);
+            .sample_sub_frame(sim_world.time_of_day, true);
 
         let view_proj = camera.calculate_view_projection();
         let frustum = view_proj.frustum();
         let position = camera.position;
         let forward = (camera.rotation * Camera::FORWARD).normalize();
 
-        context.sim_world.computed_camera = ComputedCamera {
+        sim_world.computed_camera = ComputedCamera {
             view_proj,
             frustum,
             position,
@@ -108,16 +108,16 @@ where
         };
     }
 
-    fn extract(&mut self, context: &mut ExtractContext) {
-        Self::extract_camera(context.sim_world, context.render_world);
-        Self::extract_environment(context.sim_world, context.render_world);
+    pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
+        Self::extract_camera(sim_world, render_world);
+        Self::extract_environment(sim_world, render_world);
     }
 
-    fn prepare(&mut self, context: &mut PrepareContext) {
-        context.renderer.queue.write_buffer(
-            &context.render_world.camera_env_buffer,
+    pub fn prepare(&mut self, render_world: &RenderWorld, renderer: &Renderer) {
+        renderer.queue.write_buffer(
+            &render_world.camera_env_buffer,
             0,
-            bytemuck::bytes_of(&context.render_world.camera_env),
+            bytemuck::bytes_of(&render_world.camera_env),
         );
     }
 }

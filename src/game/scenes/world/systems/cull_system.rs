@@ -1,19 +1,15 @@
 use glam::vec4;
 
-use crate::engine::gizmos::GizmosRenderer;
-
-use super::{PreUpdateContext, System};
+use crate::{engine::gizmos::GizmosRenderer, game::scenes::world::sim_world::SimWorld};
 
 /// Calculate visible elements for the current frame.
 #[derive(Default)]
 pub struct CullSystem {
-    pub debug_visible_terrain_chunks: bool,
+    debug_visible_terrain_chunks: bool,
 }
 
-impl System for CullSystem {
-    fn pre_update(&mut self, context: &mut PreUpdateContext) {
-        let sim_world = &mut context.sim_world;
-
+impl CullSystem {
+    pub fn calculate_visible_chunks(&mut self, sim_world: &mut SimWorld) {
         let frustum = &sim_world.computed_camera.frustum;
 
         sim_world.visible_chunks.clear();

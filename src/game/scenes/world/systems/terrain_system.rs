@@ -5,12 +5,14 @@ use glam::{IVec2, UVec2, Vec3, ivec2};
 use wgpu::util::DeviceExt;
 
 use crate::{
+    engine::prelude::{Frame, Renderer},
     game::{
         image::images,
         scenes::world::{
             new_terrain::NewTerrain,
             render_world::{ChunkInstanceData, RenderWorld},
-            systems::{ExtractContext, NewSystemContext, PrepareContext, QueueContext, System},
+            sim_world::SimWorld,
+            systems::RenderStore,
         },
     },
     wgsl_shader,
@@ -51,13 +53,7 @@ impl TerrainSystem {
     const _WIREFRAME_INDEX_RANGES: [std::ops::Range<u32>; 4] =
         [0..512, 512..640, 640..672, 672..680];
 
-    pub fn new(context: &mut NewSystemContext) -> Self {
-        let NewSystemContext {
-            renderer,
-            render_store,
-            sim_world,
-        } = context;
-
+    pub fn new(renderer: &Renderer, render_store: &RenderStore, sim_world: &SimWorld) -> Self {
         let height_map = &sim_world.terrain.height_map;
 
         let cells_dim = height_map.size;
@@ -432,25 +428,25 @@ impl TerrainSystem {
     }
 }
 
-impl System for TerrainSystem {
-    fn extract(&mut self, context: &mut ExtractContext) {
+impl TerrainSystem {
+    pub fn extract(&mut self, sim_world: &SimWorld, render_world: &mut RenderWorld) {
         self.chunk_lod_cache.clear();
 
-        let camera_position = context.sim_world.computed_camera.position;
-        let camera_forward = context.sim_world.computed_camera.forward;
-        let camera_far = context.sim_world.camera.far;
+        let camera_position = sim_world.computed_camera.position;
+        let camera_forward = sim_world.computed_camera.forward;
+        let camera_far = sim_world.camera.far;
 
-        let terrain_chunk_instances = &mut context.render_world.terrain_chunk_instances;
-        let strata_instances = &mut context.render_world.strata_instances;
-        let strata_instances_side_count = &mut context.render_world.strata_instances_side_count;
+        let terrain_chunk_instances = &mut render_world.terrain_chunk_instances;
+        let strata_instances = &mut render_world.strata_instances;
+        let strata_instances_side_count = &mut render_world.strata_instances_side_count;
 
         terrain_chunk_instances.clear();
         strata_instances.clear();
         *strata_instances_side_count = [0; 4];
 
-        for visible_coord in context.sim_world.visible_chunks.iter() {
+        for visible_coord in sim_world.visible_chunks.iter() {
             let mut lod_at = |coord: IVec2| {
-                context.sim_world.terrain.chunk_at(coord).map(|chunk| {
+                sim_world.terrain.chunk_at(coord).map(|chunk| {
                     *self.chunk_lod_cache.entry(coord).or_insert({
                         let center = chunk.bounding_box.center();
                         calculate_lod(camera_position, camera_forward, camera_far, center)
@@ -518,19 +514,12 @@ impl System for TerrainSystem {
 
         strata_instances.sort_unstable_by_key(|instance| instance.flags >> 8 & 0b11);
 
-        context
-            .render_world
+        render_world
             .terrain_chunk_instances
             .sort_unstable_by_key(|instance| instance.lod);
     }
 
-    fn prepare(&mut self, context: &mut PrepareContext) {
-        let PrepareContext {
-            render_world,
-            renderer,
-            ..
-        } = context;
-
+    pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {
         // Upload the chunk instance data.
         {
             render_world.ensure_terrain_chunk_instance_capacity(
@@ -560,34 +549,35 @@ impl System for TerrainSystem {
         }
     }
 
-    fn queue(&mut self, context: &mut QueueContext) {
-        let mut render_pass =
-            context
-                .frame
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("terrain_render_pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &context.frame.surface,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: context.depth_buffer,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        }),
-                        stencil_ops: None,
+    pub fn queue(
+        &mut self,
+        render_world: &RenderWorld,
+        frame: &mut Frame,
+        depth_buffer: &wgpu::TextureView,
+    ) {
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("terrain_render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: depth_buffer,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
                     }),
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
-
-        let render_world = context.render_world;
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
         // Strata
         {

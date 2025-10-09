@@ -1,9 +1,5 @@
-use crate::game::scenes::world::systems::{System, UpdateContext};
+use crate::game::scenes::world::{sim_world::SimWorld, systems::Time};
 
-pub struct DayNightCycleSystem;
-
-impl System for DayNightCycleSystem {
-    fn update(&mut self, context: &mut UpdateContext) {
-        context.sim_world.time_of_day += context.time.delta_time * 0.001;
-    }
+pub fn increment_time_of_day(sim_world: &mut SimWorld, time: &Time) {
+    sim_world.time_of_day += time.delta_time * 0.001;
 }
