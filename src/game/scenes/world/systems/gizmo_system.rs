@@ -67,16 +67,9 @@ impl GizmoSystem {
     }
 
     pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {
-        render_world.ensure_gizmo_vertices_capacity(
-            &renderer.device,
-            render_world.gizmo_vertices.len() as u32,
-        );
-
-        let data = bytemuck::cast_slice(&render_world.gizmo_vertices);
-
-        renderer
-            .queue
-            .write_buffer(&render_world.gizmo_vertices_buffer, 0, data);
+        render_world
+            .gizmo_vertices_buffer
+            .write(renderer, &render_world.gizmo_vertices);
     }
 
     pub fn queue(&mut self, render_world: &RenderWorld, frame: &mut Frame) {

@@ -520,32 +520,14 @@ impl TerrainSystem {
 
     pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {
         // Upload the chunk instance data.
-        {
-            render_world.ensure_terrain_chunk_instance_capacity(
-                &renderer.device,
-                render_world.terrain_chunk_instances.len() as u32,
-            );
-
-            renderer.queue.write_buffer(
-                &render_world.terrain_chunk_instances_buffer,
-                0,
-                bytemuck::cast_slice(&render_world.terrain_chunk_instances),
-            );
-        }
+        render_world
+            .terrain_chunk_instances_buffer
+            .write(renderer, &render_world.terrain_chunk_instances);
 
         // Upload the strata data.
-        {
-            render_world.ensure_strata_instance_capacity(
-                &renderer.device,
-                render_world.strata_instances.len() as u32,
-            );
-
-            renderer.queue.write_buffer(
-                &render_world.strata_instances_buffer,
-                0,
-                bytemuck::cast_slice(&render_world.strata_instances),
-            );
-        }
+        render_world
+            .strata_instances_buffer
+            .write(renderer, &render_world.strata_instances);
     }
 
     pub fn queue(

@@ -8,6 +8,7 @@ use crate::{
         assets::AssetError,
         growing_buffer::GrowingBuffer,
         mesh::IndexedMesh,
+        prelude::renderer,
         storage::{Handle, Storage},
     },
     game::{
@@ -59,12 +60,14 @@ impl RenderModels {
 
     pub fn new() -> Self {
         let vertices_buffer = GrowingBuffer::new(
+            renderer(),
             Self::INITIAL_VERTEX_COUNT,
             wgpu::BufferUsages::VERTEX,
             "render_models_vertices",
         );
 
         let indices_buffer = GrowingBuffer::new(
+            renderer(),
             Self::INITIAL_INDEX_COUNT,
             wgpu::BufferUsages::INDEX,
             "render_models_indices",
@@ -83,11 +86,11 @@ impl RenderModels {
     }
 
     pub fn vertices_buffer_slice(&self) -> wgpu::BufferSlice<'_> {
-        self.vertices_buffer.buffer_slice()
+        self.vertices_buffer.slice(..)
     }
 
     pub fn indices_buffer_slice(&self) -> wgpu::BufferSlice<'_> {
-        self.indices_buffer.buffer_slice()
+        self.indices_buffer.slice(..)
     }
 
     pub fn get_or_create(
@@ -137,14 +140,17 @@ impl RenderModels {
         }
 
         let mut push_mesh = |mut indexed_mesh: IndexedMesh<RenderVertex>| {
-            let vertices_range = self.vertices_buffer.push(&indexed_mesh.vertices);
+            let vertices_range = self
+                .vertices_buffer
+                .extend(renderer(), &indexed_mesh.vertices);
             // Adjust the indices to point to the range of the vertices.
             indexed_mesh
                 .indices
                 .iter_mut()
                 .for_each(|i| *i += vertices_range.start);
 
-            self.indices_buffer.push(&indexed_mesh.indices)
+            self.indices_buffer
+                .extend(renderer(), &indexed_mesh.indices)
         };
 
         let opaque_range = push_mesh(opaque_mesh);
