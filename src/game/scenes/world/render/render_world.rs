@@ -2,7 +2,7 @@ use bytemuck::NoUninit;
 
 use crate::{
     engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, prelude::Renderer},
-    game::scenes::world::render_store::RenderStore,
+    game::scenes::world::render::render_store::RenderStore,
 };
 
 #[derive(Clone, Copy, Debug, Default, NoUninit)]
@@ -30,6 +30,14 @@ pub struct ChunkInstanceData {
     pub flags: u32,
 }
 
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[repr(C)]
+pub struct ModelInstanceData {
+    pub transform: [[f32; 4]; 4],
+    pub first_node_index: u32,
+    pub _pad: [u32; 3],
+}
+
 /// Set of data that changes on each frame.
 pub struct RenderWorld {
     pub camera_env: CameraEnvironment,
@@ -49,6 +57,8 @@ pub struct RenderWorld {
     pub strata_instances_side_count: [u32; 4],
     /// Buffer holding instance data for strata to be rendered per frame.
     pub strata_instances_buffer: GrowingBuffer<ChunkInstanceData>,
+
+    pub model_instances: GrowingBuffer<ModelInstanceData>,
 
     pub gizmo_vertices: Vec<GizmoVertex>,
     pub gizmo_vertices_buffer: GrowingBuffer<GizmoVertex>,
@@ -92,6 +102,13 @@ impl RenderWorld {
             format!("strata_instances:{index}"),
         );
 
+        let model_instances = GrowingBuffer::new(
+            renderer,
+            1 << 7,
+            wgpu::BufferUsages::VERTEX,
+            format!("model_instances:{index}"),
+        );
+
         let gizmo_vertices = Vec::default();
         let gizmo_vertices_buffer = GrowingBuffer::new(
             renderer,
@@ -111,6 +128,8 @@ impl RenderWorld {
             strata_instances_buffer,
             strata_instances,
             strata_instances_side_count: [0; 4],
+
+            model_instances,
 
             gizmo_vertices,
             gizmo_vertices_buffer,

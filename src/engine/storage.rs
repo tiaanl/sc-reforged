@@ -31,6 +31,12 @@ impl<T> PartialOrd for Handle<T> {
     }
 }
 
+impl<T> Ord for Handle<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
 impl<T> std::fmt::Debug for Handle<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Handle").field(&self.0).finish()

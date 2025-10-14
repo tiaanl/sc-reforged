@@ -38,6 +38,7 @@ const SHADERS: &[&str] = &[
     "src/game/scenes/world/strata.wgsl",
     "src/game/scenes/world/terrain.wgsl",
     "src/game/scenes/world/systems/new_terrain.wgsl",
+    "src/game/scenes/world/systems/objects.wgsl",
 ];
 
 fn compile_shaders() {

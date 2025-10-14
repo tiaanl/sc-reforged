@@ -4,7 +4,8 @@ use crate::{
         prelude::{BufferLayout, Frame, Renderer},
     },
     game::scenes::world::{
-        render_store::RenderStore, render_world::RenderWorld, sim_world::SimWorld,
+        render::{RenderStore, RenderWorld},
+        sim_world::SimWorld,
     },
     wgsl_shader,
 };

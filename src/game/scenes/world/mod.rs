@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use glam::vec3;
 use terrain::Terrain;
 use wgpu::util::DeviceExt;
 
@@ -22,8 +23,7 @@ use crate::{
             new_terrain::NewTerrain,
             overlay_renderer::OverlayRenderer,
             quad_tree::QuadTree,
-            render_store::RenderStore,
-            render_world::RenderWorld,
+            render::{RenderStore, RenderWorld},
             sim_world::{ComputedCamera, SimWorld},
         },
         shadows::ShadowCascades,
@@ -40,9 +40,7 @@ mod object;
 mod objects;
 mod overlay_renderer;
 mod quad_tree;
-pub mod render_model;
-mod render_store;
-mod render_world;
+mod render;
 mod sim_world;
 mod strata;
 mod systems;
@@ -280,7 +278,7 @@ impl WorldScene {
                 if let Err(err) = objects.spawn(
                     // Rotate objects to the left.
                     Transform::from_translation(object.position)
-                        .with_euler_rotation(object.rotation * Vec3::new(1.0, 1.0, -1.0)),
+                        .with_euler_rotation(object.rotation * vec3(1.0, 1.0, -1.0)),
                     object_type,
                     &object.name,
                     &object.title,
@@ -611,11 +609,12 @@ impl Scene for WorldScene {
 
         // Systems
         {
-            self.systems.extract(&mut self.sim_world, render_world);
+            self.systems
+                .extract(&mut self.sim_world, &mut self.render_store, render_world);
             self.systems
                 .prepare(render_world, renderer(), &mut self.render_store);
             self.systems
-                .queue(render_world, frame, &self.depth_buffer, &self.render_store);
+                .queue(&self.render_store, render_world, frame, &self.depth_buffer);
         }
 
         /*

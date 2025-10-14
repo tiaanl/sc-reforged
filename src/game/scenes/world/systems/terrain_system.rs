@@ -10,8 +10,7 @@ use crate::{
         image::images,
         scenes::world::{
             new_terrain::NewTerrain,
-            render_store::RenderStore,
-            render_world::{ChunkInstanceData, RenderWorld},
+            render::{ChunkInstanceData, RenderStore, RenderWorld},
             sim_world::SimWorld,
         },
     },

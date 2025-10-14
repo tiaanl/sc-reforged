@@ -5,7 +5,7 @@ use crate::{
     game::{
         camera::Camera,
         scenes::world::{
-            render_world::RenderWorld,
+            render::RenderWorld,
             sim_world::{ComputedCamera, SimWorld},
             systems::Time,
         },

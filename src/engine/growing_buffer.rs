@@ -12,9 +12,9 @@ pub struct GrowingBuffer<T: NoUninit> {
     /// Handle to the underlying buffer.
     buffer: wgpu::Buffer,
     /// Current amount of items in the buffer.
-    count: u32,
+    pub count: u32,
     /// Amount of items that can be held in the buffer.
-    capacity: u32,
+    pub capacity: u32,
 
     _phantom: std::marker::PhantomData<T>,
 }

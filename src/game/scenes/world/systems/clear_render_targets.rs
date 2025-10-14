@@ -1,4 +1,4 @@
-use crate::{engine::prelude::Frame, game::scenes::world::render_world::RenderWorld};
+use crate::{engine::prelude::Frame, game::scenes::world::render::RenderWorld};
 
 pub fn clear_render_targets(
     render_world: &RenderWorld,
