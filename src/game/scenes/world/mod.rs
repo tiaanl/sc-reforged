@@ -359,7 +359,7 @@ impl WorldScene {
 
                     let _ = objects.spawn(
                         Transform::from_translation(object.position)
-                            .with_euler_rotation(object.rotation),
+                            .with_euler_rotation(object.rotation * vec3(1.0, 1.0, -1.0)),
                         100.0,
                         object_type,
                         &object.name,
