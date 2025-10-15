@@ -324,7 +324,10 @@ impl ObjectsSystem {
                 render_store
                     .models
                     .get(batch.key.render_model)
-                    .map(|render_model| (render_model, batch.range.clone()))
+                    .and_then(|render_model| {
+                        (!render_model.opaque_range.is_empty())
+                            .then(|| (render_model, batch.range.clone()))
+                    })
             }) {
                 render_pass.draw_indexed(render_model.opaque_range.clone(), 0, range);
             }
@@ -334,16 +337,16 @@ impl ObjectsSystem {
         {
             setup_render_pass(&mut render_pass, &self.alpha_pipeline);
 
+            // TODO: Should the blend mode pipelines each have their own set of instances? Right now
+            //       the instances without alpha ranges are just filtered out. This might be good
+            //       enough.
             for (render_model, range) in self.batches.iter().filter_map(|batch| {
                 render_store
                     .models
                     .get(batch.key.render_model)
                     .and_then(|render_model| {
-                        if render_model.alpha_range.is_empty() {
-                            None
-                        } else {
-                            Some((render_model, batch.range.clone()))
-                        }
+                        (!render_model.alpha_range.is_empty())
+                            .then(|| (render_model, batch.range.clone()))
                     })
             }) {
                 render_pass.draw_indexed(render_model.alpha_range.clone(), 0, range);
