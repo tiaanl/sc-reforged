@@ -5,6 +5,20 @@ use crate::{
     game::{image::Image, math::BoundingBox, scenes::world::new_height_map::NewHeightMap},
 };
 
+// Size of each terrain:
+//
+//                     cells       chunks
+//   angola            320 x 320   40 x 40
+//   angola_2          288 x 288   36 x 36
+//   angola_tutorial   160 x 160   20 x 20
+//   caribbean         288 x 288   36 x 36
+//   ecuador           288 x 288   36 x 36
+//   kola              320 x 320   40 x 40
+//   kola_2            320 x 320   40 x 40
+//   peru              168 x 256   21 x 32
+//   romania           256 x 256   32 x 32
+//   training          64 x 64     8 x 8
+
 pub struct Chunk {
     pub bounding_box: BoundingBox,
 }
