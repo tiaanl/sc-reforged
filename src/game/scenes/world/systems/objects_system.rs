@@ -300,9 +300,9 @@ impl ObjectsSystem {
                 occlusion_query_set: None,
             });
 
-        // Opaque
-        {
-            render_pass.set_pipeline(&self.opaque_pipeline);
+        let setup_render_pass = |render_pass: &mut wgpu::RenderPass,
+                                 pipeline: &wgpu::RenderPipeline| {
+            render_pass.set_pipeline(pipeline);
 
             render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
             render_pass.set_bind_group(1, &render_store.textures.texture_data_bind_group, &[]);
@@ -314,6 +314,11 @@ impl ObjectsSystem {
                 render_store.models.indices_buffer_slice(),
                 wgpu::IndexFormat::Uint32,
             );
+        };
+
+        // Opaque
+        {
+            setup_render_pass(&mut render_pass, &self.opaque_pipeline);
 
             for (render_model, range) in self.batches.iter().filter_map(|batch| {
                 render_store
@@ -327,18 +332,7 @@ impl ObjectsSystem {
 
         // Alpha
         {
-            render_pass.set_pipeline(&self.alpha_pipeline);
-
-            render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
-            render_pass.set_bind_group(1, &render_store.textures.texture_data_bind_group, &[]);
-            render_pass.set_bind_group(2, &render_store.models.nodes_bind_group, &[]);
-
-            render_pass.set_vertex_buffer(0, render_store.models.vertices_buffer_slice());
-            render_pass.set_vertex_buffer(1, render_world.model_instances.slice(..));
-            render_pass.set_index_buffer(
-                render_store.models.indices_buffer_slice(),
-                wgpu::IndexFormat::Uint32,
-            );
+            setup_render_pass(&mut render_pass, &self.alpha_pipeline);
 
             for (render_model, range) in self.batches.iter().filter_map(|batch| {
                 render_store
