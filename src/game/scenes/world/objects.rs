@@ -59,7 +59,7 @@ impl Objects {
 
         match object_type {
             ObjectType::Bipedal => {
-                let body_model = models().load_model(
+                let (body_model, _) = models().load_model(
                     model_name,
                     PathBuf::from("models")
                         .join("people")
@@ -70,7 +70,7 @@ impl Objects {
                 )?;
 
                 let head_model_name = "head_john";
-                let head_model = models().load_model(
+                let (head_model, _) = models().load_model(
                     head_model_name,
                     PathBuf::from("models")
                         .join("people")
@@ -112,7 +112,7 @@ impl Objects {
             }
 
             ObjectType::SceneryLit => {
-                let model_handle = models().load_object_model(model_name)?;
+                let (model_handle, _) = models().load_object_model(model_name)?;
                 let model = models().get_mut(model_handle).unwrap();
 
                 // Create a new model with only the light cone.
@@ -162,7 +162,7 @@ impl Objects {
             }
 
             _ => {
-                let model = models().load_object_model(model_name)?;
+                let (model, _) = models().load_object_model(model_name)?;
 
                 let render_instance = self.model_renderer.add_render_instance(
                     model,

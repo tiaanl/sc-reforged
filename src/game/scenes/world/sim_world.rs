@@ -101,7 +101,7 @@ impl SimWorld {
             NewTerrain::new(height_map, terrain_texture)
         };
 
-        let quad_tree = QuadTree::from_new_terrain(&terrain);
+        let mut quad_tree = QuadTree::from_new_terrain(&terrain);
 
         let mut objects = NewObjects::default();
 
@@ -112,16 +112,26 @@ impl SimWorld {
                 let object_type = ObjectType::from_string(&object.typ)
                     .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
 
-                let _ = objects.spawn(
+                let (object_handle, object) = match objects.spawn(
                     Transform::from_translation(object.position)
                         .with_euler_rotation(object.rotation * vec3(1.0, 1.0, -1.0)),
-                    100.0,
                     object_type,
                     &object.name,
                     &object.title,
-                );
+                ) {
+                    Ok(handle) => handle,
+                    Err(err) => {
+                        tracing::warn!("Could not spawn object! ({})", err);
+                        continue;
+                    }
+                };
+
+                // Insert the object into the quad tree.
+                quad_tree.insert_object(object_handle, &object.bounding_sphere);
             }
         }
+
+        // quad_tree._print_nodes();
 
         Ok(SimWorld {
             camera: camera::Camera::new(

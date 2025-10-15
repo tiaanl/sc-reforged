@@ -147,6 +147,18 @@ impl BoundingBox {
     pub fn center(&self) -> Vec3 {
         self.min + (self.max - self.min)
     }
+
+    pub fn fully_contains_sphere(&self, sphere: &BoundingSphere) -> bool {
+        let center = sphere.center;
+        let radius = sphere.radius;
+
+        center.x - radius >= self.min.x
+            && center.x + radius <= self.max.x
+            && center.y - radius >= self.min.y
+            && center.y + radius <= self.max.y
+            && center.z - radius >= self.min.z
+            && center.z + radius <= self.max.z
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -160,6 +172,11 @@ impl BoundingSphere {
         center: Vec3::ZERO,
         radius: 0.0,
     };
+
+    #[inline]
+    pub fn new(center: Vec3, radius: f32) -> Self {
+        Self { center, radius }
+    }
 
     pub fn from_positions_ritter<I>(positions: I) -> Self
     where

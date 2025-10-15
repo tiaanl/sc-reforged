@@ -15,6 +15,8 @@ use crate::{
     },
 };
 
+pub use cull_system::DebugQuadTreeOptions;
+
 mod camera_system;
 mod clear_render_targets;
 mod cull_system;
@@ -33,9 +35,9 @@ pub struct Time {
 /// Shared resources between rendering in the systems and the [RenderWorld].
 pub struct Systems {
     camera_system: camera_system::CameraSystem<TopDownCameraController>,
-    culling: cull_system::CullSystem,
+    pub culling: cull_system::CullSystem,
     terrain_system: terrain_system::TerrainSystem,
-    objects_system: objects_system::ObjectsSystem,
+    pub objects_system: objects_system::ObjectsSystem,
     gizmo_system: gizmo_system::GizmoSystem,
 }
 
@@ -79,7 +81,7 @@ impl Systems {
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
         self.culling.calculate_visible_chunks(sim_world);
         day_night_cycle_system::increment_time_of_day(sim_world, time);
-        // self.objects_system.render_gizmos(sim_world);
+        self.objects_system.render_gizmos(sim_world);
     }
 
     pub fn extract(

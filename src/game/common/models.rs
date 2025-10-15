@@ -57,7 +57,7 @@ impl Models {
         handle
     }
 
-    pub fn load_object_model(&mut self, name: &str) -> Result<Handle<Model>, AssetError> {
+    pub fn load_object_model(&mut self, name: &str) -> Result<(Handle<Model>, &Model), AssetError> {
         let path = if let Some(def) = self.model_lod_defs.get(name) {
             PathBuf::from(&def[0].sub_model_model)
         } else {
@@ -72,7 +72,10 @@ impl Models {
         self.load_model(name, path)
     }
 
-    pub fn _load_bipedal_model(&mut self, name: &str) -> Result<Handle<Model>, AssetError> {
+    pub fn _load_bipedal_model(
+        &mut self,
+        name: &str,
+    ) -> Result<(Handle<Model>, &Model), AssetError> {
         // TODO: No LOD's for bipedal models?
 
         let path = PathBuf::from("models")
@@ -88,9 +91,9 @@ impl Models {
         &mut self,
         name: &str,
         path: impl AsRef<Path>,
-    ) -> Result<Handle<Model>, AssetError> {
+    ) -> Result<(Handle<Model>, &Model), AssetError> {
         if let Some(handle) = self.lookup.get(name) {
-            return Ok(*handle);
+            return Ok((*handle, self.get(*handle).unwrap()));
         }
 
         let data = file_system().load(&path)?;
@@ -104,7 +107,9 @@ impl Models {
             return Err(AssetError::custom(path, "Model does not contain meshes!"));
         }
 
-        Ok(self.add(name, model))
+        let handle = self.add(name, model);
+
+        Ok((handle, self.get(handle).unwrap()))
     }
 
     pub fn get(&self, handle: Handle<Model>) -> Option<&Model> {

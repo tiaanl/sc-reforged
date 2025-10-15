@@ -47,6 +47,8 @@ pub struct ObjectsSystem {
     alpha_pipeline: wgpu::RenderPipeline,
     models_to_render: Vec<ModelToRender>,
     batches: Vec<Batch>,
+
+    pub debug_render_bounding_spheres: bool,
 }
 
 impl ObjectsSystem {
@@ -179,18 +181,22 @@ impl ObjectsSystem {
 
             models_to_render,
             batches,
+
+            debug_render_bounding_spheres: false,
         }
     }
 
     pub fn render_gizmos(&self, sim_world: &mut SimWorld) {
-        for (_, object) in sim_world.objects.objects.iter() {
-            sim_world
-                .gizmo_vertices
-                .extend(GizmosRenderer::create_iso_sphere(
-                    object.transform.to_mat4(),
-                    object.bounding_sphere.radius,
-                    6,
-                ));
+        if self.debug_render_bounding_spheres {
+            for (_, object) in sim_world.objects.objects.iter() {
+                sim_world
+                    .gizmo_vertices
+                    .extend(GizmosRenderer::create_iso_sphere(
+                        object.transform.to_mat4(),
+                        object.bounding_sphere.radius,
+                        16,
+                    ));
+            }
         }
     }
 

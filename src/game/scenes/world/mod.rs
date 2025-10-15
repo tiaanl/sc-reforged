@@ -19,12 +19,10 @@ use crate::{
         scenes::world::{
             actions::PlayerAction,
             game_mode::GameMode,
-            new_objects::NewObjects,
-            new_terrain::NewTerrain,
             overlay_renderer::OverlayRenderer,
             quad_tree::QuadTree,
             render::{RenderStore, RenderWorld},
-            sim_world::{ComputedCamera, SimWorld},
+            sim_world::SimWorld,
         },
         shadows::ShadowCascades,
         sky_renderer::SkyRenderer,
@@ -882,6 +880,7 @@ impl Scene for WorldScene {
             // self.gizmos_renderer
             //     .render(frame, view_camera_bind_group, &self.gizmos_vertices);
         }
+        */
 
         let now = std::time::Instant::now();
         let render_time = now - self.last_frame_time;
@@ -889,7 +888,6 @@ impl Scene for WorldScene {
 
         self.fps_history[self.fps_history_cursor] = render_time.as_secs_f32();
         self.fps_history_cursor = (self.fps_history_cursor + 1) % self.fps_history.len();
-        */
     }
 
     fn post_render(&mut self) {
@@ -912,6 +910,8 @@ impl Scene for WorldScene {
         egui::Window::new("World")
             .default_open(true)
             .show(ctx, |ui| {
+                use crate::game::scenes::world::systems::DebugQuadTreeOptions;
+
                 ui.heading("Render");
                 ui.checkbox(&mut self.render_overlay, "Render overlay");
 
@@ -938,20 +938,80 @@ impl Scene for WorldScene {
                 ui.heading("Terrain");
                 self.terrain.debug_panel(ui);
 
-                ui.heading("Geometry Data");
-                if let Some(ref geometry_data) = self.geometry_data {
-                    ui.label(format!(
-                        "position: {:.2}, {:.2}, {:.2}",
-                        geometry_data.position.x,
-                        geometry_data.position.y,
-                        geometry_data.position.z,
-                    ));
-                    ui.label(format!("id: {:?}", geometry_data.id));
-                } else {
-                    ui.label("None");
+                // ui.heading("Geometry Data");
+                // if let Some(ref geometry_data) = self.geometry_data {
+                //     ui.label(format!(
+                //         "position: {:.2}, {:.2}, {:.2}",
+                //         geometry_data.position.x,
+                //         geometry_data.position.y,
+                //         geometry_data.position.z,
+                //     ));
+                //     ui.label(format!("id: {:?}", geometry_data.id));
+                // } else {
+                //     ui.label("None");
+                // }
+
+                // Quad tree
+                {
+                    ui.heading("Quad Tree");
+                    if ui
+                        .radio(
+                            matches!(
+                                self.systems.culling.debug_quad_tree,
+                                DebugQuadTreeOptions::None
+                            ),
+                            "None",
+                        )
+                        .clicked()
+                    {
+                        self.systems.culling.debug_quad_tree = DebugQuadTreeOptions::None;
+                    }
+
+                    ui.horizontal(|ui| {
+                        if ui
+                            .radio(
+                                matches!(
+                                    self.systems.culling.debug_quad_tree,
+                                    DebugQuadTreeOptions::Level(_)
+                                ),
+                                "Level",
+                            )
+                            .clicked()
+                        {
+                            self.systems.culling.debug_quad_tree = DebugQuadTreeOptions::Level(0);
+                        };
+                        if let DebugQuadTreeOptions::Level(level) =
+                            &mut self.systems.culling.debug_quad_tree
+                        {
+                            ui.add(egui::widgets::Slider::new(
+                                level,
+                                0..=(self.sim_world.quad_tree.max_level),
+                            ));
+                        }
+                    });
+
+                    if ui
+                        .radio(
+                            matches!(
+                                self.systems.culling.debug_quad_tree,
+                                DebugQuadTreeOptions::All
+                            ),
+                            "All",
+                        )
+                        .clicked()
+                    {
+                        self.systems.culling.debug_quad_tree = DebugQuadTreeOptions::All;
+                    }
                 }
 
-                ui.heading("Entities");
+                // Objects
+                {
+                    ui.heading("Objects");
+                    ui.checkbox(
+                        &mut self.systems.objects_system.debug_render_bounding_spheres,
+                        "Render bounding spheres",
+                    )
+                }
             });
 
         egui::Window::new("Timings")
@@ -1018,6 +1078,6 @@ impl Scene for WorldScene {
             });
         });
 
-        self.objects.debug_panel(ctx);
+        // self.objects.debug_panel(ctx);
     }
 }

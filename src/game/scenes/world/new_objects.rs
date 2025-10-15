@@ -16,6 +16,8 @@ enum ObjectData {
         model: Handle<Model>,
         model_des: Handle<Model>,
     },
+    /// Temporary for use with more complicated objects that is not implemented yet.
+    SingleModel { model: Handle<Model> },
 }
 
 pub struct NewObject {
@@ -28,6 +30,7 @@ impl NewObject {
     pub fn model_to_render(&self) -> Option<Handle<Model>> {
         Some(match self.data {
             ObjectData::Scenery { model, .. } => model,
+            ObjectData::SingleModel { model } => model,
         })
     }
 }
@@ -45,17 +48,13 @@ impl NewObjects {
     pub fn spawn(
         &mut self,
         transform: Transform,
-        radius: f32,
         object_type: ObjectType,
         name: &str,
         _title: &str,
-    ) -> Result<Handle<NewObject>, AssetError> {
-        let bounding_sphere = BoundingSphere {
-            center: transform.translation,
-            radius,
-        };
+    ) -> Result<(Handle<NewObject>, &NewObject), AssetError> {
+        let mut bounding_sphere = BoundingSphere::ZERO;
 
-        match object_type {
+        let object_data = match object_type {
             ObjectType::Scenery
             | ObjectType::SceneryAlarm
             | ObjectType::SceneryBush
@@ -94,7 +93,7 @@ impl NewObjects {
             | ObjectType::StructureSwingDoor
             | ObjectType::StructureTent
             | ObjectType::StructureWall => {
-                let model = models().load_model(
+                let (model_handle, model) = models().load_model(
                     name,
                     PathBuf::from("models")
                         .join(name)
@@ -102,7 +101,9 @@ impl NewObjects {
                         .with_extension("smf"),
                 )?;
 
-                let model_des = models().load_model(
+                bounding_sphere.expand_to_include(&model.bounding_sphere);
+
+                let (model_des_handle, model_des) = models().load_model(
                     name,
                     PathBuf::from("models")
                         .join(name)
@@ -110,17 +111,45 @@ impl NewObjects {
                         .with_extension("smf"),
                 )?;
 
-                self.models_to_prepare.push(model);
-                self.models_to_prepare.push(model_des);
+                bounding_sphere.expand_to_include(&model_des.bounding_sphere);
 
-                Ok(self.objects.insert(NewObject {
-                    transform,
-                    bounding_sphere,
-                    data: ObjectData::Scenery { model, model_des },
-                }))
+                self.models_to_prepare.push(model_handle);
+                self.models_to_prepare.push(model_des_handle);
+
+                ObjectData::Scenery {
+                    model: model_handle,
+                    model_des: model_des_handle,
+                }
             }
-            _ => Err(AssetError::Decode(PathBuf::default())),
-        }
+            _ => {
+                let (model_handle, model) = models().load_model(
+                    name,
+                    PathBuf::from("models")
+                        .join(name)
+                        .join(name)
+                        .with_extension("smf"),
+                )?;
+
+                bounding_sphere.expand_to_include(&model.bounding_sphere);
+
+                self.models_to_prepare.push(model_handle);
+
+                ObjectData::SingleModel {
+                    model: model_handle,
+                }
+            }
+        };
+
+        // Move to bounding sphere into position.
+        bounding_sphere.center += transform.translation;
+
+        let handle = self.objects.insert(NewObject {
+            transform,
+            bounding_sphere,
+            data: object_data,
+        });
+
+        Ok((handle, self.objects.get(handle).unwrap()))
     }
 
     #[inline]
