@@ -79,7 +79,7 @@ impl Systems {
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
         self.culling.calculate_visible_chunks(sim_world);
         day_night_cycle_system::increment_time_of_day(sim_world, time);
-        self.objects_system.render_gizmos(sim_world);
+        // self.objects_system.render_gizmos(sim_world);
     }
 
     pub fn extract(

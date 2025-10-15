@@ -129,6 +129,24 @@ fn fragment_opaque(vertex: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(lit, 1.0);
 }
 
+@fragment
+fn fragment_alpha(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    let texture_data = u_texture_data[vertex.texture_data_index];
+    let texture = u_texture_buckets[texture_data.bucket];
+    let base_color = textureSample(texture, u_texture_sampler, vertex.tex_coord, texture_data.layer);
+
+    let distance = length(vertex.world_position - u_camera_env.position.xyz);
+
+    let lit = diffuse_with_fog(
+        u_camera_env,
+        vertex.world_normal,
+        base_color.rgb,
+        distance,
+        1.0,
+    );
+
+    return vec4<f32>(lit, base_color.a);
+}
 
 /// Diffuse + ambient lighting, modulated by shadow visibility.
 fn diffuse(
