@@ -26,6 +26,7 @@ struct TextureData {
 
 struct Node {
     transform: mat4x4<f32>,
+    parent_index: u32,
 }
 
 @group(2) @binding(0) var<storage, read> u_nodes: array<Node>;
@@ -54,9 +55,31 @@ struct VertexOutput {
     @location(3) texture_data_index: u32,
 }
 
+const NODE_SENTINEL: u32 = 0xFFFFFFFFu;
+
+fn get_node_transform(first_index: u32, index: u32) -> mat4x4<f32> {
+    var transform = mat4x4<f32>(
+        vec4<f32>(1.0, 0.0, 0.0, 0.0),
+        vec4<f32>(0.0, 1.0, 0.0, 0.0),
+        vec4<f32>(0.0, 0.0, 1.0, 0.0),
+        vec4<f32>(0.0, 0.0, 0.0, 1.0),
+    );
+    var current = first_index + index;
+    loop {
+        let node = u_nodes[current];
+        transform *= node.transform;
+        if node.parent_index == NODE_SENTINEL {
+            break;
+        }
+        current = first_index + node.parent_index;
+    }
+
+    return transform;
+}
+
 @vertex
 fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
-    let local_matrix = u_nodes[instance.first_node_index + vertex.node_index].transform;
+    let local_matrix = get_node_transform(instance.first_node_index, vertex.node_index);
 
     let model_matrix = mat4x4<f32>(
         instance.model_mat_0,
@@ -121,14 +144,9 @@ fn diffuse(
 
     // Direct sunlight (scaled by visibility)
     let sun_light = env.sun_color.rgb * n_dot_l * visibility;
-
-    // Ambient term (not shadowed)
     let ambient = env.ambient_color.rgb;
-    let ambient_color = env.sun_color.rgb * ambient;
 
-    let lighting = sun_light + ambient_color;
-
-    return lighting * base_color;
+    return (sun_light + ambient) * base_color;
 }
 
 /// Same as diffuse_with_fog(), but blends in a shadow term.

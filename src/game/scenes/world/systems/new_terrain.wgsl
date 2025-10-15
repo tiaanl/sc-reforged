@@ -121,8 +121,8 @@ fn vertex_terrain(
     let clip_position = u_camera_env.proj_view * vec4<f32>(world_position, 1.0);
 
     let tex_coord = vec2<f32>(
-        f32(abs_node_coord.x) / f32(u_terrain_data.cells_dim.x + 1),
-        f32(abs_node_coord.y) / f32(u_terrain_data.cells_dim.y + 1),
+        f32(abs_node_coord.x) / f32(u_terrain_data.cells_dim.x),
+        f32(abs_node_coord.y) / f32(u_terrain_data.cells_dim.y),
     );
 
     return VertexOutput(
@@ -239,14 +239,9 @@ fn diffuse(
 
     // Direct sunlight (scaled by visibility)
     let sun_light = env.sun_color.rgb * n_dot_l * visibility;
-
-    // Ambient term (not shadowed)
     let ambient = env.ambient_color.rgb;
-    let ambient_color = env.sun_color.rgb * ambient;
 
-    let lighting = sun_light + ambient_color;
-
-    return lighting * base_color;
+    return (sun_light + ambient) * base_color;
 }
 
 /// Same as diffuse_with_fog(), but blends in a shadow term.

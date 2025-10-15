@@ -274,8 +274,6 @@ impl ObjectsSystem {
             wgpu::IndexFormat::Uint32,
         );
 
-        let mut draw_call_count = 0;
-
         for (render_model, range) in self.batches.iter().filter_map(|batch| {
             render_store
                 .models
@@ -283,9 +281,6 @@ impl ObjectsSystem {
                 .map(|handle| (handle, batch.range.clone()))
         }) {
             render_pass.draw_indexed(render_model.opaque_range.clone(), 0, range);
-            draw_call_count += 1;
         }
-
-        println!("draw_calls: {draw_call_count}");
     }
 }

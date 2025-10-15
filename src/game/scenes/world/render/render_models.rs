@@ -16,9 +16,11 @@ use crate::{
 #[repr(C)]
 pub struct RenderNode {
     transform: [[f32; 4]; 4],
+    parent_index: u32,
+    _pad: [u32; 3],
 }
 
-#[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
+#[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
 pub struct RenderVertex {
     pub position: [f32; 3],
@@ -149,6 +151,8 @@ impl RenderModels {
             .iter()
             .map(|bone| RenderNode {
                 transform: bone.transform.to_mat4().to_cols_array_2d(),
+                parent_index: bone.parent,
+                _pad: Default::default(),
             })
             .collect();
 
