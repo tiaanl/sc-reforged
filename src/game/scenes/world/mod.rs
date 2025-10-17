@@ -19,7 +19,6 @@ use crate::{
         scenes::world::{
             actions::PlayerAction,
             game_mode::GameMode,
-            overlay_renderer::OverlayRenderer,
             quad_tree::QuadTree,
             render::{RenderStore, RenderWorld},
             sim_world::SimWorld,
@@ -36,7 +35,6 @@ mod new_objects;
 mod new_terrain;
 mod object;
 mod objects;
-mod overlay_renderer;
 mod quad_tree;
 mod render;
 mod sim_world;
@@ -92,8 +90,6 @@ pub struct WorldScene {
     shadow_render_target: RenderTarget,
 
     sky_renderer: SkyRenderer,
-
-    overlay_renderer: OverlayRenderer,
 
     environment: GpuEnvironment,
     ambient_color: Vec3,
@@ -290,12 +286,6 @@ impl WorldScene {
             sky_renderer
         };
 
-        let overlay_renderer = OverlayRenderer::new(
-            &main_camera.gpu_camera.bind_group_layout,
-            &shadow_cascades,
-            &geometry_buffers,
-        );
-
         let gizmos_renderer = GizmosRenderer::new(&main_camera.gpu_camera.bind_group_layout);
 
         let fps_history = vec![0.0; 100];
@@ -342,8 +332,6 @@ impl WorldScene {
             compositor,
 
             sky_renderer,
-
-            overlay_renderer,
 
             environment,
             ambient_color,
@@ -890,13 +878,6 @@ impl Scene for WorldScene {
         self.fps_history_cursor = (self.fps_history_cursor + 1) % self.fps_history.len();
     }
 
-    fn post_render(&mut self) {
-        self.geometry_data = self.last_mouse_position.map(|position| {
-            self.geometry_buffers
-                .fetch_data(&renderer().device, &renderer().queue, position)
-        });
-    }
-
     #[cfg(feature = "egui")]
     fn debug_panel(&mut self, ctx: &egui::Context, frame_index: usize) {
         use egui::widgets::Slider;
@@ -911,9 +892,6 @@ impl Scene for WorldScene {
             .default_open(true)
             .show(ctx, |ui| {
                 use crate::game::scenes::world::systems::DebugQuadTreeOptions;
-
-                ui.heading("Render");
-                ui.checkbox(&mut self.render_overlay, "Render overlay");
 
                 ui.heading("Camera");
                 ui.checkbox(&mut self.view_debug_camera, "View debug camera");

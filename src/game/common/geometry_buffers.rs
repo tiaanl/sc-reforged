@@ -39,90 +39,11 @@ impl RenderTarget {
     }
 }
 
-pub struct ReadBackBuffer {
-    buffer: wgpu::Buffer,
-}
-
-impl ReadBackBuffer {
-    pub fn new(device: &wgpu::Device, label: &str) -> Self {
-        let full_label = format!("read_back_buffer_{label}");
-
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(&full_label),
-            size: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-
-        Self { buffer }
-    }
-
-    /// Fetch the data from the given texture at the given position into this [ReadBackBuffer].
-    pub fn fetch(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        texture: &wgpu::Texture,
-        position: UVec2,
-    ) {
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d {
-                    x: position.x,
-                    y: position.y,
-                    z: 0,
-                },
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &self.buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
-                    rows_per_image: None,
-                },
-            },
-            wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-        );
-    }
-
-    /// Read the data from this [ReadBackBuffer] for use on the CPU.
-    pub fn read<T>(&self, device: &wgpu::Device, f: impl FnOnce(&wgpu::BufferView) -> T) -> T {
-        let buffer_slice = self.buffer.slice(..);
-
-        buffer_slice.map_async(wgpu::MapMode::Read, |result| {
-            if result.is_err() {
-                eprintln!("Failed to map buffer for reading");
-            }
-        });
-
-        // Wait or poll for the GPU to complete the copy
-        device.poll(wgpu::Maintain::Wait);
-
-        let data = buffer_slice.get_mapped_range();
-
-        let res = f(&data);
-
-        drop(data);
-        self.buffer.unmap();
-
-        res
-    }
-}
-
 pub struct GeometryBuffers {
     pub depth: RenderTarget,
     pub color: RenderTarget,
     pub oit_accumulation: RenderTarget,
     pub oit_revealage: RenderTarget,
-    pub position_id: RenderTarget,
-
-    position_id_read_back_buffer: ReadBackBuffer,
 
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
@@ -139,7 +60,6 @@ impl GeometryBuffers {
     const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     const OIT_ACCUMULATION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
     const OIT_REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
-    const POSITION_ID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
     pub fn new(device: &wgpu::Device, size: UVec2) -> Self {
         tracing::info!("Creating geometry buffers ({}x{})", size.x, size.y);
@@ -149,9 +69,6 @@ impl GeometryBuffers {
         let oit_accumulation =
             RenderTarget::new(device, "color", size, Self::OIT_ACCUMULATION_FORMAT);
         let oit_revealage = RenderTarget::new(device, "color", size, Self::OIT_REVEALAGE_FORMAT);
-        let position_id = RenderTarget::new(device, "position", size, Self::POSITION_ID_FORMAT);
-
-        let position_id_read_back_buffer = ReadBackBuffer::new(device, "position_id");
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("g_buffer_bind_group_layout"),
@@ -189,17 +106,6 @@ impl GeometryBuffers {
                     },
                     count: None,
                 },
-                // position_id
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
             ],
         });
 
@@ -219,10 +125,6 @@ impl GeometryBuffers {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(&oit_revealage.view),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&position_id.view),
-                },
             ],
         });
 
@@ -231,101 +133,48 @@ impl GeometryBuffers {
             color,
             oit_accumulation,
             oit_revealage,
-            position_id,
-
-            position_id_read_back_buffer,
 
             bind_group_layout,
             bind_group,
         }
     }
 
-    pub fn fetch_data(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        position: UVec2,
-    ) -> GeometryData {
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("geometry_buffer_fetch_data"),
-        });
-
-        self.position_id_read_back_buffer
-            .fetch(&mut encoder, &self.position_id.texture, position);
-
-        queue.submit(Some(encoder.finish()));
-
-        let (position, id) = self.position_id_read_back_buffer.read(device, |data| {
-            let f: [f32; 4] = bytemuck::cast_slice(&data[0..16])[0..4].try_into().unwrap();
-            (
-                Vec3::new(f[0], f[1], f[2]),
-                u32::from_le_bytes(f[3].to_le_bytes()),
-            )
-        });
-
-        GeometryData { position, id }
-    }
-
-    pub fn opaque_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
-        [
-            Some(wgpu::RenderPassColorAttachment {
-                view: &self.color.view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            }),
-            Some(wgpu::RenderPassColorAttachment {
-                view: &self.position_id.view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            }),
-        ]
+    pub fn opaque_attachments(&self) -> [Option<wgpu::RenderPassColorAttachment<'_>>; 1] {
+        [Some(wgpu::RenderPassColorAttachment {
+            view: &self.color.view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Load,
+                store: wgpu::StoreOp::Store,
+            },
+        })]
     }
 
     pub fn opaque_targets() -> &'static [Option<wgpu::ColorTargetState>] {
-        &[
-            Some(wgpu::ColorTargetState {
-                format: Self::COLOR_FORMAT,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            }),
-            Some(wgpu::ColorTargetState {
-                format: Self::POSITION_ID_FORMAT,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            }),
-        ]
+        &[Some(wgpu::ColorTargetState {
+            format: Self::COLOR_FORMAT,
+            blend: None,
+            write_mask: wgpu::ColorWrites::ALL,
+        })]
     }
 
     pub fn additive_targets() -> &'static [Option<wgpu::ColorTargetState>] {
-        &[
-            Some(wgpu::ColorTargetState {
-                format: Self::COLOR_FORMAT,
-                blend: Some(wgpu::BlendState {
-                    color: wgpu::BlendComponent {
-                        src_factor: wgpu::BlendFactor::One,
-                        dst_factor: wgpu::BlendFactor::One,
-                        operation: wgpu::BlendOperation::Add,
-                    },
-                    alpha: wgpu::BlendComponent {
-                        src_factor: wgpu::BlendFactor::One,
-                        dst_factor: wgpu::BlendFactor::One,
-                        operation: wgpu::BlendOperation::Add,
-                    },
-                }),
-                write_mask: wgpu::ColorWrites::ALL,
+        &[Some(wgpu::ColorTargetState {
+            format: Self::COLOR_FORMAT,
+            blend: Some(wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
             }),
-            Some(wgpu::ColorTargetState {
-                format: Self::POSITION_ID_FORMAT,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            }),
-        ]
+            write_mask: wgpu::ColorWrites::ALL,
+        })]
     }
 
     pub fn alpha_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {

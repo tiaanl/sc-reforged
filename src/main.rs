@@ -291,8 +291,6 @@ impl winit::application::ApplicationHandler for App {
                                 .queue
                                 .submit(std::iter::once(frame.encoder.finish()));
 
-                            scene.post_render();
-
                             output.present();
 
                             // Frame is done rendering.

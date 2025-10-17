@@ -1,9 +1,6 @@
 use glam::vec4;
 
-use crate::{
-    engine::gizmos::GizmosRenderer,
-    game::{math::Frustum, scenes::world::sim_world::SimWorld},
-};
+use crate::{engine::gizmos::GizmosRenderer, game::scenes::world::sim_world::SimWorld};
 
 #[derive(Default)]
 pub enum DebugQuadTreeOptions {
