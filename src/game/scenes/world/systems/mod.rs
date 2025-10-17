@@ -17,6 +17,7 @@ use crate::{
 
 pub use cull_system::DebugQuadTreeOptions;
 
+mod animations;
 mod camera_system;
 mod clear_render_targets;
 mod cull_system;

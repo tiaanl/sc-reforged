@@ -9,11 +9,9 @@ use crate::{
         prelude::Transform,
         storage::{Handle, Storage},
     },
-    game::{data_dir::data_dir, skeleton::Skeleton},
+    game::{data_dir::data_dir, skeleton::Skeleton, track::Track},
     global,
 };
-
-use super::track::Track;
 
 #[derive(Debug, Default)]
 pub struct Animation {

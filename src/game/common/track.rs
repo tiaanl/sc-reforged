@@ -1,4 +1,4 @@
-use crate::game::animations::Interpolate;
+use crate::game::interpolate::Interpolate;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Key<V> {
@@ -6,12 +6,12 @@ pub struct Key<V> {
     pub value: V,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Track<V: Interpolate> {
     keys: Vec<Key<V>>,
 }
 
-impl<V: Interpolate> Track<V> {
+impl<V: Interpolate + Default> Track<V> {
     /// Return the frame number of the last key frame.
     #[inline]
     pub fn last_frame(&self) -> Option<u32> {
@@ -79,7 +79,10 @@ impl<V: Interpolate> Track<V> {
     /// If `looping`, wrap to [0, last_frame).
     #[inline]
     pub fn sample_sub_frame(&self, frame_f: f32, looping: bool) -> V {
-        debug_assert!(!self.keys.is_empty());
+        if self.keys.is_empty() {
+            return V::default();
+        }
+        // debug_assert!(!self.keys.is_empty());
 
         if self.keys.len() == 1 {
             return self.keys[0].value;

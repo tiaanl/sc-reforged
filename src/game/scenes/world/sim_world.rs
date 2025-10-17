@@ -5,7 +5,6 @@ use glam::{IVec2, Quat, Vec3, vec3};
 use crate::{
     engine::{assets::AssetError, gizmos::GizmoVertex, prelude::Transform, storage::Handle},
     game::{
-        animations::track::Track,
         camera::{self, Camera},
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
@@ -15,6 +14,7 @@ use crate::{
             new_terrain::NewTerrain,
             quad_tree::QuadTree,
         },
+        track::Track,
     },
 };
 
