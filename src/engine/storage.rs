@@ -27,7 +27,7 @@ impl<T> Eq for Handle<T> {}
 
 impl<T> PartialOrd for Handle<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
+        Some(self.cmp(other))
     }
 }
 
@@ -59,6 +59,7 @@ impl<T> Default for Storage<T> {
     }
 }
 
+#[allow(dead_code)]
 impl<T> Storage<T> {
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {

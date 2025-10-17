@@ -57,8 +57,8 @@ impl Default for TimeOfDayEntry {
 // SKY_TEXTURE_TO_USE [i] [texturename] [trans_delay] [world_to_tvert_scalar] [world_to_tverts_sc_trans]
 #[derive(Debug, Default)]
 pub struct SkyTexture {
-    pub index: i32,
-    pub name: String,
+    pub _index: i32,
+    pub _name: String,
     pub _trans_delay: i32,
     pub _world_to_tvert_scalar: f32,
     pub _world_to_tverts_sc_trans: f32,
@@ -163,8 +163,8 @@ impl From<ConfigLines> for Campaign {
                 "SKY_TEXTURE_TO_USE" => {
                     // SKY_TEXTURE_TO_USE 0 sky_cloud1.bmp 32000 0.00012 0.00002
                     let sky_texture = SkyTexture {
-                        index: line.param(0),
-                        name: line.param(1),
+                        _index: line.param(0),
+                        _name: line.param(1),
                         _trans_delay: line.param(2),
                         _world_to_tvert_scalar: line.param(3),
                         _world_to_tverts_sc_trans: line.param(4),

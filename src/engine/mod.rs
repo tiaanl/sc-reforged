@@ -20,7 +20,6 @@ pub mod prelude {
     pub use super::mesh::*;
     pub use super::renderer::*;
     pub use super::scene::*;
-    pub use super::tracked::*;
     pub use super::transform::*;
     pub use glam::{Mat4, Quat, UVec2, Vec2, Vec3};
 }

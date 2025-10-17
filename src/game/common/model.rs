@@ -223,7 +223,7 @@ impl TryFrom<smf::Model> for Model {
                 .map(|node| Bone {
                     parent: node.parent,
                     transform: node.transform.clone(),
-                    id: node.bone_id,
+                    _id: node.bone_id,
                     _name: node.name.clone(),
                 })
                 .collect(),

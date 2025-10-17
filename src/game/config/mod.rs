@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 mod campaign;
 mod campaign_defs;
 mod image_defs;

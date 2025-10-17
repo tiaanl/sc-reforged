@@ -24,7 +24,6 @@ mod cull_system;
 mod day_night_cycle_system;
 mod free_camera_controller;
 mod gizmo_system;
-mod model_render_system;
 mod objects_system;
 mod terrain_system;
 mod top_down_camera_controller;

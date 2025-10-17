@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 pub mod animation;
 pub mod pose;
 pub mod skeleton;

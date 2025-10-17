@@ -1,17 +1,11 @@
-pub mod animations;
 pub mod camera;
-pub mod compositor;
 pub mod data_dir;
 pub mod file_system;
 pub mod geometry_buffers;
-pub mod height_map;
 pub mod image;
 pub mod interpolate;
 pub mod math;
 pub mod model;
 pub mod models;
-pub mod renderer;
-pub mod shadows;
 pub mod skeleton;
-pub mod sky_renderer;
 pub mod track;

@@ -1,30 +1,13 @@
-use std::path::PathBuf;
-
-use glam::vec3;
-use terrain::Terrain;
-use wgpu::util::DeviceExt;
-
 use crate::{
-    engine::{
-        gizmos::{GizmoVertex, GizmosRenderer},
-        prelude::*,
-    },
+    engine::prelude::*,
     game::{
-        camera::{self, Controller},
-        compositor::Compositor,
-        config::{CampaignDef, ObjectType},
+        config::CampaignDef,
         data_dir::data_dir,
-        geometry_buffers::{GeometryBuffers, GeometryData, RenderTarget},
-        image::images,
         scenes::world::{
-            actions::PlayerAction,
             game_mode::GameMode,
-            quad_tree::QuadTree,
             render::{RenderStore, RenderWorld},
             sim_world::SimWorld,
         },
-        shadows::ShadowCascades,
-        sky_renderer::SkyRenderer,
     },
 };
 
@@ -33,31 +16,10 @@ mod game_mode;
 pub mod new_height_map;
 mod new_objects;
 mod new_terrain;
-mod object;
-mod objects;
 mod quad_tree;
 mod render;
 mod sim_world;
-mod strata;
 mod systems;
-pub mod terrain;
-
-#[derive(Clone, Copy, Default, bytemuck::NoUninit)]
-#[repr(C)]
-struct GpuEnvironment {
-    pub sun_dir: [f32; 4],
-    pub sun_color: [f32; 4],
-
-    pub fog_color: [f32; 4],
-    pub fog_params: [f32; 4],
-}
-
-/// Wrap all the data for controlling the camera.
-struct Camera<C: camera::Controller> {
-    controller: C,
-    camera: camera::Camera,
-    gpu_camera: camera::GpuCamera,
-}
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
@@ -68,225 +30,24 @@ pub struct WorldScene {
     // Systems
     systems: systems::Systems,
 
-    game_mode: GameMode,
-
-    view_debug_camera: bool,
-    control_debug_camera: bool,
-
-    main_camera: Camera<camera::GameCameraController>,
-    debug_camera: Camera<camera::FreeCameraController>,
-
-    terrain: Terrain,
-    objects: objects::Objects,
-    quad_tree: QuadTree,
-
-    // Render
     depth_buffer: wgpu::TextureView,
 
-    shadow_cascades: ShadowCascades,
-    shadow_cascades_lambda: f32,
-    geometry_buffers: GeometryBuffers,
-    compositor: Compositor,
-    shadow_render_target: RenderTarget,
-
-    sky_renderer: SkyRenderer,
-
-    environment: GpuEnvironment,
-    ambient_color: Vec3,
-
-    environment_buffer: wgpu::Buffer,
-    environment_bind_group: wgpu::BindGroup,
+    game_mode: GameMode,
 
     last_mouse_position: Option<UVec2>,
-    geometry_data: Option<GeometryData>,
 
     last_frame_time: std::time::Instant,
     fps_history: Vec<f32>,
     fps_history_cursor: usize,
-
-    gizmos_vertices: Vec<GizmoVertex>,
-    gizmos_renderer: GizmosRenderer,
-
-    render_overlay: bool,
-
-    pos_and_normal: Option<(Vec3, Vec3)>,
 }
 
 impl WorldScene {
     const RENDER_FRAME_COUNT: usize = 3;
-    const SHADOW_MAP_RESOLUTION: u32 = 2048;
 
     pub fn new(campaign_def: CampaignDef) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
-
-        let main_camera = {
-            let camera_from = campaign.view_initial.from.extend(2500.0);
-            let camera_to = campaign.view_initial.to.extend(0.0);
-
-            let mut controller = camera::GameCameraController::new(1000.0, 0.2);
-            controller.move_to_direct(camera_from);
-            controller.look_at_direct(camera_to);
-            let camera = camera::Camera::new(
-                camera_from,
-                Quat::IDENTITY,
-                45.0_f32.to_radians(),
-                1.0,
-                10.0,
-                13_300.0,
-            );
-            let gpu_camera = camera::GpuCamera::new(&renderer().device);
-
-            Camera {
-                controller,
-                camera,
-                gpu_camera,
-            }
-        };
-
-        let debug_camera = {
-            let controller = camera::FreeCameraController::new(1000.0, 0.2);
-            let camera = camera::Camera::new(
-                Vec3::new(0.0, 0.0, 10_000.0),
-                Quat::IDENTITY,
-                45.0_f32.to_radians(),
-                1.0,
-                10.0,
-                150_000.0,
-            );
-            let gpu_camera = camera::GpuCamera::new(&renderer().device);
-
-            Camera {
-                controller,
-                camera,
-                gpu_camera,
-            }
-        };
-
-        let environment = GpuEnvironment::default();
-        let ambient_color = Vec3::splat(0.3);
-
-        let environment_buffer =
-            renderer()
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("environment_buffer"),
-                    contents: bytemuck::cast_slice(&[environment]),
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                });
-
-        let environment_bind_group_layout =
-            renderer()
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("environment_bind_group_layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX
-                            | wgpu::ShaderStages::FRAGMENT
-                            | wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
-
-        let environment_bind_group =
-            renderer()
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("environment_bind_group_layout"),
-                    layout: &environment_bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer(
-                            environment_buffer.as_entire_buffer_binding(),
-                        ),
-                    }],
-                });
-
-        let shadow_cascades = ShadowCascades::new(&renderer().device, Self::SHADOW_MAP_RESOLUTION);
-
-        let geometry_buffers = GeometryBuffers::new(&renderer().device, renderer().surface.size());
-
-        // Start with a 4K shadow buffer.
-        let shadow_render_target = RenderTarget::new(
-            &renderer().device,
-            "shadow",
-            UVec2::new(Self::SHADOW_MAP_RESOLUTION, Self::SHADOW_MAP_RESOLUTION),
-            wgpu::TextureFormat::Depth32Float,
-        );
-
-        let compositor = Compositor::new(
-            &geometry_buffers.bind_group_layout,
-            &main_camera.gpu_camera.bind_group_layout,
-            &environment_bind_group_layout,
-        );
-
-        let terrain = Terrain::new(
-            &campaign_def,
-            &main_camera.gpu_camera.bind_group_layout,
-            &environment_bind_group_layout,
-            &shadow_cascades,
-        )?;
-
-        let mut objects = objects::Objects::new(
-            &main_camera.gpu_camera.bind_group_layout,
-            &environment_bind_group_layout,
-            &shadow_cascades,
-        )?;
-
-        let quad_tree = QuadTree::default();
-
-        if let Some(ref mtf_name) = campaign.mtf_name {
-            let mtf = data_dir().load_mtf(mtf_name)?;
-
-            for object in mtf.objects.iter() {
-                let object_type = ObjectType::from_string(&object.typ)
-                    .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
-
-                if let Err(err) = objects.spawn(
-                    // Rotate objects to the left.
-                    Transform::from_translation(object.position)
-                        .with_euler_rotation(object.rotation * vec3(1.0, 1.0, -1.0)),
-                    object_type,
-                    &object.name,
-                    &object.title,
-                ) {
-                    tracing::error!("Could not load model: {}", err);
-                }
-            }
-        }
-
-        let sky_renderer = {
-            let device = &renderer().device;
-            let queue = &renderer().queue;
-
-            let mut sky_renderer =
-                SkyRenderer::new(device, &main_camera.gpu_camera.bind_group_layout);
-
-            for sky_texture in campaign.sky_textures.iter() {
-                // Kind of hacky, but OK.
-                if sky_texture.name.eq_ignore_ascii_case("unused.bmp") {
-                    continue;
-                }
-
-                let image = images().load_image(
-                    PathBuf::from("textures")
-                        .join("object")
-                        .join(&sky_texture.name),
-                )?;
-                sky_renderer.set_sky_texture(device, queue, sky_texture.index, image);
-            }
-
-            sky_renderer
-        };
-
-        let gizmos_renderer = GizmosRenderer::new(&main_camera.gpu_camera.bind_group_layout);
 
         let fps_history = vec![0.0; 100];
         let fps_history_cursor = 0;
@@ -314,76 +75,18 @@ impl WorldScene {
 
             game_mode: GameMode::Editor,
 
-            view_debug_camera: false,
-            control_debug_camera: false,
-
-            main_camera,
-            debug_camera,
-
-            terrain,
-            objects,
-            quad_tree,
-
             depth_buffer,
-            shadow_cascades,
-            shadow_cascades_lambda: 0.5,
-            geometry_buffers,
-            shadow_render_target,
-            compositor,
-
-            sky_renderer,
-
-            environment,
-            ambient_color,
-
-            environment_buffer,
-            environment_bind_group,
 
             last_mouse_position: None,
-            geometry_data: None,
 
             last_frame_time: std::time::Instant::now(),
             fps_history,
             fps_history_cursor,
-
-            gizmos_vertices: Vec::with_capacity(128),
-            gizmos_renderer,
-
-            render_overlay: false,
-
-            pos_and_normal: None,
         })
     }
 
     pub fn in_editor(&self) -> bool {
         matches!(self.game_mode, GameMode::Editor)
-    }
-
-    fn calculate_environment(&self, time_of_day: f32) -> GpuEnvironment {
-        let day_night_cycle = &self.sim_world.day_night_cycle;
-
-        let sun_dir = day_night_cycle.sun_dir.sample_sub_frame(time_of_day, true);
-        let sun_color = day_night_cycle
-            .sun_color
-            .sample_sub_frame(time_of_day, true);
-
-        let fog_far = day_night_cycle
-            .fog_distance
-            .sample_sub_frame(time_of_day, true);
-        let fog_near = fog_far
-            * day_night_cycle
-                .fog_near_fraction
-                .sample_sub_frame(time_of_day, true);
-        let fog_color = day_night_cycle
-            .fog_color
-            .sample_sub_frame(time_of_day, true);
-
-        GpuEnvironment {
-            sun_dir: sun_dir.extend(self.ambient_color.x).to_array(),
-            sun_color: sun_color.extend(self.ambient_color.y).to_array(),
-            fog_color: fog_color.extend(self.ambient_color.z).to_array(),
-            fog_params: [fog_near, fog_far, 0.0, 0.0],
-        }
     }
 
     fn create_depth_buffer(device: &wgpu::Device, size: UVec2) -> wgpu::TextureView {
@@ -412,15 +115,8 @@ impl Scene for WorldScene {
     fn resize(&mut self) {
         let size = renderer().surface.size();
 
-        self.depth_buffer = Self::create_depth_buffer(&renderer().device, size);
-
-        // Replace the buffers with new ones.
-        self.geometry_buffers = GeometryBuffers::new(&renderer().device, size);
-
         let [width, height] = size.to_array().map(|f| f as f32);
         let aspect = width / height.max(1.0);
-        self.main_camera.camera.aspect_ratio = aspect;
-        self.debug_camera.camera.aspect_ratio = aspect;
 
         self.sim_world.camera.aspect_ratio = aspect;
     }
@@ -443,11 +139,6 @@ impl Scene for WorldScene {
             self.systems.update(&mut self.sim_world, &time);
         }
 
-        self.pos_and_normal = self.geometry_data.as_ref().map(|data| {
-            let world_xy = data.position.truncate();
-            self.terrain.height_map.world_position_and_normal(world_xy)
-        });
-
         if input.key_just_pressed(KeyCode::Backquote) {
             self.game_mode = if self.in_editor() {
                 GameMode::Game
@@ -455,51 +146,6 @@ impl Scene for WorldScene {
                 GameMode::Editor
             }
         }
-
-        if input.mouse_just_pressed(MouseButton::Left) {
-            if let Some(ref data) = self.geometry_data {
-                // TODO: This needs a better place.
-                const TERRAIN_ENTITY_ID: u32 = 1 << 16;
-
-                // Figure out the type of object we clicked on:
-                let player_action = if data.id >= TERRAIN_ENTITY_ID {
-                    PlayerAction::TerrainClicked {
-                        _position: data.position,
-                    }
-                } else {
-                    PlayerAction::ObjectClicked {
-                        _position: data.position,
-                        id: data.id,
-                    }
-                };
-
-                self.objects.handle_player_action(&player_action);
-            }
-        } else if input.mouse_just_pressed(MouseButton::Right) {
-            self.objects
-                .handle_player_action(&PlayerAction::ClearSelection);
-        }
-
-        // Advance time of day.
-        // self.time_of_day = (self.time_of_day + delta_time * 0.01).rem_euclid(24.0);
-        self.environment = self.calculate_environment(self.sim_world.time_of_day);
-
-        // Set the camera far plane to max distance of the fog.
-        self.main_camera.camera.far = self.environment.fog_params[1];
-        if self.control_debug_camera {
-            self.debug_camera.controller.update(delta_time, input);
-        } else {
-            self.main_camera.controller.update(delta_time, input);
-        }
-
-        self.main_camera
-            .controller
-            .update_camera(&mut self.main_camera.camera);
-        self.debug_camera
-            .controller
-            .update_camera(&mut self.debug_camera.camera);
-
-        self.objects.update(delta_time, &self.terrain.height_map);
     }
 
     fn render(&mut self, frame: &mut Frame) {
@@ -893,10 +539,6 @@ impl Scene for WorldScene {
             .show(ctx, |ui| {
                 use crate::game::scenes::world::systems::DebugQuadTreeOptions;
 
-                ui.heading("Camera");
-                ui.checkbox(&mut self.view_debug_camera, "View debug camera");
-                ui.checkbox(&mut self.control_debug_camera, "Control debug camera");
-
                 ui.heading("Environment");
                 ui.horizontal(|ui| {
                     ui.label("Time of day");
@@ -905,29 +547,6 @@ impl Scene for WorldScene {
                             .drag_value_speed(0.01),
                     );
                 });
-
-                ui.add(Slider::new(&mut self.shadow_cascades_lambda, 0.0..=1.0));
-                ui.collapsing("Ambient", |ui| {
-                    ui.add(Slider::new(&mut self.ambient_color.x, 0.0..=1.0));
-                    ui.add(Slider::new(&mut self.ambient_color.y, 0.0..=1.0));
-                    ui.add(Slider::new(&mut self.ambient_color.z, 0.0..=1.0));
-                });
-
-                ui.heading("Terrain");
-                self.terrain.debug_panel(ui);
-
-                // ui.heading("Geometry Data");
-                // if let Some(ref geometry_data) = self.geometry_data {
-                //     ui.label(format!(
-                //         "position: {:.2}, {:.2}, {:.2}",
-                //         geometry_data.position.x,
-                //         geometry_data.position.y,
-                //         geometry_data.position.z,
-                //     ));
-                //     ui.label(format!("id: {:?}", geometry_data.id));
-                // } else {
-                //     ui.label("None");
-                // }
 
                 // Quad tree
                 {

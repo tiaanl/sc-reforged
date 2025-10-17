@@ -7,9 +7,8 @@ use crate::{
     engine::storage::Handle,
     game::{
         common::image::Image,
-        config::{self, parser::ConfigLines, TerrainMapping},
+        config::{self, TerrainMapping, parser::ConfigLines},
         file_system::file_system,
-        height_map::HeightMap,
         image::images,
         scenes::world::new_height_map::NewHeightMap,
     },
@@ -46,20 +45,6 @@ impl DataDir {
     #[inline]
     pub fn load_terrain_texture(&self, name: &str) -> Result<Handle<Image>, AssetError> {
         images().load_image(PathBuf::from("trnhigh").join(name).with_extension("jpg"))
-    }
-
-    pub fn load_height_map(
-        &self,
-        path: impl AsRef<Path>,
-        elevation_scale: f32,
-        cell_size: f32,
-    ) -> Result<HeightMap, AssetError> {
-        HeightMap::from_pcx(
-            file_system().load(path.as_ref())?,
-            elevation_scale,
-            cell_size,
-        )
-        .map_err(|err| AssetError::from_io_error(err, path.as_ref()))
     }
 
     pub fn load_new_height_map(
@@ -109,7 +94,7 @@ impl DataDir {
         self.load_config::<config::Mtf>(&path)
     }
 
-    pub fn load_motion(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
+    pub fn _load_motion(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
         let data = file_system().load(path.as_ref())?;
 
         bmf::Motion::read(&mut std::io::Cursor::new(data))

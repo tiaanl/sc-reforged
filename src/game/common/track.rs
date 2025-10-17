@@ -14,7 +14,7 @@ pub struct Track<V: Interpolate> {
 impl<V: Interpolate + Default> Track<V> {
     /// Return the frame number of the last key frame.
     #[inline]
-    pub fn last_frame(&self) -> Option<u32> {
+    pub fn _last_frame(&self) -> Option<u32> {
         self.keys.last().map(|k| k.frame)
     }
 

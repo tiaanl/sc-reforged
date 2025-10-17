@@ -36,11 +36,11 @@ pub struct RenderModel {
     /// Range for alpha blended mesh indices.
     pub alpha_range: Range<u32>,
     /// Range for additive blended mesh indices.
-    pub additive_range: Range<u32>,
+    pub _additive_range: Range<u32>,
     /// Range for [RenderNode]'s for the model.
     pub nodes_range: Range<u32>,
     /// A [BoundingSphere] that wraps the entire model. Used for culling.
-    pub bounding_sphere: BoundingSphere,
+    pub _bounding_sphere: BoundingSphere,
 }
 
 pub struct RenderModels {
@@ -128,10 +128,6 @@ impl RenderModels {
         self.indices_buffer.slice(..)
     }
 
-    pub fn nodes_buffer_slice(&self) -> wgpu::BufferSlice<'_> {
-        self.nodes_buffer.slice(..)
-    }
-
     pub fn add(
         &mut self,
         render_textures: &mut RenderTextures,
@@ -163,7 +159,7 @@ impl RenderModels {
             let indexed_mesh = match texture.blend_mode {
                 BlendMode::Opaque | BlendMode::ColorKeyed => &mut opaque_mesh,
                 BlendMode::Alpha => &mut alpha_mesh,
-                BlendMode::Additive => &mut additive_mesh,
+                BlendMode::_Additive => &mut additive_mesh,
             };
 
             // Extend the mesh for the texture with the data from the model.
@@ -220,9 +216,9 @@ impl RenderModels {
         let render_model = self.models.insert(RenderModel {
             opaque_range,
             alpha_range,
-            additive_range,
+            _additive_range: additive_range,
             nodes_range,
-            bounding_sphere: model.bounding_sphere,
+            _bounding_sphere: model.bounding_sphere,
         });
 
         Ok(render_model)

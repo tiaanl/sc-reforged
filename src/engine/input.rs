@@ -87,7 +87,7 @@ impl InputState {
         self.mouse_pressed.contains(&button)
     }
 
-    pub fn mouse_just_pressed(&self, button: MouseButton) -> bool {
+    pub fn _mouse_just_pressed(&self, button: MouseButton) -> bool {
         self.mouse_just_pressed.contains(&button)
     }
 

@@ -1,5 +1,5 @@
 use crate::{
-    engine::{gizmos::GizmosRenderer, prelude::*, storage::Handle},
+    engine::{gizmos, prelude::*, storage::Handle},
     game::scenes::world::{
         render::{ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld},
         sim_world::SimWorld,
@@ -28,7 +28,6 @@ impl Ord for RenderKey {
 
 enum RenderNodeIndex {
     Base(u32),
-    Override(u32),
 }
 
 struct ModelToRender {
@@ -189,13 +188,11 @@ impl ObjectsSystem {
     pub fn render_gizmos(&self, sim_world: &mut SimWorld) {
         if self.debug_render_bounding_spheres {
             for (_, object) in sim_world.objects.objects.iter() {
-                sim_world
-                    .gizmo_vertices
-                    .extend(GizmosRenderer::create_iso_sphere(
-                        object.transform.to_mat4(),
-                        object.bounding_sphere.radius,
-                        16,
-                    ));
+                sim_world.gizmo_vertices.extend(gizmos::create_iso_sphere(
+                    object.transform.to_mat4(),
+                    object.bounding_sphere.radius,
+                    16,
+                ));
             }
         }
     }
@@ -245,7 +242,7 @@ impl ObjectsSystem {
             .map(|instance| ModelInstanceData {
                 transform: instance.transform.to_cols_array_2d(),
                 first_node_index: match instance.first_node_index {
-                    RenderNodeIndex::Base(i) | RenderNodeIndex::Override(i) => i,
+                    RenderNodeIndex::Base(i) => i,
                 },
                 _pad: Default::default(),
             })

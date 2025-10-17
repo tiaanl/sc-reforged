@@ -11,7 +11,6 @@ use winit::{
 };
 
 use crate::game::{
-    animations::{Sequences, scoped_sequences},
     data_dir::{DataDir, data_dir, scoped_data_dir},
     file_system::scoped_file_system,
     image::{Images, scoped_images},
@@ -383,9 +382,6 @@ fn main() {
     let _data_dir = scoped_data_dir(|| DataDir);
     let _images = scoped_images(|| Images::new().expect("Could not initialize images."));
     let _models = scoped_models(|| Models::new().expect("Could not initialize models."));
-    let _animations = game::animations::scoped_animations(game::animations::Animations::new);
-    let _sequences =
-        scoped_sequences(|| Sequences::new().expect("Could not initialize sequencer."));
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
 

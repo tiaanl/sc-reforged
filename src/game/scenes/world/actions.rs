@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use glam::Vec3;
 
 #[derive(Clone, Copy)]

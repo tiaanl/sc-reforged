@@ -1,12 +1,9 @@
-use glam::{Mat4, Vec3, Vec4};
-use wgpu::{util::DeviceExt, vertex_attr_array};
+#![allow(dead_code)]
 
-use crate::{
-    Frame,
-    engine::prelude::renderer,
-    game::math::{BoundingBox, ViewProjection},
-    wgsl_shader,
-};
+use glam::{Mat4, Vec3, Vec4};
+use wgpu::vertex_attr_array;
+
+use crate::game::math::{BoundingBox, ViewProjection};
 
 use super::renderer::BufferLayout;
 
@@ -43,226 +40,129 @@ impl BufferLayout for GizmoVertex {
     }
 }
 
-pub struct GizmosRenderer {
-    pipeline: wgpu::RenderPipeline,
+pub fn create_axis(transform: Mat4, size: f32) -> Vec<GizmoVertex> {
+    let zero = transform.project_point3(Vec3::ZERO);
+    vec![
+        GizmoVertex::new(zero, Vec4::new(1.0, 0.0, 0.0, 1.0)),
+        GizmoVertex::new(
+            transform.project_point3(Vec3::X * size),
+            Vec4::new(1.0, 0.0, 0.0, 1.0),
+        ),
+        GizmoVertex::new(zero, Vec4::new(0.0, 1.0, 0.0, 1.0)),
+        GizmoVertex::new(
+            transform.project_point3(Vec3::Y * size),
+            Vec4::new(0.0, 1.0, 0.0, 1.0),
+        ),
+        GizmoVertex::new(zero, Vec4::new(0.0, 0.0, 1.0, 1.0)),
+        GizmoVertex::new(
+            transform.project_point3(Vec3::Z * size),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+        ),
+    ]
 }
 
-impl GizmosRenderer {
-    pub fn new(camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
-        let renderer = renderer();
+pub fn create_iso_sphere(transform: Mat4, radius: f32, resolution: i32) -> Vec<GizmoVertex> {
+    let mut vertices = Vec::new();
+    let res = resolution.max(3);
 
-        let module = renderer.device.create_shader_module(wgsl_shader!("gizmos"));
+    // Each axis defines the normal of the circle's plane.
+    // For each axis, we need to pick two orthogonal vectors to define the circle.
+    let axes = [
+        (Vec3::Y, Vec3::Z, Vec4::new(1.0, 0.0, 0.0, 1.0)), // X: YZ plane (red)
+        (Vec3::Z, Vec3::X, Vec4::new(0.0, 1.0, 0.0, 1.0)), // Y: ZX plane (green)
+        (Vec3::X, Vec3::Y, Vec4::new(0.0, 0.5, 1.0, 1.0)), // Z: XY plane (blue)
+    ];
 
-        let layout = renderer
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("gizmos_pipeline_layout"),
-                bind_group_layouts: &[camera_bind_group_layout],
-                push_constant_ranges: &[],
-            });
+    for (u, v, color) in axes {
+        for i in 0..res {
+            let theta0 = (i as f32) * std::f32::consts::TAU / (res as f32);
+            let theta1 = ((i + 1) as f32) * std::f32::consts::TAU / (res as f32);
 
-        let pipeline = renderer
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("gizmos_render_pipeline"),
-                layout: Some(&layout),
-                vertex: wgpu::VertexState {
-                    module: &module,
-                    entry_point: Some("vertex_main"),
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[GizmoVertex::layout()],
-                },
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::LineList,
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &module,
-                    entry_point: Some("fragment_main"),
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: renderer.surface.format(),
-                        blend: None,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                multiview: None,
-                cache: None,
-            });
+            let p0 = transform.transform_point3((u * theta0.cos() + v * theta0.sin()) * radius);
+            let p1 = transform.transform_point3((u * theta1.cos() + v * theta1.sin()) * radius);
 
-        Self { pipeline }
-    }
-
-    pub fn render(
-        &self,
-        frame: &mut Frame,
-        camera_bind_group: &wgpu::BindGroup,
-        vertices: &[GizmoVertex],
-    ) {
-        if vertices.is_empty() {
-            return;
+            vertices.push(GizmoVertex::new(p0, color));
+            vertices.push(GizmoVertex::new(p1, color));
         }
-
-        let vertex_buffer =
-            renderer()
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("gizmos_vertex_buffer"),
-                    contents: bytemuck::cast_slice(vertices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
-
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("gizmos_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                ..Default::default()
-            });
-
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.draw(0..(vertices.len() as u32), 0..1);
     }
 
-    pub fn create_axis(transform: Mat4, size: f32) -> Vec<GizmoVertex> {
-        let zero = transform.project_point3(Vec3::ZERO);
-        vec![
-            GizmoVertex::new(zero, Vec4::new(1.0, 0.0, 0.0, 1.0)),
-            GizmoVertex::new(
-                transform.project_point3(Vec3::X * size),
-                Vec4::new(1.0, 0.0, 0.0, 1.0),
-            ),
-            GizmoVertex::new(zero, Vec4::new(0.0, 1.0, 0.0, 1.0)),
-            GizmoVertex::new(
-                transform.project_point3(Vec3::Y * size),
-                Vec4::new(0.0, 1.0, 0.0, 1.0),
-            ),
-            GizmoVertex::new(zero, Vec4::new(0.0, 0.0, 1.0, 1.0)),
-            GizmoVertex::new(
-                transform.project_point3(Vec3::Z * size),
-                Vec4::new(0.0, 0.0, 1.0, 1.0),
-            ),
-        ]
+    vertices
+}
+
+pub fn create_view_projection(view_projection: &ViewProjection, color: Vec4) -> Vec<GizmoVertex> {
+    const EDGES: &[(usize, usize)] = &[
+        // near ring
+        (0, 1),
+        (1, 2),
+        (2, 3),
+        (3, 0),
+        // sides
+        (0, 4),
+        (1, 5),
+        (2, 6),
+        (3, 7),
+        // far ring
+        (4, 5),
+        (5, 6),
+        (6, 7),
+        (7, 4),
+    ];
+
+    let mut result = Vec::with_capacity(EDGES.len() * 2);
+
+    let v: [GizmoVertex; 8] = view_projection
+        .corners()
+        .map(|p| GizmoVertex::new(p, color));
+
+    for &(from, to) in EDGES {
+        result.push(v[from]);
+        result.push(v[to]);
     }
 
-    pub fn create_iso_sphere(transform: Mat4, radius: f32, resolution: i32) -> Vec<GizmoVertex> {
-        let mut vertices = Vec::new();
-        let res = resolution.max(3);
+    result
+}
 
-        // Each axis defines the normal of the circle's plane.
-        // For each axis, we need to pick two orthogonal vectors to define the circle.
-        let axes = [
-            (Vec3::Y, Vec3::Z, Vec4::new(1.0, 0.0, 0.0, 1.0)), // X: YZ plane (red)
-            (Vec3::Z, Vec3::X, Vec4::new(0.0, 1.0, 0.0, 1.0)), // Y: ZX plane (green)
-            (Vec3::X, Vec3::Y, Vec4::new(0.0, 0.5, 1.0, 1.0)), // Z: XY plane (blue)
-        ];
+pub fn create_bounding_box(bounding_box: &BoundingBox, color: Vec4) -> Vec<GizmoVertex> {
+    let min: Vec3 = bounding_box.min;
+    let max: Vec3 = bounding_box.max;
 
-        for (u, v, color) in axes {
-            for i in 0..res {
-                let theta0 = (i as f32) * std::f32::consts::TAU / (res as f32);
-                let theta1 = ((i + 1) as f32) * std::f32::consts::TAU / (res as f32);
+    // 8 corners of the box
+    let corners = [
+        Vec3::new(min.x, min.y, min.z),
+        Vec3::new(max.x, min.y, min.z),
+        Vec3::new(max.x, max.y, min.z),
+        Vec3::new(min.x, max.y, min.z),
+        Vec3::new(min.x, min.y, max.z),
+        Vec3::new(max.x, min.y, max.z),
+        Vec3::new(max.x, max.y, max.z),
+        Vec3::new(min.x, max.y, max.z),
+    ];
 
-                let p0 = transform.transform_point3((u * theta0.cos() + v * theta0.sin()) * radius);
-                let p1 = transform.transform_point3((u * theta1.cos() + v * theta1.sin()) * radius);
+    // Each pair defines a line segment (edge)
+    const EDGES: &[(usize, usize)] = &[
+        // bottom face
+        (0, 1),
+        (1, 2),
+        (2, 3),
+        (3, 0),
+        // top face
+        (4, 5),
+        (5, 6),
+        (6, 7),
+        (7, 4),
+        // vertical edges
+        (0, 4),
+        (1, 5),
+        (2, 6),
+        (3, 7),
+    ];
 
-                vertices.push(GizmoVertex::new(p0, color));
-                vertices.push(GizmoVertex::new(p1, color));
-            }
-        }
+    let mut result = Vec::with_capacity(EDGES.len() * 2);
 
-        vertices
+    for (a, b) in EDGES {
+        result.push(GizmoVertex::new(corners[*a], color));
+        result.push(GizmoVertex::new(corners[*b], color));
     }
 
-    pub fn create_view_projection(
-        view_projection: &ViewProjection,
-        color: Vec4,
-    ) -> Vec<GizmoVertex> {
-        const EDGES: &[(usize, usize)] = &[
-            // near ring
-            (0, 1),
-            (1, 2),
-            (2, 3),
-            (3, 0),
-            // sides
-            (0, 4),
-            (1, 5),
-            (2, 6),
-            (3, 7),
-            // far ring
-            (4, 5),
-            (5, 6),
-            (6, 7),
-            (7, 4),
-        ];
-
-        let mut result = Vec::with_capacity(EDGES.len() * 2);
-
-        let v: [GizmoVertex; 8] = view_projection
-            .corners()
-            .map(|p| GizmoVertex::new(p, color));
-
-        for &(from, to) in EDGES {
-            result.push(v[from]);
-            result.push(v[to]);
-        }
-
-        result
-    }
-
-    pub fn create_bounding_box(bounding_box: &BoundingBox, color: Vec4) -> Vec<GizmoVertex> {
-        let min: Vec3 = bounding_box.min;
-        let max: Vec3 = bounding_box.max;
-
-        // 8 corners of the box
-        let corners = [
-            Vec3::new(min.x, min.y, min.z),
-            Vec3::new(max.x, min.y, min.z),
-            Vec3::new(max.x, max.y, min.z),
-            Vec3::new(min.x, max.y, min.z),
-            Vec3::new(min.x, min.y, max.z),
-            Vec3::new(max.x, min.y, max.z),
-            Vec3::new(max.x, max.y, max.z),
-            Vec3::new(min.x, max.y, max.z),
-        ];
-
-        // Each pair defines a line segment (edge)
-        const EDGES: &[(usize, usize)] = &[
-            // bottom face
-            (0, 1),
-            (1, 2),
-            (2, 3),
-            (3, 0),
-            // top face
-            (4, 5),
-            (5, 6),
-            (6, 7),
-            (7, 4),
-            // vertical edges
-            (0, 4),
-            (1, 5),
-            (2, 6),
-            (3, 7),
-        ];
-
-        let mut result = Vec::with_capacity(EDGES.len() * 2);
-
-        for (a, b) in EDGES {
-            result.push(GizmoVertex::new(corners[*a], color));
-            result.push(GizmoVertex::new(corners[*b], color));
-        }
-
-        result
-    }
+    result
 }

@@ -6,7 +6,6 @@ use crate::{
 };
 
 use super::{
-    render_animations::RenderAnimations,
     render_models::{RenderModel, RenderModels},
     render_textures::RenderTextures,
 };
@@ -16,7 +15,6 @@ pub struct RenderStore {
 
     pub models: RenderModels,
     pub textures: RenderTextures,
-    pub animations: RenderAnimations,
 
     /// Cache of model handles to render model handles.
     model_to_render_model: HashMap<Handle<Model>, Handle<RenderModel>>,
@@ -28,7 +26,6 @@ impl RenderStore {
 
         let models = RenderModels::new();
         let textures = RenderTextures::new();
-        let animations = RenderAnimations::default();
 
         let model_to_render_model = HashMap::default();
 
@@ -37,7 +34,6 @@ impl RenderStore {
 
             models,
             textures,
-            animations,
 
             model_to_render_model,
         }
@@ -64,10 +60,5 @@ impl RenderStore {
     #[inline]
     pub fn render_model_for_model(&self, model: Handle<Model>) -> Option<Handle<RenderModel>> {
         self.model_to_render_model.get(&model).cloned()
-    }
-
-    #[inline]
-    pub fn get_render_model(&self, handle: Handle<RenderModel>) -> Option<&RenderModel> {
-        self.models.get(handle)
     }
 }

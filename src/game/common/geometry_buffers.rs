@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use glam::{UVec2, Vec3};
 
 pub struct RenderTarget {

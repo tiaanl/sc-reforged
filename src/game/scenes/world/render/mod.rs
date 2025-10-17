@@ -1,4 +1,3 @@
-mod render_animations;
 mod render_models;
 mod render_store;
 mod render_textures;

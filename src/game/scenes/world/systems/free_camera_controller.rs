@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use glam::{Quat, Vec2, Vec3};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
@@ -55,7 +57,7 @@ pub struct FreeCameraController {
     /// Current pitch angle of the camera in *degrees*.
     pub pitch: f32,
     /// The speed at which movements will be calculated.
-    pub movement_speed: f32,
+    pub _movement_speed: f32,
     /// The rotation sensitivity of mouse movement.
     pub mouse_sensitivity: f32,
     /// Controls used to manipulate the camera.
@@ -63,12 +65,12 @@ pub struct FreeCameraController {
 }
 
 impl FreeCameraController {
-    pub fn new(movement_speed: f32, mouse_sensitivity: f32) -> Self {
+    pub fn _new(movement_speed: f32, mouse_sensitivity: f32) -> Self {
         Self {
             input: Input::default(),
             yaw: 0.0,
             pitch: 0.0,
-            movement_speed,
+            _movement_speed: movement_speed,
             mouse_sensitivity,
             controls: FreeCameraControls::default(),
         }
@@ -82,36 +84,36 @@ impl CameraController for FreeCameraController {
         input_state: &InputState,
         delta_time: f32,
     ) {
-        let mut input = Input::default();
+        let mut input = Input {
+            direction: {
+                let mut direction = Vec3::ZERO;
 
-        input.direction = {
-            let mut direction = Vec3::ZERO;
+                if input_state.key_pressed(self.controls.forward) {
+                    direction += Camera::FORWARD;
+                }
+                if input_state.key_pressed(self.controls.back) {
+                    direction -= Camera::FORWARD
+                }
 
-            if input_state.key_pressed(self.controls.forward) {
-                direction += Camera::FORWARD;
-            }
-            if input_state.key_pressed(self.controls.back) {
-                direction -= Camera::FORWARD
-            }
+                if input_state.key_pressed(self.controls.right) {
+                    direction += Camera::RIGHT;
+                }
+                if input_state.key_pressed(self.controls.left) {
+                    direction -= Camera::RIGHT;
+                }
 
-            if input_state.key_pressed(self.controls.right) {
-                direction += Camera::RIGHT;
-            }
-            if input_state.key_pressed(self.controls.left) {
-                direction -= Camera::RIGHT;
-            }
+                if input_state.key_pressed(self.controls.up) {
+                    direction += Camera::UP;
+                }
+                if input_state.key_pressed(self.controls.down) {
+                    direction -= Camera::UP;
+                }
 
-            if input_state.key_pressed(self.controls.up) {
-                direction += Camera::UP;
-            }
-            if input_state.key_pressed(self.controls.down) {
-                direction -= Camera::UP;
-            }
-
-            direction
+                direction
+            },
+            accelerator: input_state.key_pressed(self.controls.accelerate),
+            mouse_delta: Default::default(),
         };
-
-        input.accelerator = input_state.key_pressed(self.controls.accelerate);
 
         if input_state.mouse_pressed(self.controls.mouse_button) {
             if let Some(delta) = input_state.mouse_delta() {

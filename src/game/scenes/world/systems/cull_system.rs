@@ -1,6 +1,6 @@
 use glam::vec4;
 
-use crate::{engine::gizmos::GizmosRenderer, game::scenes::world::sim_world::SimWorld};
+use crate::{engine::gizmos, game::scenes::world::sim_world::SimWorld};
 
 #[derive(Default)]
 pub enum DebugQuadTreeOptions {
@@ -50,24 +50,20 @@ impl CullSystem {
 
                     let bounding_box = node.bounding_box();
 
-                    sim_world
-                        .gizmo_vertices
-                        .extend(GizmosRenderer::create_bounding_box(
-                            &bounding_box,
-                            vec4(1.0, 0.0, 0.0, 1.0),
-                        ));
+                    sim_world.gizmo_vertices.extend(gizmos::create_bounding_box(
+                        &bounding_box,
+                        vec4(1.0, 0.0, 0.0, 1.0),
+                    ));
                 })
             }
             DebugQuadTreeOptions::All => {
                 sim_world.quad_tree.with_nodes_in_frustum(frustum, |node| {
                     let bounding_box = node.bounding_box();
 
-                    sim_world
-                        .gizmo_vertices
-                        .extend(GizmosRenderer::create_bounding_box(
-                            &bounding_box,
-                            vec4(0.0, 1.0, 0.0, 1.0),
-                        ));
+                    sim_world.gizmo_vertices.extend(gizmos::create_bounding_box(
+                        &bounding_box,
+                        vec4(0.0, 1.0, 0.0, 1.0),
+                    ));
                 })
             }
         }

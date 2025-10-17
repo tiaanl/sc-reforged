@@ -46,6 +46,8 @@ fn get_node(coord: vec2<u32>) -> vec4<f32> {
     return u_height_map[index];
 }
 
+const CELLS_PER_CHUNK: u32 = 8u;
+
 const NORTH_FLAG: u32 = (1u << 0u);
 const EAST_FLAG: u32 = (1u << 1u);
 const SOUTH_FLAG: u32 = (1u << 2u);
@@ -59,7 +61,7 @@ fn get_stitched_node(
 ) -> vec4<f32> {
     var normal_and_height = get_node(abs_node_coord);
 
-    let last = terrain::CELLS_PER_CHUNK >> chunk.lod;
+    let last = CELLS_PER_CHUNK >> chunk.lod;
 
     // If last is one, the amount of cells in this chunk is 1, so no stitching is required.
     if last == 1u {

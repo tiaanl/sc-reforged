@@ -24,7 +24,7 @@ impl<V: Copy> IndexedMesh<V> {
         self.vertices.is_empty() || self.indices.is_empty()
     }
 
-    pub fn map<O, F>(&self, f: F) -> IndexedMesh<O>
+    pub fn _map<O, F>(&self, f: F) -> IndexedMesh<O>
     where
         O: Copy,
         F: FnMut(&V) -> O,
@@ -77,7 +77,7 @@ impl std::fmt::Debug for GpuIndexedMesh {
 }
 
 impl<V: bytemuck::NoUninit> IndexedMesh<V> {
-    pub fn to_gpu(&self, device: &wgpu::Device) -> GpuIndexedMesh {
+    pub fn _to_gpu(&self, device: &wgpu::Device) -> GpuIndexedMesh {
         debug_assert!(!self.vertices.is_empty(), "Uploading empty vertex buffer.");
         debug_assert!(!self.indices.is_empty(), "Uploading empty index buffer.");
 

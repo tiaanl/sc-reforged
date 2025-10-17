@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::{
     engine::{
         prelude::*,
@@ -14,7 +12,7 @@ use crate::{
 enum ObjectData {
     Scenery {
         model: Handle<Model>,
-        model_des: Handle<Model>,
+        _model_des: Handle<Model>,
     },
     /// Temporary for use with more complicated objects that is not implemented yet.
     SingleModel { model: Handle<Model> },
@@ -93,23 +91,11 @@ impl NewObjects {
             | ObjectType::StructureSwingDoor
             | ObjectType::StructureTent
             | ObjectType::StructureWall => {
-                let (model_handle, model) = models().load_model(
-                    name,
-                    PathBuf::from("models")
-                        .join(name)
-                        .join(name)
-                        .with_extension("smf"),
-                )?;
+                let (model_handle, model) = models().load_object_model(name)?;
 
                 bounding_sphere.expand_to_include(&model.bounding_sphere);
 
-                let (model_des_handle, model_des) = models().load_model(
-                    name,
-                    PathBuf::from("models")
-                        .join(name)
-                        .join(format!("{name}_des"))
-                        .with_extension("smf"),
-                )?;
+                let (model_des_handle, model_des) = models().load_object_model(name)?;
 
                 bounding_sphere.expand_to_include(&model_des.bounding_sphere);
 
@@ -118,17 +104,11 @@ impl NewObjects {
 
                 ObjectData::Scenery {
                     model: model_handle,
-                    model_des: model_des_handle,
+                    _model_des: model_des_handle,
                 }
             }
             _ => {
-                let (model_handle, model) = models().load_model(
-                    name,
-                    PathBuf::from("models")
-                        .join(name)
-                        .join(name)
-                        .with_extension("smf"),
-                )?;
+                let (model_handle, model) = models().load_object_model(name)?;
 
                 bounding_sphere.expand_to_include(&model.bounding_sphere);
 

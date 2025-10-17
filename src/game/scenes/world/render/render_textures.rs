@@ -228,9 +228,6 @@ impl RenderTextures {
 
     #[inline]
     fn calculate_bucket_index(image_size: UVec2) -> usize {
-        if image_size.x != image_size.y {
-            println!("non square texture: {:?}", image_size);
-        }
         let max_size = image_size.x.max(image_size.y);
         debug_assert!(max_size > 0, "texture size must be > 0");
 

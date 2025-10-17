@@ -14,28 +14,16 @@ fn main() {
 }
 
 const COMMON: &[&str] = &[
-    // First
-    "src/game/common/renderer/math.wgsl",
-    // Rest
     "src/game/common/camera.wgsl",
     "src/game/common/fullscreen.wgsl",
     "src/game/common/geometry_buffers.wgsl",
-    "src/game/common/shadows.wgsl",
-    "src/game/common/renderer/animation.wgsl",
     "src/game/scenes/world/environment.wgsl",
-    "src/game/scenes/world/terrain_data.wgsl",
     "src/game/scenes/world/frustum.wgsl",
 ];
 
 const SHADERS: &[&str] = &[
     "src/engine/gizmos.wgsl",
-    "src/game/common/compositor.wgsl",
-    "src/game/common/renderer/model_renderer_shadows.wgsl",
-    "src/game/common/renderer/model_renderer.wgsl",
     "src/game/common/sky.wgsl",
-    "src/game/scenes/world/process_chunks.wgsl",
-    "src/game/scenes/world/strata.wgsl",
-    "src/game/scenes/world/terrain.wgsl",
     "src/game/scenes/world/systems/new_terrain.wgsl",
     "src/game/scenes/world/systems/objects.wgsl",
 ];
