@@ -14,6 +14,10 @@ enum ObjectData {
         model: Handle<Model>,
         _model_des: Handle<Model>,
     },
+    Biped {
+        body_model: Handle<Model>,
+        head_model: Handle<Model>,
+    },
     /// Temporary for use with more complicated objects that is not implemented yet.
     SingleModel { model: Handle<Model> },
 }
@@ -28,6 +32,7 @@ impl Object {
     pub fn model_to_render(&self) -> Option<Handle<Model>> {
         Some(match self.data {
             ObjectData::Scenery { model, .. } => model,
+            ObjectData::Biped { body_model, .. } => body_model,
             ObjectData::SingleModel { model } => model,
         })
     }
@@ -107,6 +112,28 @@ impl NewObjects {
                     _model_des: model_des_handle,
                 }
             }
+
+            ObjectType::Bipedal | ObjectType::Ape => {
+                let body_model = {
+                    let (handle, model) = models().load_biped_body_model(name)?;
+                    self.models_to_prepare.push(handle);
+                    bounding_sphere.expand_to_include(&model.bounding_sphere);
+                    handle
+                };
+
+                let head_model = {
+                    let (handle, model) = models().load_biped_head_model(name)?;
+                    self.models_to_prepare.push(handle);
+                    bounding_sphere.expand_to_include(&model.bounding_sphere);
+                    handle
+                };
+
+                ObjectData::Biped {
+                    body_model,
+                    head_model,
+                }
+            }
+
             _ => {
                 let (model_handle, model) = models().load_object_model(name)?;
 

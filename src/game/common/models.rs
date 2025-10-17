@@ -72,7 +72,7 @@ impl Models {
         self.load_model(name, path)
     }
 
-    pub fn _load_bipedal_model(
+    pub fn load_biped_body_model(
         &mut self,
         name: &str,
     ) -> Result<(Handle<Model>, &Model), AssetError> {
@@ -81,6 +81,21 @@ impl Models {
         let path = PathBuf::from("models")
             .join("people")
             .join("bodies")
+            .join(name)
+            .join(name)
+            .with_extension("smf");
+        self.load_model(name, path)
+    }
+
+    pub fn load_biped_head_model(
+        &mut self,
+        name: &str,
+    ) -> Result<(Handle<Model>, &Model), AssetError> {
+        // TODO: No LOD's for bipedal models?
+
+        let path = PathBuf::from("models")
+            .join("people")
+            .join("heads")
             .join(name)
             .join(name)
             .with_extension("smf");

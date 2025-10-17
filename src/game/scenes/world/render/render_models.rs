@@ -59,9 +59,9 @@ pub struct RenderModels {
 }
 
 impl RenderModels {
-    const INITIAL_VERTEX_COUNT: u32 = 4_096;
-    const INITIAL_INDEX_COUNT: u32 = 4_096;
-    const INITIAL_NODES_COUNT: u32 = 4_096;
+    const INITIAL_VERTEX_COUNT: u32 = 1 << 15;
+    const INITIAL_INDEX_COUNT: u32 = 1 << 15;
+    const INITIAL_NODES_COUNT: u32 = 1 << 15;
 
     pub fn new() -> Self {
         let vertices_buffer = GrowingBuffer::new(

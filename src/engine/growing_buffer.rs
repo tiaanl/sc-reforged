@@ -93,7 +93,11 @@ impl<T: NoUninit> GrowingBuffer<T> {
     }
 
     fn resize(&mut self, renderer: &Renderer, required_capacity: u32) {
-        let new_capacity = required_capacity.next_multiple_of(16);
+        let mut new_capacity = self.capacity * 2;
+        while new_capacity < required_capacity {
+            new_capacity *= 2;
+        }
+
         let new_size_in_bytes = new_capacity as u64 * Self::STRIDE;
 
         tracing::info!(
