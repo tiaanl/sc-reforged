@@ -30,6 +30,7 @@ pub struct WorldScene {
     // Systems
     systems: systems::Systems,
 
+    geometry_buffer: render::GeometryBuffer,
     depth_buffer: wgpu::TextureView,
 
     game_mode: GameMode,
@@ -44,7 +45,7 @@ pub struct WorldScene {
 impl WorldScene {
     const RENDER_FRAME_COUNT: usize = 3;
 
-    pub fn new(campaign_def: CampaignDef) -> Result<Self, AssetError> {
+    pub fn new(campaign_def: CampaignDef, window_size: UVec2) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
@@ -66,6 +67,8 @@ impl WorldScene {
 
         let systems = systems::Systems::new(renderer(), &render_store, &sim_world, &campaign);
 
+        let geometry_buffer = render::GeometryBuffer::new(&renderer().device, window_size);
+
         Ok(Self {
             sim_world,
             render_worlds,
@@ -75,6 +78,7 @@ impl WorldScene {
 
             game_mode: GameMode::Editor,
 
+            geometry_buffer,
             depth_buffer,
 
             last_mouse_position: None,
@@ -117,6 +121,9 @@ impl Scene for WorldScene {
 
         let [width, height] = size.to_array().map(|f| f as f32);
         let aspect = width / height.max(1.0);
+
+        self.geometry_buffer
+            .resize(&renderer().device, renderer().surface.size());
 
         self.sim_world.camera.aspect_ratio = aspect;
     }

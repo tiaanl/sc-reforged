@@ -88,6 +88,10 @@ impl winit::application::ApplicationHandler for App {
                         .create_window(attributes)
                         .expect("create main window"),
                 );
+                let window_size = {
+                    let winit::dpi::PhysicalSize { width, height } = window.inner_size();
+                    UVec2::new(width, height)
+                };
 
                 let _global_renderer = scoped_renderer(|| Renderer::new(Arc::clone(&window)));
 
@@ -123,7 +127,7 @@ impl winit::application::ApplicationHandler for App {
                         .cloned()
                         .unwrap();
 
-                    Box::new(match WorldScene::new(campaign_def) {
+                    Box::new(match WorldScene::new(campaign_def, window_size) {
                         Ok(scene) => scene,
                         Err(err) => {
                             tracing::error!("Could not create world scene! - {}", err);

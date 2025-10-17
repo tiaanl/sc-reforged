@@ -1,7 +1,6 @@
 pub mod camera;
 pub mod data_dir;
 pub mod file_system;
-pub mod geometry_buffers;
 pub mod image;
 pub mod interpolate;
 pub mod math;

@@ -1,9 +1,8 @@
 #![allow(unused)]
 
-use glam::{UVec2, Vec3};
+use glam::UVec2;
 
 pub struct RenderTarget {
-    pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
 }
 
@@ -37,41 +36,78 @@ impl RenderTarget {
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        Self { texture, view }
+        Self { view }
     }
 }
 
-pub struct GeometryBuffers {
+/// These [Inner] parts of a [GeometryBuffer] is recreated when the size of other parameter changes.
+struct Inner {
     pub depth: RenderTarget,
     pub color: RenderTarget,
     pub oit_accumulation: RenderTarget,
     pub oit_revealage: RenderTarget,
 
-    pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
 }
 
-#[derive(Debug, Default)]
-pub struct GeometryData {
-    pub position: Vec3,
-    pub id: u32,
-}
-
-impl GeometryBuffers {
-    const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-    const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
-    const OIT_ACCUMULATION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
-    const OIT_REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
-
-    pub fn new(device: &wgpu::Device, size: UVec2) -> Self {
+impl Inner {
+    fn new(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayout, size: UVec2) -> Self {
         tracing::info!("Creating geometry buffers ({}x{})", size.x, size.y);
 
-        let depth = RenderTarget::new(device, "depth", size, Self::DEPTH_FORMAT);
-        let color = RenderTarget::new(device, "color", size, Self::COLOR_FORMAT);
-        let oit_accumulation =
-            RenderTarget::new(device, "color", size, Self::OIT_ACCUMULATION_FORMAT);
-        let oit_revealage = RenderTarget::new(device, "color", size, Self::OIT_REVEALAGE_FORMAT);
+        let depth = RenderTarget::new(device, "depth", size, GeometryBuffer::DEPTH_FORMAT);
+        let color = RenderTarget::new(device, "color", size, GeometryBuffer::COLOR_FORMAT);
+        let oit_accumulation = RenderTarget::new(
+            device,
+            "color",
+            size,
+            GeometryBuffer::OIT_ACCUMULATION_FORMAT,
+        );
+        let oit_revealage =
+            RenderTarget::new(device, "color", size, GeometryBuffer::OIT_REVEALAGE_FORMAT);
 
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("g_buffer_bind_group"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&color.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&oit_accumulation.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&oit_revealage.view),
+                },
+            ],
+        });
+
+        Self {
+            depth,
+            color,
+            oit_accumulation,
+            oit_revealage,
+
+            bind_group,
+        }
+    }
+}
+
+pub struct GeometryBuffer {
+    pub bind_group_layout: wgpu::BindGroupLayout,
+
+    inner: Inner,
+}
+
+impl GeometryBuffer {
+    pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+    pub const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+    pub const OIT_ACCUMULATION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+    pub const OIT_REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
+
+    pub fn new(device: &wgpu::Device, size: UVec2) -> Self {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("g_buffer_bind_group_layout"),
             entries: &[
@@ -111,39 +147,21 @@ impl GeometryBuffers {
             ],
         });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("g_buffer_bind_group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&color.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&oit_accumulation.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&oit_revealage.view),
-                },
-            ],
-        });
+        let inner = Inner::new(device, &bind_group_layout, size);
 
         Self {
-            depth,
-            color,
-            oit_accumulation,
-            oit_revealage,
-
             bind_group_layout,
-            bind_group,
+            inner,
         }
     }
 
-    pub fn opaque_attachments(&self) -> [Option<wgpu::RenderPassColorAttachment<'_>>; 1] {
+    pub fn resize(&mut self, device: &wgpu::Device, size: UVec2) {
+        self.inner = Inner::new(device, &self.bind_group_layout, size);
+    }
+
+    fn opaque_attachments(&self) -> [Option<wgpu::RenderPassColorAttachment<'_>>; 1] {
         [Some(wgpu::RenderPassColorAttachment {
-            view: &self.color.view,
+            view: &self.inner.color.view,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -152,7 +170,7 @@ impl GeometryBuffers {
         })]
     }
 
-    pub fn opaque_targets() -> &'static [Option<wgpu::ColorTargetState>] {
+    fn opaque_targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[Some(wgpu::ColorTargetState {
             format: Self::COLOR_FORMAT,
             blend: None,
@@ -160,7 +178,7 @@ impl GeometryBuffers {
         })]
     }
 
-    pub fn additive_targets() -> &'static [Option<wgpu::ColorTargetState>] {
+    fn additive_targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[Some(wgpu::ColorTargetState {
             format: Self::COLOR_FORMAT,
             blend: Some(wgpu::BlendState {
@@ -179,10 +197,10 @@ impl GeometryBuffers {
         })]
     }
 
-    pub fn alpha_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
+    fn alpha_attachments<'a>(&'a self) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
         [
             Some(wgpu::RenderPassColorAttachment {
-                view: &self.oit_accumulation.view,
+                view: &self.inner.oit_accumulation.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -190,7 +208,7 @@ impl GeometryBuffers {
                 },
             }),
             Some(wgpu::RenderPassColorAttachment {
-                view: &self.oit_revealage.view,
+                view: &self.inner.oit_revealage.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -200,7 +218,7 @@ impl GeometryBuffers {
         ]
     }
 
-    pub fn alpha_targets() -> &'static [Option<wgpu::ColorTargetState>] {
+    fn alpha_targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[
             Some(wgpu::ColorTargetState {
                 format: Self::OIT_ACCUMULATION_FORMAT,
@@ -238,7 +256,7 @@ impl GeometryBuffers {
         ]
     }
 
-    pub fn depth_stencil_state(
+    fn depth_stencil_state(
         depth_compare: wgpu::CompareFunction,
         depth_write_enabled: bool,
     ) -> wgpu::DepthStencilState {
@@ -249,5 +267,73 @@ impl GeometryBuffers {
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }
+    }
+}
+
+impl GeometryBuffer {
+    pub fn begin_opaque_render_pass<'rp>(
+        &self,
+        encoder: &'rp mut wgpu::CommandEncoder,
+        label: &str,
+    ) -> wgpu::RenderPass<'rp> {
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some(label),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &self.inner.color.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.inner.depth.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        })
+    }
+
+    pub fn begin_alpha_render_pass<'rp>(
+        &self,
+        encoder: &'rp mut wgpu::CommandEncoder,
+        label: &str,
+    ) -> wgpu::RenderPass<'rp> {
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some(label),
+            color_attachments: &[
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &self.inner.oit_accumulation.view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &self.inner.oit_revealage.view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+            ],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.inner.depth.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        })
     }
 }
