@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use glam::UVec2;
+use glam::{UVec2, Vec3};
 
 pub struct RenderTarget {
     pub view: wgpu::TextureView,
@@ -103,7 +103,7 @@ pub struct GeometryBuffer {
 
 impl GeometryBuffer {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-    pub const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+    pub const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
     pub const OIT_ACCUMULATION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
     pub const OIT_REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
 
@@ -159,6 +159,68 @@ impl GeometryBuffer {
         self.inner = Inner::new(device, &self.bind_group_layout, size);
     }
 
+    pub fn clear(&self, encoder: &mut wgpu::CommandEncoder, clear_color: Vec3) {
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("geometry_buffer_clear"),
+            color_attachments: &[
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &self.inner.color.view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: clear_color.x as f64,
+                            g: clear_color.y as f64,
+                            b: clear_color.z as f64,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &self.inner.oit_accumulation.view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 0.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &self.inner.oit_revealage.view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 1.0,
+                            g: 1.0,
+                            b: 1.0,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+            ],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.inner.depth.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+    }
+
+    #[inline]
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.inner.bind_group
+    }
+
     fn opaque_attachments(&self) -> [Option<wgpu::RenderPassColorAttachment<'_>>; 1] {
         [Some(wgpu::RenderPassColorAttachment {
             view: &self.inner.color.view,
@@ -170,7 +232,7 @@ impl GeometryBuffer {
         })]
     }
 
-    fn opaque_targets() -> &'static [Option<wgpu::ColorTargetState>] {
+    pub fn opaque_targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[Some(wgpu::ColorTargetState {
             format: Self::COLOR_FORMAT,
             blend: None,
@@ -218,7 +280,7 @@ impl GeometryBuffer {
         ]
     }
 
-    fn alpha_targets() -> &'static [Option<wgpu::ColorTargetState>] {
+    pub fn alpha_targets() -> &'static [Option<wgpu::ColorTargetState>] {
         &[
             Some(wgpu::ColorTargetState {
                 format: Self::OIT_ACCUMULATION_FORMAT,

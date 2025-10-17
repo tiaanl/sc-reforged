@@ -111,7 +111,7 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
 }
 
 @fragment
-fn fragment_opaque(vertex: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment_opaque(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffer {
     let texture_data = u_texture_data[vertex.texture_data_index];
     let texture = u_texture_buckets[texture_data.bucket];
     let base_color = textureSample(texture, u_texture_sampler, vertex.tex_coord, texture_data.layer);
@@ -126,11 +126,11 @@ fn fragment_opaque(vertex: VertexOutput) -> @location(0) vec4<f32> {
         1.0,
     );
 
-    return vec4<f32>(lit, 1.0);
+    return geometry_buffer::to_opaque_geometry_buffer(lit);
 }
 
 @fragment
-fn fragment_alpha(vertex: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment_alpha(vertex: VertexOutput) -> geometry_buffer::AlphaGeometryBuffer {
     let texture_data = u_texture_data[vertex.texture_data_index];
     let texture = u_texture_buckets[texture_data.bucket];
     let base_color = textureSample(texture, u_texture_sampler, vertex.tex_coord, texture_data.layer);
@@ -145,7 +145,7 @@ fn fragment_alpha(vertex: VertexOutput) -> @location(0) vec4<f32> {
         1.0,
     );
 
-    return vec4<f32>(lit, base_color.a);
+    return geometry_buffer::to_alpha_geometry_buffer(lit.rgb, base_color.a, 1.0);
 }
 
 /// Diffuse + ambient lighting, modulated by shadow visibility.

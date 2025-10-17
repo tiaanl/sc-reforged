@@ -17,6 +17,8 @@ use crate::{
 
 pub use cull_system::DebugQuadTreeOptions;
 
+use super::render::GeometryBuffer;
+
 mod animations;
 mod camera_system;
 mod clear_render_targets;
@@ -117,12 +119,13 @@ impl Systems {
         render_store: &RenderStore,
         render_world: &RenderWorld,
         frame: &mut Frame,
-        depth_buffer: &wgpu::TextureView,
+        geometry_buffer: &GeometryBuffer,
     ) {
-        clear_render_targets::clear_render_targets(render_world, frame, depth_buffer);
-        self.terrain_system.queue(render_world, frame, depth_buffer);
+        clear_render_targets::clear_render_targets(render_world, frame, geometry_buffer);
+        self.terrain_system
+            .queue(render_world, frame, geometry_buffer);
         self.objects_system
-            .queue(render_store, render_world, frame, depth_buffer);
+            .queue(render_store, render_world, frame, geometry_buffer);
         self.gizmo_system.queue(render_world, frame);
     }
 }

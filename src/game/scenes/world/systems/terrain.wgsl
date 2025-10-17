@@ -136,7 +136,7 @@ fn vertex_terrain(
 }
 
 @fragment
-fn fragment_terrain(vertex: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment_terrain(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffer {
     let base_color = textureSample(u_terrain_texture, u_terrain_sampler, vertex.tex_coord);
 
     let distance = length(vertex.world_position - u_camera_env.position.xyz);
@@ -149,7 +149,7 @@ fn fragment_terrain(vertex: VertexOutput) -> @location(0) vec4<f32> {
         1.0,
     );
 
-    return vec4<f32>(d, 1.0);
+    return geometry_buffer::to_opaque_geometry_buffer(d);
 }
 
 struct StrataVertexInput {
@@ -210,7 +210,7 @@ fn strata_vertex(
 }
 
 @fragment
-fn strata_fragment(vertex: VertexOutput) -> @location(0) vec4<f32> {
+fn strata_fragment(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffer {
     let base_color = textureSample(u_strata_texture, u_terrain_sampler, vertex.tex_coord);
 
     let distance = length(vertex.world_position - u_camera_env.position.xyz);
@@ -223,8 +223,7 @@ fn strata_fragment(vertex: VertexOutput) -> @location(0) vec4<f32> {
         1.0,
     );
 
-    return vec4<f32>(d, 1.0);
-
+    return geometry_buffer::to_opaque_geometry_buffer(d);
 }
 
 /// Diffuse + ambient lighting, modulated by shadow visibility.

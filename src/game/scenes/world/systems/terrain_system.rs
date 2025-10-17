@@ -9,7 +9,7 @@ use crate::{
     game::{
         image::images,
         scenes::world::{
-            render::{ChunkInstanceData, RenderStore, RenderWorld},
+            render::{ChunkInstanceData, GeometryBuffer, RenderStore, RenderWorld},
             sim_world::SimWorld,
             terrain::Terrain,
         },
@@ -284,11 +284,7 @@ impl TerrainSystem {
                         module: &module,
                         entry_point: Some("fragment_terrain"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: renderer.surface.format(),
-                            blend: None,
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
+                        targets: GeometryBuffer::opaque_targets(),
                     }),
                     multiview: None,
                     cache: None,
@@ -340,11 +336,7 @@ impl TerrainSystem {
                         module: &module,
                         entry_point: Some("strata_fragment"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: renderer.surface.format(),
-                            blend: None,
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
+                        targets: GeometryBuffer::opaque_targets(),
                     }),
                     multiview: None,
                     cache: None,
@@ -533,31 +525,10 @@ impl TerrainSystem {
         &mut self,
         render_world: &RenderWorld,
         frame: &mut Frame,
-        depth_buffer: &wgpu::TextureView,
+        geometry_buffer: &GeometryBuffer,
     ) {
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("terrain_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: depth_buffer,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+        let mut render_pass =
+            geometry_buffer.begin_opaque_render_pass(&mut frame.encoder, "terrain_render_pass");
 
         // Strata
         {

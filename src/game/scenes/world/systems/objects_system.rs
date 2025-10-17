@@ -1,7 +1,9 @@
 use crate::{
     engine::{gizmos, prelude::*, storage::Handle},
     game::scenes::world::{
-        render::{ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld},
+        render::{
+            GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld,
+        },
         sim_world::SimWorld,
     },
     wgsl_shader,
@@ -126,11 +128,7 @@ impl ObjectsSystem {
                         module: &module,
                         entry_point: Some("fragment_opaque"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: renderer.surface.format(),
-                            blend: None,
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
+                        targets: GeometryBuffer::opaque_targets(),
                     }),
                     multiview: None,
                     cache: None,
@@ -161,11 +159,7 @@ impl ObjectsSystem {
                         module: &module,
                         entry_point: Some("fragment_alpha"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: renderer.surface.format(),
-                            blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
+                        targets: GeometryBuffer::alpha_targets(),
                     }),
                     multiview: None,
                     cache: None,
@@ -277,83 +271,101 @@ impl ObjectsSystem {
         render_store: &RenderStore,
         render_world: &RenderWorld,
         frame: &mut Frame,
-        depth_buffer: &wgpu::TextureView,
+        geometry_buffer: &GeometryBuffer,
     ) {
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("models_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: depth_buffer,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+        self.opaque_render_pass(
+            &mut frame.encoder,
+            geometry_buffer,
+            render_store,
+            render_world,
+        );
 
-        let setup_render_pass = |render_pass: &mut wgpu::RenderPass,
-                                 pipeline: &wgpu::RenderPipeline| {
-            render_pass.set_pipeline(pipeline);
+        self.alpha_render_pass(
+            &mut frame.encoder,
+            geometry_buffer,
+            render_store,
+            render_world,
+        );
+    }
 
-            render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
-            render_pass.set_bind_group(1, &render_store.textures.texture_data_bind_group, &[]);
-            render_pass.set_bind_group(2, &render_store.models.nodes_bind_group, &[]);
+    fn setup_render_pass(
+        render_pass: &mut wgpu::RenderPass,
+        pipeline: &wgpu::RenderPipeline,
+        render_store: &RenderStore,
+        render_world: &RenderWorld,
+    ) {
+        render_pass.set_pipeline(pipeline);
 
-            render_pass.set_vertex_buffer(0, render_store.models.vertices_buffer_slice());
-            render_pass.set_vertex_buffer(1, render_world.model_instances.slice(..));
-            render_pass.set_index_buffer(
-                render_store.models.indices_buffer_slice(),
-                wgpu::IndexFormat::Uint32,
-            );
-        };
+        render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
+        render_pass.set_bind_group(1, &render_store.textures.texture_data_bind_group, &[]);
+        render_pass.set_bind_group(2, &render_store.models.nodes_bind_group, &[]);
 
-        // Opaque
-        {
-            setup_render_pass(&mut render_pass, &self.opaque_pipeline);
+        render_pass.set_vertex_buffer(0, render_store.models.vertices_buffer_slice());
+        render_pass.set_vertex_buffer(1, render_world.model_instances.slice(..));
+        render_pass.set_index_buffer(
+            render_store.models.indices_buffer_slice(),
+            wgpu::IndexFormat::Uint32,
+        );
+    }
 
-            for (render_model, range) in self.batches.iter().filter_map(|batch| {
-                render_store
-                    .models
-                    .get(batch.key.render_model)
-                    .and_then(|render_model| {
-                        (!render_model.opaque_range.is_empty())
-                            .then(|| (render_model, batch.range.clone()))
-                    })
-            }) {
-                render_pass.draw_indexed(render_model.opaque_range.clone(), 0, range);
-            }
+    fn opaque_render_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        geometry_buffer: &GeometryBuffer,
+        render_store: &RenderStore,
+        render_world: &RenderWorld,
+    ) {
+        let mut render_pass = geometry_buffer.begin_opaque_render_pass(encoder, "objects_opaque");
+
+        Self::setup_render_pass(
+            &mut render_pass,
+            &self.opaque_pipeline,
+            render_store,
+            render_world,
+        );
+
+        for (render_model, range) in self.batches.iter().filter_map(|batch| {
+            render_store
+                .models
+                .get(batch.key.render_model)
+                .and_then(|render_model| {
+                    (!render_model.opaque_range.is_empty())
+                        .then(|| (render_model, batch.range.clone()))
+                })
+        }) {
+            render_pass.draw_indexed(render_model.opaque_range.clone(), 0, range);
         }
+    }
 
-        // Alpha
-        {
-            setup_render_pass(&mut render_pass, &self.alpha_pipeline);
+    fn alpha_render_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        geometry_buffer: &GeometryBuffer,
+        render_store: &RenderStore,
+        render_world: &RenderWorld,
+    ) {
+        let mut render_pass = geometry_buffer.begin_alpha_render_pass(encoder, "objects_opaque");
 
-            // TODO: Should the blend mode pipelines each have their own set of instances? Right now
-            //       the instances without alpha ranges are just filtered out. This might be good
-            //       enough.
-            for (render_model, range) in self.batches.iter().filter_map(|batch| {
-                render_store
-                    .models
-                    .get(batch.key.render_model)
-                    .and_then(|render_model| {
-                        (!render_model.alpha_range.is_empty())
-                            .then(|| (render_model, batch.range.clone()))
-                    })
-            }) {
-                render_pass.draw_indexed(render_model.alpha_range.clone(), 0, range);
-            }
+        Self::setup_render_pass(
+            &mut render_pass,
+            &self.alpha_pipeline,
+            render_store,
+            render_world,
+        );
+
+        // TODO: Should the blend mode pipelines each have their own set of instances? Right now
+        //       the instances without alpha ranges are just filtered out. This might be good
+        //       enough.
+        for (render_model, range) in self.batches.iter().filter_map(|batch| {
+            render_store
+                .models
+                .get(batch.key.render_model)
+                .and_then(|render_model| {
+                    (!render_model.alpha_range.is_empty())
+                        .then(|| (render_model, batch.range.clone()))
+                })
+        }) {
+            render_pass.draw_indexed(render_model.alpha_range.clone(), 0, range);
         }
     }
 }

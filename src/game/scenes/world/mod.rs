@@ -31,7 +31,7 @@ pub struct WorldScene {
     systems: systems::Systems,
 
     geometry_buffer: render::GeometryBuffer,
-    depth_buffer: wgpu::TextureView,
+    compositor: render::Compositor,
 
     game_mode: GameMode,
 
@@ -55,8 +55,6 @@ impl WorldScene {
 
         let sim_world = SimWorld::new(&campaign_def)?;
 
-        let depth_buffer = Self::create_depth_buffer(&renderer().device, renderer().surface.size());
-
         let render_store = RenderStore::new(renderer());
 
         let render_worlds = [
@@ -68,6 +66,7 @@ impl WorldScene {
         let systems = systems::Systems::new(renderer(), &render_store, &sim_world, &campaign);
 
         let geometry_buffer = render::GeometryBuffer::new(&renderer().device, window_size);
+        let compositor = render::Compositor::new(renderer(), &geometry_buffer);
 
         Ok(Self {
             sim_world,
@@ -76,10 +75,10 @@ impl WorldScene {
 
             systems,
 
-            game_mode: GameMode::Editor,
-
             geometry_buffer,
-            depth_buffer,
+            compositor,
+
+            game_mode: GameMode::Editor,
 
             last_mouse_position: None,
 
@@ -91,27 +90,6 @@ impl WorldScene {
 
     pub fn in_editor(&self) -> bool {
         matches!(self.game_mode, GameMode::Editor)
-    }
-
-    fn create_depth_buffer(device: &wgpu::Device, size: UVec2) -> wgpu::TextureView {
-        let size = wgpu::Extent3d {
-            width: size.x.max(1),
-            height: size.y.max(1),
-            depth_or_array_layers: 1,
-        };
-
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("depth_buffer"),
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-
-        texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 }
 
@@ -164,9 +142,15 @@ impl Scene for WorldScene {
                 .extract(&mut self.sim_world, &mut self.render_store, render_world);
             self.systems
                 .prepare(render_world, renderer(), &mut self.render_store);
-            self.systems
-                .queue(&self.render_store, render_world, frame, &self.depth_buffer);
+            self.systems.queue(
+                &self.render_store,
+                render_world,
+                frame,
+                &self.geometry_buffer,
+            );
         }
+
+        self.compositor.render(frame, &self.geometry_buffer);
 
         /*
         let main_view_projection = {
