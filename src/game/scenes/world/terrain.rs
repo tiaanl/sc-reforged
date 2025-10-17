@@ -2,7 +2,7 @@ use glam::{IVec2, UVec2, ivec2, uvec2};
 
 use crate::{
     engine::storage::Handle,
-    game::{image::Image, math::BoundingBox, scenes::world::new_height_map::NewHeightMap},
+    game::{image::Image, math::BoundingBox, scenes::world::height_map::HeightMap},
 };
 
 // Size of each terrain:
@@ -23,15 +23,15 @@ pub struct Chunk {
     pub bounding_box: BoundingBox,
 }
 
-pub struct NewTerrain {
-    pub height_map: NewHeightMap,
+pub struct Terrain {
+    pub height_map: HeightMap,
     pub chunk_dim: UVec2,
     pub chunks: Vec<Chunk>,
     pub terrain_texture: Handle<Image>,
     // pub water_image: Option<Handle<Image>>,
 }
 
-impl NewTerrain {
+impl Terrain {
     /// Number of LOD levels.
     pub const LOD_COUNT: u32 = 4;
     /// Maximum level of detail downsampling. cell_count = (1 << LOD_MAX)
@@ -41,7 +41,7 @@ impl NewTerrain {
     /// Amount of nodes in a chunk.
     pub const NODES_PER_CHUNK: u32 = Self::CELLS_PER_CHUNK + 1;
 
-    pub fn new(height_map: NewHeightMap, terrain_texture: Handle<Image>) -> Self {
+    pub fn new(height_map: HeightMap, terrain_texture: Handle<Image>) -> Self {
         let chunk_dim = uvec2(
             height_map.size.x.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
             height_map.size.y.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
@@ -65,7 +65,7 @@ impl NewTerrain {
         self.chunks.get(index)
     }
 
-    fn build_chunks(height_map: &NewHeightMap, chunk_dim: UVec2) -> Vec<Chunk> {
+    fn build_chunks(height_map: &HeightMap, chunk_dim: UVec2) -> Vec<Chunk> {
         let mut chunks = Vec::with_capacity(chunk_dim.x as usize * chunk_dim.y as usize);
 
         for y in 0..chunk_dim.y {

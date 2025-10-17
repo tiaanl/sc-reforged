@@ -10,9 +10,9 @@ use crate::{
         data_dir::data_dir,
         math::{Frustum, ViewProjection},
         scenes::world::{
-            new_objects::{NewObject, NewObjects},
-            new_terrain::NewTerrain,
+            objects::{NewObjects, Object},
             quad_tree::QuadTree,
+            terrain::Terrain,
         },
         track::Track,
     },
@@ -48,14 +48,14 @@ pub struct SimWorld {
     /// Used for determining visible elements in the world.
     pub quad_tree: QuadTree,
 
-    pub terrain: NewTerrain,
+    pub terrain: Terrain,
     /// The visible chunks for the current frame.
     pub visible_chunks: Vec<IVec2>,
 
     pub objects: NewObjects,
 
     /// A list of visible objects this frame.
-    pub visible_objects: Vec<Handle<NewObject>>,
+    pub visible_objects: Vec<Handle<Object>>,
 
     pub gizmo_vertices: Vec<GizmoVertex>,
 }
@@ -98,7 +98,7 @@ impl SimWorld {
             let terrain_texture =
                 data_dir().load_terrain_texture(&terrain_mapping.texture_map_base_name)?;
 
-            NewTerrain::new(height_map, terrain_texture)
+            Terrain::new(height_map, terrain_texture)
         };
 
         let mut quad_tree = QuadTree::from_new_terrain(&terrain);

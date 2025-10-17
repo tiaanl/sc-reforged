@@ -10,7 +10,7 @@ use crate::{
         config::{self, TerrainMapping, parser::ConfigLines},
         file_system::file_system,
         image::images,
-        scenes::world::new_height_map::NewHeightMap,
+        scenes::world::height_map::HeightMap,
     },
     global,
 };
@@ -52,7 +52,7 @@ impl DataDir {
         path: impl AsRef<Path>,
         elevation_scale: f32,
         cell_size: f32,
-    ) -> Result<NewHeightMap, AssetError> {
+    ) -> Result<HeightMap, AssetError> {
         use glam::UVec2;
 
         let data = file_system().load(path.as_ref())?;
@@ -75,7 +75,7 @@ impl DataDir {
                 .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
         }
 
-        Ok(NewHeightMap::from_iter(
+        Ok(HeightMap::from_iter(
             size,
             cell_size,
             elevations

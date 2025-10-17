@@ -87,24 +87,23 @@ impl<T: NoUninit> GrowingBuffer<T> {
     }
 
     fn ensure_size(&mut self, renderer: &Renderer, required_capacity: u32) {
-        if required_capacity >= self.capacity {
-            self.resize(renderer, required_capacity.next_power_of_two());
+        if required_capacity > self.capacity {
+            self.resize(renderer, required_capacity);
         }
     }
 
-    fn resize(&mut self, renderer: &Renderer, capacity: u32) {
-        self.capacity = capacity;
-
-        let size_in_bytes = self.capacity as u64 * Self::STRIDE;
+    fn resize(&mut self, renderer: &Renderer, required_capacity: u32) {
+        let new_capacity = required_capacity.next_multiple_of(16);
+        let new_size_in_bytes = new_capacity as u64 * Self::STRIDE;
 
         tracing::info!(
-            "Growing buffer with label \"{}\" to {} ({} bytes).",
+            "Resizing buffer with label \"{}\" from {} to {new_capacity} ({} bytes).",
             self.label,
-            capacity,
-            size_in_bytes,
+            self.capacity,
+            new_size_in_bytes,
         );
 
-        let buffer = Self::create_buffer(renderer, &self.label, size_in_bytes, self.usage);
+        let buffer = Self::create_buffer(renderer, &self.label, new_size_in_bytes, self.usage);
 
         let mut encoder = renderer
             .device
@@ -122,18 +121,20 @@ impl<T: NoUninit> GrowingBuffer<T> {
 
         renderer.queue.submit(std::iter::once(encoder.finish()));
 
+        self.capacity = new_capacity;
         self.buffer = buffer;
     }
 
+    #[inline]
     fn create_buffer(
         renderer: &Renderer,
         label: &str,
-        size: u64,
+        size_in_bytes: u64,
         usage: wgpu::BufferUsages,
     ) -> wgpu::Buffer {
         renderer.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(&format!("{label}_buffer")),
-            size,
+            size: size_in_bytes,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC | usage,
             mapped_at_creation: false,
         })

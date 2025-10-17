@@ -9,7 +9,7 @@ use crate::{
     game::{
         image::images,
         scenes::world::{
-            new_terrain::NewTerrain,
+            terrain::Terrain,
             render::{ChunkInstanceData, RenderStore, RenderWorld},
             sim_world::SimWorld,
         },
@@ -56,7 +56,7 @@ impl TerrainSystem {
         let height_map = &sim_world.terrain.height_map;
 
         let cells_dim = height_map.size;
-        let chunks_dim = cells_dim / NewTerrain::CELLS_PER_CHUNK;
+        let chunks_dim = cells_dim / Terrain::CELLS_PER_CHUNK;
 
         let terrain_data_buffer = {
             #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -397,20 +397,20 @@ impl TerrainSystem {
     fn build_draw_commands(
         chunk_instances: &[ChunkInstanceData],
         ranges: &[std::ops::Range<u32>],
-    ) -> [(std::ops::Range<u32>, std::ops::Range<u32>); NewTerrain::LOD_COUNT as usize] {
+    ) -> [(std::ops::Range<u32>, std::ops::Range<u32>); Terrain::LOD_COUNT as usize] {
         // TODO: This is probably not needed.
         debug_assert!(chunk_instances.is_sorted_by_key(|instance| instance.lod));
 
-        let mut counts = [0_u32; NewTerrain::LOD_COUNT as usize];
+        let mut counts = [0_u32; Terrain::LOD_COUNT as usize];
 
         // Count the number of each LOD.
         for instance in chunk_instances {
-            let lod = instance.lod.min(NewTerrain::LOD_MAX) as usize;
+            let lod = instance.lod.min(Terrain::LOD_MAX) as usize;
             counts[lod] += 1;
         }
 
         // Create starting indices by accumulating the LOD counts.
-        let mut offsets = [0_u32; NewTerrain::LOD_COUNT as usize];
+        let mut offsets = [0_u32; Terrain::LOD_COUNT as usize];
         let mut acc = 0;
         for i in 0..counts.len() {
             offsets[i] = acc;
@@ -580,7 +580,7 @@ impl TerrainSystem {
                 let side = strata_instance.flags >> 8 & 0b11;
                 let lod = strata_instance.lod;
 
-                let stride = 2 + ((NewTerrain::CELLS_PER_CHUNK * 2) >> lod);
+                let stride = 2 + ((Terrain::CELLS_PER_CHUNK * 2) >> lod);
                 let start = INDEX_START[lod as usize] + stride * side;
 
                 let indices = start..(start + stride);
@@ -623,7 +623,7 @@ fn calculate_lod(
     chunk_center: Vec3,
 ) -> u32 {
     let far = camera_far.max(1e-6);
-    let inv_step = NewTerrain::LOD_MAX as f32 / far;
+    let inv_step = Terrain::LOD_MAX as f32 / far;
 
     let forward_distance = (chunk_center - camera_position)
         .dot(camera_forward)
@@ -631,7 +631,7 @@ fn calculate_lod(
 
     let t = forward_distance * inv_step;
 
-    (t.floor() as i32).clamp(0, (NewTerrain::LOD_MAX - 1) as i32) as u32
+    (t.floor() as i32).clamp(0, (Terrain::LOD_MAX - 1) as i32) as u32
 }
 
 struct ChunkIndices {
@@ -654,15 +654,15 @@ impl Default for ChunkIndices {
         let mut wireframe_indices =
             Vec::<u32>::with_capacity(512_usize + 128_usize + 32_usize + 8_usize);
 
-        for level in 0..=NewTerrain::LOD_MAX {
-            let cell_count = NewTerrain::CELLS_PER_CHUNK >> level;
+        for level in 0..=Terrain::LOD_MAX {
+            let cell_count = Terrain::CELLS_PER_CHUNK >> level;
 
             for y in 0..cell_count {
                 for x in 0..cell_count {
-                    let i0 = y * NewTerrain::NODES_PER_CHUNK + x;
-                    let i1 = y * NewTerrain::NODES_PER_CHUNK + (x + 1);
-                    let i2 = (y + 1) * NewTerrain::NODES_PER_CHUNK + (x + 1);
-                    let i3 = (y + 1) * NewTerrain::NODES_PER_CHUNK + x;
+                    let i0 = y * Terrain::NODES_PER_CHUNK + x;
+                    let i1 = y * Terrain::NODES_PER_CHUNK + (x + 1);
+                    let i2 = (y + 1) * Terrain::NODES_PER_CHUNK + (x + 1);
+                    let i3 = (y + 1) * Terrain::NODES_PER_CHUNK + x;
 
                     indices.extend_from_slice(&[i0, i1, i2, i2, i3, i0]);
                     wireframe_indices.extend_from_slice(&[i0, i1, i1, i2, i2, i3, i3, i0]);
@@ -688,7 +688,7 @@ fn generate_strata_vertices() -> Vec<StrataVertex> {
     let mut vertices = Vec::with_capacity((9 + 9 + 7 + 7) * 2);
 
     // South
-    for x in 0..NewTerrain::NODES_PER_CHUNK {
+    for x in 0..Terrain::NODES_PER_CHUNK {
         vertices.push(StrataVertex {
             normal: [0.0, -1.0, 0.0],
             node_coord: [x, 0],
@@ -700,38 +700,38 @@ fn generate_strata_vertices() -> Vec<StrataVertex> {
     }
 
     // West
-    for y in 0..NewTerrain::NODES_PER_CHUNK {
+    for y in 0..Terrain::NODES_PER_CHUNK {
         vertices.push(StrataVertex {
             normal: [1.0, 0.0, 0.0],
-            node_coord: [NewTerrain::CELLS_PER_CHUNK, y],
+            node_coord: [Terrain::CELLS_PER_CHUNK, y],
         });
         vertices.push(StrataVertex {
             normal: [1.0, 0.0, 0.0],
-            node_coord: [NewTerrain::CELLS_PER_CHUNK, y],
+            node_coord: [Terrain::CELLS_PER_CHUNK, y],
         });
     }
 
     // North
-    for x in 0..NewTerrain::NODES_PER_CHUNK {
+    for x in 0..Terrain::NODES_PER_CHUNK {
         vertices.push(StrataVertex {
             normal: [0.0, 1.0, 0.0],
-            node_coord: [NewTerrain::CELLS_PER_CHUNK - x, NewTerrain::CELLS_PER_CHUNK],
+            node_coord: [Terrain::CELLS_PER_CHUNK - x, Terrain::CELLS_PER_CHUNK],
         });
         vertices.push(StrataVertex {
             normal: [0.0, 1.0, 0.0],
-            node_coord: [NewTerrain::CELLS_PER_CHUNK - x, NewTerrain::CELLS_PER_CHUNK],
+            node_coord: [Terrain::CELLS_PER_CHUNK - x, Terrain::CELLS_PER_CHUNK],
         });
     }
 
     // East
-    for y in 0..NewTerrain::NODES_PER_CHUNK {
+    for y in 0..Terrain::NODES_PER_CHUNK {
         vertices.push(StrataVertex {
             normal: [-1.0, 0.0, 0.0],
-            node_coord: [0, NewTerrain::CELLS_PER_CHUNK - y],
+            node_coord: [0, Terrain::CELLS_PER_CHUNK - y],
         });
         vertices.push(StrataVertex {
             normal: [-1.0, 0.0, 0.0],
-            node_coord: [0, NewTerrain::CELLS_PER_CHUNK - y],
+            node_coord: [0, Terrain::CELLS_PER_CHUNK - y],
         });
     }
 

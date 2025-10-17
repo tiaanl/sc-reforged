@@ -1,6 +1,6 @@
 use glam::{IVec2, UVec2, Vec3, Vec4, ivec2};
 
-pub struct NewHeightMap {
+pub struct HeightMap {
     /// Amount of nodes in the height map.
     pub size: UVec2,
     /// Size of each cell/space between each node; in cm.
@@ -9,7 +9,7 @@ pub struct NewHeightMap {
     pub nodes: Vec<Vec4>,
 }
 
-impl NewHeightMap {
+impl HeightMap {
     pub fn from_iter(size: UVec2, cell_size: f32, nodes: impl Iterator<Item = f32>) -> Self {
         let mut height_map = Self {
             size,

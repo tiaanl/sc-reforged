@@ -18,13 +18,13 @@ enum ObjectData {
     SingleModel { model: Handle<Model> },
 }
 
-pub struct NewObject {
+pub struct Object {
     pub transform: Transform,
     pub bounding_sphere: BoundingSphere,
     data: ObjectData,
 }
 
-impl NewObject {
+impl Object {
     pub fn model_to_render(&self) -> Option<Handle<Model>> {
         Some(match self.data {
             ObjectData::Scenery { model, .. } => model,
@@ -36,7 +36,7 @@ impl NewObject {
 #[derive(Default)]
 pub struct NewObjects {
     /// A list for all objects iun the world.
-    pub objects: Storage<NewObject>,
+    pub objects: Storage<Object>,
 
     /// Keep a list of handles to try and load.
     models_to_prepare: Vec<Handle<Model>>,
@@ -49,7 +49,7 @@ impl NewObjects {
         object_type: ObjectType,
         name: &str,
         _title: &str,
-    ) -> Result<(Handle<NewObject>, &NewObject), AssetError> {
+    ) -> Result<(Handle<Object>, &Object), AssetError> {
         let mut bounding_sphere = BoundingSphere::ZERO;
 
         let object_data = match object_type {
@@ -123,7 +123,7 @@ impl NewObjects {
         // Move to bounding sphere into position.
         bounding_sphere.center += transform.translation;
 
-        let handle = self.objects.insert(NewObject {
+        let handle = self.objects.insert(Object {
             transform,
             bounding_sphere,
             data: object_data,
@@ -133,7 +133,7 @@ impl NewObjects {
     }
 
     #[inline]
-    pub fn get(&self, handle: Handle<NewObject>) -> Option<&NewObject> {
+    pub fn get(&self, handle: Handle<Object>) -> Option<&Object> {
         self.objects.get(handle)
     }
 

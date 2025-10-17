@@ -5,7 +5,7 @@ use crate::{
     engine::storage::Handle,
     game::{
         math::{BoundingBox, BoundingSphere, Frustum},
-        scenes::world::{new_objects::NewObject, new_terrain::NewTerrain},
+        scenes::world::{objects::Object, terrain::Terrain},
     },
 };
 
@@ -30,7 +30,7 @@ pub struct Node {
     /// If this node is a leaf and wraps a single terrain chunk, it holds the chunk coord.
     pub chunk_coord: Option<IVec2>,
     /// A list of objects who's bounding spheres are fully contained inside this node.
-    pub objects: Vec<Handle<NewObject>>,
+    pub objects: Vec<Handle<Object>>,
 }
 
 impl Node {
@@ -50,7 +50,7 @@ pub struct QuadTree {
 }
 
 impl QuadTree {
-    pub fn from_new_terrain(terrain: &NewTerrain) -> Self {
+    pub fn from_new_terrain(terrain: &Terrain) -> Self {
         let mut result = Self::default();
 
         result.root = result.build_new_node(terrain, IVec2::ZERO, terrain.chunk_dim.as_ivec2(), 0);
@@ -58,14 +58,14 @@ impl QuadTree {
         result
     }
 
-    pub fn insert_object(&mut self, object: Handle<NewObject>, bounding_sphere: &BoundingSphere) {
+    pub fn insert_object(&mut self, object: Handle<Object>, bounding_sphere: &BoundingSphere) {
         self.insert_object_at(self.root, object, bounding_sphere);
     }
 
     fn insert_object_at(
         &mut self,
         node_id: NodeId,
-        object: Handle<NewObject>,
+        object: Handle<Object>,
         bounding_sphere: &BoundingSphere,
     ) {
         // Expand the current node Z to cover the object span so frustum culling of this node stays
@@ -121,7 +121,7 @@ impl QuadTree {
 
     fn build_new_node(
         &mut self,
-        terrain: &NewTerrain,
+        terrain: &Terrain,
         chunk_min: IVec2,
         chunk_max: IVec2,
         level: usize,

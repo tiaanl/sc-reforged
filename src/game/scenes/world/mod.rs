@@ -13,13 +13,13 @@ use crate::{
 
 pub mod actions;
 mod game_mode;
-pub mod new_height_map;
-mod new_objects;
-mod new_terrain;
+pub mod height_map;
+mod objects;
 mod quad_tree;
 mod render;
 mod sim_world;
 mod systems;
+mod terrain;
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
