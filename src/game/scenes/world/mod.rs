@@ -96,7 +96,10 @@ impl Scene for WorldScene {
         // Run systems
         {
             let time = systems::Time { delta_time };
-            self.systems.input(&mut self.sim_world, &time, input);
+            let viewport_size = renderer().surface.size();
+
+            self.systems
+                .input(&mut self.sim_world, &time, input, viewport_size);
             self.systems.update(&mut self.sim_world, &time);
         }
 

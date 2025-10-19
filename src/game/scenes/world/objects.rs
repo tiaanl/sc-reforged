@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-enum ObjectData {
+pub enum ObjectData {
     Scenery {
         model: Handle<Model>,
     },
@@ -32,7 +32,7 @@ enum ObjectData {
 pub struct Object {
     pub transform: Transform,
     pub bounding_sphere: BoundingSphere,
-    data: ObjectData,
+    pub data: ObjectData,
 }
 
 impl Object {

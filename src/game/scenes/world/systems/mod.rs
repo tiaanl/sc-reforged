@@ -1,4 +1,4 @@
-use glam::vec2;
+use glam::{UVec2, Vec2};
 
 use crate::{
     engine::{
@@ -55,7 +55,7 @@ impl Systems {
 
                 let dir = (camera_to - camera_from).normalize();
 
-                let flat = vec2(dir.x, dir.y);
+                let flat = Vec2::new(dir.x, dir.y);
                 let yaw = (-dir.x).atan2(dir.y).to_degrees();
                 let pitch = dir.z.atan2(flat.length()).to_degrees();
 
@@ -74,8 +74,23 @@ impl Systems {
         }
     }
 
-    pub fn input(&mut self, sim_world: &mut SimWorld, time: &Time, input_state: &InputState) {
+    pub fn input(
+        &mut self,
+        sim_world: &mut SimWorld,
+        time: &Time,
+        input_state: &InputState,
+        viewport_size: UVec2,
+    ) {
+        // TODO: Not nice that we have to pass in a `viewport_size` here, but don't know where else
+        //       to put it for now.
+
         self.camera_system.input(sim_world, time, input_state);
+
+        if let Some(mouse_position) = input_state.mouse_position() {
+            let _camera_ray_segment = sim_world
+                .computed_camera
+                .create_ray_segment(mouse_position.as_uvec2(), viewport_size);
+        }
     }
 
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {

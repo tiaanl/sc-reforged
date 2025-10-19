@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use glam::{IVec2, Quat, Vec3, vec3};
+use glam::{IVec2, Quat, UVec2, Vec2, Vec3, Vec4, vec3};
 
 use crate::{
     engine::{assets::AssetError, gizmos::GizmoVertex, prelude::Transform, storage::Handle},
@@ -8,7 +8,7 @@ use crate::{
         camera::{self, Camera},
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
-        math::{Frustum, ViewProjection},
+        math::{Frustum, Ray, RaySegment, ViewProjection},
         scenes::world::{
             objects::{Object, Objects},
             quad_tree::QuadTree,
@@ -35,6 +35,36 @@ pub struct ComputedCamera {
     pub frustum: Frustum,
     pub position: Vec3,
     pub forward: Vec3,
+}
+
+impl ComputedCamera {
+    pub fn create_ray_segment(&self, mouse_position: UVec2, viewport_size: UVec2) -> RaySegment {
+        let viewport_pos = (mouse_position.as_vec2() + Vec2::splat(0.5)) / viewport_size.as_vec2();
+        let ndc_x = viewport_pos.x * 2.0 - 1.0;
+        let ndc_y = 1.0 - viewport_pos.y * 2.0;
+
+        let near_clip = Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+        let far_clip = Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+
+        let mut near_world = self.view_proj.inv * near_clip;
+        let mut far_world = self.view_proj.inv * far_clip;
+
+        // Homogeneous divide.
+        near_world /= near_world.w;
+        far_world /= far_world.w;
+
+        let near_world = near_world.truncate();
+        let far_world = far_world.truncate();
+
+        let direction = far_world - near_world;
+        RaySegment {
+            ray: Ray {
+                origin: near_world,
+                direction: direction.normalize(),
+            },
+            distance: direction.length(),
+        }
+    }
 }
 
 /// Holds all the data for the world we are simulating.

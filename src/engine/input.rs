@@ -91,7 +91,7 @@ impl InputState {
 }
 
 impl InputState {
-    pub fn _mouse_position(&self) -> Option<IVec2> {
+    pub fn mouse_position(&self) -> Option<IVec2> {
         self.mouse_position
     }
 
