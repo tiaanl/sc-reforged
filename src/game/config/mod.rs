@@ -2,6 +2,7 @@
 
 mod campaign;
 mod campaign_defs;
+mod character_profiles;
 mod image_defs;
 mod model_lods;
 mod motion_sequencer_defs;
@@ -13,6 +14,7 @@ mod windows;
 
 pub use campaign::*;
 pub use campaign_defs::*;
+pub use character_profiles::*;
 pub use image_defs::*;
 pub use model_lods::*;
 pub use motion_sequencer_defs::*;

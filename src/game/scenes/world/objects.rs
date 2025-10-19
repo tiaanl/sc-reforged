@@ -4,7 +4,8 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
-        config::ObjectType,
+        config::{CharacterProfiles, ObjectType},
+        data_dir::data_dir,
         math::BoundingSphere,
         model::Model,
         models::{ModelName, models},
@@ -53,8 +54,9 @@ impl Object {
     }
 }
 
-#[derive(Default)]
 pub struct Objects {
+    character_profiles: CharacterProfiles,
+
     /// A list for all objects iun the world.
     pub objects: Storage<Object>,
 
@@ -63,6 +65,16 @@ pub struct Objects {
 }
 
 impl Objects {
+    pub fn new() -> Result<Self, AssetError> {
+        let character_profiles = data_dir().load_character_profiles()?;
+
+        Ok(Self {
+            character_profiles,
+            objects: Storage::default(),
+            models_to_prepare: Vec::default(),
+        })
+    }
+
     pub fn spawn(
         &mut self,
         transform: Transform,

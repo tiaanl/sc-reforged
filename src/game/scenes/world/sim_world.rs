@@ -103,7 +103,7 @@ impl SimWorld {
 
         let mut quad_tree = QuadTree::from_new_terrain(&terrain);
 
-        let mut objects = Objects::default();
+        let mut objects = Objects::new()?;
 
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;

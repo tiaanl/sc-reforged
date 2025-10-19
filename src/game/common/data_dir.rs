@@ -3,11 +3,10 @@ use std::path::{Path, PathBuf};
 use shadow_company_tools::bmf;
 
 use crate::{
-    engine::assets::AssetError,
-    engine::storage::Handle,
+    engine::{assets::AssetError, storage::Handle},
     game::{
         common::image::Image,
-        config::{self, TerrainMapping, parser::ConfigLines},
+        config::{self, CharacterProfiles, TerrainMapping, parser::ConfigLines},
         file_system::file_system,
         image::images,
         scenes::world::height_map::HeightMap,
@@ -99,6 +98,26 @@ impl DataDir {
 
         bmf::Motion::read(&mut std::io::Cursor::new(data))
             .map_err(|err| AssetError::from_io_error(err, path.as_ref()))
+    }
+
+    pub fn load_character_profiles(&self) -> Result<CharacterProfiles, AssetError> {
+        let mut character_profiles = CharacterProfiles::default();
+
+        for file in file_system()
+            .dir(PathBuf::from("config").join("character_profiles"))?
+            .filter(|p| {
+                if let Some(e) = p.extension() {
+                    e.eq_ignore_ascii_case("txt")
+                } else {
+                    false
+                }
+            })
+        {
+            let config = self.load_config(file)?;
+            character_profiles.parse_lines(config);
+        }
+
+        Ok(character_profiles)
     }
 
     pub fn load_config<C: From<ConfigLines>>(
