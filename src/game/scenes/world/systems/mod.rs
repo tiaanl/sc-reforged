@@ -16,10 +16,10 @@ use crate::{
 };
 
 pub use cull_system::DebugQuadTreeOptions;
+pub use objects_system::RenderWrapper;
 
 use super::render::GeometryBuffer;
 
-mod animations;
 mod camera_system;
 mod clear_render_targets;
 mod cull_system;
@@ -65,7 +65,7 @@ impl Systems {
                     camera_from,
                     yaw.to_degrees(),
                     pitch.to_degrees(),
-                    10_000.0,
+                    4_000.0,
                     100.0,
                 )
             }),

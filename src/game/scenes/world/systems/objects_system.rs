@@ -1,10 +1,14 @@
 use crate::{
     engine::{gizmos, prelude::*, storage::Handle},
-    game::scenes::world::{
-        render::{
-            GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld,
+    game::{
+        model::Model,
+        scenes::world::{
+            render::{
+                GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex,
+                RenderWorld,
+            },
+            sim_world::SimWorld,
         },
-        sim_world::SimWorld,
     },
     wgsl_shader,
 };
@@ -36,6 +40,34 @@ struct ModelToRender {
     key: RenderKey,
     transform: Mat4,
     first_node_index: RenderNodeIndex,
+}
+
+/// Wrapper passed to objects so they can specify what they want rendered in the scene.
+pub struct RenderWrapper<'a> {
+    render_store: &'a mut RenderStore,
+    models_to_render: &'a mut Vec<ModelToRender>,
+}
+
+impl<'a> RenderWrapper<'a> {
+    pub fn render_model(&mut self, transform: Mat4, model: Handle<Model>) {
+        let Some(render_model_handle) = self.render_store.render_model_for_model(model) else {
+            tracing::warn!("Missing render model for model!");
+            return;
+        };
+
+        let Some(render_model) = self.render_store.models.get(render_model_handle) else {
+            tracing::warn!("Missing render model for render model handle!");
+            return;
+        };
+
+        self.models_to_render.push(ModelToRender {
+            key: RenderKey {
+                render_model: render_model_handle,
+            },
+            transform,
+            first_node_index: RenderNodeIndex::Base(render_model.nodes_range.start),
+        });
+    }
 }
 
 struct Batch {
@@ -192,38 +224,20 @@ impl ObjectsSystem {
     }
 
     pub fn extract(&mut self, sim_world: &mut SimWorld, render_store: &mut RenderStore) {
-        self.models_to_render = sim_world
+        self.models_to_render.clear();
+
+        let mut wrapper = RenderWrapper {
+            render_store,
+            models_to_render: &mut self.models_to_render,
+        };
+
+        sim_world
             .visible_objects
             .iter()
-            .filter_map(|object| {
-                sim_world
-                    .objects
-                    .get(*object)
-                    .and_then(|object| {
-                        object
-                            .model_to_render()
-                            .map(|model_handle| (object.transform.to_mat4(), model_handle))
-                    })
-                    .and_then(|(transform, model_handle)| {
-                        render_store.render_model_for_model(model_handle).map(
-                            |render_model_handle| {
-                                let render_model =
-                                    render_store.models.get(render_model_handle).unwrap();
-
-                                ModelToRender {
-                                    key: RenderKey {
-                                        render_model: render_model_handle,
-                                    },
-                                    transform,
-                                    first_node_index: RenderNodeIndex::Base(
-                                        render_model.nodes_range.start,
-                                    ),
-                                }
-                            },
-                        )
-                    })
-            })
-            .collect();
+            .filter_map(|object_handle| sim_world.objects.get(*object_handle))
+            .for_each(|object| {
+                object.gather_models_to_render(&mut wrapper);
+            });
     }
 
     pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {

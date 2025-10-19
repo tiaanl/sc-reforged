@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use ahash::HashMap;
 
@@ -16,9 +16,16 @@ use crate::{
     global,
 };
 
+#[derive(PartialEq, Eq, Hash)]
+pub enum ModelName {
+    Object(String),
+    Body(String),
+    Head(String),
+}
+
 pub struct Models {
     models: Storage<Model>,
-    lookup: HashMap<String, Handle<Model>>,
+    lookup: HashMap<ModelName, Handle<Model>>,
 
     model_lod_defs: HashMap<String, Vec<SubModelDefinition>>,
 }
@@ -36,7 +43,7 @@ impl Models {
             }) {
                 let profile = data_dir().load_config::<LodModelProfileDefinition>(lod_path)?;
                 lod_definitions.insert(
-                    profile.lod_model_name.clone(),
+                    profile.lod_model_name,
                     profile.sub_model_definitions.clone(),
                 );
             }
@@ -51,63 +58,30 @@ impl Models {
         })
     }
 
-    pub fn add(&mut self, name: impl Into<String>, model: Model) -> Handle<Model> {
+    pub fn add(&mut self, name: ModelName, model: Model) -> Handle<Model> {
         let handle = self.models.insert(model);
-        self.lookup.insert(name.into(), handle);
+        self.lookup.insert(name, handle);
         handle
     }
 
-    pub fn load_object_model(&mut self, name: &str) -> Result<(Handle<Model>, &Model), AssetError> {
-        let path = if let Some(def) = self.model_lod_defs.get(name) {
-            PathBuf::from(&def[0].sub_model_model)
-        } else {
-            PathBuf::from(name)
+    pub fn load_model(&mut self, name: ModelName) -> Result<(Handle<Model>, &Model), AssetError> {
+        let path = match &name {
+            ModelName::Object(name) => {
+                let lod_name = self
+                    .model_lod_defs
+                    .get(name)
+                    .map(|def| def[0].sub_model_model.as_str())
+                    .unwrap_or(name);
+
+                PathBuf::from(lod_name).join(lod_name)
+            }
+            ModelName::Body(name) => PathBuf::from("people").join("bodies").join(name).join(name),
+            ModelName::Head(name) => PathBuf::from("people").join("heads").join(name).join(name),
         };
 
-        let path = PathBuf::from("models")
-            .join(&path)
-            .join(&path)
-            .with_extension("smf");
+        let path = PathBuf::from("models").join(path).with_extension("smf");
 
-        self.load_model(name, path)
-    }
-
-    pub fn load_biped_body_model(
-        &mut self,
-        name: &str,
-    ) -> Result<(Handle<Model>, &Model), AssetError> {
-        // TODO: No LOD's for bipedal models?
-
-        let path = PathBuf::from("models")
-            .join("people")
-            .join("bodies")
-            .join(name)
-            .join(name)
-            .with_extension("smf");
-        self.load_model(name, path)
-    }
-
-    pub fn load_biped_head_model(
-        &mut self,
-        name: &str,
-    ) -> Result<(Handle<Model>, &Model), AssetError> {
-        // TODO: No LOD's for bipedal models?
-
-        let path = PathBuf::from("models")
-            .join("people")
-            .join("heads")
-            .join(name)
-            .join(name)
-            .with_extension("smf");
-        self.load_model(name, path)
-    }
-
-    pub fn load_model(
-        &mut self,
-        name: &str,
-        path: impl AsRef<Path>,
-    ) -> Result<(Handle<Model>, &Model), AssetError> {
-        if let Some(handle) = self.lookup.get(name) {
+        if let Some(handle) = self.lookup.get(&name) {
             return Ok((*handle, self.get(*handle).unwrap()));
         }
 

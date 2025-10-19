@@ -4,22 +4,26 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
-        config::ObjectType, math::BoundingSphere, model::Model, models::models,
-        scenes::world::render::RenderStore,
+        config::ObjectType,
+        math::BoundingSphere,
+        model::Model,
+        models::{ModelName, models},
+        scenes::world::{render::RenderStore, systems::RenderWrapper},
     },
 };
 
 enum ObjectData {
     Scenery {
         model: Handle<Model>,
-        _model_des: Handle<Model>,
     },
     Biped {
         body_model: Handle<Model>,
         head_model: Handle<Model>,
     },
     /// Temporary for use with more complicated objects that is not implemented yet.
-    SingleModel { model: Handle<Model> },
+    SingleModel {
+        model: Handle<Model>,
+    },
 }
 
 pub struct Object {
@@ -29,17 +33,28 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn model_to_render(&self) -> Option<Handle<Model>> {
-        Some(match self.data {
-            ObjectData::Scenery { model, .. } => model,
-            ObjectData::Biped { body_model, .. } => body_model,
-            ObjectData::SingleModel { model } => model,
-        })
+    pub fn gather_models_to_render(&self, renderer: &mut RenderWrapper) {
+        match self.data {
+            ObjectData::Scenery { model } => renderer.render_model(self.transform.to_mat4(), model),
+
+            ObjectData::Biped {
+                body_model,
+                head_model,
+            } => {
+                let transform = self.transform.to_mat4();
+                renderer.render_model(transform, body_model);
+                renderer.render_model(transform, head_model);
+            }
+
+            ObjectData::SingleModel { model } => {
+                renderer.render_model(self.transform.to_mat4(), model)
+            }
+        }
     }
 }
 
 #[derive(Default)]
-pub struct NewObjects {
+pub struct Objects {
     /// A list for all objects iun the world.
     pub objects: Storage<Object>,
 
@@ -47,7 +62,7 @@ pub struct NewObjects {
     models_to_prepare: Vec<Handle<Model>>,
 }
 
-impl NewObjects {
+impl Objects {
     pub fn spawn(
         &mut self,
         transform: Transform,
@@ -96,33 +111,28 @@ impl NewObjects {
             | ObjectType::StructureSwingDoor
             | ObjectType::StructureTent
             | ObjectType::StructureWall => {
-                let (model_handle, model) = models().load_object_model(name)?;
+                let (model_handle, model) = models().load_model(ModelName::Object(name.into()))?;
 
                 bounding_sphere.expand_to_include(&model.bounding_sphere);
 
-                let (model_des_handle, model_des) = models().load_object_model(name)?;
-
-                bounding_sphere.expand_to_include(&model_des.bounding_sphere);
-
                 self.models_to_prepare.push(model_handle);
-                self.models_to_prepare.push(model_des_handle);
 
                 ObjectData::Scenery {
                     model: model_handle,
-                    _model_des: model_des_handle,
                 }
             }
 
-            ObjectType::Bipedal | ObjectType::Ape => {
+            ObjectType::Bipedal => {
                 let body_model = {
-                    let (handle, model) = models().load_biped_body_model(name)?;
+                    let (handle, model) = models().load_model(ModelName::Body(name.into()))?;
                     self.models_to_prepare.push(handle);
                     bounding_sphere.expand_to_include(&model.bounding_sphere);
                     handle
                 };
 
                 let head_model = {
-                    let (handle, model) = models().load_biped_head_model(name)?;
+                    let (handle, model) =
+                        models().load_model(ModelName::Head(String::from("head_john")))?;
                     self.models_to_prepare.push(handle);
                     bounding_sphere.expand_to_include(&model.bounding_sphere);
                     handle
@@ -135,7 +145,7 @@ impl NewObjects {
             }
 
             _ => {
-                let (model_handle, model) = models().load_object_model(name)?;
+                let (model_handle, model) = models().load_model(ModelName::Object(name.into()))?;
 
                 bounding_sphere.expand_to_include(&model.bounding_sphere);
 

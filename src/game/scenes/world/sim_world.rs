@@ -10,7 +10,7 @@ use crate::{
         data_dir::data_dir,
         math::{Frustum, ViewProjection},
         scenes::world::{
-            objects::{NewObjects, Object},
+            objects::{Object, Objects},
             quad_tree::QuadTree,
             terrain::Terrain,
         },
@@ -52,7 +52,7 @@ pub struct SimWorld {
     /// The visible chunks for the current frame.
     pub visible_chunks: Vec<IVec2>,
 
-    pub objects: NewObjects,
+    pub objects: Objects,
 
     /// A list of visible objects this frame.
     pub visible_objects: Vec<Handle<Object>>,
@@ -103,7 +103,7 @@ impl SimWorld {
 
         let mut quad_tree = QuadTree::from_new_terrain(&terrain);
 
-        let mut objects = NewObjects::default();
+        let mut objects = Objects::default();
 
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;

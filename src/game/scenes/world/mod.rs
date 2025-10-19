@@ -12,6 +12,7 @@ use crate::{
 };
 
 pub mod actions;
+mod animation;
 mod game_mode;
 pub mod height_map;
 mod objects;
