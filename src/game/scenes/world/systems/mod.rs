@@ -18,8 +18,6 @@ use crate::{
 pub use cull_system::DebugQuadTreeOptions;
 pub use objects_system::RenderWrapper;
 
-use super::render::GeometryBuffer;
-
 mod camera_system;
 mod clear_render_targets;
 mod cull_system;
@@ -104,10 +102,17 @@ impl Systems {
 
     pub fn prepare(
         &mut self,
+        render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         renderer: &Renderer,
-        _render_store: &mut RenderStore,
     ) {
+        // Make sure the geometry buffer is the correct size.
+        if renderer.surface.size() != render_store.geometry_buffer.size {
+            render_store
+                .geometry_buffer
+                .resize(&renderer.device, renderer.surface.size());
+        }
+
         self.camera_system.prepare(render_world, renderer);
         self.terrain_system.prepare(render_world, renderer);
         self.objects_system.prepare(render_world, renderer);
@@ -119,13 +124,25 @@ impl Systems {
         render_store: &RenderStore,
         render_world: &RenderWorld,
         frame: &mut Frame,
-        geometry_buffer: &GeometryBuffer,
     ) {
-        clear_render_targets::clear_render_targets(render_world, frame, geometry_buffer);
+        clear_render_targets::clear_render_targets(
+            render_world,
+            frame,
+            &render_store.geometry_buffer,
+        );
         self.terrain_system
-            .queue(render_world, frame, geometry_buffer);
-        self.objects_system
-            .queue(render_store, render_world, frame, geometry_buffer);
+            .queue(render_world, frame, &render_store.geometry_buffer);
+        self.objects_system.queue(
+            render_store,
+            render_world,
+            frame,
+            &render_store.geometry_buffer,
+        );
+
+        render_store
+            .compositor
+            .render(frame, &render_store.geometry_buffer);
+
         self.gizmo_system.queue(render_world, frame);
     }
 }

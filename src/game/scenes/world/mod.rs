@@ -32,12 +32,7 @@ pub struct WorldScene {
     // Systems
     systems: systems::Systems,
 
-    geometry_buffer: render::GeometryBuffer,
-    compositor: render::Compositor,
-
     game_mode: GameMode,
-
-    last_mouse_position: Option<UVec2>,
 
     last_frame_time: std::time::Instant,
     fps_history: Vec<f32>,
@@ -57,7 +52,7 @@ impl WorldScene {
 
         let sim_world = SimWorld::new(&campaign_def)?;
 
-        let render_store = RenderStore::new(renderer());
+        let render_store = RenderStore::new(renderer(), window_size);
 
         let render_worlds = [
             RenderWorld::new(0, renderer(), &render_store),
@@ -67,9 +62,6 @@ impl WorldScene {
 
         let systems = systems::Systems::new(renderer(), &render_store, &sim_world, &campaign);
 
-        let geometry_buffer = render::GeometryBuffer::new(&renderer().device, window_size);
-        let compositor = render::Compositor::new(renderer(), &geometry_buffer);
-
         Ok(Self {
             sim_world,
             render_worlds,
@@ -77,12 +69,7 @@ impl WorldScene {
 
             systems,
 
-            geometry_buffer,
-            compositor,
-
             game_mode: GameMode::Editor,
-
-            last_mouse_position: None,
 
             last_frame_time: std::time::Instant::now(),
             fps_history,
@@ -102,20 +89,7 @@ impl Scene for WorldScene {
         let [width, height] = size.to_array().map(|f| f as f32);
         let aspect = width / height.max(1.0);
 
-        self.geometry_buffer
-            .resize(&renderer().device, renderer().surface.size());
-
         self.sim_world.camera.aspect_ratio = aspect;
-    }
-
-    fn event(&mut self, event: SceneEvent) {
-        match event {
-            SceneEvent::MouseLeft => self.last_mouse_position = None,
-            SceneEvent::MouseMove { position } => {
-                self.last_mouse_position = Some(position);
-            }
-            _ => {}
-        }
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
@@ -157,371 +131,9 @@ impl Scene for WorldScene {
             self.systems
                 .extract(&mut self.sim_world, &mut self.render_store, render_world);
             self.systems
-                .prepare(render_world, renderer(), &mut self.render_store);
-            self.systems.queue(
-                &self.render_store,
-                render_world,
-                frame,
-                &self.geometry_buffer,
-            );
+                .prepare(&mut self.render_store, render_world, renderer());
+            self.systems.queue(&self.render_store, render_world, frame);
         }
-
-        self.compositor.render(frame, &self.geometry_buffer);
-
-        /*
-        let main_view_projection = {
-            let camera = &self.main_camera.camera;
-
-            let view_projection = camera.calculate_view_projection();
-            let forward = view_projection.mat.project_point3(Vec3::Y).normalize();
-            let position = camera.position;
-            let fov = camera.fov;
-            let aspect_ratio = camera.aspect_ratio;
-
-            self.main_camera.gpu_camera.upload(
-                &view_projection,
-                position,
-                forward,
-                fov,
-                aspect_ratio,
-            );
-
-            view_projection
-        };
-
-        let main_camera_frustum = main_view_projection.frustum();
-
-        let _debug_view_projection = {
-            let camera = &self.debug_camera.camera;
-
-            let view_projection = camera.calculate_view_projection();
-            let position = camera.position;
-            let forward = view_projection.mat.project_point3(Vec3::Y).normalize();
-            let fov = camera.fov;
-            let aspect_ratio = camera.aspect_ratio;
-
-            self.debug_camera.gpu_camera.upload(
-                &view_projection,
-                position,
-                forward,
-                fov,
-                aspect_ratio,
-            );
-
-            view_projection
-        };
-
-        let sun_dir = Vec4::from(self.environment.sun_dir).truncate();
-        self.shadow_cascades.update_from_camera(
-            &self.main_camera.camera,
-            sun_dir,
-            self.shadow_cascades_lambda,
-        );
-
-        renderer().queue.write_buffer(
-            &self.environment_buffer,
-            0,
-            bytemuck::cast_slice(&[self.environment]),
-        );
-
-        // Clear the buffers.
-        {
-            const INVALID_ID: u32 = 0xFFFF_FFFF;
-            let positions_clear_color = wgpu::Color {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: f32::from_le_bytes(INVALID_ID.to_le_bytes()) as f64,
-            };
-            let fog_clear_color = wgpu::Color {
-                r: self.environment.fog_color[0] as f64,
-                g: self.environment.fog_color[1] as f64,
-                b: self.environment.fog_color[2] as f64,
-                a: 1.0,
-            };
-
-            let oit_accumulation_clear = wgpu::Color {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 0.0,
-            };
-            let oit_revealage_clear = wgpu::Color {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0,
-                a: 1.0,
-            };
-
-            drop(
-                frame
-                    .encoder
-                    .begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("world_clear_render_pass"),
-                        color_attachments: &[
-                            // Clear the color buffer with the fog color.
-                            Some(wgpu::RenderPassColorAttachment {
-                                view: &self.geometry_buffers.color.view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(fog_clear_color),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            }),
-                            Some(wgpu::RenderPassColorAttachment {
-                                view: &self.geometry_buffers.oit_accumulation.view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(oit_accumulation_clear),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            }),
-                            Some(wgpu::RenderPassColorAttachment {
-                                view: &self.geometry_buffers.oit_revealage.view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(oit_revealage_clear),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            }),
-                            // Set positions to 0 and ID's to invalid.
-                            Some(wgpu::RenderPassColorAttachment {
-                                view: &self.geometry_buffers.position_id.view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(positions_clear_color),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            }),
-                        ],
-                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                            view: &self.geometry_buffers.depth.view,
-                            depth_ops: Some(wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(1.0),
-                                store: wgpu::StoreOp::Store,
-                            }),
-                            stencil_ops: None,
-                        }),
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                    }),
-            );
-
-            drop(
-                frame
-                    .encoder
-                    .begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("light_clear_render_pass"),
-                        color_attachments: &[],
-                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                            view: &self.shadow_render_target.view,
-                            depth_ops: Some(wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(1.0),
-                                store: wgpu::StoreOp::Store,
-                            }),
-                            stencil_ops: None,
-                        }),
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                    }),
-            );
-
-            self.shadow_cascades.clear_buffers(&mut frame.encoder);
-        }
-
-        // --- Shadow pass ---
-
-        let _z = tracy_client::span!("render shadow map");
-
-        if true {
-            self.objects
-                .render_shadow_casters(frame, &self.shadow_cascades);
-        }
-
-        // --- Color pass ---
-
-        let view_camera_bind_group = if self.in_editor() && self.view_debug_camera {
-            &self.debug_camera.gpu_camera.bind_group
-        } else {
-            &self.main_camera.gpu_camera.bind_group
-        };
-
-        // --- Sky box ---
-        self.sky_renderer.render(
-            frame,
-            &self.geometry_buffers,
-            &self.main_camera.gpu_camera.bind_group,
-        );
-
-        if true {
-            // Render Opaque geometry first.
-            self.terrain.render(
-                frame,
-                self.in_editor(),
-                &self.geometry_buffers,
-                &self.shadow_cascades,
-                view_camera_bind_group,
-                &self.environment_bind_group,
-                &self.main_camera.gpu_camera.bind_group, // Always the main camera.
-            );
-
-            self.objects.render_objects(
-                frame,
-                &main_camera_frustum,
-                &self.geometry_buffers,
-                view_camera_bind_group,
-                &self.environment_bind_group,
-                &self.shadow_cascades,
-            );
-
-            // Now render alpha geoometry.
-            self.terrain.render_water(
-                frame,
-                &self.geometry_buffers,
-                view_camera_bind_group,
-                &self.environment_bind_group,
-            );
-        }
-
-        if self.in_editor() && self.render_overlay {
-            self.overlay_renderer.render(
-                frame,
-                &self.main_camera.gpu_camera.bind_group,
-                &self.shadow_cascades,
-                &self.geometry_buffers,
-            );
-        } else {
-            self.compositor.render(
-                frame,
-                &self.geometry_buffers,
-                &self.main_camera.gpu_camera.bind_group,
-                &self.environment_bind_group,
-            );
-        }
-
-        if self.in_editor() {
-            let _z = tracy_client::span!("render gizmos");
-
-            self.gizmos_vertices.clear();
-
-            // Render any kind of debug overlays.
-            self.terrain.render_gizmos(&mut self.gizmos_vertices);
-            self.objects.render_gizmos(&mut self.gizmos_vertices);
-
-            if let Some((pos, normal)) = self.pos_and_normal {
-                let color = Vec4::new(1.0, 0.0, 0.0, 1.0);
-                self.gizmos_vertices.push(GizmoVertex::new(pos, color));
-                self.gizmos_vertices
-                    .push(GizmoVertex::new(pos + normal * 100.0, color));
-            }
-
-            // Render the main camera frustum when we're looking through the debug camera.
-            // if self.view_debug_camera {
-            //     self.gizmos_vertices
-            //         .extend(GizmosRenderer::create_view_projection(
-            //             &main_view_projection,
-            //             Vec4::new(1.0, 0.0, 1.0, 1.0),
-            //         ));
-            // }
-
-            // if false {
-            //     if let Some(ref data) = self.geometry_data {
-            //         // Translation matrix
-            //         let translation = Mat4::from_translation(data.position);
-
-            //         let vertices = GizmosRenderer::create_axis(translation, 100.0);
-            //         self.gizmos_renderer
-            //             .render(frame, view_camera_bind_group, &vertices);
-            //     }
-            // }
-
-            // Render sky box.
-            {
-                let blue = Vec4::new(0.0, 0.0, 1.0, 1.0);
-
-                const RADIUS_MID: f32 = 17_100.0;
-                const RADIUS_FAR: f32 = 25_650.0;
-
-                // Use the horizontal fov to calculate the edges.
-                let half_angle = ((self.main_camera.camera.fov * 0.5).tan()
-                    * self.main_camera.camera.aspect_ratio)
-                    .atan();
-                // Add some overscan.
-                let half_angle = half_angle * 1.08;
-
-                // Rotate forward_xy around +Z by ±`half_angle` to get the two edge directions.
-                let rot_neg = Quat::from_axis_angle(Vec3::Z, -half_angle);
-                let rot_pos = Quat::from_axis_angle(Vec3::Z, half_angle);
-
-                // Get the world forward from the camera.
-                let forward_world = self.main_camera.camera.rotation.mul_vec3(Vec3::Y);
-                let forward_xy = {
-                    let v = Vec2::new(forward_world.x, forward_world.y);
-                    let len = v.length();
-                    if len > 1e-6 { v / len } else { Vec2::Y }
-                };
-
-                let edge0 = (rot_neg.mul_vec3(forward_xy.extend(0.0))).truncate(); // Left edge.
-                let edge1 = (rot_pos.mul_vec3(forward_xy.extend(0.0))).truncate(); // Right edge.
-
-                // Build the ring points.
-                let cam_pos = self.main_camera.camera.position.truncate();
-                let mid0 = cam_pos + edge0 * RADIUS_MID;
-                let mid1 = cam_pos + edge1 * RADIUS_MID;
-                let far0 = cam_pos + edge0 * RADIUS_FAR;
-                let far1 = cam_pos + edge1 * RADIUS_FAR;
-
-                const Z_APEX_HIGH: f32 = 7_500.0;
-                const Z_RING_HIGH: f32 = 2_500.0;
-                const Z_FAR_HIGH: f32 = 0.0;
-                const Z_OFFSET_LOW: f32 = -100.0;
-
-                // Top apex.
-                let apex_high = Vec3::new(cam_pos.x, cam_pos.y, Z_APEX_HIGH);
-                let mid0_high = Vec3::new(mid0.x, mid0.y, Z_RING_HIGH);
-                let mid1_high = Vec3::new(mid1.x, mid1.y, Z_RING_HIGH);
-                let far0_high = Vec3::new(far0.x, far0.y, Z_FAR_HIGH);
-                let far1_high = Vec3::new(far1.x, far1.y, Z_FAR_HIGH);
-
-                let high = [apex_high, mid0_high, mid1_high, far0_high, far1_high];
-
-                let apex_low = apex_high + Vec3::Z * Z_OFFSET_LOW;
-                let mid0_low = mid0_high + Vec3::Z * Z_OFFSET_LOW;
-                let mid1_low = mid1_high + Vec3::Z * Z_OFFSET_LOW;
-                let far0_low = far0_high + Vec3::Z * Z_OFFSET_LOW;
-                let far1_low = far1_high + Vec3::Z * Z_OFFSET_LOW;
-                let low = [apex_low, mid0_low, mid1_low, far0_low, far1_low];
-
-                let indices = [0usize, 2, 1, 1, 2, 4, 1, 4, 3];
-
-                for a in indices.windows(3) {
-                    self.gizmos_vertices.extend(vec![
-                        GizmoVertex::new(high[a[0]], blue),
-                        GizmoVertex::new(high[a[1]], blue),
-                        GizmoVertex::new(high[a[1]], blue),
-                        GizmoVertex::new(high[a[2]], blue),
-                        GizmoVertex::new(high[a[2]], blue),
-                        GizmoVertex::new(high[a[0]], blue),
-                    ]);
-                    self.gizmos_vertices.extend(vec![
-                        GizmoVertex::new(low[a[0]], blue),
-                        GizmoVertex::new(low[a[1]], blue),
-                        GizmoVertex::new(low[a[1]], blue),
-                        GizmoVertex::new(low[a[2]], blue),
-                        GizmoVertex::new(low[a[2]], blue),
-                        GizmoVertex::new(low[a[0]], blue),
-                    ]);
-                }
-            }
-
-            // self.quad_tree.render_gizmos(&mut self.gizmos_vertices);
-            // self.quad_tree
-            //     .render_gizmos_in_frustum(&main_camera_frustum, &mut self.gizmos_vertices);
-
-            // self.gizmos_renderer
-            //     .render(frame, view_camera_bind_group, &self.gizmos_vertices);
-        }
-        */
 
         let now = std::time::Instant::now();
         let render_time = now - self.last_frame_time;

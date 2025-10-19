@@ -1,16 +1,21 @@
 use ahash::HashMap;
+use glam::UVec2;
 
 use crate::{
     engine::{assets::AssetError, prelude::Renderer, storage::Handle},
-    game::{model::Model, scenes::world::render::render_world::RenderWorld},
+    game::model::Model,
 };
 
 use super::{
+    Compositor, GeometryBuffer, RenderWorld,
     render_models::{RenderModel, RenderModels},
     render_textures::RenderTextures,
 };
 
 pub struct RenderStore {
+    pub geometry_buffer: GeometryBuffer,
+    pub compositor: Compositor,
+
     pub camera_bind_group_layout: wgpu::BindGroupLayout,
 
     pub models: RenderModels,
@@ -21,7 +26,10 @@ pub struct RenderStore {
 }
 
 impl RenderStore {
-    pub fn new(renderer: &Renderer) -> Self {
+    pub fn new(renderer: &Renderer, size: UVec2) -> Self {
+        let geometry_buffer = GeometryBuffer::new(&renderer.device, size);
+        let compositor = Compositor::new(renderer, &geometry_buffer);
+
         let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(renderer);
 
         let models = RenderModels::new();
@@ -30,6 +38,9 @@ impl RenderStore {
         let model_to_render_model = HashMap::default();
 
         Self {
+            geometry_buffer,
+            compositor,
+
             camera_bind_group_layout,
 
             models,

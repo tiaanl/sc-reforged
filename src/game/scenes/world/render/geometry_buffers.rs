@@ -67,7 +67,7 @@ impl Inner {
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("g_buffer_bind_group"),
-            layout: &bind_group_layout,
+            layout: bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -97,6 +97,9 @@ impl Inner {
 
 pub struct GeometryBuffer {
     pub bind_group_layout: wgpu::BindGroupLayout,
+
+    /// The current size of the buffers.
+    pub size: UVec2,
 
     inner: Inner,
 }
@@ -151,12 +154,14 @@ impl GeometryBuffer {
 
         Self {
             bind_group_layout,
+            size,
             inner,
         }
     }
 
     pub fn resize(&mut self, device: &wgpu::Device, size: UVec2) {
         self.inner = Inner::new(device, &self.bind_group_layout, size);
+        self.size = size;
     }
 
     pub fn clear(&self, encoder: &mut wgpu::CommandEncoder, clear_color: Vec3) {
