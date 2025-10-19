@@ -56,7 +56,7 @@ pub struct QuadTree {
 }
 
 impl QuadTree {
-    pub fn from_new_terrain(terrain: &Terrain) -> Self {
+    pub fn from_terrain(terrain: &Terrain) -> Self {
         let mut result = Self::default();
 
         result.root = result.build_new_node(terrain, IVec2::ZERO, terrain.chunk_dim.as_ivec2(), 0);
@@ -270,8 +270,8 @@ impl QuadTree {
                     distance,
                     _world_point: hit_point,
                     _world_normal: normal,
-                    _target: RayCastTarget::TerrainChunk {
-                        _chunk_coord: node.chunk_coord.unwrap(),
+                    target: RayCastTarget::TerrainChunk {
+                        chunk_coord: node.chunk_coord.unwrap(),
                     },
                 });
                 if first_only {
@@ -323,7 +323,7 @@ impl QuadTree {
                         distance,
                         _world_point: hit_point,
                         _world_normal: normal,
-                        _target: RayCastTarget::Object {
+                        target: RayCastTarget::Object {
                             _object: object.handle,
                         },
                     });
@@ -355,7 +355,7 @@ impl QuadTree {
 
 #[derive(Debug)]
 pub enum RayCastTarget {
-    TerrainChunk { _chunk_coord: IVec2 },
+    TerrainChunk { chunk_coord: IVec2 },
     Object { _object: Handle<Object> },
 }
 
@@ -367,5 +367,5 @@ pub struct RayCastHit {
     pub distance: f32,
     pub _world_point: Vec3,
     pub _world_normal: Vec3,
-    pub _target: RayCastTarget,
+    pub target: RayCastTarget,
 }

@@ -19,7 +19,7 @@ use crate::{
 
 pub struct TerrainSystem {
     /// Dimensions of the terrain in chunks.
-    _chunks_dim: UVec2,
+    chunks_dim: UVec2,
 
     /// Buffer holding indices to render a single chunk at various LOD's.
     chunk_indices_buffer: wgpu::Buffer,
@@ -235,7 +235,7 @@ impl TerrainSystem {
 
         let module = renderer
             .device
-            .create_shader_module(wgsl_shader!("new_terrain"));
+            .create_shader_module(wgsl_shader!("terrain"));
 
         let layout = renderer
             .device
@@ -367,7 +367,7 @@ impl TerrainSystem {
         };
 
         Self {
-            _chunks_dim: chunks_dim,
+            chunks_dim,
 
             chunk_indices_buffer,
             _chunk_wireframe_indices_buffer: chunk_wireframe_indices_buffer,
@@ -447,6 +447,7 @@ impl TerrainSystem {
             let center_lod = lod_at(*visible_coord).expect("Center chunk is always valid!");
 
             let mut flags = 0_u32;
+
             let neighbors = [ivec2(0, 1), ivec2(-1, 0), ivec2(0, -1), ivec2(1, 0)]
                 .map(|offset| lod_at(*visible_coord + offset));
             for (i, neighbor_lod) in neighbors.iter().enumerate() {
@@ -454,6 +455,12 @@ impl TerrainSystem {
                 if neighbor_lod.unwrap_or(center_lod) > center_lod {
                     flags |= 1 << i;
                 }
+            }
+
+            // Highlight the chunk.
+            const HIGHLIGHT: u32 = 1 << 15;
+            if sim_world.highlighted_chunks.contains(visible_coord) {
+                flags |= HIGHLIGHT;
             }
 
             let chunk_instance = ChunkInstanceData {
@@ -476,7 +483,7 @@ impl TerrainSystem {
                 };
                 strata_instances.push(chunk_instance);
                 strata_instances_side_count[EAST as usize] += 1;
-            } else if visible_coord.x == self._chunks_dim.x as i32 - 1 {
+            } else if visible_coord.x == self.chunks_dim.x as i32 - 1 {
                 let chunk_instance = ChunkInstanceData {
                     flags: chunk_instance.flags | (WEST << 8),
                     ..chunk_instance
@@ -492,7 +499,7 @@ impl TerrainSystem {
                 };
                 strata_instances.push(chunk_instance);
                 strata_instances_side_count[SOUTH as usize] += 1;
-            } else if visible_coord.y == self._chunks_dim.y as i32 - 1 {
+            } else if visible_coord.y == self.chunks_dim.y as i32 - 1 {
                 let chunk_instance = ChunkInstanceData {
                     flags: chunk_instance.flags | (NORTH << 8),
                     ..chunk_instance

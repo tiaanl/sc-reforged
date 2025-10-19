@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use ahash::HashSet;
 use glam::{IVec2, Quat, UVec2, Vec2, Vec3, Vec4, vec3};
 
 use crate::{
@@ -79,6 +80,8 @@ pub struct SimWorld {
     pub quad_tree: QuadTree,
 
     pub terrain: Terrain,
+    /// A list of chunks that should be highlighted during rendering.
+    pub highlighted_chunks: HashSet<IVec2>,
     /// The visible chunks for the current frame.
     pub visible_chunks: Vec<IVec2>,
 
@@ -131,7 +134,7 @@ impl SimWorld {
             Terrain::new(height_map, terrain_texture)
         };
 
-        let mut quad_tree = QuadTree::from_new_terrain(&terrain);
+        let mut quad_tree = QuadTree::from_terrain(&terrain);
 
         let mut objects = Objects::new()?;
 
@@ -179,6 +182,7 @@ impl SimWorld {
             quad_tree,
 
             terrain,
+            highlighted_chunks: HashSet::default(),
             visible_chunks: Vec::default(),
 
             objects,

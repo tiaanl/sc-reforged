@@ -38,6 +38,7 @@ struct VertexOutput {
     @location(0) world_position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) tex_coord: vec2<f32>,
+    @location(3) flags: u32,
 }
 
 fn get_node(coord: vec2<u32>) -> vec4<f32> {
@@ -52,6 +53,8 @@ const NORTH_FLAG: u32 = (1u << 0u);
 const EAST_FLAG: u32 = (1u << 1u);
 const SOUTH_FLAG: u32 = (1u << 2u);
 const WEST_FLAG: u32 = (1u << 3u);
+
+const HIGHLIGHT_FLAG: u32 = (1u << 15u);
 
 fn get_stitched_node(
     chunk_coord: vec2<u32>,
@@ -132,6 +135,7 @@ fn vertex_terrain(
         world_position,
         normal,
         tex_coord,
+        chunk.flags,
     );
 }
 
@@ -148,6 +152,11 @@ fn fragment_terrain(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuff
         distance,
         1.0,
     );
+
+    if (vertex.flags & HIGHLIGHT_FLAG) == HIGHLIGHT_FLAG {
+        let c = mix(d, vec3<f32>(0.0, 1.0, 0.0), 0.1);
+        return geometry_buffer::to_opaque_geometry_buffer(c);
+    }
 
     return geometry_buffer::to_opaque_geometry_buffer(d);
 }
@@ -206,6 +215,7 @@ fn strata_vertex(
         world_position,
         input.normal,
         tex_coord,
+        chunk.flags,
     );
 }
 
