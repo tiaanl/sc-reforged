@@ -350,22 +350,6 @@ impl winit::application::ApplicationHandler for App {
             }
         }
     }
-
-    fn device_event(
-        &mut self,
-        _event_loop: &winit::event_loop::ActiveEventLoop,
-        _device_id: winit::event::DeviceId,
-        event: winit::event::DeviceEvent,
-    ) {
-        match self {
-            App::Uninitialzed(_) => {
-                tracing::warn!("Can't process events for uninitialized application.");
-            }
-            App::Initialized { input, .. } => {
-                input.handle_device_event(event);
-            }
-        }
-    }
 }
 
 fn main() {

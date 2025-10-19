@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use glam::IVec2;
 use winit::{
-    event::{DeviceEvent, ElementState, MouseScrollDelta, WindowEvent},
+    event::{ElementState, MouseScrollDelta, WindowEvent},
     keyboard::PhysicalKey,
 };
 
@@ -81,8 +81,6 @@ impl InputState {
         }
     }
 
-    pub(crate) fn handle_device_event(&mut self, _event: DeviceEvent) {}
-
     /// Reset data being tracked per frame.
     pub(crate) fn reset_current_frame(&mut self) {
         self.key_just_pressed.clear();
@@ -93,7 +91,7 @@ impl InputState {
 }
 
 impl InputState {
-    pub fn mouse_position(&self) -> Option<IVec2> {
+    pub fn _mouse_position(&self) -> Option<IVec2> {
         self.mouse_position
     }
 
