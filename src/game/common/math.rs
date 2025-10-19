@@ -106,6 +106,24 @@ impl Ray {
     }
 }
 
+pub struct RaySegment {
+    pub ray: Ray,
+    pub distance: f32,
+}
+
+impl RaySegment {
+    #[inline]
+    pub fn is_degenerate(&self) -> bool {
+        self.distance <= 0.0 || self.ray.direction.length_squared() == 0.0
+    }
+
+    #[inline]
+    pub fn t_max(&self) -> f32 {
+        let len = self.ray.direction.length();
+        if len == 0.0 { 0.0 } else { self.distance / len }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Plane {
     pub normal: Vec3,
@@ -158,6 +176,65 @@ impl BoundingBox {
             && center.y + radius <= self.max.y
             && center.z - radius >= self.min.z
             && center.z + radius <= self.max.z
+    }
+
+    /// Return (t_enter, t_exit, enter_normal)
+    pub fn intersect_ray_segment(&self, ray_segment: &RaySegment) -> Option<(f32, f32, Vec3)> {
+        const EPSILON: f32 = 1e-8;
+
+        if ray_segment.is_degenerate() {
+            return None;
+        }
+
+        let mut t_min = f32::NEG_INFINITY;
+        let mut t_max = f32::INFINITY;
+        let mut enter_normal = Vec3::ZERO;
+
+        for axis in 0..3 {
+            let origin = ray_segment.ray.origin[axis];
+            let direction = ray_segment.ray.direction[axis];
+            let min_a = self.min[axis];
+            let max_a = self.max[axis];
+
+            if direction.abs() < EPSILON {
+                // Parallel to slab; must be inside.
+                if origin < min_a || origin > max_a {
+                    return None;
+                }
+                continue;
+            }
+
+            let mut t1 = (min_a - origin) / direction;
+            let mut t2 = (max_a - origin) / direction;
+            let mut normal = Vec3::ZERO;
+            if t1 > t2 {
+                std::mem::swap(&mut t1, &mut t2);
+                normal[axis] = 1.0; // Entering from max-face.
+            } else {
+                normal[axis] = -1.0; // Entering from min-face.
+            }
+
+            if t1 > t_min {
+                t_min = t1;
+                enter_normal = normal;
+            }
+            t_max = t_max.min(t2);
+            if t_min > t_max {
+                return None;
+            }
+        }
+
+        // Clip to segment range.
+        let t_lo = 0.0;
+        let t_hi = ray_segment.t_max();
+        if t_max < t_lo || t_min > t_hi {
+            return None;
+        }
+
+        let t_enter = t_min.max(t_lo);
+        let t_exit = t_max.min(t_hi);
+
+        Some((t_enter, t_exit, enter_normal))
     }
 }
 
@@ -262,5 +339,46 @@ impl BoundingSphere {
 
     pub fn expand_to_include(&mut self, other: &BoundingSphere) {
         *self = self.union(other);
+    }
+
+    pub fn intersect_ray_segment(&self, ray_segment: &RaySegment) -> Option<(f32, Vec3)> {
+        if ray_segment.is_degenerate() {
+            return None;
+        }
+
+        let m = ray_segment.ray.origin - self.center;
+        let a = ray_segment.ray.direction.length_squared();
+        let b = 2.0 * m.dot(ray_segment.ray.direction);
+        let c = m.length_squared() - self.radius * self.radius;
+
+        // Origin inside sphere → treat t=0 as hit.
+        if c <= 0.0 {
+            let normal = (ray_segment.ray.origin - self.center).normalize_or_zero();
+            return Some((0.0, normal));
+        }
+
+        let disc = b * b - 4.0 * a * c;
+        if disc < 0.0 {
+            return None;
+        }
+        let sqrt_disc = disc.sqrt();
+        let inv_2a = 0.5 / a;
+
+        let t1 = (-b - sqrt_disc) * inv_2a;
+        let t2 = (-b + sqrt_disc) * inv_2a;
+
+        let t_max = ray_segment.t_max();
+        let t_hit = if (0.0..=t_max).contains(&t1) {
+            t1
+        } else if (0.0..=t_max).contains(&t2) {
+            t2
+        } else {
+            return None;
+        };
+
+        let p = ray_segment.ray.origin + ray_segment.ray.direction * t_hit;
+        let n = (p - self.center).normalize_or_zero();
+
+        Some((t_hit, n))
     }
 }
