@@ -7,88 +7,87 @@ use super::parser::ConfigLines;
 
 #[derive(Debug, Default)]
 pub struct BodyDefinition {
-    body_type: String,
-    head_model: String,
-    head_map: String,
-    body_model: String,
-    body_map: String,
-    pack_model: String,
-    pack_map: String,
+    pub body_type: String,
+    pub head_model: String,
+    pub head_map: String,
+    pub body_model: String,
+    pub body_map: String,
+    pub pack_model: String,
+    pub pack_map: String,
 }
 
 #[derive(Debug, Default)]
 pub struct Attributes {
-    strength: i32,
-    intelligence: i32,
-    dexterity: i32,
-    endurance: i32,
+    pub strength: i32,
+    pub intelligence: i32,
+    pub dexterity: i32,
+    pub endurance: i32,
 
-    health_max: i32,
-    morale_default: i32,
+    pub health_max: i32,
+    pub morale_default: i32,
 }
 
 #[derive(Debug, Default)]
 pub struct CharacterProfile {
-    character: String,
-    firstname: String,
-    lastname: String,
-    nickname: String,
-    abrev_name: String,
-    default_object_id: i32,
+    pub character: String,
+    pub firstname: String,
+    pub lastname: String,
+    pub nickname: String,
+    pub abrev_name: String,
+    pub default_object_id: i32,
 
-    sound_dir: String,
-    script: String,
+    pub sound_dir: String,
+    pub script: String,
 
-    age: i32,
-    sex: String,
-    nationality: String,
-    height: String,
-    weight: String,
+    pub age: i32,
+    pub sex: String,
+    pub nationality: String,
+    pub height: String,
+    pub weight: String,
 
-    /// Set PLAYER_CHARACTER; This determines if this is a potentially player controlled commando.
-    /// Presence of this line indicates this is true. (defalts to false)
-    player_character: bool,
+    /// This determines if this is a potentially player controlled commando. Presence of this line
+    /// indicates this is true. (defalts to false)
+    pub player_character: bool,
 
-    /// Set ON_INITIAL_ROSTER; This says just that; defaults to false. Should never be true unless
-    /// PLAYER_CHARACTER is also true.
-    on_initial_roster: bool,
+    /// This says just that; defaults to false. Should never be true unless PLAYER_CHARACTER is also
+    /// true.
+    pub on_initial_roster: bool,
 
-    difficulty_scaled: bool,
+    pub difficulty_scaled: bool,
 
     /// Inlcude this flag if we don't want the body to ever gib.
-    persistant: bool,
+    pub persistant: bool,
 
     /// The initial body this character is created with.
-    body_initial: String,
+    pub body_initial: String,
 
     /// NOTE: First body definition is used as the default if a requested body not.
-    body_definitions: HashMap<String, BodyDefinition>,
+    pub body_definitions: HashMap<String, BodyDefinition>,
 
     /// NOTE: ALL Attributes must be defined!
-    attributes: Attributes,
+    pub attributes: Attributes,
 
     /// BASE_USAGE_COST: Starting cost to use per mission; this amount is increased over usage &
     /// skill increases.
-    base_usage_cost: i32,
+    pub base_usage_cost: i32,
 
     /// Specify skill proficiencies. All valid skills are enumerated here.
-    /// NOTE: Spaces aren't allowed in the skill name!
-    ///       Other than using '_' instead of spaces, the skill name should appear as hey appear in
-    ///       the commando window.
-    skills: HashMap<String, i32>,
+    /// NOTE: Spaces aren't allowed in the skill name! Other than using '_' instead of spaces, the
+    ///       skill name should appear as hey appear in the commando window.
+    pub skills: HashMap<String, i32>,
 
     /// Specify abilities.
-    abilities: Vec<String>,
+    pub abilities: Vec<String>,
 
-    give_object: Vec<String>,
-    give_1_object_of_2: Vec<[String; 2]>,
-    give_1_object_of_3: Vec<[String; 3]>,
-    give_1_object_of_4: Vec<[String; 4]>,
+    pub give_object: Vec<String>,
+    pub give_1_object_of_2: Vec<[String; 2]>,
+    pub give_1_object_of_3: Vec<[String; 3]>,
+    pub give_1_object_of_4: Vec<[String; 4]>,
 
-    bottom_bar_face: IVec2,
-    equip_screen_face: IVec2,
+    pub bottom_bar_face: IVec2,
+    pub equip_screen_face: IVec2,
 
-    dossier_lines: Vec<String>,
+    pub dossier_lines: Vec<String>,
 }
 
 #[derive(Default)]
@@ -97,6 +96,10 @@ pub struct CharacterProfiles {
 }
 
 impl CharacterProfiles {
+    pub fn get(&self, name: &str) -> Option<&CharacterProfile> {
+        self.character_profiles.get(name)
+    }
+
     pub fn parse_lines(&mut self, lines: ConfigLines) {
         #[derive(Debug)]
         enum State {
@@ -243,28 +246,3 @@ impl CharacterProfiles {
         }
     }
 }
-
-/*
-match line.key.as_str() {
-                "CHARACTER_BEGIN" => state = State::CharacterProfile(CharacterProfile::default()),
-
-                k if character_profile.is_some() => {
-                    if let Some(character_profile) = character_profile.as_mut() {
-                        match k {
-
-
-                            _ => panic!("Unexpected character key: {line:?}"),
-                        }
-                    }
-                }
-
-                "CHARACTER_END" => {
-                    if let Some(character_profile) = character_profile.take() {
-                        self.character_profiles
-                            .insert(character_profile.character.clone(), character_profile);
-                    }
-                }
-
-                _ =>
-            }
-*/

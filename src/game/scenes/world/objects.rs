@@ -20,6 +20,7 @@ enum ObjectData {
     Biped {
         body_model: Handle<Model>,
         head_model: Handle<Model>,
+        pack_model: Option<Handle<Model>>,
     },
     /// Temporary for use with more complicated objects that is not implemented yet.
     SingleModel {
@@ -41,10 +42,14 @@ impl Object {
             ObjectData::Biped {
                 body_model,
                 head_model,
+                pack_model,
             } => {
                 let transform = self.transform.to_mat4();
                 renderer.render_model(transform, body_model);
                 renderer.render_model(transform, head_model);
+                if let Some(pack_model) = pack_model {
+                    renderer.render_model(transform, pack_model);
+                }
             }
 
             ObjectData::SingleModel { model } => {
@@ -80,7 +85,7 @@ impl Objects {
         transform: Transform,
         object_type: ObjectType,
         name: &str,
-        _title: &str,
+        title: &str,
     ) -> Result<(Handle<Object>, &Object), AssetError> {
         let mut bounding_sphere = BoundingSphere::ZERO;
 
@@ -135,8 +140,26 @@ impl Objects {
             }
 
             ObjectType::Bipedal => {
+                let Some(character_profile) = self.character_profiles.get(title) else {
+                    tracing::warn!("Character profile not found! ({title})");
+                    return Err(AssetError::Custom(
+                        std::path::PathBuf::new(),
+                        String::from("Character profile not found!"),
+                    ));
+                };
+
+                let body_initial = character_profile.body_initial.as_str();
+                let Some(body_definition) = character_profile.body_definitions.get(body_initial)
+                else {
+                    return Err(AssetError::Custom(
+                        std::path::PathBuf::new(),
+                        String::from("Could not find initial body definition!"),
+                    ));
+                };
+
                 let body_model = {
-                    let (handle, model) = models().load_model(ModelName::Body(name.into()))?;
+                    let (handle, model) =
+                        models().load_model(ModelName::Body(body_definition.body_model.clone()))?;
                     self.models_to_prepare.push(handle);
                     bounding_sphere.expand_to_include(&model.bounding_sphere);
                     handle
@@ -144,15 +167,26 @@ impl Objects {
 
                 let head_model = {
                     let (handle, model) =
-                        models().load_model(ModelName::Head(String::from("head_john")))?;
+                        models().load_model(ModelName::Head(body_definition.head_model.clone()))?;
                     self.models_to_prepare.push(handle);
                     bounding_sphere.expand_to_include(&model.bounding_sphere);
                     handle
                 };
 
+                let pack_model = if body_definition.pack_model.is_empty() {
+                    None
+                } else {
+                    let (handle, model) =
+                        models().load_model(ModelName::Misc(String::from("smallpack")))?;
+                    self.models_to_prepare.push(handle);
+                    bounding_sphere.expand_to_include(&model.bounding_sphere);
+                    Some(handle)
+                };
+
                 ObjectData::Biped {
                     body_model,
                     head_model,
+                    pack_model,
                 }
             }
 
