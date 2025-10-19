@@ -214,7 +214,7 @@ impl QuadTree {
         }
     }
 
-    pub fn ray_cast_all_segment(&self, ray_segment: &RaySegment) -> Vec<RayCastHit> {
+    pub fn _ray_cast_all_segment(&self, ray_segment: &RaySegment) -> Vec<RayCastHit> {
         let mut hits = Vec::new();
         self.traverse_segment(self.root, ray_segment, false, &mut hits);
         hits.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
@@ -262,16 +262,16 @@ impl QuadTree {
                 let hit_point = ray_segment.ray.origin + ray_segment.ray.direction * t_hit;
                 let distance = t_hit * ray_segment.ray.direction.length();
                 out_hits.push(RayCastHit {
-                    t_fraction: if ray_segment.t_max() > 0.0 {
+                    _t_fraction: if ray_segment.t_max() > 0.0 {
                         t_hit / ray_segment.t_max()
                     } else {
                         0.0
                     },
                     distance,
-                    world_point: hit_point,
-                    world_normal: normal,
-                    target: RayCastTarget::TerrainChunk {
-                        chunk_coord: node.chunk_coord.unwrap(),
+                    _world_point: hit_point,
+                    _world_normal: normal,
+                    _target: RayCastTarget::TerrainChunk {
+                        _chunk_coord: node.chunk_coord.unwrap(),
                     },
                 });
                 if first_only {
@@ -315,16 +315,16 @@ impl QuadTree {
                     }
 
                     out_hits.push(RayCastHit {
-                        t_fraction: if ray_segment.t_max() > 0.0 {
+                        _t_fraction: if ray_segment.t_max() > 0.0 {
                             t_hit / ray_segment.t_max()
                         } else {
                             0.0
                         },
                         distance,
-                        world_point: hit_point,
-                        world_normal: normal,
-                        target: RayCastTarget::Object {
-                            object: object.handle,
+                        _world_point: hit_point,
+                        _world_normal: normal,
+                        _target: RayCastTarget::Object {
+                            _object: object.handle,
                         },
                     });
 
@@ -355,17 +355,17 @@ impl QuadTree {
 
 #[derive(Debug)]
 pub enum RayCastTarget {
-    TerrainChunk { chunk_coord: IVec2 },
-    Object { object: Handle<Object> },
+    TerrainChunk { _chunk_coord: IVec2 },
+    Object { _object: Handle<Object> },
 }
 
 #[derive(Debug)]
 pub struct RayCastHit {
     /// Fraction along the segment in [0,1]. Useful for depth-sorting UI, etc.
-    pub t_fraction: f32,
+    pub _t_fraction: f32,
     /// World distance from segment.ray.origin to the hit point.
     pub distance: f32,
-    pub world_point: Vec3,
-    pub world_normal: Vec3,
-    pub target: RayCastTarget,
+    pub _world_point: Vec3,
+    pub _world_normal: Vec3,
+    pub _target: RayCastTarget,
 }

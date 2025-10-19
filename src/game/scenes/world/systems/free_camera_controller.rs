@@ -117,7 +117,7 @@ impl CameraController for FreeCameraController {
 
         if input_state.mouse_pressed(self.controls.mouse_button) {
             if let Some(delta) = input_state.mouse_delta() {
-                input.mouse_delta = delta;
+                input.mouse_delta = delta.as_vec2();
             }
         }
 

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use glam::Vec2;
+use glam::IVec2;
 use winit::{
     event::{DeviceEvent, ElementState, MouseScrollDelta, WindowEvent},
     keyboard::PhysicalKey,
@@ -11,11 +11,18 @@ pub use winit::keyboard::KeyCode;
 
 #[derive(Default)]
 pub struct InputState {
-    key_pressed: HashSet<KeyCode>,
-    key_just_pressed: HashSet<KeyCode>,
+    /// The current position of the mouse inside the window client area in pixels. Set to `None` If
+    /// the mouse is not over the client area.
+    mouse_position: Option<IVec2>,
+    last_mouse_position: Option<IVec2>,
+    mouse_delta: Option<IVec2>,
+
     mouse_pressed: HashSet<MouseButton>,
     mouse_just_pressed: HashSet<MouseButton>,
-    mouse_delta: Option<Vec2>,
+
+    key_pressed: HashSet<KeyCode>,
+    key_just_pressed: HashSet<KeyCode>,
+
     wheel_delta: f32,
 }
 
@@ -35,6 +42,32 @@ impl InputState {
                 }
             }
 
+            WindowEvent::CursorMoved {
+                position: winit::dpi::PhysicalPosition { x, y },
+                ..
+            } => {
+                self.last_mouse_position = self.mouse_position;
+                let current = IVec2::new(x as i32, y as i32);
+
+                if let Some(last) = self.last_mouse_position {
+                    self.mouse_delta = Some(last - current);
+                }
+
+                self.mouse_position = Some(current);
+            }
+
+            WindowEvent::CursorLeft { .. } => self.mouse_position = None,
+
+            WindowEvent::MouseWheel { delta, .. } => {
+                let delta = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y,
+                    MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition { y, .. }) => {
+                        y as f32
+                    }
+                };
+                self.wheel_delta = delta;
+            }
+
             WindowEvent::MouseInput { state, button, .. } => {
                 if state.is_pressed() {
                     self.mouse_pressed.insert(button);
@@ -48,22 +81,7 @@ impl InputState {
         }
     }
 
-    pub(crate) fn handle_device_event(&mut self, event: DeviceEvent) {
-        match event {
-            DeviceEvent::MouseMotion { delta: (x, y) } => {
-                let delta = Vec2::new(x as f32, y as f32);
-                if let Some(ref mut mouse_delta) = self.mouse_delta {
-                    *mouse_delta += delta;
-                } else {
-                    self.mouse_delta = Some(delta)
-                }
-            }
-            DeviceEvent::MouseWheel {
-                delta: MouseScrollDelta::LineDelta(_, y),
-            } => self.wheel_delta = y,
-            _ => {}
-        }
-    }
+    pub(crate) fn handle_device_event(&mut self, _event: DeviceEvent) {}
 
     /// Reset data being tracked per frame.
     pub(crate) fn reset_current_frame(&mut self) {
@@ -75,6 +93,10 @@ impl InputState {
 }
 
 impl InputState {
+    pub fn mouse_position(&self) -> Option<IVec2> {
+        self.mouse_position
+    }
+
     pub fn key_pressed(&self, key: KeyCode) -> bool {
         self.key_pressed.contains(&key)
     }
@@ -91,11 +113,11 @@ impl InputState {
         self.mouse_just_pressed.contains(&button)
     }
 
-    pub fn mouse_delta(&self) -> Option<Vec2> {
+    pub fn mouse_delta(&self) -> Option<IVec2> {
         self.mouse_delta
     }
 
-    pub fn wheel_delta(&self) -> f32 {
+    pub fn _wheel_delta(&self) -> f32 {
         self.wheel_delta
     }
 }

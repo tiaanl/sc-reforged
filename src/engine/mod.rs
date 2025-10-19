@@ -8,14 +8,12 @@ pub mod scene;
 pub mod shaders;
 pub mod storage;
 
-pub mod dirty;
 pub mod growing_buffer;
 pub mod tracked;
 pub mod transform;
 
 pub mod prelude {
     pub use super::assets::*;
-    pub use super::dirty::*;
     pub use super::input::*;
     pub use super::mesh::*;
     pub use super::renderer::*;
