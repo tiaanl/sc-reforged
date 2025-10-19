@@ -22,6 +22,7 @@ pub enum ModelName {
     Body(String),
     Head(String),
     Misc(String),
+    BodyDefinition(String, String), // (<profile name>, <body def name>)
 }
 
 pub struct Models {
@@ -79,6 +80,7 @@ impl Models {
             ModelName::Body(name) => PathBuf::from("people").join("bodies").join(name).join(name),
             ModelName::Head(name) => PathBuf::from("people").join("heads").join(name).join(name),
             ModelName::Misc(name) => PathBuf::from("people").join("misc").join(name).join(name),
+            ModelName::BodyDefinition(..) => panic!("Can't load body definition models!"),
         };
 
         let path = PathBuf::from("models").join(path).with_extension("smf");

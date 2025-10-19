@@ -1,13 +1,16 @@
+use std::path::PathBuf;
+
 use crate::{
     engine::{
         prelude::*,
         storage::{Handle, Storage},
     },
     game::{
-        config::{CharacterProfiles, ObjectType},
+        config::{BodyDefinition, CharacterProfiles, ObjectType},
         data_dir::data_dir,
+        image::images,
         math::BoundingSphere,
-        model::Model,
+        model::{Mesh, Model},
         models::{ModelName, models},
         scenes::world::{render::RenderStore, systems::RenderWrapper},
     },
@@ -18,9 +21,7 @@ enum ObjectData {
         model: Handle<Model>,
     },
     Biped {
-        body_model: Handle<Model>,
-        head_model: Handle<Model>,
-        pack_model: Option<Handle<Model>>,
+        model: Handle<Model>,
     },
     /// Temporary for use with more complicated objects that is not implemented yet.
     SingleModel {
@@ -39,17 +40,8 @@ impl Object {
         match self.data {
             ObjectData::Scenery { model } => renderer.render_model(self.transform.to_mat4(), model),
 
-            ObjectData::Biped {
-                body_model,
-                head_model,
-                pack_model,
-            } => {
-                let transform = self.transform.to_mat4();
-                renderer.render_model(transform, body_model);
-                renderer.render_model(transform, head_model);
-                if let Some(pack_model) = pack_model {
-                    renderer.render_model(transform, pack_model);
-                }
+            ObjectData::Biped { model } => {
+                renderer.render_model(self.transform.to_mat4(), model);
             }
 
             ObjectData::SingleModel { model } => {
@@ -157,36 +149,19 @@ impl Objects {
                     ));
                 };
 
-                let body_model = {
-                    let (handle, model) =
-                        models().load_model(ModelName::Body(body_definition.body_model.clone()))?;
-                    self.models_to_prepare.push(handle);
-                    bounding_sphere.expand_to_include(&model.bounding_sphere);
-                    handle
-                };
+                let model = Self::build_body_definition_model(body_definition)?;
+                let model_handle = models().add(
+                    ModelName::BodyDefinition(
+                        character_profile.character.clone(),
+                        body_definition.body_type.clone(),
+                    ),
+                    model,
+                );
 
-                let head_model = {
-                    let (handle, model) =
-                        models().load_model(ModelName::Head(body_definition.head_model.clone()))?;
-                    self.models_to_prepare.push(handle);
-                    bounding_sphere.expand_to_include(&model.bounding_sphere);
-                    handle
-                };
-
-                let pack_model = if body_definition.pack_model.is_empty() {
-                    None
-                } else {
-                    let (handle, model) =
-                        models().load_model(ModelName::Misc(String::from("smallpack")))?;
-                    self.models_to_prepare.push(handle);
-                    bounding_sphere.expand_to_include(&model.bounding_sphere);
-                    Some(handle)
-                };
+                self.models_to_prepare.push(model_handle);
 
                 ObjectData::Biped {
-                    body_model,
-                    head_model,
-                    pack_model,
+                    model: model_handle,
                 }
             }
 
@@ -236,5 +211,62 @@ impl Objects {
                 tracing::warn!("Could not prepare model! ({err})");
             }
         }
+    }
+
+    fn build_body_definition_model(body_definition: &BodyDefinition) -> Result<Model, AssetError> {
+        let (_, body_model) =
+            models().load_model(ModelName::Body(body_definition.body_model.clone()))?;
+        let (_, head_model) =
+            models().load_model(ModelName::Head(body_definition.head_model.clone()))?;
+
+        let mut new_model = Model {
+            skeleton: body_model.skeleton.clone(),
+            meshes: Vec::with_capacity(body_model.meshes.len() + head_model.meshes.len()),
+            collision_boxes: Vec::with_capacity(
+                body_model.collision_boxes.len() + head_model.collision_boxes.len(),
+            ),
+            bounding_sphere: BoundingSphere::ZERO,
+            name_lookup: body_model.name_lookup.clone(),
+        };
+
+        // Merge the body.
+        for mesh in body_model.meshes.iter() {
+            let image_name = body_definition.body_map.clone();
+            let image =
+                images().load_image(PathBuf::from("textures").join("shared").join(&image_name))?;
+            new_model.meshes.push(Mesh {
+                node_index: mesh.node_index,
+                image_name,
+                image,
+                mesh: mesh.mesh.clone(),
+            });
+        }
+        new_model
+            .collision_boxes
+            .extend(body_model.collision_boxes.iter().cloned());
+        new_model
+            .bounding_sphere
+            .expand_to_include(&body_model.bounding_sphere);
+
+        // Merge the head model meshes.
+        for mesh in head_model.meshes.iter() {
+            let image_name = body_definition.head_map.clone();
+            let image =
+                images().load_image(PathBuf::from("textures").join("shared").join(&image_name))?;
+            new_model.meshes.push(Mesh {
+                node_index: mesh.node_index,
+                image_name,
+                image,
+                mesh: mesh.mesh.clone(),
+            });
+        }
+        new_model
+            .collision_boxes
+            .extend(head_model.collision_boxes.iter().cloned());
+        new_model
+            .bounding_sphere
+            .expand_to_include(&head_model.bounding_sphere);
+
+        Ok(new_model)
     }
 }

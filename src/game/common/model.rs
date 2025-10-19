@@ -8,7 +8,7 @@ use shadow_company_tools::smf;
 use crate::{
     engine::{prelude::*, storage::Handle},
     game::{
-        image::{BlendMode, Image, images},
+        image::{Image, images},
         math::BoundingSphere,
         skeleton::{Bone, Skeleton},
     },
@@ -26,11 +26,11 @@ pub struct Model {
     /// A list of all the [Mesh]s contained in this model.
     pub meshes: Vec<Mesh>,
     /// A collection of collision boxes in the model, each associated with a specific node.
-    pub _collision_boxes: Vec<CollisionBox>,
+    pub collision_boxes: Vec<CollisionBox>,
     /// A bounding sphere surrounding all the vertices in the model.
     pub bounding_sphere: BoundingSphere,
     /// Look up node indices according to original node names.
-    pub _name_lookup: NameLookup,
+    pub name_lookup: NameLookup,
 }
 
 impl Model {
@@ -38,15 +38,15 @@ impl Model {
         Self {
             skeleton,
             meshes: Vec::default(),
-            _collision_boxes: Vec::default(),
+            collision_boxes: Vec::default(),
             bounding_sphere: BoundingSphere::ZERO,
-            _name_lookup: HashMap::default(),
+            name_lookup: HashMap::default(),
         }
     }
 
     /// Find a node index for a mesh with the given name.
     pub fn node_index_by_name(&self, name: &str) -> Option<NodeIndex> {
-        self._name_lookup.get(name).cloned()
+        self.name_lookup.get(name).cloned()
     }
 
     /// Clone the meshes from another [Model]'s node to this one. *Does not recurse nodes.*
@@ -94,8 +94,6 @@ pub struct Mesh {
     pub image_name: String,
     /// Handle to the loaded image.
     pub image: Handle<Image>,
-    /// The blend mode to render the image with. (Defaults to the image blend mode).
-    pub blend_mode: BlendMode,
     /// Vertex and index data.
     pub mesh: IndexedMesh<Vertex>,
 }
@@ -190,13 +188,10 @@ impl TryFrom<smf::Model> for Model {
 
                         let image = images().load_image(path)?;
 
-                        let blend_mode = images().get(image).unwrap().blend_mode;
-
                         Ok(Mesh {
                             node_index: node_index as u32,
                             image_name: smf_mesh.texture_name.clone(),
                             image,
-                            blend_mode,
                             mesh,
                         })
                     })
@@ -245,9 +240,9 @@ impl TryFrom<smf::Model> for Model {
         Ok(Model {
             skeleton,
             meshes,
-            _collision_boxes: collision_boxes,
+            collision_boxes,
             bounding_sphere,
-            _name_lookup: names,
+            name_lookup: names,
         })
     }
 }
