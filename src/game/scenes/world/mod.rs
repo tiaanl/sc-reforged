@@ -103,20 +103,6 @@ impl Scene for WorldScene {
             self.systems.update(&mut self.sim_world, &time);
         }
 
-        if input.mouse_just_pressed(MouseButton::Left) {
-            let ray_segment = RaySegment {
-                ray: self.sim_world.camera.generate_ray(Vec2::ZERO),
-                distance: 20_000.0,
-            };
-
-            println!(
-                "hits: {:?}",
-                self.sim_world
-                    .quad_tree
-                    .ray_cast_first_segment(&ray_segment)
-            );
-        }
-
         if input.key_just_pressed(KeyCode::Backquote) {
             self.game_mode = if self.in_editor() {
                 GameMode::Game
