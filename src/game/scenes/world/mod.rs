@@ -208,13 +208,22 @@ impl Scene for WorldScene {
                     }
                 }
 
+                // Terrain
+                {
+                    ui.heading("Terrain");
+                    ui.checkbox(
+                        &mut self.systems.terrain_system.debug_render_terrain_wireframe,
+                        "Render terrain wireframe",
+                    );
+                }
+
                 // Objects
                 {
                     ui.heading("Objects");
                     ui.checkbox(
                         &mut self.systems.objects_system.debug_render_bounding_spheres,
                         "Render bounding spheres",
-                    )
+                    );
                 }
             });
 

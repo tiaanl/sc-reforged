@@ -36,7 +36,7 @@ pub struct Time {
 pub struct Systems {
     camera_system: camera_system::CameraSystem<TopDownCameraController>,
     pub culling: cull_system::CullSystem,
-    terrain_system: terrain_system::TerrainSystem,
+    pub terrain_system: terrain_system::TerrainSystem,
     pub objects_system: objects_system::ObjectsSystem,
     gizmo_system: gizmo_system::GizmoSystem,
 }

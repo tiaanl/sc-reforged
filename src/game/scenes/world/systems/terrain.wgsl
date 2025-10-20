@@ -95,33 +95,27 @@ fn get_stitched_node(
     return normal_and_height;
 }
 
-@vertex
-fn vertex_terrain(
-    @builtin(vertex_index) vertex_index: u32,
+fn make_vertex_terrain(
     chunk: InstanceInput,
+    vertex_index: u32,
+    z_offset: f32,
 ) -> VertexOutput {
-    let node_coord = vec2<u32>(
-        vertex_index % 9,
-        vertex_index / 9,
+    let node_coord = vec2<u32>(vertex_index % 9, vertex_index / 9);
+
+    let abs_node_coord = chunk.coord * 8 + vec2<u32>(
+        node_coord.x << chunk.lod,
+        node_coord.y << chunk.lod,
     );
 
-    let abs_node_coord = chunk.coord * 8 +
-        vec2<u32>(node_coord.x << chunk.lod, node_coord.y << chunk.lod);
-
-    let node = get_stitched_node(
-        chunk.coord,
-        node_coord,
-        abs_node_coord,
-        chunk,
-    );
+    let node = get_stitched_node(chunk.coord, node_coord, abs_node_coord, chunk);
 
     let world_position = vec3<f32>(
         f32(abs_node_coord.x) * u_terrain_data.cell_size,
         f32(abs_node_coord.y) * u_terrain_data.cell_size,
-        node.w, // Height from the height map.
+        node.w + z_offset,
     );
 
-    let normal = node.xyz;  // Normal from the height map.
+    let normal = node.xyz;
 
     let clip_position = u_camera_env.proj_view * vec4<f32>(world_position, 1.0);
 
@@ -137,6 +131,14 @@ fn vertex_terrain(
         tex_coord,
         chunk.flags,
     );
+}
+
+@vertex
+fn vertex_terrain(
+    @builtin(vertex_index) vertex_index: u32,
+    chunk: InstanceInput,
+) -> VertexOutput {
+    return make_vertex_terrain(chunk, vertex_index, 0.0);
 }
 
 @fragment
@@ -234,6 +236,21 @@ fn strata_fragment(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffe
     );
 
     return geometry_buffer::to_opaque_geometry_buffer(d);
+}
+
+@vertex
+fn vertex_wireframe(
+    @builtin(vertex_index) vertex_index: u32,
+    chunk: InstanceInput,
+) -> VertexOutput {
+    return make_vertex_terrain(chunk, vertex_index, 10.0);
+}
+
+@fragment
+fn fragment_wireframe(_vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffer {
+    // Bright green lines, no fog applied so they are clearer.
+    let line_color = vec3<f32>(0.0, 1.0, 0.1);
+    return geometry_buffer::to_opaque_geometry_buffer(line_color);
 }
 
 /// Diffuse + ambient lighting, modulated by shadow visibility.

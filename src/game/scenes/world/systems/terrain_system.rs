@@ -24,7 +24,7 @@ pub struct TerrainSystem {
     /// Buffer holding indices to render a single chunk at various LOD's.
     chunk_indices_buffer: wgpu::Buffer,
     /// Buffer holding indices to render a wireframe over a single chunk of various LOD's.
-    _chunk_wireframe_indices_buffer: wgpu::Buffer,
+    chunk_wireframe_indices_buffer: wgpu::Buffer,
 
     /// Bind group for all terrain GPU resources.
     terrain_bind_group: wgpu::BindGroup,
@@ -35,6 +35,9 @@ pub struct TerrainSystem {
     /// Pipeline to render the terrain chunks.
     terrain_pipeline: wgpu::RenderPipeline,
 
+    /// Pipeline to render the terrain chunks as wireframe.
+    terrain_wireframe_pipeline: wgpu::RenderPipeline,
+
     /// Pipeline to render the stratas.
     strata_pipeline: wgpu::RenderPipeline,
 
@@ -43,13 +46,16 @@ pub struct TerrainSystem {
 
     /// Buffer holding indices for the strata at different sides and lod's.
     strata_index_buffer: wgpu::Buffer,
+
+    /// Debug toggle: render terrain wireframe overlay.
+    pub debug_render_terrain_wireframe: bool,
 }
 
 impl TerrainSystem {
     const STRATA_DESCENT: f32 = -20_000.0;
 
     const INDEX_RANGES: [std::ops::Range<u32>; 4] = [0..384, 384..480, 480..504, 504..510];
-    const _WIREFRAME_INDEX_RANGES: [std::ops::Range<u32>; 4] =
+    const WIREFRAME_INDEX_RANGES: [std::ops::Range<u32>; 4] =
         [0..512, 512..640, 640..672, 672..680];
 
     pub fn new(renderer: &Renderer, render_store: &RenderStore, sim_world: &SimWorld) -> Self {
@@ -290,6 +296,46 @@ impl TerrainSystem {
                     cache: None,
                 });
 
+        let terrain_wireframe_pipeline =
+            renderer
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("terrain_wireframe_pipeline"),
+                    layout: Some(&layout),
+                    vertex: wgpu::VertexState {
+                        module: &module,
+                        entry_point: Some("vertex_wireframe"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers: &[wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<ChunkInstanceData>()
+                                as wgpu::BufferAddress,
+                            step_mode: wgpu::VertexStepMode::Instance,
+                            attributes: &instance_attrs,
+                        }],
+                    },
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::LineList,
+                        cull_mode: None,
+                        ..Default::default()
+                    },
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: wgpu::TextureFormat::Depth32Float,
+                        depth_write_enabled: false,
+                        depth_compare: wgpu::CompareFunction::LessEqual,
+                        stencil: wgpu::StencilState::default(),
+                        bias: wgpu::DepthBiasState::default(),
+                    }),
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module: &module,
+                        entry_point: Some("fragment_wireframe"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        targets: GeometryBuffer::opaque_targets(),
+                    }),
+                    multiview: None,
+                    cache: None,
+                });
+
         let strata_pipeline =
             renderer
                 .device
@@ -312,7 +358,7 @@ impl TerrainSystem {
                                     as wgpu::BufferAddress,
                                 step_mode: wgpu::VertexStepMode::Vertex,
                                 attributes: &wgpu::vertex_attr_array![
-                                    3 => Float32x3,  // normal
+                                    3 => Float32x3, // normal
                                     4 => Uint32x2,  // node_coord
                                 ],
                             },
@@ -321,7 +367,6 @@ impl TerrainSystem {
                     primitive: wgpu::PrimitiveState {
                         topology: wgpu::PrimitiveTopology::TriangleStrip,
                         cull_mode: Some(wgpu::Face::Back),
-                        // polygon_mode: wgpu::PolygonMode::Line,
                         ..Default::default()
                     },
                     depth_stencil: Some(wgpu::DepthStencilState {
@@ -370,17 +415,20 @@ impl TerrainSystem {
             chunks_dim,
 
             chunk_indices_buffer,
-            _chunk_wireframe_indices_buffer: chunk_wireframe_indices_buffer,
+            chunk_wireframe_indices_buffer,
 
             terrain_bind_group,
 
             terrain_pipeline,
+            terrain_wireframe_pipeline,
             strata_pipeline,
 
             strata_vertex_buffer,
             strata_index_buffer,
 
             chunk_lod_cache: HashMap::default(),
+
+            debug_render_terrain_wireframe: false,
         }
     }
 
@@ -582,6 +630,29 @@ impl TerrainSystem {
             let draw_commands = Self::build_draw_commands(
                 &render_world.terrain_chunk_instances,
                 &Self::INDEX_RANGES,
+            );
+
+            for (indices, instances) in draw_commands {
+                if instances.is_empty() {
+                    continue;
+                }
+                render_pass.draw_indexed(indices, 0, instances);
+            }
+        }
+
+        if self.debug_render_terrain_wireframe {
+            render_pass.set_pipeline(&self.terrain_wireframe_pipeline);
+            render_pass.set_vertex_buffer(0, render_world.terrain_chunk_instances_buffer.slice(..));
+            render_pass.set_index_buffer(
+                self.chunk_wireframe_indices_buffer.slice(..),
+                wgpu::IndexFormat::Uint32,
+            );
+            render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
+
+            let draw_commands = Self::build_draw_commands(
+                &render_world.terrain_chunk_instances,
+                &Self::WIREFRAME_INDEX_RANGES,
             );
 
             for (indices, instances) in draw_commands {
