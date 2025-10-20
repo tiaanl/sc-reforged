@@ -1,4 +1,3 @@
-use ahash::HashSet;
 use glam::{UVec2, Vec2};
 
 use crate::{
@@ -18,8 +17,6 @@ use crate::{
 
 pub use cull_system::DebugQuadTreeOptions;
 pub use objects_system::RenderWrapper;
-
-use super::quad_tree::RayCastTarget;
 
 mod camera_system;
 mod clear_render_targets;
@@ -90,18 +87,9 @@ impl Systems {
         self.camera_system.input(sim_world, time, input_state);
 
         if let Some(mouse_position) = input_state.mouse_position() {
-            let camera_ray_segment = sim_world
+            let _camera_ray_segment = sim_world
                 .computed_camera
                 .create_ray_segment(mouse_position.as_uvec2(), viewport_size);
-
-            let hits = sim_world
-                .quad_tree
-                ._ray_cast_all_segment(&camera_ray_segment);
-            let hits = hits.iter().filter_map(|hit| match hit.target {
-                RayCastTarget::TerrainChunk { chunk_coord } => Some(chunk_coord),
-                RayCastTarget::Object { .. } => None,
-            });
-            sim_world.highlighted_chunks = HashSet::from_iter(hits);
         }
     }
 

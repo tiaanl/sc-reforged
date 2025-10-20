@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use crate::game::math::{Ray, ViewProjection};
+use crate::game::math::ViewProjection;
 
-use glam::{Mat4, Quat, Vec2, Vec3};
+use glam::{Mat4, Quat, Vec3};
 
 #[derive(Debug, Default)]
 pub struct Camera {
@@ -40,23 +40,6 @@ impl Camera {
     #[inline]
     pub fn calculate_view_projection(&self) -> ViewProjection {
         ViewProjection::from_projection_view(self.calculate_projection(), self.calculate_view())
-    }
-
-    /// Generates a ray in world space based on the mouse position.
-    pub fn generate_ray(&self, mouse_ndc: Vec2) -> Ray {
-        let ndc = Vec3::new(mouse_ndc.x, mouse_ndc.y, 1.0);
-
-        // TODO: Can we cache the matrices somewhere?
-        let view_projection = self.calculate_view_projection();
-        let world_coords = view_projection.unproject_ndc(ndc);
-
-        let ray_origin = self.position;
-        let ray_direction = (world_coords - ray_origin).normalize();
-
-        Ray {
-            origin: ray_origin,
-            direction: ray_direction,
-        }
     }
 
     pub fn look_at(&mut self, camera_to: Vec3) {

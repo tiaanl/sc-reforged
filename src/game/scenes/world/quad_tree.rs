@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use glam::{IVec2, Vec2, Vec3, ivec2};
 use slab::Slab;
 

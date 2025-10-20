@@ -3,7 +3,6 @@ use crate::{
     game::{
         config::CampaignDef,
         data_dir::data_dir,
-        math::RaySegment,
         scenes::world::{
             game_mode::GameMode,
             render::{RenderStore, RenderWorld},
