@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use ahash::HashMap;
-use glam::{IVec2, UVec2, Vec3, ivec2};
+use glam::{IVec2, UVec2, ivec2};
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -487,7 +487,7 @@ impl TerrainSystem {
                 sim_world.terrain.chunk_at(coord).map(|chunk| {
                     *self.chunk_lod_cache.entry(coord).or_insert({
                         let center = chunk.bounding_box.center();
-                        calculate_lod(camera_position, camera_forward, camera_far, center)
+                        Terrain::calculate_lod(camera_position, camera_forward, camera_far, center)
                     })
                 })
             };
@@ -663,24 +663,6 @@ impl TerrainSystem {
             }
         }
     }
-}
-
-fn calculate_lod(
-    camera_position: Vec3,
-    camera_forward: Vec3,
-    camera_far: f32,
-    chunk_center: Vec3,
-) -> u32 {
-    let far = camera_far.max(1e-6);
-    let inv_step = Terrain::LOD_MAX as f32 / far;
-
-    let forward_distance = (chunk_center - camera_position)
-        .dot(camera_forward)
-        .max(0.0);
-
-    let t = forward_distance * inv_step;
-
-    (t.floor() as i32).clamp(0, (Terrain::LOD_MAX - 1) as i32) as u32
 }
 
 struct ChunkIndices {

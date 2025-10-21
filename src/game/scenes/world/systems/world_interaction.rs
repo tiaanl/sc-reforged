@@ -1,8 +1,8 @@
 use glam::{IVec2, UVec2, Vec4};
 
 use crate::{
-    engine::{gizmos::create_axis, prelude::InputState},
-    game::scenes::world::{sim_world::SimWorld, systems::gizmo_system::GizmoSystem},
+    engine::prelude::InputState,
+    game::scenes::world::{sim_world::SimWorld, terrain::Terrain},
 };
 
 pub struct WorldInteractionSystem;
@@ -17,7 +17,7 @@ impl WorldInteractionSystem {
                 .computed_camera
                 .create_ray_segment(mouse_position.as_uvec2(), viewport_size);
 
-            let mut terrain_chunks = Vec::default();
+            let mut terrain_chunks: Vec<IVec2> = Vec::default();
 
             sim_world
                 .quad_tree
@@ -28,9 +28,21 @@ impl WorldInteractionSystem {
                 });
 
             for chunk_coord in terrain_chunks {
+                let lod = if let Some(chunk) = sim_world.terrain.chunk_at(chunk_coord) {
+                    let center = chunk.bounding_box.center();
+                    Terrain::calculate_lod(
+                        sim_world.computed_camera.position,
+                        sim_world.computed_camera.forward,
+                        sim_world.camera.far,
+                        center,
+                    )
+                } else {
+                    continue;
+                };
+
                 if !sim_world
                     .terrain
-                    .chunk_intersect_ray_segment(chunk_coord, &camera_ray_segment)
+                    .chunk_intersect_ray_segment(chunk_coord, &camera_ray_segment, Some(lod))
                     .is_empty()
                 {
                     sim_world.highlighted_chunks.insert(chunk_coord);

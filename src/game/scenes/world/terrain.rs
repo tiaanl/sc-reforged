@@ -1,4 +1,4 @@
-use glam::{IVec2, UVec2};
+use glam::{IVec2, UVec2, Vec3};
 
 use crate::{
     engine::storage::Handle,
@@ -75,6 +75,7 @@ impl Terrain {
         &self,
         chunk_coord: IVec2,
         ray_segment: &RaySegment,
+        lod: Option<u32>,
     ) -> Vec<RayTriangleHit> {
         let chunk = self.chunk_at(chunk_coord).unwrap();
 
@@ -89,11 +90,14 @@ impl Terrain {
 
         let mut hits = Vec::default();
 
-        for y in chunk._min_node.y..chunk._max_node.y {
-            for x in chunk._min_node.x..chunk._max_node.x {
+        let lod_level = lod.unwrap_or(0).min(Self::LOD_MAX);
+        let step = 1 << lod_level;
+
+        for y in (chunk._min_node.y..chunk._max_node.y).step_by(step as usize) {
+            for x in (chunk._min_node.x..chunk._max_node.x).step_by(step as usize) {
                 let node_coord = IVec2::new(x, y);
                 let vertices =
-                    INDICES.map(|offset| height_map.world_position_at(node_coord + offset));
+                    INDICES.map(|offset| height_map.world_position_at(node_coord + offset * step));
 
                 if let Some(hit) = triangle_intersect_ray_segment(
                     vertices[0],
@@ -119,6 +123,24 @@ impl Terrain {
         hits.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap());
 
         hits
+    }
+
+    pub fn calculate_lod(
+        camera_position: Vec3,
+        camera_forward: Vec3,
+        camera_far: f32,
+        chunk_center: Vec3,
+    ) -> u32 {
+        let far = camera_far.max(1e-6);
+        let inv_step = Self::LOD_MAX as f32 / far;
+
+        let forward_distance = (chunk_center - camera_position)
+            .dot(camera_forward)
+            .max(0.0);
+
+        let t = forward_distance * inv_step;
+
+        (t.floor() as i32).clamp(0, (Self::LOD_MAX - 1) as i32) as u32
     }
 
     fn build_chunks(height_map: &HeightMap, chunk_dim: UVec2) -> Vec<Chunk> {
