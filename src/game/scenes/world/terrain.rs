@@ -71,7 +71,7 @@ impl Terrain {
         self.chunks.get(index)
     }
 
-    fn _ray_segment_intersect_chunk(
+    pub fn chunk_intersect_ray_segment(
         &self,
         chunk_coord: IVec2,
         ray_segment: &RaySegment,
@@ -83,8 +83,8 @@ impl Terrain {
         const INDICES: [IVec2; 4] = [
             IVec2::ZERO,      // bottom-right
             IVec2::new(1, 0), // bottom-left
-            IVec2::new(0, 1), // top-left
-            IVec2::ONE,       // top-right
+            IVec2::ONE,       // top-left
+            IVec2::new(0, 1), // top-right
         ];
 
         let mut hits = Vec::default();
