@@ -347,6 +347,7 @@ impl BoundingSphere {
         *self = self.union(other);
     }
 
+    /// Returns (t, enter_normal).
     pub fn intersect_ray_segment(&self, ray_segment: &RaySegment) -> Option<(f32, Vec3)> {
         if ray_segment.is_degenerate() {
             return None;
@@ -392,6 +393,7 @@ impl BoundingSphere {
 pub struct RayTriangleHit {
     /// Parameter along the ray: hit_point = origin + direction * t
     pub t: f32,
+    /// World position of the intersection.
     pub world_position: Vec3,
     /// (w,u,v) where w = 1 - u - v
     pub barycentric: Vec3,

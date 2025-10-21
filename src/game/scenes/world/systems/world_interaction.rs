@@ -1,6 +1,33 @@
-use glam::{IVec2, UVec2, Vec4};
+use glam::{IVec2, UVec2, Vec3, Vec4};
 
-use crate::{engine::prelude::InputState, game::scenes::world::sim_world::SimWorld};
+use crate::{
+    engine::{prelude::InputState, storage::Handle},
+    game::scenes::world::{objects::Object, sim_world::SimWorld},
+};
+
+#[derive(Debug)]
+pub enum InteractionHit {
+    Terrain {
+        _world_position: Vec3,
+        distance: f32,
+        _chunk_coord: IVec2,
+    },
+    Object {
+        _world_position: Vec3,
+        distance: f32,
+        _object: Handle<Object>,
+    },
+}
+
+impl InteractionHit {
+    pub fn distance(&self) -> f32 {
+        match self {
+            InteractionHit::Terrain { distance, .. } | InteractionHit::Object { distance, .. } => {
+                *distance
+            }
+        }
+    }
+}
 
 pub struct WorldInteractionSystem;
 
@@ -14,23 +41,52 @@ impl WorldInteractionSystem {
                 .computed_camera
                 .create_ray_segment(mouse_position.as_uvec2(), viewport_size);
 
-            let mut terrain_chunks: Vec<IVec2> = Vec::default();
+            let mut hits: Vec<InteractionHit> = Vec::default();
 
             sim_world
                 .quad_tree
                 .with_nodes_ray_segment(&camera_ray_segment, |node| {
                     if let Some(chunk_coord) = node.chunk_coord {
-                        terrain_chunks.push(chunk_coord);
+                        if let Some(hit) = sim_world
+                            .terrain
+                            .chunk_intersect_ray_segment(chunk_coord, &camera_ray_segment)
+                            .first()
+                        {
+                            hits.push(InteractionHit::Terrain {
+                                _world_position: hit.world_position,
+                                distance: hit.t,
+                                _chunk_coord: chunk_coord,
+                            });
+                            sim_world.highlighted_chunks.insert(chunk_coord);
+                        }
+                    }
+
+                    for object_handle in node.objects.iter() {
+                        if let Some(object) = sim_world.objects.get(*object_handle) {
+                            if let Some(hit) = object
+                                .bounding_sphere
+                                .intersect_ray_segment(&camera_ray_segment)
+                            {
+                                hits.push(InteractionHit::Object {
+                                    _world_position: camera_ray_segment.ray.point_at(hit.0),
+                                    distance: hit.0,
+                                    _object: *object_handle,
+                                });
+                            }
+                        }
                     }
                 });
 
-            for chunk_coord in terrain_chunks {
-                if !sim_world
-                    .terrain
-                    .chunk_intersect_ray_segment(chunk_coord, &camera_ray_segment)
-                    .is_empty()
-                {
-                    sim_world.highlighted_chunks.insert(chunk_coord);
+            hits.sort_by(|a, b| a.distance().partial_cmp(&b.distance()).unwrap());
+
+            if let Some(_hit) = hits.first() {
+                match _hit {
+                    InteractionHit::Terrain {
+                        _world_position, ..
+                    } => println!("terrain at {_world_position}"),
+                    InteractionHit::Object {
+                        _world_position, ..
+                    } => println!("object at {_world_position}"),
                 }
             }
         }
