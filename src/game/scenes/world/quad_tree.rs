@@ -4,7 +4,7 @@ use slab::Slab;
 use crate::{
     engine::storage::Handle,
     game::{
-        math::{BoundingBox, BoundingSphere, Frustum},
+        math::{BoundingBox, BoundingSphere, Frustum, RaySegment},
         scenes::world::{objects::Object, terrain::Terrain},
     },
 };
@@ -201,6 +201,36 @@ impl QuadTree {
         if !node.is_leaf {
             for child_id in node.children.iter().flatten() {
                 self.traverse_nodes_in_frustum(*child_id, frustum, f);
+            }
+        }
+    }
+
+    pub fn with_nodes_ray_segment<F>(&self, ray_segment: &RaySegment, mut f: F)
+    where
+        F: FnMut(&Node),
+    {
+        self.traverse_nodes_ray_segment(self.root, ray_segment, &mut f);
+    }
+
+    fn traverse_nodes_ray_segment<F>(&self, node_id: NodeId, ray_segment: &RaySegment, f: &mut F)
+    where
+        F: FnMut(&Node),
+    {
+        let node = &self.nodes[node_id];
+
+        if node
+            .bounding_box()
+            .intersect_ray_segment(ray_segment)
+            .is_none()
+        {
+            return;
+        }
+
+        f(node);
+
+        if !node.is_leaf {
+            for child_id in node.children.iter().flatten() {
+                self.traverse_nodes_ray_segment(*child_id, ray_segment, f);
             }
         }
     }
