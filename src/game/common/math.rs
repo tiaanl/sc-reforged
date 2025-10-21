@@ -86,6 +86,12 @@ pub struct Ray {
 }
 
 impl Ray {
+    pub fn point_at(&self, distance: f32) -> Vec3 {
+        debug_assert!(self.direction.is_normalized());
+
+        self.origin + self.direction * distance
+    }
+
     pub fn intersect_plane(&self, plane: &Plane) -> Option<Vec3> {
         let denom = self.direction.dot(plane.normal);
 
@@ -380,5 +386,109 @@ impl BoundingSphere {
         let n = (p - self.center).normalize_or_zero();
 
         Some((t_hit, n))
+    }
+}
+
+pub struct RayTriangleHit {
+    /// Parameter along the ray: hit_point = origin + direction * t
+    pub t: f32,
+    pub world_position: Vec3,
+    /// (w,u,v) where w = 1 - u - v
+    pub barycentric: Vec3,
+    /// Geometric triangle normal (right-hand cross of edges). Handedness of your world
+    /// doesn't break the math; choose vertex winding to control this direction.
+    pub normal: Vec3,
+    /// True if the ray hits the side the normal points away from (normal·dir < 0).
+    pub front_face: bool,
+}
+
+/// Ray/triangle intersection (Möller–Trumbore).
+/// `cull_backfaces = true` rejects hits from the back side.
+/// Returns `t`, hit position, barycentrics, and a geometric normal.
+pub fn triangle_intersect_ray(
+    v0: Vec3,
+    v1: Vec3,
+    v2: Vec3,
+    ray: &Ray,
+    cull_backfaces: bool,
+) -> Option<RayTriangleHit> {
+    // Edges of the triangle
+    let edge_0_1 = v1 - v0;
+    let edge_0_2 = v2 - v0;
+
+    // Begin calculating determinant — also used to calculate U parameter.
+    let perpendicular_to_direction_and_edge_0_2 = ray.direction.cross(edge_0_2);
+    let determinant = edge_0_1.dot(perpendicular_to_direction_and_edge_0_2);
+
+    // Epsilon tuned for f32; adjust if your scale is extreme.
+    const EPS: f32 = 1e-7;
+
+    if cull_backfaces {
+        if determinant <= EPS {
+            return None;
+        }
+    } else if determinant.abs() <= EPS {
+        // Parallel or degenerate triangle.
+        return None;
+    }
+
+    let inverse_determinant = 1.0 / determinant;
+
+    // Calculate distance from vertex0 to ray origin
+    let origin_to_vertex0 = ray.origin - v0;
+
+    // Calculate U parameter and test bounds
+    let u = origin_to_vertex0.dot(perpendicular_to_direction_and_edge_0_2) * inverse_determinant;
+    if u < 0.0 || u > 1.0 {
+        return None;
+    }
+
+    // Prepare to test V parameter
+    let cross_origin_to_vertex0_and_edge_0_1 = origin_to_vertex0.cross(edge_0_1);
+
+    // Calculate V parameter and test bounds
+    let v = ray.direction.dot(cross_origin_to_vertex0_and_edge_0_1) * inverse_determinant;
+    if v < 0.0 || (u + v) > 1.0 {
+        return None;
+    }
+
+    // Calculate t to intersection point
+    let t = edge_0_2.dot(cross_origin_to_vertex0_and_edge_0_1) * inverse_determinant;
+    if t < 0.0 {
+        return None; // Behind the ray origin
+    }
+
+    let world_position = ray.origin + ray.direction * t;
+
+    // Geometric normal (right-hand cross). If your triangle winding follows your LH world,
+    // you may want to swap the order to flip the normal.
+    let normal = edge_0_1.cross(edge_0_2).normalize_or_zero();
+
+    let front_face = normal.dot(ray.direction) < 0.0;
+    let w = 1.0 - u - v;
+
+    Some(RayTriangleHit {
+        t,
+        world_position,
+        barycentric: Vec3::new(w, u, v),
+        normal,
+        front_face,
+    })
+}
+
+/// Ray *segment*/triangle intersection. Accepts the hit only if `t ∈ [0, segment.distance]`.
+#[inline]
+pub fn triangle_intersect_ray_segment(
+    v0: Vec3,
+    v1: Vec3,
+    v2: Vec3,
+    ray_segment: &RaySegment,
+    cull_backfaces: bool,
+) -> Option<RayTriangleHit> {
+    let hit = triangle_intersect_ray(v0, v1, v2, &ray_segment.ray, cull_backfaces)?;
+    if hit.t <= ray_segment.distance {
+        Some(hit)
+    } else {
+        None
     }
 }

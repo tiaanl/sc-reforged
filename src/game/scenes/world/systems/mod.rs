@@ -27,6 +27,7 @@ mod gizmo_system;
 mod objects_system;
 mod terrain_system;
 mod top_down_camera_controller;
+mod world_interaction;
 
 pub struct Time {
     pub delta_time: f32,
@@ -38,6 +39,7 @@ pub struct Systems {
     pub culling: cull_system::CullSystem,
     pub terrain_system: terrain_system::TerrainSystem,
     pub objects_system: objects_system::ObjectsSystem,
+    world_interaction_system: world_interaction::WorldInteractionSystem,
     gizmo_system: gizmo_system::GizmoSystem,
 }
 
@@ -70,6 +72,7 @@ impl Systems {
             culling: cull_system::CullSystem::default(),
             terrain_system: terrain_system::TerrainSystem::new(renderer, render_store, sim_world),
             objects_system: objects_system::ObjectsSystem::new(renderer, render_store),
+            world_interaction_system: world_interaction::WorldInteractionSystem,
             gizmo_system: gizmo_system::GizmoSystem::new(renderer, render_store),
         }
     }
@@ -85,12 +88,8 @@ impl Systems {
         //       to put it for now.
 
         self.camera_system.input(sim_world, time, input_state);
-
-        if let Some(mouse_position) = input_state.mouse_position() {
-            let _camera_ray_segment = sim_world
-                .computed_camera
-                .create_ray_segment(mouse_position.as_uvec2(), viewport_size);
-        }
+        self.world_interaction_system
+            .input(sim_world, input_state, viewport_size);
     }
 
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {

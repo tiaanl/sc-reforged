@@ -31,9 +31,7 @@ impl CullSystem {
                 sim_world.visible_chunks.push(chunk_coord);
             }
 
-            sim_world
-                .visible_objects
-                .extend(node.objects.iter().map(|entry| entry.handle));
+            sim_world.visible_objects.extend(node.objects.iter());
         });
 
         self.debug_quad_tree(sim_world);

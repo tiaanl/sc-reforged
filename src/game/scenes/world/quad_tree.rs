@@ -1,23 +1,15 @@
-#![allow(unused)]
-
 use glam::{IVec2, Vec2, Vec3, ivec2};
 use slab::Slab;
 
 use crate::{
     engine::storage::Handle,
     game::{
-        math::{BoundingBox, BoundingSphere, Frustum, RaySegment},
+        math::{BoundingBox, BoundingSphere, Frustum},
         scenes::world::{objects::Object, terrain::Terrain},
     },
 };
 
 pub type NodeId = usize;
-
-#[derive(Debug)]
-pub struct ObjectEntry {
-    pub handle: Handle<Object>,
-    pub bounding_sphere: BoundingSphere,
-}
 
 #[derive(Debug)]
 pub struct Node {
@@ -38,7 +30,7 @@ pub struct Node {
     /// If this node is a leaf and wraps a single terrain chunk, it holds the chunk coord.
     pub chunk_coord: Option<IVec2>,
     /// A list of objects who's bounding spheres are fully contained inside this node.
-    pub objects: Vec<ObjectEntry>,
+    pub objects: Vec<Handle<Object>>,
 }
 
 impl Node {
@@ -111,10 +103,7 @@ impl QuadTree {
         if let Some(child_id) = target_child {
             self.insert_object_at(child_id, object, bounding_sphere);
         } else {
-            self.nodes[node_id].objects.push(ObjectEntry {
-                handle: object,
-                bounding_sphere: *bounding_sphere,
-            });
+            self.nodes[node_id].objects.push(object);
         }
     }
 
@@ -194,10 +183,10 @@ impl QuadTree {
     where
         F: FnMut(&Node),
     {
-        self.collect_visible_nodes(self.root, frustum, &mut f);
+        self.traverse_nodes_in_frustum(self.root, frustum, &mut f);
     }
 
-    fn collect_visible_nodes<F>(&self, node_id: NodeId, frustum: &Frustum, f: &mut F)
+    fn traverse_nodes_in_frustum<F>(&self, node_id: NodeId, frustum: &Frustum, f: &mut F)
     where
         F: FnMut(&Node),
     {
@@ -211,129 +200,7 @@ impl QuadTree {
 
         if !node.is_leaf {
             for child_id in node.children.iter().flatten() {
-                self.collect_visible_nodes(*child_id, frustum, f);
-            }
-        }
-    }
-
-    pub fn _ray_cast_all_segment(&self, ray_segment: &RaySegment) -> Vec<RayCastHit> {
-        let mut hits = Vec::new();
-        self.traverse_segment(self.root, ray_segment, false, &mut hits);
-        hits.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
-        hits
-    }
-
-    pub fn ray_cast_first_segment(&self, segment: &RaySegment) -> Option<RayCastHit> {
-        let mut hits = Vec::new();
-        self.traverse_segment(self.root, segment, true, &mut hits);
-        hits.into_iter()
-            .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap())
-    }
-
-    fn traverse_segment(
-        &self,
-        node_id: NodeId,
-        ray_segment: &RaySegment,
-        first_only: bool,
-        out_hits: &mut Vec<RayCastHit>,
-    ) {
-        let bb = self.nodes[node_id].bounding_box();
-
-        let Some((t_entry_node, _t_exit_node, _n)) = bb.intersect_ray_segment(ray_segment) else {
-            return;
-        };
-
-        // Early pruning when we already have a nearer hit and only want the first.
-        if first_only {
-            if let Some(best) = out_hits
-                .iter()
-                .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap())
-            {
-                let entry_distance = t_entry_node * ray_segment.ray.direction.length();
-                if entry_distance > best.distance {
-                    return;
-                }
-            }
-        }
-
-        let node = &self.nodes[node_id];
-
-        // If leaf, consider the terrain chunk AABB as a candidate hit.
-        if node.is_leaf {
-            if let Some((t_hit, _t_exit, normal)) = bb.intersect_ray_segment(ray_segment) {
-                let hit_point = ray_segment.ray.origin + ray_segment.ray.direction * t_hit;
-                let distance = t_hit * ray_segment.ray.direction.length();
-                out_hits.push(RayCastHit {
-                    _t_fraction: if ray_segment.t_max() > 0.0 {
-                        t_hit / ray_segment.t_max()
-                    } else {
-                        0.0
-                    },
-                    distance,
-                    _world_point: hit_point,
-                    _world_normal: normal,
-                    target: RayCastTarget::TerrainChunk {
-                        chunk_coord: node.chunk_coord.unwrap(),
-                    },
-                });
-                if first_only {
-                    return;
-                }
-            }
-        } else {
-            // Visit children front-to-back by entry t.
-            let mut children_hits: Vec<(NodeId, f32)> = Vec::new();
-            for child_id in node.children.iter().flatten().copied() {
-                let child_box = self.nodes[child_id].bounding_box();
-                if let Some((t_enter, _t_exit, _)) = child_box.intersect_ray_segment(ray_segment) {
-                    children_hits.push((child_id, t_enter));
-                }
-            }
-            children_hits.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-            for (child_id, _) in children_hits {
-                self.traverse_segment(child_id, ray_segment, first_only, out_hits);
-                if first_only && !out_hits.is_empty() {
-                    return;
-                }
-            }
-        }
-
-        if !node.objects.is_empty() {
-            for object in node.objects.iter() {
-                let sphere = object.bounding_sphere;
-                if let Some((t_hit, normal)) = sphere.intersect_ray_segment(ray_segment) {
-                    let hit_point = ray_segment.ray.origin + ray_segment.ray.direction * t_hit;
-                    let distance = t_hit * ray_segment.ray.direction.length();
-
-                    if first_only {
-                        if let Some(best) = out_hits
-                            .iter()
-                            .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap())
-                        {
-                            if distance >= best.distance {
-                                continue;
-                            }
-                        }
-                    }
-
-                    out_hits.push(RayCastHit {
-                        _t_fraction: if ray_segment.t_max() > 0.0 {
-                            t_hit / ray_segment.t_max()
-                        } else {
-                            0.0
-                        },
-                        distance,
-                        _world_point: hit_point,
-                        _world_normal: normal,
-                        target: RayCastTarget::Object {
-                            _object: object.handle,
-                        },
-                    });
-
-                    if first_only {
-                        return;
-                    }
-                }
+                self.traverse_nodes_in_frustum(*child_id, frustum, f);
             }
         }
     }
@@ -353,21 +220,4 @@ impl QuadTree {
         }
         print_internal(&self.nodes, self.root, 0);
     }
-}
-
-#[derive(Debug)]
-pub enum RayCastTarget {
-    TerrainChunk { chunk_coord: IVec2 },
-    Object { _object: Handle<Object> },
-}
-
-#[derive(Debug)]
-pub struct RayCastHit {
-    /// Fraction along the segment in [0,1]. Useful for depth-sorting UI, etc.
-    pub _t_fraction: f32,
-    /// World distance from segment.ray.origin to the hit point.
-    pub distance: f32,
-    pub _world_point: Vec3,
-    pub _world_normal: Vec3,
-    pub target: RayCastTarget,
 }

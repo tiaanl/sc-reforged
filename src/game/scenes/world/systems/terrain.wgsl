@@ -243,7 +243,7 @@ fn vertex_wireframe(
     @builtin(vertex_index) vertex_index: u32,
     chunk: InstanceInput,
 ) -> VertexOutput {
-    return make_vertex_terrain(chunk, vertex_index, 10.0);
+    return make_vertex_terrain(chunk, vertex_index, 1.0);
 }
 
 @fragment

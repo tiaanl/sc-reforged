@@ -1,8 +1,12 @@
-use glam::{IVec2, UVec2, ivec2, uvec2};
+use glam::{IVec2, UVec2};
 
 use crate::{
     engine::storage::Handle,
-    game::{image::Image, math::BoundingBox, scenes::world::height_map::HeightMap},
+    game::{
+        image::Image,
+        math::{BoundingBox, RaySegment, RayTriangleHit, triangle_intersect_ray_segment},
+        scenes::world::height_map::HeightMap,
+    },
 };
 
 // Size of each terrain:
@@ -20,6 +24,8 @@ use crate::{
 //   training          64 x 64     8 x 8
 
 pub struct Chunk {
+    pub _min_node: IVec2,
+    pub _max_node: IVec2,
     pub bounding_box: BoundingBox,
 }
 
@@ -42,7 +48,7 @@ impl Terrain {
     pub const NODES_PER_CHUNK: u32 = Self::CELLS_PER_CHUNK + 1;
 
     pub fn new(height_map: HeightMap, terrain_texture: Handle<Image>) -> Self {
-        let chunk_dim = uvec2(
+        let chunk_dim = UVec2::new(
             height_map.size.x.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
             height_map.size.y.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
         );
@@ -65,26 +71,79 @@ impl Terrain {
         self.chunks.get(index)
     }
 
+    fn _ray_segment_intersect_chunk(
+        &self,
+        chunk_coord: IVec2,
+        ray_segment: &RaySegment,
+    ) -> Vec<RayTriangleHit> {
+        let chunk = self.chunk_at(chunk_coord).unwrap();
+
+        let height_map = &self.height_map;
+
+        const INDICES: [IVec2; 4] = [
+            IVec2::ZERO,      // bottom-right
+            IVec2::new(1, 0), // bottom-left
+            IVec2::new(0, 1), // top-left
+            IVec2::ONE,       // top-right
+        ];
+
+        let mut hits = Vec::default();
+
+        for y in chunk._min_node.y..chunk._max_node.y {
+            for x in chunk._min_node.x..chunk._max_node.x {
+                let node_coord = IVec2::new(x, y);
+                let vertices =
+                    INDICES.map(|offset| height_map.world_position_at(node_coord + offset));
+
+                if let Some(hit) = triangle_intersect_ray_segment(
+                    vertices[0],
+                    vertices[1],
+                    vertices[2],
+                    ray_segment,
+                    true,
+                ) {
+                    hits.push(hit);
+                }
+                if let Some(hit) = triangle_intersect_ray_segment(
+                    vertices[2],
+                    vertices[3],
+                    vertices[0],
+                    ray_segment,
+                    true,
+                ) {
+                    hits.push(hit);
+                }
+            }
+        }
+
+        hits.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap());
+
+        hits
+    }
+
     fn build_chunks(height_map: &HeightMap, chunk_dim: UVec2) -> Vec<Chunk> {
         let mut chunks = Vec::with_capacity(chunk_dim.x as usize * chunk_dim.y as usize);
 
         for y in 0..chunk_dim.y {
             for x in 0..chunk_dim.x {
-                let start = uvec2(x * Self::CELLS_PER_CHUNK, y * Self::CELLS_PER_CHUNK).as_ivec2();
-                let end = start + IVec2::splat(Self::CELLS_PER_CHUNK as i32);
+                let min_node =
+                    UVec2::new(x * Self::CELLS_PER_CHUNK, y * Self::CELLS_PER_CHUNK).as_ivec2();
+                let max_node = min_node + IVec2::splat(Self::CELLS_PER_CHUNK as i32);
 
-                let mut min = height_map.world_position_at(start);
-                let mut max = height_map.world_position_at(end);
+                let mut min = height_map.world_position_at(min_node);
+                let mut max = height_map.world_position_at(max_node);
 
-                for yy in start.y..=end.y {
-                    for xx in start.x..=end.x {
-                        let altitude = height_map.node_at(ivec2(xx, yy)).w;
+                for yy in min_node.y..=max_node.y {
+                    for xx in min_node.x..=max_node.x {
+                        let altitude = height_map.node_at(IVec2::new(xx, yy)).w;
                         min.z = min.z.min(altitude);
                         max.z = max.z.max(altitude);
                     }
                 }
 
                 chunks.push(Chunk {
+                    _min_node: min_node,
+                    _max_node: max_node,
                     bounding_box: BoundingBox { min, max },
                 })
             }
