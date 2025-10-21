@@ -1,9 +1,6 @@
 use glam::{IVec2, UVec2, Vec4};
 
-use crate::{
-    engine::prelude::InputState,
-    game::scenes::world::{sim_world::SimWorld, terrain::Terrain},
-};
+use crate::{engine::prelude::InputState, game::scenes::world::sim_world::SimWorld};
 
 pub struct WorldInteractionSystem;
 
@@ -28,21 +25,9 @@ impl WorldInteractionSystem {
                 });
 
             for chunk_coord in terrain_chunks {
-                let lod = if let Some(chunk) = sim_world.terrain.chunk_at(chunk_coord) {
-                    let center = chunk.bounding_box.center();
-                    Terrain::calculate_lod(
-                        sim_world.computed_camera.position,
-                        sim_world.computed_camera.forward,
-                        sim_world.camera.far,
-                        center,
-                    )
-                } else {
-                    continue;
-                };
-
                 if !sim_world
                     .terrain
-                    .chunk_intersect_ray_segment(chunk_coord, &camera_ray_segment, Some(lod))
+                    .chunk_intersect_ray_segment(chunk_coord, &camera_ray_segment)
                     .is_empty()
                 {
                     sim_world.highlighted_chunks.insert(chunk_coord);

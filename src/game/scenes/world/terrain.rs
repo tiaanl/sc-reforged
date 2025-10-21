@@ -75,7 +75,6 @@ impl Terrain {
         &self,
         chunk_coord: IVec2,
         ray_segment: &RaySegment,
-        lod: Option<u32>,
     ) -> Vec<RayTriangleHit> {
         let chunk = self.chunk_at(chunk_coord).unwrap();
 
@@ -90,14 +89,11 @@ impl Terrain {
 
         let mut hits = Vec::default();
 
-        let lod_level = lod.unwrap_or(0).min(Self::LOD_MAX);
-        let step = 1 << lod_level;
-
-        for y in (chunk._min_node.y..chunk._max_node.y).step_by(step as usize) {
-            for x in (chunk._min_node.x..chunk._max_node.x).step_by(step as usize) {
+        for y in chunk._min_node.y..chunk._max_node.y {
+            for x in chunk._min_node.x..chunk._max_node.x {
                 let node_coord = IVec2::new(x, y);
                 let vertices =
-                    INDICES.map(|offset| height_map.world_position_at(node_coord + offset * step));
+                    INDICES.map(|offset| height_map.world_position_at(node_coord + offset));
 
                 if let Some(hit) = triangle_intersect_ray_segment(
                     vertices[0],
