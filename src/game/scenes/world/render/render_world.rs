@@ -35,7 +35,8 @@ pub struct ChunkInstanceData {
 pub struct ModelInstanceData {
     pub transform: [[f32; 4]; 4],
     pub first_node_index: u32,
-    pub _pad: [u32; 3],
+    pub highlight: f32,
+    pub _pad: [u32; 2],
 }
 
 /// Set of data that changes on each frame.

@@ -42,6 +42,7 @@ struct ModelToRender {
     key: RenderKey,
     transform: Mat4,
     first_node_index: RenderNodeIndex,
+    highlight: f32,
 }
 
 /// Wrapper passed to objects so they can specify what they want rendered in the scene.
@@ -51,7 +52,7 @@ pub struct RenderWrapper<'a> {
 }
 
 impl<'a> RenderWrapper<'a> {
-    pub fn render_model(&mut self, transform: Mat4, model: Handle<Model>) {
+    pub fn render_model(&mut self, transform: Mat4, model: Handle<Model>, highlight: f32) {
         let Some(render_model_handle) = self.render_store.render_model_for_model(model) else {
             tracing::warn!("Missing render model for model!");
             return;
@@ -68,6 +69,7 @@ impl<'a> RenderWrapper<'a> {
             },
             transform,
             first_node_index: RenderNodeIndex::Base(render_model.nodes_range.start),
+            highlight,
         });
     }
 }
@@ -125,6 +127,7 @@ impl ObjectsSystem {
                     7 => Float32x4,  // model_mat_2
                     8 => Float32x4,  // model_mat_3
                     9 => Uint32,     // first_node_index
+                    10 => Float32,   // highlight
                 ],
             },
         ];
@@ -236,9 +239,19 @@ impl ObjectsSystem {
         sim_world
             .visible_objects
             .iter()
-            .filter_map(|object_handle| sim_world.objects.get(*object_handle))
-            .for_each(|object| {
-                object.gather_models_to_render(&mut wrapper);
+            .filter_map(|object_handle| {
+                sim_world
+                    .objects
+                    .get(*object_handle)
+                    .map(|o| (o, *object_handle))
+            })
+            .for_each(|(object, handle)| {
+                let highlight = if sim_world.highlighted_objects.contains(&handle) {
+                    0.5
+                } else {
+                    0.0
+                };
+                object.gather_models_to_render(&mut wrapper, highlight);
             });
     }
 
@@ -254,6 +267,7 @@ impl ObjectsSystem {
                 first_node_index: match instance.first_node_index {
                     RenderNodeIndex::Base(i) => i,
                 },
+                highlight: instance.highlight,
                 _pad: Default::default(),
             })
             .collect();

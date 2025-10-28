@@ -86,6 +86,7 @@ pub struct SimWorld {
     pub visible_chunks: Vec<IVec2>,
 
     pub objects: Objects,
+    pub highlighted_objects: HashSet<Handle<Object>>,
 
     /// A list of visible objects this frame.
     pub visible_objects: Vec<Handle<Object>>,
@@ -186,6 +187,7 @@ impl SimWorld {
             visible_chunks: Vec::default(),
 
             objects,
+            highlighted_objects: HashSet::default(),
             visible_objects: Vec::default(),
 
             gizmo_vertices: Vec::with_capacity(1024),

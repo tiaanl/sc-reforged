@@ -45,6 +45,7 @@ struct InstanceInput {
     @location(7) model_mat_2: vec4<f32>,
     @location(8) model_mat_3: vec4<f32>,
     @location(9) first_node_index: u32,
+    @location(10) highlight: f32,
 }
 
 struct VertexOutput {
@@ -53,6 +54,7 @@ struct VertexOutput {
     @location(1) world_normal: vec3<f32>,
     @location(2) tex_coord: vec2<f32>,
     @location(3) texture_data_index: u32,
+    @location(4) highlight: f32,
 }
 
 const NODE_SENTINEL: u32 = 0xFFFFFFFFu;
@@ -107,6 +109,7 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
         world_normal,
         tex_coord,
         texture_data_index,
+        instance.highlight,
     );
 }
 
@@ -126,7 +129,9 @@ fn fragment_opaque(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffe
         1.0,
     );
 
-    return geometry_buffer::to_opaque_geometry_buffer(lit);
+    let h = mix(lit, vec3<f32>(1.0, 0.0, 0.0), vertex.highlight);
+
+    return geometry_buffer::to_opaque_geometry_buffer(h);
 }
 
 @fragment

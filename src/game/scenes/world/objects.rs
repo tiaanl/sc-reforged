@@ -36,16 +36,18 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn gather_models_to_render(&self, renderer: &mut RenderWrapper) {
+    pub fn gather_models_to_render(&self, renderer: &mut RenderWrapper, highlight: f32) {
         match self.data {
-            ObjectData::Scenery { model } => renderer.render_model(self.transform.to_mat4(), model),
+            ObjectData::Scenery { model } => {
+                renderer.render_model(self.transform.to_mat4(), model, highlight)
+            }
 
             ObjectData::Biped { model } => {
-                renderer.render_model(self.transform.to_mat4(), model);
+                renderer.render_model(self.transform.to_mat4(), model, highlight);
             }
 
             ObjectData::SingleModel { model } => {
-                renderer.render_model(self.transform.to_mat4(), model)
+                renderer.render_model(self.transform.to_mat4(), model, highlight)
             }
         }
     }
