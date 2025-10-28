@@ -9,7 +9,7 @@ use crate::{
         prelude::renderer,
         storage::{Handle, Storage},
     },
-    game::{image::BlendMode, math::BoundingSphere, model::Model, models::models},
+    game::{image::BlendMode, model::Model, models::models},
 };
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -39,8 +39,6 @@ pub struct RenderModel {
     pub _additive_range: Range<u32>,
     /// Range for [RenderNode]'s for the model.
     pub nodes_range: Range<u32>,
-    /// A [BoundingSphere] that wraps the entire model. Used for culling.
-    pub _bounding_sphere: BoundingSphere,
 }
 
 pub struct RenderModels {
@@ -218,7 +216,6 @@ impl RenderModels {
             alpha_range,
             _additive_range: additive_range,
             nodes_range,
-            _bounding_sphere: model.bounding_sphere,
         });
 
         Ok(render_model)
