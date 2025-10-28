@@ -9,8 +9,8 @@ use crate::{
         config::{BodyDefinition, CharacterProfiles, ObjectType},
         data_dir::data_dir,
         image::images,
-        math::BoundingSphere,
-        model::{Mesh, Model},
+        math::{BoundingSphere, RaySegment},
+        model::{Mesh, Model, ModelRayHit},
         models::{ModelName, models},
         scenes::world::{render::RenderStore, systems::RenderWrapper},
     },
@@ -48,6 +48,22 @@ impl Object {
                 renderer.render_model(self.transform.to_mat4(), model)
             }
         }
+    }
+
+    /// Intersect this object with a world-space ray segment using the model's collision boxes.
+    /// Returns Some((t, world_position)) for the closest hit, or None if no hit.
+    pub fn ray_intersection(&self, ray_segment: &RaySegment) -> Option<ModelRayHit> {
+        // Quad tree already applied coarse culling; do only fine model test here.
+        let object_to_world = self.transform.to_mat4();
+
+        let model_handle = match &self.data {
+            ObjectData::Scenery { model }
+            | ObjectData::Biped { model }
+            | ObjectData::SingleModel { model } => *model,
+        };
+
+        let model = models().get(model_handle)?;
+        model.intersect_ray_segment_with_transform(object_to_world, ray_segment)
     }
 }
 

@@ -441,7 +441,7 @@ pub fn triangle_intersect_ray(
 
     // Calculate U parameter and test bounds
     let u = origin_to_vertex0.dot(perpendicular_to_direction_and_edge_0_2) * inverse_determinant;
-    if u < 0.0 || u > 1.0 {
+    if !(0.0..=1.0).contains(&u) {
         return None;
     }
 

@@ -1,3 +1,5 @@
+use glam::UVec2;
+
 use crate::{
     engine::prelude::*,
     game::{

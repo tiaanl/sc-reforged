@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use ahash::HashMap;
 use shadow_company_tools::smf;
 
+use crate::game::math::{BoundingBox, Ray, RaySegment};
 use crate::{
     engine::{prelude::*, storage::Handle},
     game::{
@@ -13,6 +14,7 @@ use crate::{
         skeleton::{Bone, Skeleton},
     },
 };
+use glam::{Mat4, Quat, Vec2, Vec3};
 
 pub type NodeIndex = u32;
 
@@ -71,6 +73,103 @@ impl Model {
     /// Remove all the meshes from the specified node.
     pub fn clear_meshes(&mut self, node_index: NodeIndex) {
         self.meshes.retain(|mesh| mesh.node_index != node_index);
+    }
+}
+
+/// Result of a model ray-segment intersection against collision boxes.
+#[derive(Clone, Copy, Debug)]
+pub struct ModelRayHit {
+    /// Parameter along the input ray: `hit = origin + direction * t`.
+    pub t: f32,
+    /// World-space position of the intersection.
+    pub world_position: Vec3,
+    /// World-space surface normal (unit length).
+    pub normal: Vec3,
+    /// Node the collision box belongs to.
+    pub node_index: NodeIndex,
+    /// Index into `Model::collision_boxes`.
+    pub collision_box_index: usize,
+}
+
+impl Model {
+    /// Intersect a world-space ray segment with this model's collision boxes, applying an
+    /// object-to-world transform for the model instance. Returns the closest hit, if any.
+    pub fn intersect_ray_segment_with_transform(
+        &self,
+        object_to_world: Mat4,
+        ray_segment: &RaySegment,
+    ) -> Option<ModelRayHit> {
+        debug_assert!(ray_segment.distance.is_finite());
+        debug_assert!(!ray_segment.is_degenerate());
+        debug_assert!(ray_segment.ray.direction.is_normalized());
+        debug_assert!(!ray_segment.ray.direction.is_nan());
+
+        let world_dir = ray_segment.ray.direction;
+        let t_max_world = ray_segment.t_max(); // equals distance when direction is normalized
+        let world_end = ray_segment.ray.origin + world_dir * t_max_world;
+
+        let mut best: Option<ModelRayHit> = None;
+        let mut best_t = f32::INFINITY;
+
+        for (i, cb) in self.collision_boxes.iter().enumerate() {
+            let node_to_world = object_to_world * self.skeleton.local_transform(cb.node_index);
+            let world_to_node = node_to_world.inverse();
+
+            // Transform the segment endpoints into node-local space.
+            let local_origin = world_to_node.transform_point3(ray_segment.ray.origin);
+            let local_end = world_to_node.transform_point3(world_end);
+            let local_dir = local_end - local_origin;
+
+            // Skip degenerate local rays.
+            let local_len = local_dir.length();
+            debug_assert!(local_len.is_finite());
+            if local_len <= f32::EPSILON {
+                continue;
+            }
+
+            let local_segment = RaySegment {
+                ray: Ray {
+                    origin: local_origin,
+                    direction: local_dir,
+                },
+                distance: local_len,
+            };
+
+            let bbox = BoundingBox {
+                min: cb.min,
+                max: cb.max,
+            };
+
+            if let Some((t_enter_local, _t_exit_local, enter_normal_local)) =
+                bbox.intersect_ray_segment(&local_segment)
+            {
+                // Compute local/world-space hit and normal.
+                let local_hit = local_origin + local_dir * t_enter_local;
+                let world_hit = node_to_world.transform_point3(local_hit);
+                let normal_world = node_to_world
+                    .transform_vector3(enter_normal_local)
+                    .normalize_or_zero();
+
+                // Recover t along the original (normalized) world ray.
+                let delta_world = world_hit - ray_segment.ray.origin;
+                let t_world = delta_world.dot(world_dir);
+
+                // Keep only hits within the segment range and closest first.
+                if (0.0..=t_max_world).contains(&t_world) && t_world < best_t {
+                    best_t = t_world;
+                    debug_assert!(normal_world.is_normalized() || normal_world.length() == 0.0);
+                    best = Some(ModelRayHit {
+                        t: t_world,
+                        world_position: world_hit,
+                        normal: normal_world,
+                        node_index: cb.node_index,
+                        collision_box_index: i,
+                    });
+                }
+            }
+        }
+
+        best
     }
 }
 
