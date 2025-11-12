@@ -1,10 +1,5 @@
-use glam::{Quat, Vec3};
-
-pub struct PoseBone {
-    pub translation: Vec3,
-    pub rotation: Quat,
-}
+use glam::Mat4;
 
 pub struct Pose {
-    pub bones: Vec<PoseBone>,
+    pub bones: Vec<Mat4>,
 }

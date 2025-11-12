@@ -1,67 +1,49 @@
 #![allow(unused)]
 
-pub mod animation;
+use ahash::HashMap;
+
+use crate::{
+    engine::prelude::Transform,
+    game::{common::skeleton::Skeleton, scenes::world::animation::pose::Pose},
+};
+use glam::{Mat3, Mat4, Quat, Vec3, Vec4};
+
+pub mod motion;
 pub mod pose;
-pub mod skeleton;
 
 pub type BoneIndex = u32;
 
 pub const BONE_SENTINEL: BoneIndex = BoneIndex::MAX;
 
-pub fn generate_pose(animation: &animation::Animation, time: f32, looping: bool) -> pose::Pose {
-    let translations = animation
-        .translations
-        .iter()
-        .map(|track| track.sample_sub_frame(time, looping));
+pub fn generate_pose(
+    skeleton: &Skeleton,
+    motion: &motion::Motion,
+    time: f32,
+    looping: bool,
+) -> Pose {
+    let mut bones: Vec<Mat4> = Vec::with_capacity(skeleton.bones.len());
 
-    let rotations = animation
-        .rotations
-        .iter()
-        .map(|track| track.sample_sub_frame(time, looping));
+    for (bone_index, bone) in skeleton.bones.iter().enumerate() {
+        // Get the parent transform.
+        let parent_transform = if bone.parent == u32::MAX {
+            Mat4::IDENTITY
+        } else {
+            bones[bone.parent as usize]
+        };
 
-    pose::Pose {
-        bones: translations
-            .zip(rotations)
-            .map(|(translation, rotation)| pose::PoseBone {
-                translation,
-                rotation,
-            })
-            .collect(),
+        let translation = match motion.translations.get(&bone.id) {
+            Some(t) => t.sample_sub_frame(time, looping),
+            None => bone.transform.translation,
+        };
+        let rotation = match motion.rotations.get(&bone.id) {
+            Some(t) => t.sample_sub_frame(time, looping),
+            None => bone.transform.rotation,
+        };
+
+        let local = Transform::new(translation, rotation).to_mat4();
+
+        bones.push(parent_transform * local);
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use glam::Vec3;
-
-    #[test]
-    fn basic() {
-        let bones = &[
-            skeleton::Bone {
-                name: String::from("root"),
-                parent: BONE_SENTINEL,
-            },
-            skeleton::Bone {
-                name: String::from("bone_l"),
-                parent: 0,
-            },
-            skeleton::Bone {
-                name: String::from("bone_r"),
-                parent: 0,
-            },
-        ];
-        let skeleton = skeleton::Skeleton::from_slice(bones);
-
-        let mut animation = animation::Animation::from_skeleton(&skeleton);
-        animation.translations[0].insert(0, Vec3::splat(0.1));
-        animation.translations[0].insert(9, Vec3::splat(0.9));
-
-        let pose = generate_pose(&animation, 0.0, false);
-        assert_eq!(pose.bones[0].translation, Vec3::splat(0.1));
-
-        let pose = generate_pose(&animation, 9.0, false);
-        assert_eq!(pose.bones[0].translation, Vec3::splat(0.9));
-    }
+    Pose { bones }
 }

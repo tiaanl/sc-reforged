@@ -58,6 +58,7 @@ impl Transform {
         self
     }
 
+    #[inline]
     pub fn to_mat4(&self) -> Mat4 {
         Mat4::from_rotation_translation(self.rotation, self.translation)
     }

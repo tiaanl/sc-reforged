@@ -1,17 +1,21 @@
-use glam::{UVec2, Vec2};
+use glam::{Mat4, UVec2, Vec2, Vec3, Vec4};
 
 use crate::{
     engine::{
+        gizmos::GizmoVertex,
         input::InputState,
         prelude::{Frame, Renderer},
     },
     game::{
         config::Campaign,
+        models::models,
         scenes::world::{
+            animation::{generate_pose, pose::Pose},
             render::{RenderStore, RenderWorld},
             sim_world::SimWorld,
             systems::top_down_camera_controller::TopDownCameraController,
         },
+        skeleton::Skeleton,
     },
 };
 
@@ -52,8 +56,10 @@ impl Systems {
     ) -> Self {
         Self {
             camera_system: camera_system::CameraSystem::new({
-                let camera_from = campaign.view_initial.from.extend(2500.0);
-                let camera_to = campaign.view_initial.to.extend(0.0);
+                // let camera_from = campaign.view_initial.from.extend(2500.0);
+                // let camera_to = campaign.view_initial.to.extend(0.0);
+                let camera_from = Vec3::new(0.0, -2_000.0, 0.0);
+                let camera_to = Vec3::ZERO;
 
                 let dir = (camera_to - camera_from).normalize();
 
@@ -96,6 +102,86 @@ impl Systems {
         self.culling.calculate_visible_chunks(sim_world);
         day_night_cycle_system::increment_time_of_day(sim_world, time);
         self.objects_system.render_gizmos(sim_world);
+
+        if let Some(model) = models().get(sim_world.test_model) {
+            let pose = generate_pose(
+                &model.skeleton,
+                &sim_world.test_motion,
+                sim_world.timer,
+                true,
+            );
+
+            fn draw_bone(
+                skeleton: &Skeleton,
+                pose: &[Mat4],
+                bone_index: u32,
+                origin: &Mat4,
+                gizmo_vertices: &mut Vec<GizmoVertex>,
+                color: Option<Vec4>,
+                level: usize,
+            ) {
+                static COLORS: &[Vec4] = &[
+                    Vec4::new(1.0, 0.0, 0.0, 1.0),
+                    Vec4::new(0.0, 1.0, 0.0, 1.0),
+                    Vec4::new(0.0, 0.0, 1.0, 1.0),
+                    Vec4::new(1.0, 1.0, 0.0, 1.0),
+                    Vec4::new(1.0, 0.0, 1.0, 1.0),
+                    Vec4::new(1.0, 1.0, 1.0, 1.0),
+                ];
+
+                let start = (origin * pose[bone_index as usize]).w_axis.truncate();
+
+                for (index, _) in skeleton
+                    .bones
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, b)| b.parent == bone_index)
+                {
+                    let end = (origin * pose[index]).w_axis.truncate();
+
+                    let this_color = color.unwrap_or(COLORS[level.min(COLORS.len() - 1)]);
+
+                    gizmo_vertices.extend_from_slice(&[
+                        GizmoVertex::new(start, this_color),
+                        GizmoVertex::new(end, this_color),
+                    ]);
+
+                    draw_bone(
+                        skeleton,
+                        pose,
+                        index as u32,
+                        origin,
+                        gizmo_vertices,
+                        color,
+                        level + 1,
+                    );
+                }
+            }
+
+            draw_bone(
+                &model.skeleton,
+                &pose.bones,
+                0,
+                &Mat4::IDENTITY,
+                &mut sim_world.gizmo_vertices,
+                Some(Vec4::new(1.0, 1.0, 1.0, 1.0)),
+                0,
+            );
+
+            let rest_pose: Vec<Mat4> = (0..model.skeleton.bones.len() as u32)
+                .map(|b| model.skeleton.local_transform(b))
+                .collect();
+
+            draw_bone(
+                &model.skeleton,
+                &rest_pose,
+                0,
+                &Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+                &mut sim_world.gizmo_vertices,
+                Some(Vec4::new(0.0, 0.0, 1.0, 1.0)),
+                0,
+            );
+        }
     }
 
     pub fn extract(

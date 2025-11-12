@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use ahash::{HashMap, HashMapExt};
 use shadow_company_tools::bmf;
 
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
         config::{self, CharacterProfiles, TerrainMapping, parser::ConfigLines},
         file_system::file_system,
         image::images,
-        scenes::world::height_map::HeightMap,
+        scenes::world::{animation::motion::Motion, height_map::HeightMap},
     },
     global,
 };
@@ -93,11 +94,56 @@ impl DataDir {
         self.load_config::<config::Mtf>(&path)
     }
 
-    pub fn _load_motion(&self, path: impl AsRef<Path>) -> Result<bmf::Motion, AssetError> {
-        let data = file_system().load(path.as_ref())?;
+    pub fn load_motion(&self, name: &str) -> Result<Motion, AssetError> {
+        use glam::{Quat, Vec3};
 
-        bmf::Motion::read(&mut std::io::Cursor::new(data))
-            .map_err(|err| AssetError::from_io_error(err, path.as_ref()))
+        let path = PathBuf::from("motions").join(name).with_extension("bmf");
+        let data = file_system().load(&path)?;
+
+        let bmf = bmf::Motion::read(&mut std::io::Cursor::new(data))
+            .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
+
+        let bones_len = bmf.bone_ids.len();
+        let mut motion = Motion {
+            bone_ids: bmf.bone_ids.iter().map(|&id| id as _).collect(),
+            translations: HashMap::with_capacity(bones_len),
+            rotations: HashMap::with_capacity(bones_len),
+        };
+
+        fn convert_position(p: Vec3) -> Vec3 {
+            Vec3::new(-p.x, p.y, p.z)
+        }
+
+        fn convert_rotation(q: Quat) -> Quat {
+            Quat::from_xyzw(-q.x, -q.y, -q.z, q.w)
+        }
+
+        for bmf_frame in bmf.key_frames.iter() {
+            let frame_num = bmf_frame.frame;
+
+            for bone_index in 0..bmf_frame.bones.len() {
+                let bone_id = bmf.bone_ids[bone_index];
+                let bone = &bmf_frame.bones[bone_index];
+
+                if let Some(translation) = bone.position {
+                    motion
+                        .translations
+                        .entry(bone_id)
+                        .or_default()
+                        .insert(frame_num, convert_position(translation));
+                }
+
+                if let Some(rotation) = bone.rotation {
+                    motion
+                        .rotations
+                        .entry(bone_id)
+                        .or_default()
+                        .insert(frame_num, convert_rotation(rotation));
+                }
+            }
+        }
+
+        Ok(motion)
     }
 
     pub fn load_character_profiles(&self) -> Result<CharacterProfiles, AssetError> {

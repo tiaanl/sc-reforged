@@ -317,7 +317,7 @@ impl TryFrom<smf::Model> for Model {
                 .map(|node| Bone {
                     parent: node.parent,
                     transform: node.transform.clone(),
-                    _id: node.bone_id,
+                    id: node.bone_id,
                     _name: node.name.clone(),
                 })
                 .collect(),

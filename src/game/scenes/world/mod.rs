@@ -14,7 +14,7 @@ use crate::{
 };
 
 pub mod actions;
-mod animation;
+pub mod animation;
 mod game_mode;
 pub mod height_map;
 mod objects;
@@ -225,6 +225,12 @@ impl Scene for WorldScene {
                     ui.checkbox(
                         &mut self.systems.objects_system.debug_render_bounding_spheres,
                         "Render bounding spheres",
+                    );
+                }
+
+                {
+                    ui.add(
+                        Slider::new(&mut self.sim_world.timer, 0.0..=240.0).drag_value_speed(0.1),
                     );
                 }
             });

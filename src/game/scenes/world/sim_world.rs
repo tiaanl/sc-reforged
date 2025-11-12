@@ -10,7 +10,10 @@ use crate::{
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         math::{Frustum, Ray, RaySegment, ViewProjection},
+        model::Model,
+        models::{ModelName, models},
         scenes::world::{
+            animation::motion::Motion,
             objects::{Object, Objects},
             quad_tree::QuadTree,
             terrain::Terrain,
@@ -92,6 +95,10 @@ pub struct SimWorld {
     pub visible_objects: Vec<Handle<Object>>,
 
     pub gizmo_vertices: Vec<GizmoVertex>,
+
+    pub test_model: Handle<Model>,
+    pub test_motion: Motion,
+    pub timer: f32,
 }
 
 impl SimWorld {
@@ -167,6 +174,9 @@ impl SimWorld {
 
         // quad_tree._print_nodes();
 
+        let (test_model, _) = models().load_model(ModelName::Body(String::from("man1_enemy")))?;
+        let test_motion = data_dir().load_motion("bipedal_stand_idle_smoke")?;
+
         Ok(SimWorld {
             camera: camera::Camera::new(
                 Vec3::ZERO,
@@ -191,6 +201,10 @@ impl SimWorld {
             visible_objects: Vec::default(),
 
             gizmo_vertices: Vec::with_capacity(1024),
+
+            test_model,
+            test_motion,
+            timer: 0.0,
         })
     }
 }

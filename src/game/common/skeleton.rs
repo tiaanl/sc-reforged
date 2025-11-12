@@ -6,7 +6,7 @@ use crate::engine::prelude::Transform;
 pub struct Bone {
     pub parent: u32,
     pub transform: Transform,
-    pub _id: u32,
+    pub id: u32,
     pub _name: String,
 }
 
