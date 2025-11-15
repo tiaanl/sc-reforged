@@ -18,6 +18,7 @@ pub mod animation;
 mod game_mode;
 pub mod height_map;
 mod objects;
+mod orders;
 mod quad_tree;
 mod render;
 mod sim_world;

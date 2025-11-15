@@ -1,0 +1,68 @@
+// 1  -> order_move
+// 3  -> order_move_to_use_vehicle
+// 4  -> order_move_to_attack
+// 5  -> order_move_to_cut_fence
+// 6  -> order_move_to_crawl_through_fence
+// 7  -> order_move_to_climb_wall
+// 8  -> order_move_to_pick_up
+// 9  -> order_move_to_use_structure
+// 10 -> order_move_to_drop_item
+// 11 -> order_move_to_activate_structure
+// 12 -> order_move_to_tranfer_item
+// 13 -> order_move_to_transger_item_weapons_locker
+// 14 -> order_move_to_transfer_item_from_body
+// 15 -> order_move_to_investigate
+// 16 -> order_move_to_use_ladder
+// 17 -> order_move_to_investigate_body
+// 18 -> order_move_to_use_cover
+// 19 -> order_move_to_avoid_vehicle
+// 20 -> order_track
+// 21 -> order_track_to_attack
+// 22 -> order_force_attack
+// 23 -> order_equip_self
+// 24 -> order_unequip_self
+// 25 -> order_move_to_place_item
+// 26 -> order_defensive_attack
+// 27 -> order_info
+// 28 -> order_change_state
+// 29 -> order_exit_structure
+// 30 -> order_use_special_item
+// 31 -> order_track (base; lightweight)
+// 32 -> order_track_to_attack (alt entry)
+// 33 -> order_move_to_place_item (alt entry)
+// 34 -> order_move_to_pick_up (alt entry)
+// 35 -> order_move_to_transfer_item (alt entry)
+// 36 -> order_move_to_transfer_item_weapons_locker (alt entry)
+// 37 -> order_move_to_transfer_item_from_body (alt entry)
+
+pub enum _Order {
+    Move,
+    MoveToUseVehicle,
+    MoveToAttack,
+    MoveToCutFence,
+    MoveToCrawlThroughFence,
+    MoveToClimbWall,
+    MoveToPickUp,
+    MoveToUseStructure,
+    MoveToDropItem,
+    MoveToActivateStructure,
+    MoveToTransferItem,
+    MoveToTransferItemWeaponsLocker,
+    MoveToTransferItemFromBody,
+    MoveToInvestigate,
+    MoveToUseLadder,
+    MoveToInvestigateBody,
+    MoveToUseCover,
+    MoveToAvoidVehicle,
+    Track,
+    TrackToAttack,
+    ForceAttack,
+    EquipSelf,
+    UnequipSelf,
+    MoveToPlaceItem,
+    DefensiveAttack,
+    Info,
+    ChangeState,
+    ExitStructure,
+    UseSpecialItem,
+}
