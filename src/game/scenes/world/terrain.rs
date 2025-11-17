@@ -75,7 +75,7 @@ impl Terrain {
         &self,
         chunk_coord: IVec2,
         ray_segment: &RaySegment,
-    ) -> Vec<RayTriangleHit> {
+    ) -> Option<RayTriangleHit> {
         let chunk = self.chunk_at(chunk_coord).unwrap();
 
         let height_map = &self.height_map;
@@ -87,7 +87,7 @@ impl Terrain {
             IVec2::new(0, 1), // top-right
         ];
 
-        let mut hits = Vec::default();
+        let mut closest: Option<RayTriangleHit> = None;
 
         for y in chunk._min_node.y..chunk._max_node.y {
             for x in chunk._min_node.x..chunk._max_node.x {
@@ -102,7 +102,13 @@ impl Terrain {
                     ray_segment,
                     true,
                 ) {
-                    hits.push(hit);
+                    if let Some(closest_hit) = &closest {
+                        if hit.t < closest_hit.t {
+                            closest = Some(hit);
+                        }
+                    } else {
+                        closest = Some(hit);
+                    }
                 }
                 if let Some(hit) = triangle_intersect_ray_segment(
                     vertices[2],
@@ -111,14 +117,18 @@ impl Terrain {
                     ray_segment,
                     true,
                 ) {
-                    hits.push(hit);
+                    if let Some(closest_hit) = &closest {
+                        if hit.t < closest_hit.t {
+                            closest = Some(hit);
+                        }
+                    } else {
+                        closest = Some(hit);
+                    }
                 }
             }
         }
 
-        hits.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap());
-
-        hits
+        closest
     }
 
     pub fn calculate_lod(
