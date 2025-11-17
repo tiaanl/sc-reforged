@@ -10,7 +10,7 @@ use crate::{
         config::Campaign,
         models::models,
         scenes::world::{
-            animation::{generate_pose, pose::Pose},
+            animation::generate_pose,
             render::{RenderStore, RenderWorld},
             sim_world::SimWorld,
             systems::top_down_camera_controller::TopDownCameraController,
@@ -52,7 +52,7 @@ impl Systems {
         renderer: &Renderer,
         render_store: &RenderStore,
         sim_world: &SimWorld,
-        campaign: &Campaign,
+        _campaign: &Campaign,
     ) -> Self {
         Self {
             camera_system: camera_system::CameraSystem::new({

@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+#![allow(unused)]
 
 mod campaign;
 mod campaign_defs;
