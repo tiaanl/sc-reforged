@@ -1,4 +1,4 @@
-use glam::{IVec2, UVec2, Vec3, Vec4, ivec2};
+use glam::{IVec2, UVec2, Vec2, Vec3, Vec4, ivec2};
 
 pub struct HeightMap {
     /// Amount of nodes in the height map.
@@ -29,7 +29,7 @@ impl HeightMap {
     }
 
     #[inline]
-    pub fn world_position_at(&self, coord: IVec2) -> Vec3 {
+    pub fn world_position_at_node(&self, coord: IVec2) -> Vec3 {
         let altitude = self.node_at(coord).w;
 
         Vec3::new(
@@ -37,6 +37,29 @@ impl HeightMap {
             coord.y as f32 * self.cell_size,
             altitude,
         )
+    }
+
+    /// Return the elevation at the given world space coordinate.
+    pub fn _elevation_at(&self, coord: Vec2) -> f32 {
+        let node_space = (coord / self.cell_size).clamp(
+            Vec2::ZERO,
+            (self.size.as_vec2() - Vec2::ONE).max(Vec2::ZERO),
+        );
+        let base = node_space.floor().as_ivec2();
+        let frac = node_space.fract();
+
+        let max_node = self.size.as_ivec2() - IVec2::ONE;
+        let next = (base + IVec2::ONE).min(max_node);
+
+        let h00 = self.node_at(base).w;
+        let h10 = self.node_at(IVec2::new(next.x, base.y)).w;
+        let h01 = self.node_at(IVec2::new(base.x, next.y)).w;
+        let h11 = self.node_at(next).w;
+
+        let bottom = h00 + (h10 - h00) * frac.x;
+        let top = h01 + (h11 - h01) * frac.x;
+
+        bottom + (top - bottom) * frac.y
     }
 
     fn recalculate_normals(&mut self) {
@@ -53,7 +76,7 @@ impl HeightMap {
                     continue;
                 }
 
-                let center = self.world_position_at(ivec2(x, y));
+                let center = self.world_position_at_node(ivec2(x, y));
 
                 let [north, east, south, west] = [
                     ivec2(x, y + 1),
@@ -61,7 +84,7 @@ impl HeightMap {
                     ivec2(x, y - 1),
                     ivec2(x + 1, y),
                 ]
-                .map(|coord| (center - self.world_position_at(coord)).normalize());
+                .map(|coord| (center - self.world_position_at_node(coord)).normalize());
 
                 let n0 = north.cross(east).normalize();
                 let n1 = east.cross(south).normalize();

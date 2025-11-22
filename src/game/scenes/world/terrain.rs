@@ -93,7 +93,7 @@ impl Terrain {
             for x in chunk._min_node.x..chunk._max_node.x {
                 let node_coord = IVec2::new(x, y);
                 let vertices =
-                    INDICES.map(|offset| height_map.world_position_at(node_coord + offset));
+                    INDICES.map(|offset| height_map.world_position_at_node(node_coord + offset));
 
                 if let Some(hit) = triangle_intersect_ray_segment(
                     vertices[0],
@@ -158,8 +158,8 @@ impl Terrain {
                     UVec2::new(x * Self::CELLS_PER_CHUNK, y * Self::CELLS_PER_CHUNK).as_ivec2();
                 let max_node = min_node + IVec2::splat(Self::CELLS_PER_CHUNK as i32);
 
-                let mut min = height_map.world_position_at(min_node);
-                let mut max = height_map.world_position_at(max_node);
+                let mut min = height_map.world_position_at_node(min_node);
+                let mut max = height_map.world_position_at_node(max_node);
 
                 for yy in min_node.y..=max_node.y {
                     for xx in min_node.x..=max_node.x {

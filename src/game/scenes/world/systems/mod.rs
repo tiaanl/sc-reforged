@@ -52,14 +52,12 @@ impl Systems {
         renderer: &Renderer,
         render_store: &RenderStore,
         sim_world: &SimWorld,
-        _campaign: &Campaign,
+        campaign: &Campaign,
     ) -> Self {
         Self {
             camera_system: camera_system::CameraSystem::new({
-                // let camera_from = campaign.view_initial.from.extend(2500.0);
-                // let camera_to = campaign.view_initial.to.extend(0.0);
-                let camera_from = Vec3::new(0.0, -2_000.0, 0.0);
-                let camera_to = Vec3::ZERO;
+                let camera_from = campaign.view_initial.from.extend(2500.0);
+                let camera_to = campaign.view_initial.to.extend(0.0);
 
                 let dir = (camera_to - camera_from).normalize();
 
