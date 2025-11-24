@@ -19,6 +19,7 @@ pub struct InputState {
 
     mouse_pressed: HashSet<MouseButton>,
     mouse_just_pressed: HashSet<MouseButton>,
+    mouse_just_released: HashSet<MouseButton>,
 
     key_pressed: HashSet<KeyCode>,
     key_just_pressed: HashSet<KeyCode>,
@@ -74,6 +75,7 @@ impl InputState {
                     self.mouse_just_pressed.insert(button);
                 } else {
                     self.mouse_pressed.remove(&button);
+                    self.mouse_just_released.insert(button);
                 }
             }
 
@@ -85,6 +87,7 @@ impl InputState {
     pub(crate) fn reset_current_frame(&mut self) {
         self.key_just_pressed.clear();
         self.mouse_just_pressed.clear();
+        self.mouse_just_released.clear();
         self.mouse_delta = None;
         self.wheel_delta = 0.0;
     }
@@ -107,8 +110,12 @@ impl InputState {
         self.mouse_pressed.contains(&button)
     }
 
-    pub fn _mouse_just_pressed(&self, button: MouseButton) -> bool {
+    pub fn mouse_just_pressed(&self, button: MouseButton) -> bool {
         self.mouse_just_pressed.contains(&button)
+    }
+
+    pub fn mouse_just_released(&self, button: MouseButton) -> bool {
+        self.mouse_just_released.contains(&button)
     }
 
     pub fn mouse_delta(&self) -> Option<IVec2> {

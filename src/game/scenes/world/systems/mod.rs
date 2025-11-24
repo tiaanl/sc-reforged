@@ -31,6 +31,7 @@ mod gizmo_system;
 mod objects_system;
 mod terrain_system;
 mod top_down_camera_controller;
+mod ui_system;
 mod world_interaction;
 
 pub struct Time {
@@ -45,6 +46,7 @@ pub struct Systems {
     pub objects_system: objects_system::ObjectsSystem,
     world_interaction_system: world_interaction::WorldInteractionSystem,
     gizmo_system: gizmo_system::GizmoSystem,
+    ui_system: ui_system::UiSystem,
 }
 
 impl Systems {
@@ -78,6 +80,7 @@ impl Systems {
             objects_system: objects_system::ObjectsSystem::new(renderer, render_store),
             world_interaction_system: world_interaction::WorldInteractionSystem,
             gizmo_system: gizmo_system::GizmoSystem::new(renderer, render_store),
+            ui_system: ui_system::UiSystem,
         }
     }
 
@@ -91,6 +94,7 @@ impl Systems {
         // TODO: Not nice that we have to pass in a `viewport_size` here, but don't know where else
         //       to put it for now.
 
+        self.ui_system.input(sim_world, input_state);
         self.camera_system.input(sim_world, time, input_state);
         self.world_interaction_system
             .input(sim_world, input_state, viewport_size);

@@ -14,7 +14,7 @@ use crate::{
         models::{ModelName, models},
         scenes::world::{
             animation::motion::Motion,
-            sim_world::{objects::Objects, quad_tree::QuadTree},
+            sim_world::{objects::Objects, quad_tree::QuadTree, ui::Ui},
         },
         track::Track,
     },
@@ -24,10 +24,12 @@ mod height_map;
 mod objects;
 mod quad_tree;
 mod terrain;
+mod ui;
 
 pub use height_map::HeightMap;
 pub use objects::Object;
 pub use terrain::Terrain;
+pub use ui::SelectionRect;
 
 /// Holds data for the sun and fog values throughout the day and night.
 #[derive(Default)]
@@ -106,6 +108,8 @@ pub struct SimWorld {
     pub test_model: Handle<Model>,
     pub test_motion: Motion,
     pub timer: f32,
+
+    pub ui: Ui,
 }
 
 impl SimWorld {
@@ -184,6 +188,8 @@ impl SimWorld {
         let (test_model, _) = models().load_model(ModelName::Body(String::from("man1_enemy")))?;
         let test_motion = data_dir().load_motion("bipedal_stand_idle_smoke")?;
 
+        let ui = Ui::new();
+
         Ok(SimWorld {
             camera: camera::Camera::new(
                 Vec3::ZERO,
@@ -212,6 +218,8 @@ impl SimWorld {
             test_model,
             test_motion,
             timer: 0.0,
+
+            ui,
         })
     }
 }
