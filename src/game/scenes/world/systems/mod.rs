@@ -80,7 +80,7 @@ impl Systems {
             objects_system: objects_system::ObjectsSystem::new(renderer, render_store),
             world_interaction_system: world_interaction::WorldInteractionSystem,
             gizmo_system: gizmo_system::GizmoSystem::new(renderer, render_store),
-            ui_system: ui_system::UiSystem,
+            ui_system: ui_system::UiSystem::new(renderer, render_store),
         }
     }
 
@@ -191,6 +191,7 @@ impl Systems {
         sim_world: &mut SimWorld,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
+        viewport_size: UVec2,
     ) {
         self.camera_system.extract(sim_world, render_world);
         self.terrain_system.extract(sim_world, render_world);
@@ -200,6 +201,9 @@ impl Systems {
         sim_world.objects.prepare_models(render_store);
 
         self.objects_system.extract(sim_world, render_store);
+
+        self.ui_system
+            .extract(sim_world, render_store, render_world, viewport_size);
     }
 
     pub fn prepare(
@@ -219,6 +223,8 @@ impl Systems {
         self.terrain_system.prepare(render_world, renderer);
         self.objects_system.prepare(render_world, renderer);
         self.gizmo_system.prepare(render_world, renderer);
+
+        self.ui_system.prepare(render_world, renderer);
     }
 
     pub fn queue(
@@ -246,5 +252,7 @@ impl Systems {
             .render(frame, &render_store.geometry_buffer);
 
         self.gizmo_system.queue(render_world, frame);
+
+        self.ui_system.queue(render_world, frame);
     }
 }

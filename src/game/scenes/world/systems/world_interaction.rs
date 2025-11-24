@@ -45,18 +45,22 @@ impl WorldInteractionSystem {
         sim_world.highlighted_objects.clear();
         let _color = Vec4::new(1.0, 0.0, 0.0, 1.0);
 
-        if let Some(mouse_position) = input_state.mouse_position() {
-            let camera_ray_segment = sim_world
-                .computed_camera
-                .create_ray_segment(mouse_position.as_uvec2(), viewport_size);
+        if false {
+            if let Some(mouse_position) = input_state.mouse_position() {
+                let camera_ray_segment = sim_world
+                    .computed_camera
+                    .create_ray_segment(mouse_position.as_uvec2(), viewport_size);
 
-            if let Some(hit) = Self::get_interaction_hit(sim_world, &camera_ray_segment, |_| true) {
-                match hit {
-                    InteractionHit::Terrain { chunk_coord, .. } => {
-                        sim_world.highlighted_chunks.insert(chunk_coord);
-                    }
-                    InteractionHit::Object { object, .. } => {
-                        sim_world.highlighted_objects.insert(object);
+                if let Some(hit) =
+                    Self::get_interaction_hit(sim_world, &camera_ray_segment, |_| true)
+                {
+                    match hit {
+                        InteractionHit::Terrain { chunk_coord, .. } => {
+                            sim_world.highlighted_chunks.insert(chunk_coord);
+                        }
+                        InteractionHit::Object { object, .. } => {
+                            sim_world.highlighted_objects.insert(object);
+                        }
                     }
                 }
             }

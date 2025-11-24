@@ -131,8 +131,12 @@ impl Scene for WorldScene {
         // Systems
         {
             let start = std::time::Instant::now();
-            self.systems
-                .extract(&mut self.sim_world, &mut self.render_store, render_world);
+            self.systems.extract(
+                &mut self.sim_world,
+                &mut self.render_store,
+                render_world,
+                frame.size,
+            );
             frame_time.extract = (std::time::Instant::now() - start).as_secs_f64();
 
             let start = std::time::Instant::now();

@@ -239,6 +239,7 @@ impl winit::application::ApplicationHandler for App {
                                 encoder,
                                 surface,
                                 frame_index: *frame_index,
+                                size: renderer().surface.size(),
                             };
 
                             {

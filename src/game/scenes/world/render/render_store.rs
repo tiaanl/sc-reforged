@@ -17,6 +17,7 @@ pub struct RenderStore {
     pub compositor: Compositor,
 
     pub camera_bind_group_layout: wgpu::BindGroupLayout,
+    pub ui_state_bind_group_layout: wgpu::BindGroupLayout,
 
     pub models: RenderModels,
     pub textures: RenderTextures,
@@ -31,6 +32,7 @@ impl RenderStore {
         let compositor = Compositor::new(renderer, &geometry_buffer);
 
         let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(renderer);
+        let ui_state_bind_group_layout = RenderWorld::create_ui_state_bind_group_layout(renderer);
 
         let models = RenderModels::new();
         let textures = RenderTextures::new();
@@ -42,6 +44,7 @@ impl RenderStore {
             compositor,
 
             camera_bind_group_layout,
+            ui_state_bind_group_layout,
 
             models,
             textures,

@@ -26,6 +26,7 @@ const SHADERS: &[&str] = &[
     "src/game/scenes/world/render/compositor.wgsl",
     "src/game/scenes/world/systems/terrain.wgsl",
     "src/game/scenes/world/systems/objects.wgsl",
+    "src/game/scenes/world/systems/ui_rect.wgsl",
 ];
 
 fn compile_shaders() {

@@ -210,4 +210,7 @@ pub struct Frame {
 
     /// The index of the frame being rendered.
     pub frame_index: usize,
+
+    /// The size of the surface.
+    pub size: UVec2,
 }

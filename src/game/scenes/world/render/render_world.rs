@@ -39,6 +39,20 @@ pub struct ModelInstanceData {
     pub _pad: [u32; 2],
 }
 
+#[derive(Clone, Copy, Debug, Default, NoUninit)]
+#[repr(C)]
+pub struct UiState {
+    pub view_proj: [[f32; 4]; 4],
+}
+
+#[derive(Clone, Copy, Debug, Default, NoUninit)]
+#[repr(C)]
+pub struct UiRect {
+    pub min: [f32; 2],
+    pub max: [f32; 2],
+    pub color: [f32; 4],
+}
+
 /// Set of data that changes on each frame.
 pub struct RenderWorld {
     pub camera_env: CameraEnvironment,
@@ -63,6 +77,13 @@ pub struct RenderWorld {
 
     pub gizmo_vertices: Vec<GizmoVertex>,
     pub gizmo_vertices_buffer: GrowingBuffer<GizmoVertex>,
+
+    pub ui_state: UiState,
+    pub ui_state_buffer: wgpu::Buffer,
+    pub ui_state_bind_group: wgpu::BindGroup,
+
+    pub ui_rects: Vec<UiRect>,
+    pub ui_rects_buffer: GrowingBuffer<UiRect>,
 }
 
 impl RenderWorld {
@@ -118,6 +139,31 @@ impl RenderWorld {
             format!("gizmo_vertices:{index}"),
         );
 
+        let ui_state_buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("ui_state_buffer"),
+            size: std::mem::size_of::<UiState>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+            mapped_at_creation: false,
+        });
+
+        let ui_state_bind_group = renderer
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(&format!("ui_state_bind_group_{index}")),
+                layout: &render_store.ui_state_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: ui_state_buffer.as_entire_binding(),
+                }],
+            });
+
+        let ui_rects_buffer = GrowingBuffer::new(
+            renderer,
+            1024,
+            wgpu::BufferUsages::VERTEX,
+            format!("ui_rects_buffer:{index}"),
+        );
+
         Self {
             camera_env: CameraEnvironment::default(),
             camera_env_buffer,
@@ -134,6 +180,12 @@ impl RenderWorld {
 
             gizmo_vertices,
             gizmo_vertices_buffer,
+
+            ui_state: UiState::default(),
+            ui_state_buffer,
+            ui_state_bind_group,
+            ui_rects: Vec::default(),
+            ui_rects_buffer,
         }
     }
 
@@ -145,6 +197,24 @@ impl RenderWorld {
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            })
+    }
+
+    pub fn create_ui_state_bind_group_layout(renderer: &Renderer) -> wgpu::BindGroupLayout {
+        renderer
+            .device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("ui_state_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
