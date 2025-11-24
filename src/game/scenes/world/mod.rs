@@ -25,6 +25,15 @@ mod sim_world;
 mod systems;
 mod terrain;
 
+#[derive(Clone, Copy, Debug, Default)]
+struct FrameTime {
+    input: f64,
+    update: f64,
+    extract: f64,
+    prepare: f64,
+    queue: f64,
+}
+
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
     sim_world: SimWorld,
@@ -36,8 +45,7 @@ pub struct WorldScene {
 
     game_mode: GameMode,
 
-    last_frame_time: std::time::Instant,
-    fps_history: Vec<f32>,
+    fps_history: Vec<FrameTime>,
     fps_history_cursor: usize,
 }
 
@@ -49,7 +57,7 @@ impl WorldScene {
 
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
 
-        let fps_history = vec![0.0; 100];
+        let fps_history = vec![FrameTime::default(); 100];
         let fps_history_cursor = 0;
 
         let sim_world = SimWorld::new(&campaign_def)?;
@@ -73,7 +81,6 @@ impl WorldScene {
 
             game_mode: GameMode::Editor,
 
-            last_frame_time: std::time::Instant::now(),
             fps_history,
             fps_history_cursor,
         })
@@ -95,14 +102,21 @@ impl Scene for WorldScene {
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
+        let frame_time = &mut self.fps_history[self.fps_history_cursor];
+
         // Run systems
         {
             let time = systems::Time { delta_time };
             let viewport_size = renderer().surface.size();
 
+            let start = std::time::Instant::now();
             self.systems
                 .input(&mut self.sim_world, &time, input, viewport_size);
+            frame_time.input = (std::time::Instant::now() - start).as_secs_f64();
+
+            let start = std::time::Instant::now();
             self.systems.update(&mut self.sim_world, &time);
+            frame_time.update = (std::time::Instant::now() - start).as_secs_f64();
         }
 
         if input.key_just_pressed(KeyCode::Backquote) {
@@ -117,20 +131,25 @@ impl Scene for WorldScene {
     fn render(&mut self, frame: &mut Frame) {
         let render_world = &mut self.render_worlds[frame.frame_index % Self::RENDER_FRAME_COUNT];
 
+        let frame_time = &mut self.fps_history[self.fps_history_cursor];
+
         // Systems
         {
+            let start = std::time::Instant::now();
             self.systems
                 .extract(&mut self.sim_world, &mut self.render_store, render_world);
+            frame_time.extract = (std::time::Instant::now() - start).as_secs_f64();
+
+            let start = std::time::Instant::now();
             self.systems
                 .prepare(&mut self.render_store, render_world, renderer());
+            frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
+
+            let start = std::time::Instant::now();
             self.systems.queue(&self.render_store, render_world, frame);
+            frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
         }
 
-        let now = std::time::Instant::now();
-        let render_time = now - self.last_frame_time;
-        self.last_frame_time = now;
-
-        self.fps_history[self.fps_history_cursor] = render_time.as_secs_f32();
         self.fps_history_cursor = (self.fps_history_cursor + 1) % self.fps_history.len();
     }
 
@@ -248,23 +267,43 @@ impl Scene for WorldScene {
 
                 let bar_width = rect.width() / self.fps_history.len() as f32;
 
-                let fps_range = 288.0;
+                let scale = rect.height() as f64 / (1.0 / 288.0);
+
+                const COLORS: &[egui::Color32] = &[
+                    egui::Color32::from_rgb(255, 0, 0),
+                    egui::Color32::from_rgb(0, 255, 0),
+                    egui::Color32::from_rgb(0, 0, 255),
+                    egui::Color32::from_rgb(255, 255, 0),
+                    egui::Color32::from_rgb(255, 0, 255),
+                ];
 
                 for i in 0..self.fps_history.len() {
-                    let value =
+                    let frame_time =
                         self.fps_history[(self.fps_history_cursor + i) % self.fps_history.len()];
 
                     let left = rect.left() + i as f32 * bar_width;
                     let right = rect.left() + (i + 1) as f32 * bar_width;
 
-                    let bottom = rect.bottom();
-                    let top = bottom - rect.height() * ((1.0 / value) / fps_range);
+                    let mut bottom = rect.bottom();
 
-                    let bar_rect = egui::Rect::from_min_max(
-                        egui::Pos2::new(left, top),
-                        egui::Pos2::new(right, bottom),
-                    );
-                    painter.rect_filled(bar_rect, 0.0, egui::Color32::RED);
+                    for (c, value) in [
+                        frame_time.input,
+                        frame_time.update,
+                        frame_time.extract,
+                        frame_time.prepare,
+                        frame_time.queue,
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        let top = bottom - (value * scale) as f32;
+                        let bar_rect = egui::Rect::from_min_max(
+                            egui::Pos2::new(left, top),
+                            egui::Pos2::new(right, bottom),
+                        );
+                        painter.rect_filled(bar_rect, 0.0, COLORS[c % COLORS.len()]);
+                        bottom = top;
+                    }
                 }
 
                 let line_pos = rect.bottom() - (rect.bottom() - rect.top()) * 0.5;

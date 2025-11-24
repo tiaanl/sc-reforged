@@ -256,34 +256,6 @@ impl winit::application::ApplicationHandler for App {
                                     |ctx| {
                                         ctx.set_pixels_per_point(1.2);
 
-                                        egui::Area::new(egui::Id::new("engine_info")).show(
-                                            ctx,
-                                            |ui| {
-                                                let fps_label = {
-                                                    let text = egui::WidgetText::RichText(
-                                                        egui::RichText::new(format!(
-                                                            "{:3.1}",
-                                                            1.0 / last_frame_duration.as_secs_f64(),
-                                                        )),
-                                                    )
-                                                    .background_color(
-                                                        egui::Color32::from_rgba_premultiplied(
-                                                            0, 0, 0, 127,
-                                                        ),
-                                                    )
-                                                    .monospace();
-                                                    egui::Label::new(
-                                                        text.color(egui::Color32::WHITE),
-                                                    )
-                                                    .wrap_mode(egui::TextWrapMode::Extend)
-                                                };
-
-                                                use egui::Widget;
-
-                                                fps_label.ui(ui);
-                                            },
-                                        );
-
                                         // Debug stuff from the scene.
                                         scene.debug_panel(ctx, frame.frame_index);
                                     },
