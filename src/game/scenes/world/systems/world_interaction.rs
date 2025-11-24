@@ -4,7 +4,7 @@ use crate::{
     engine::{prelude::InputState, storage::Handle},
     game::{
         math::RaySegment,
-        scenes::world::{objects::Object, sim_world::SimWorld},
+        scenes::world::sim_world::{Object, SimWorld},
     },
 };
 

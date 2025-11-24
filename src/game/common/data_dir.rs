@@ -10,7 +10,7 @@ use crate::{
         config::{self, CharacterProfiles, TerrainMapping, parser::ConfigLines},
         file_system::file_system,
         image::images,
-        scenes::world::{animation::motion::Motion, height_map::HeightMap},
+        scenes::world::{animation::motion::Motion, sim_world::HeightMap},
     },
     global,
 };

@@ -14,13 +14,20 @@ use crate::{
         models::{ModelName, models},
         scenes::world::{
             animation::motion::Motion,
-            objects::{Object, Objects},
-            quad_tree::QuadTree,
-            terrain::Terrain,
+            sim_world::{objects::Objects, quad_tree::QuadTree},
         },
         track::Track,
     },
 };
+
+mod height_map;
+mod objects;
+mod quad_tree;
+mod terrain;
+
+pub use height_map::HeightMap;
+pub use objects::Object;
+pub use terrain::Terrain;
 
 /// Holds data for the sun and fog values throughout the day and night.
 #[derive(Default)]

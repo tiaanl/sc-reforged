@@ -5,9 +5,10 @@ use crate::{
     game::{
         image::Image,
         math::{BoundingBox, RaySegment, RayTriangleHit, triangle_intersect_ray_segment},
-        scenes::world::height_map::HeightMap,
     },
 };
+
+use super::height_map::HeightMap;
 
 // Size of each terrain:
 //

@@ -3,11 +3,10 @@ use slab::Slab;
 
 use crate::{
     engine::storage::Handle,
-    game::{
-        math::{BoundingBox, BoundingSphere, Frustum, RaySegment},
-        scenes::world::{objects::Object, terrain::Terrain},
-    },
+    game::math::{BoundingBox, BoundingSphere, Frustum, RaySegment},
 };
+
+use super::{objects::Object, terrain::Terrain};
 
 pub type NodeId = usize;
 

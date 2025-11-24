@@ -16,14 +16,9 @@ use crate::{
 pub mod actions;
 pub mod animation;
 mod game_mode;
-pub mod height_map;
-mod objects;
-mod orders;
-mod quad_tree;
 mod render;
-mod sim_world;
+pub mod sim_world;
 mod systems;
-mod terrain;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct FrameTime {
