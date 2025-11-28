@@ -4,7 +4,7 @@ use crate::{
     engine::{prelude::InputState, storage::Handle},
     game::{
         math::RaySegment,
-        scenes::world::sim_world::{Object, SimWorld},
+        scenes::world::sim_world::{Object, SimWorld, UiRect},
     },
 };
 
@@ -37,19 +37,48 @@ impl InteractionHit {
     }
 }
 
-pub struct WorldInteractionSystem;
+pub struct SelectionRect {
+    /// The position where the rect was dragged from.
+    pub pos: UVec2,
+    /// The current size of the rect. We use an IVec, because we store negative
+    /// size if the rect ends above or left of the `start_drag` location.
+    pub size: IVec2,
+}
+
+#[derive(Default)]
+pub struct WorldInteractionSystem {
+    selection_rect: Option<SelectionRect>,
+}
 
 impl WorldInteractionSystem {
-    pub fn input(&self, sim_world: &mut SimWorld, input_state: &InputState, viewport_size: UVec2) {
-        sim_world.highlighted_chunks.clear();
-        sim_world.highlighted_objects.clear();
-        let _color = Vec4::new(1.0, 0.0, 0.0, 1.0);
+    pub fn input(
+        &mut self,
+        sim_world: &mut SimWorld,
+        input_state: &InputState,
+        viewport_size: UVec2,
+    ) {
+        use winit::event::MouseButton;
+
+        if input_state.mouse_just_pressed(MouseButton::Left) {
+            self.selection_rect = input_state.mouse_position().map(|pos| SelectionRect {
+                pos,
+                size: IVec2::ZERO,
+            });
+        } else if input_state.mouse_just_released(MouseButton::Left) {
+            self.selection_rect = None;
+        } else if let Some(ref mut selection_rect) = self.selection_rect {
+            if let Some(mouse_position) = input_state.mouse_position() {
+                selection_rect.size = mouse_position.as_ivec2() - selection_rect.pos.as_ivec2();
+            }
+        }
 
         if false {
+            sim_world.highlighted_chunks.clear();
+            sim_world.highlighted_objects.clear();
             if let Some(mouse_position) = input_state.mouse_position() {
                 let camera_ray_segment = sim_world
                     .computed_camera
-                    .create_ray_segment(mouse_position.as_uvec2(), viewport_size);
+                    .create_ray_segment(mouse_position, viewport_size);
 
                 if let Some(hit) =
                     Self::get_interaction_hit(sim_world, &camera_ray_segment, |_| true)
@@ -63,6 +92,70 @@ impl WorldInteractionSystem {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    pub fn update(&mut self, sim_world: &mut SimWorld) {
+        if let Some(rect) = &self.selection_rect {
+            let mut pos = rect.pos.as_ivec2();
+            let mut size = rect.size;
+
+            if size.x < 0 {
+                size.x = -size.x;
+                pos.x -= size.x;
+            }
+
+            if size.y < 0 {
+                size.y = -size.y;
+                pos.y -= size.y;
+            }
+
+            let pos = pos.as_uvec2();
+            let size = size.as_uvec2();
+
+            const DRAG_THRESHOLD: u32 = 2;
+
+            if size.x > DRAG_THRESHOLD && size.y > DRAG_THRESHOLD {
+                const THICKNESS: u32 = 1;
+                debug_assert!(THICKNESS <= DRAG_THRESHOLD);
+
+                sim_world.ui.ui_rects.push(UiRect {
+                    pos,
+                    size,
+                    color: Vec4::new(0.0, 0.0, 0.0, 0.5),
+                });
+
+                // Left
+                sim_world.ui.ui_rects.push(UiRect {
+                    pos,
+                    size: UVec2::new(THICKNESS, size.y),
+                    color: Vec4::new(1.0, 1.0, 1.0, 0.5),
+                });
+
+                // Right
+                sim_world.ui.ui_rects.push(UiRect {
+                    pos: UVec2::new(pos.x + size.x - THICKNESS, pos.y),
+                    size: UVec2::new(THICKNESS, size.y),
+                    color: Vec4::new(1.0, 1.0, 1.0, 0.5),
+                });
+
+                // Top
+                sim_world.ui.ui_rects.push(UiRect {
+                    pos: UVec2::new(pos.x + THICKNESS, pos.y),
+                    size: UVec2::new(size.x.max(THICKNESS * 2) - THICKNESS * 2, THICKNESS),
+                    color: Vec4::new(1.0, 1.0, 1.0, 0.5),
+                });
+
+                // Bottom
+                sim_world.ui.ui_rects.push(UiRect {
+                    pos: UVec2::new(
+                        pos.x + THICKNESS,
+                        (pos.y + size.y).max(THICKNESS) - THICKNESS,
+                    ),
+                    size: UVec2::new(size.x.max(THICKNESS * 2) - THICKNESS * 2, THICKNESS),
+                    color: Vec4::new(1.0, 1.0, 1.0, 0.5),
+                });
             }
         }
     }

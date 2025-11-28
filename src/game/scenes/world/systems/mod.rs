@@ -78,7 +78,7 @@ impl Systems {
             culling: cull_system::CullSystem::default(),
             terrain_system: terrain_system::TerrainSystem::new(renderer, render_store, sim_world),
             objects_system: objects_system::ObjectsSystem::new(renderer, render_store),
-            world_interaction_system: world_interaction::WorldInteractionSystem,
+            world_interaction_system: world_interaction::WorldInteractionSystem::default(),
             gizmo_system: gizmo_system::GizmoSystem::new(renderer, render_store),
             ui_system: ui_system::UiSystem::new(renderer, render_store),
         }
@@ -94,7 +94,9 @@ impl Systems {
         // TODO: Not nice that we have to pass in a `viewport_size` here, but don't know where else
         //       to put it for now.
 
-        self.ui_system.input(sim_world, input_state);
+        // TODO: This should really be part of a system somewhere.
+        sim_world.ui.ui_rects.clear();
+
         self.camera_system.input(sim_world, time, input_state);
         self.world_interaction_system
             .input(sim_world, input_state, viewport_size);
@@ -104,6 +106,8 @@ impl Systems {
         self.culling.calculate_visible_chunks(sim_world);
         day_night_cycle_system::increment_time_of_day(sim_world, time);
         self.objects_system.render_gizmos(sim_world);
+
+        self.world_interaction_system.update(sim_world);
 
         if let Some(model) = models().get(sim_world.test_model) {
             let pose = generate_pose(

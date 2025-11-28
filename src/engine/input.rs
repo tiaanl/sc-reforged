@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use glam::IVec2;
+use glam::{IVec2, UVec2};
 use winit::{
     event::{ElementState, MouseScrollDelta, WindowEvent},
     keyboard::PhysicalKey,
@@ -13,8 +13,8 @@ pub use winit::keyboard::KeyCode;
 pub struct InputState {
     /// The current position of the mouse inside the window client area in pixels. Set to `None` If
     /// the mouse is not over the client area.
-    mouse_position: Option<IVec2>,
-    last_mouse_position: Option<IVec2>,
+    mouse_position: Option<UVec2>,
+    last_mouse_position: Option<UVec2>,
     mouse_delta: Option<IVec2>,
 
     mouse_pressed: HashSet<MouseButton>,
@@ -48,10 +48,10 @@ impl InputState {
                 ..
             } => {
                 self.last_mouse_position = self.mouse_position;
-                let current = IVec2::new(x as i32, y as i32);
+                let current = UVec2::new(x.round() as u32, y.round() as u32);
 
                 if let Some(last) = self.last_mouse_position {
-                    self.mouse_delta = Some(last - current);
+                    self.mouse_delta = Some(last.as_ivec2() - current.as_ivec2());
                 }
 
                 self.mouse_position = Some(current);
@@ -94,7 +94,7 @@ impl InputState {
 }
 
 impl InputState {
-    pub fn mouse_position(&self) -> Option<IVec2> {
+    pub fn mouse_position(&self) -> Option<UVec2> {
         self.mouse_position
     }
 

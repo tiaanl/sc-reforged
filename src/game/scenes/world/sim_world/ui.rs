@@ -1,18 +1,19 @@
-use glam::IVec2;
+use glam::{UVec2, Vec4};
 
-pub struct SelectionRect {
-    pub pos: IVec2,
-    pub size: IVec2,
+pub struct UiRect {
+    pub pos: UVec2,
+    pub size: UVec2,
+    pub color: Vec4,
 }
 
 pub struct Ui {
-    pub selection_rect: Option<SelectionRect>,
+    pub ui_rects: Vec<UiRect>,
 }
 
 impl Ui {
     pub fn new() -> Self {
         Self {
-            selection_rect: None,
+            ui_rects: Vec::default(),
         }
     }
 }

@@ -29,7 +29,7 @@ mod ui;
 pub use height_map::HeightMap;
 pub use objects::Object;
 pub use terrain::Terrain;
-pub use ui::SelectionRect;
+pub use ui::UiRect;
 
 /// Holds data for the sun and fog values throughout the day and night.
 #[derive(Default)]

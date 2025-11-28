@@ -47,7 +47,7 @@ pub struct UiState {
 
 #[derive(Clone, Copy, Debug, Default, NoUninit)]
 #[repr(C)]
-pub struct UiRect {
+pub struct RenderUiRect {
     pub min: [f32; 2],
     pub max: [f32; 2],
     pub color: [f32; 4],
@@ -82,8 +82,8 @@ pub struct RenderWorld {
     pub ui_state_buffer: wgpu::Buffer,
     pub ui_state_bind_group: wgpu::BindGroup,
 
-    pub ui_rects: Vec<UiRect>,
-    pub ui_rects_buffer: GrowingBuffer<UiRect>,
+    pub ui_rects: Vec<RenderUiRect>,
+    pub ui_rects_buffer: GrowingBuffer<RenderUiRect>,
 }
 
 impl RenderWorld {

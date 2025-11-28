@@ -1,14 +1,10 @@
-use glam::{IVec2, Mat4, UVec2, Vec2, Vec4};
-use winit::event::MouseButton;
+use glam::{Mat4, UVec2};
 
 use crate::{
-    engine::{
-        input::InputState,
-        prelude::{Frame, Renderer},
-    },
+    engine::prelude::{Frame, Renderer},
     game::scenes::world::{
-        render::{RenderStore, RenderWorld, UiRect},
-        sim_world::{SelectionRect, SimWorld},
+        render::{RenderStore, RenderUiRect, RenderWorld},
+        sim_world::SimWorld,
     },
     wgsl_shader,
 };
@@ -42,7 +38,8 @@ impl UiSystem {
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<UiRect>() as wgpu::BufferAddress,
+                            array_stride: std::mem::size_of::<RenderUiRect>()
+                                as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Instance,
                             attributes: &wgpu::vertex_attr_array![
                                 0 => Float32x2,
@@ -76,29 +73,6 @@ impl UiSystem {
         }
     }
 
-    pub fn input(&self, sim_world: &mut SimWorld, input_state: &InputState) {
-        if input_state.mouse_just_pressed(MouseButton::Left) {
-            sim_world.ui.selection_rect = input_state.mouse_position().map(|pos| SelectionRect {
-                pos,
-                size: IVec2::ZERO,
-            });
-            return;
-        }
-
-        if input_state.mouse_just_released(MouseButton::Left) {
-            sim_world.ui.selection_rect = None;
-            return;
-        }
-
-        let Some(rect) = sim_world.ui.selection_rect.as_mut() else {
-            return;
-        };
-
-        if let Some(mouse_position) = input_state.mouse_position() {
-            rect.size = mouse_position - rect.pos;
-        }
-    }
-
     pub fn extract(
         &self,
         sim_world: &mut SimWorld,
@@ -117,51 +91,19 @@ impl UiSystem {
 
         render_world.ui_state.view_proj = proj.to_cols_array_2d();
 
+        // Copy the requested [UiRect]s to the temp buffer. Trying to avoid allocations.
         render_world.ui_rects.clear();
-
-        if let Some(rect) = &sim_world.ui.selection_rect {
-            let pos = Vec2::new(rect.pos.x as f32, rect.pos.y as f32);
-            let size = Vec2::new(rect.size.x as f32, rect.size.y as f32);
-
-            let min = Vec2::new(pos.x.min(pos.x + size.x), pos.y.min(pos.y + size.y));
-            let max = Vec2::new(pos.x.max(pos.x + size.x), pos.y.max(pos.y + size.y));
-
-            const THICKNESS: f32 = 1.0;
-
-            render_world.ui_rects.push(UiRect {
-                min: min.to_array(),
-                max: max.to_array(),
-                color: Vec4::new(0.0, 0.0, 0.0, 0.5).to_array(),
-            });
-
-            // Left
-            render_world.ui_rects.push(UiRect {
-                min: min.to_array(),
-                max: Vec2::new(min.x + THICKNESS, max.y).to_array(),
-                color: Vec4::new(1.0, 1.0, 1.0, 0.5).to_array(),
-            });
-
-            // Right
-            render_world.ui_rects.push(UiRect {
-                min: Vec2::new(max.x - THICKNESS, min.y).to_array(),
-                max: Vec2::new(max.x, max.y).to_array(),
-                color: Vec4::new(1.0, 1.0, 1.0, 0.5).to_array(),
-            });
-
-            // Top
-            render_world.ui_rects.push(UiRect {
-                min: Vec2::new(min.x + THICKNESS, min.y).to_array(),
-                max: Vec2::new(max.x - THICKNESS, min.y + THICKNESS).to_array(),
-                color: Vec4::new(1.0, 1.0, 1.0, 0.5).to_array(),
-            });
-
-            // Bottom
-            render_world.ui_rects.push(UiRect {
-                min: Vec2::new(min.x + THICKNESS, max.y - THICKNESS).to_array(),
-                max: Vec2::new(max.x - THICKNESS, max.y).to_array(),
-                color: Vec4::new(1.0, 1.0, 1.0, 0.5).to_array(),
-            });
-        }
+        render_world
+            .ui_rects
+            .extend(sim_world.ui.ui_rects.iter().map(|rect| {
+                let min = rect.pos.as_vec2();
+                let max = min + rect.size.as_vec2();
+                RenderUiRect {
+                    min: [min.x.min(max.x), min.y.min(max.y)],
+                    max: [min.x.max(max.x), min.y.max(max.y)],
+                    color: rect.color.to_array(),
+                }
+            }));
     }
 
     pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {
