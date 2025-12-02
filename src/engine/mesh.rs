@@ -60,6 +60,7 @@ impl<V> Default for IndexedMesh<V> {
     }
 }
 
+#[allow(unused)]
 pub struct GpuIndexedMesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,

@@ -25,7 +25,7 @@ impl ViewProjection {
     }
 
     pub fn corners(&self) -> [Vec3; 8] {
-        const NDC: &[(f32, f32)] = &[(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
+        const NDC: &[(f32, f32)] = &[(-1.0, 1.0), (1.0, 1.0), (1.0, -1.0), (-1.0, -1.0)];
 
         let mut result = [Vec3::ZERO; 8];
         for (i, &(x, y)) in NDC.iter().enumerate() {
@@ -48,18 +48,109 @@ impl ViewProjection {
         let near = Plane::from_row(r2); // wgpu (D3D/Metal, 0..1 Z)
         let far = Plane::from_row(r3 - r2);
 
-        Frustum {
-            planes: [left, right, bottom, top, near, far],
-        }
+        Frustum::from_planes(left, right, bottom, top, near, far)
     }
 }
 
 #[derive(Default)]
 pub struct Frustum {
+    /// [left, right, bottom, top, near, far]
     pub planes: [Plane; 6],
 }
 
 impl Frustum {
+    pub fn from_planes(
+        left: Plane,
+        right: Plane,
+        bottom: Plane,
+        top: Plane,
+        near: Plane,
+        far: Plane,
+    ) -> Self {
+        Self {
+            planes: [left, right, bottom, top, near, far],
+        }
+    }
+
+    /// Construct a frustum from 8 corner points.
+    pub fn from_corners(
+        near_top_left: Vec3,
+        near_top_right: Vec3,
+        near_bottom_right: Vec3,
+        near_bottom_left: Vec3,
+        far_top_left: Vec3,
+        far_top_right: Vec3,
+        far_bottom_right: Vec3,
+        far_bottom_left: Vec3,
+    ) -> Self {
+        let left = Plane::from_points(near_top_left, far_top_left, far_bottom_left);
+        let right = Plane::from_points(far_bottom_right, far_top_right, near_top_right);
+        let bottom = Plane::from_points(near_bottom_left, far_bottom_left, far_bottom_right);
+        let top = Plane::from_points(far_top_right, far_top_left, near_top_left);
+        let near = Plane::from_points(near_bottom_left, near_bottom_right, near_top_right);
+        let far = Plane::from_points(far_top_right, far_bottom_right, far_bottom_left);
+
+        #[cfg(debug_assertions)]
+        {
+            let center = (near_top_left
+                + near_top_right
+                + near_bottom_right
+                + near_bottom_left
+                + far_top_left
+                + far_top_right
+                + far_bottom_right
+                + far_bottom_left)
+                / 8.0;
+            for plane in [&left, &right, &top, &bottom, &near, &far] {
+                let distance = plane.signed_distance(center);
+                debug_assert!(distance >= 0.0, "outward frustum plane ({distance})");
+            }
+        }
+
+        Frustum::from_planes(left, right, bottom, top, near, far)
+    }
+
+    /// Calculate the 8 corners of the frustum.
+    pub fn corners(&self) -> Option<[Vec3; 8]> {
+        let [left, right, bottom, top, near, far] = &self.planes;
+
+        /// Calculate the intersection of 3 planes.
+        fn intersect(a: &Plane, b: &Plane, c: &Plane) -> Option<Vec3> {
+            let n1 = a.normal;
+            let n2 = b.normal;
+            let n3 = c.normal;
+
+            let n2n3 = n2.cross(n3);
+            let n3n1 = n3.cross(n1);
+            let n1n2 = n1.cross(n2);
+
+            let denom = n1.dot(n2n3);
+            if denom.abs() < 1e-6 {
+                // Planes are nearly parallel / degenerate
+                return None;
+            }
+
+            let term1 = n2n3 * -a.distance;
+            let term2 = n3n1 * -b.distance;
+            let term3 = n1n2 * -c.distance;
+
+            Some((term1 + term2 + term3) / denom)
+        }
+
+        Some([
+            // near plane
+            intersect(near, top, left)?,     // ntl
+            intersect(near, top, right)?,    // ntr
+            intersect(near, bottom, right)?, // nbr
+            intersect(near, bottom, left)?,  // nbl
+            // far plane
+            intersect(far, top, left)?,     // ftl
+            intersect(far, top, right)?,    // ftr
+            intersect(far, bottom, right)?, // fbr
+            intersect(far, bottom, left)?,  // fbl
+        ])
+    }
+
     pub fn intersects_bounding_box(&self, b: &BoundingBox) -> bool {
         const EPS: f32 = 1e-5;
         for pl in &self.planes {
@@ -153,6 +244,17 @@ impl Plane {
             normal: normal * inv_length,
             distance: row.w * inv_length,
         }
+    }
+
+    pub fn from_points(a: Vec3, b: Vec3, c: Vec3) -> Self {
+        let ab = b - a;
+        let ac = c - a;
+
+        let normal = ab.cross(ac).normalize();
+
+        let distance = -normal.dot(a);
+
+        Self { normal, distance }
     }
 
     #[inline]

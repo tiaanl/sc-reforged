@@ -109,84 +109,86 @@ impl Systems {
 
         self.world_interaction_system.update(sim_world);
 
-        if let Some(model) = models().get(sim_world.test_model) {
-            let pose = generate_pose(
-                &model.skeleton,
-                &sim_world.test_motion,
-                sim_world.timer,
-                true,
-            );
+        if false {
+            if let Some(model) = models().get(sim_world.test_model) {
+                let pose = generate_pose(
+                    &model.skeleton,
+                    &sim_world.test_motion,
+                    sim_world.timer,
+                    true,
+                );
 
-            fn draw_bone(
-                skeleton: &Skeleton,
-                pose: &[Mat4],
-                bone_index: u32,
-                origin: &Mat4,
-                gizmo_vertices: &mut Vec<GizmoVertex>,
-                color: Option<Vec4>,
-                level: usize,
-            ) {
-                static COLORS: &[Vec4] = &[
-                    Vec4::new(1.0, 0.0, 0.0, 1.0),
-                    Vec4::new(0.0, 1.0, 0.0, 1.0),
-                    Vec4::new(0.0, 0.0, 1.0, 1.0),
-                    Vec4::new(1.0, 1.0, 0.0, 1.0),
-                    Vec4::new(1.0, 0.0, 1.0, 1.0),
-                    Vec4::new(1.0, 1.0, 1.0, 1.0),
-                ];
+                fn draw_bone(
+                    skeleton: &Skeleton,
+                    pose: &[Mat4],
+                    bone_index: u32,
+                    origin: &Mat4,
+                    gizmo_vertices: &mut Vec<GizmoVertex>,
+                    color: Option<Vec4>,
+                    level: usize,
+                ) {
+                    static COLORS: &[Vec4] = &[
+                        Vec4::new(1.0, 0.0, 0.0, 1.0),
+                        Vec4::new(0.0, 1.0, 0.0, 1.0),
+                        Vec4::new(0.0, 0.0, 1.0, 1.0),
+                        Vec4::new(1.0, 1.0, 0.0, 1.0),
+                        Vec4::new(1.0, 0.0, 1.0, 1.0),
+                        Vec4::new(1.0, 1.0, 1.0, 1.0),
+                    ];
 
-                let start = (origin * pose[bone_index as usize]).w_axis.truncate();
+                    let start = (origin * pose[bone_index as usize]).w_axis.truncate();
 
-                for (index, _) in skeleton
-                    .bones
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, b)| b.parent == bone_index)
-                {
-                    let end = (origin * pose[index]).w_axis.truncate();
+                    for (index, _) in skeleton
+                        .bones
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, b)| b.parent == bone_index)
+                    {
+                        let end = (origin * pose[index]).w_axis.truncate();
 
-                    let this_color = color.unwrap_or(COLORS[level.min(COLORS.len() - 1)]);
+                        let this_color = color.unwrap_or(COLORS[level.min(COLORS.len() - 1)]);
 
-                    gizmo_vertices.extend_from_slice(&[
-                        GizmoVertex::new(start, this_color),
-                        GizmoVertex::new(end, this_color),
-                    ]);
+                        gizmo_vertices.extend_from_slice(&[
+                            GizmoVertex::new(start, this_color),
+                            GizmoVertex::new(end, this_color),
+                        ]);
 
-                    draw_bone(
-                        skeleton,
-                        pose,
-                        index as u32,
-                        origin,
-                        gizmo_vertices,
-                        color,
-                        level + 1,
-                    );
+                        draw_bone(
+                            skeleton,
+                            pose,
+                            index as u32,
+                            origin,
+                            gizmo_vertices,
+                            color,
+                            level + 1,
+                        );
+                    }
                 }
+
+                draw_bone(
+                    &model.skeleton,
+                    &pose.bones,
+                    0,
+                    &Mat4::IDENTITY,
+                    &mut sim_world.gizmo_vertices,
+                    Some(Vec4::new(1.0, 1.0, 1.0, 1.0)),
+                    0,
+                );
+
+                let rest_pose: Vec<Mat4> = (0..model.skeleton.bones.len() as u32)
+                    .map(|b| model.skeleton.local_transform(b))
+                    .collect();
+
+                draw_bone(
+                    &model.skeleton,
+                    &rest_pose,
+                    0,
+                    &Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+                    &mut sim_world.gizmo_vertices,
+                    Some(Vec4::new(0.0, 0.0, 1.0, 1.0)),
+                    0,
+                );
             }
-
-            draw_bone(
-                &model.skeleton,
-                &pose.bones,
-                0,
-                &Mat4::IDENTITY,
-                &mut sim_world.gizmo_vertices,
-                Some(Vec4::new(1.0, 1.0, 1.0, 1.0)),
-                0,
-            );
-
-            let rest_pose: Vec<Mat4> = (0..model.skeleton.bones.len() as u32)
-                .map(|b| model.skeleton.local_transform(b))
-                .collect();
-
-            draw_bone(
-                &model.skeleton,
-                &rest_pose,
-                0,
-                &Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
-                &mut sim_world.gizmo_vertices,
-                Some(Vec4::new(0.0, 0.0, 1.0, 1.0)),
-                0,
-            );
         }
     }
 

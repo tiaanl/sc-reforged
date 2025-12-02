@@ -1,9 +1,9 @@
-use glam::{IVec2, UVec2, Vec3, Vec4};
+use glam::{IVec2, Mat4, UVec2, Vec2, Vec3, Vec4};
 
 use crate::{
     engine::{prelude::InputState, storage::Handle},
     game::{
-        math::RaySegment,
+        math::{Frustum, RaySegment},
         scenes::world::sim_world::{Object, SimWorld, UiRect},
     },
 };
@@ -37,6 +37,7 @@ impl InteractionHit {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct SelectionRect {
     /// The position where the rect was dragged from.
     pub pos: UVec2,
@@ -45,12 +46,45 @@ pub struct SelectionRect {
     pub size: IVec2,
 }
 
+impl SelectionRect {
+    pub fn normalize(self) -> Self {
+        let mut pos = self.pos.as_ivec2();
+        let mut size = self.size;
+
+        if size.x < 0 {
+            size.x = -size.x;
+            pos.x -= size.x;
+        }
+
+        if size.y < 0 {
+            size.y = -size.y;
+            pos.y -= size.y;
+        }
+
+        debug_assert!(pos.x >= 0 && pos.y >= 0);
+        debug_assert!(size.x >= 0 && size.y >= 0);
+
+        Self {
+            pos: pos.as_uvec2(),
+            size,
+        }
+    }
+
+    #[inline]
+    pub fn min_max(&self) -> (UVec2, UVec2) {
+        let n = self.clone().normalize();
+        (n.pos, n.pos + n.size.as_uvec2())
+    }
+}
+
 #[derive(Default)]
 pub struct WorldInteractionSystem {
     selection_rect: Option<SelectionRect>,
 }
 
 impl WorldInteractionSystem {
+    const DRAG_THRESHOLD: u32 = 2;
+
     pub fn input(
         &mut self,
         sim_world: &mut SimWorld,
@@ -65,6 +99,16 @@ impl WorldInteractionSystem {
                 size: IVec2::ZERO,
             });
         } else if input_state.mouse_just_released(MouseButton::Left) {
+            if let Some(rect) = self.selection_rect {
+                if rect.size.x.abs() > Self::DRAG_THRESHOLD as i32
+                    && rect.size.y.abs() > Self::DRAG_THRESHOLD as i32
+                {
+                    self.set_selection_by_rect(sim_world, rect, viewport_size);
+                } else {
+                    self.set_selection_by_ray(rect.pos);
+                }
+            }
+
             self.selection_rect = None;
         } else if let Some(ref mut selection_rect) = self.selection_rect {
             if let Some(mouse_position) = input_state.mouse_position() {
@@ -98,27 +142,12 @@ impl WorldInteractionSystem {
 
     pub fn update(&mut self, sim_world: &mut SimWorld) {
         if let Some(rect) = &self.selection_rect {
-            let mut pos = rect.pos.as_ivec2();
-            let mut size = rect.size;
-
-            if size.x < 0 {
-                size.x = -size.x;
-                pos.x -= size.x;
-            }
-
-            if size.y < 0 {
-                size.y = -size.y;
-                pos.y -= size.y;
-            }
-
-            let pos = pos.as_uvec2();
+            let SelectionRect { pos, size } = rect.normalize();
             let size = size.as_uvec2();
 
-            const DRAG_THRESHOLD: u32 = 2;
-
-            if size.x > DRAG_THRESHOLD && size.y > DRAG_THRESHOLD {
+            if size.x > Self::DRAG_THRESHOLD && size.y > Self::DRAG_THRESHOLD {
                 const THICKNESS: u32 = 1;
-                debug_assert!(THICKNESS <= DRAG_THRESHOLD);
+                debug_assert!(THICKNESS <= Self::DRAG_THRESHOLD);
 
                 sim_world.ui.ui_rects.push(UiRect {
                     pos,
@@ -158,6 +187,80 @@ impl WorldInteractionSystem {
                 });
             }
         }
+    }
+
+    /// Update the selected objects by using a rectangle in screen coordinates.
+    fn set_selection_by_rect(
+        &mut self,
+        sim_world: &SimWorld,
+        rect: SelectionRect,
+        viewport_size: UVec2,
+    ) {
+        let (min, max) = rect.min_max();
+        debug_assert!(min.x <= max.x);
+        debug_assert!(min.y <= max.y);
+
+        let frustum = {
+            const NDC_Z_NEAR: f32 = 0.0;
+            const NDC_Z_FAR: f32 = 1.0;
+
+            let viewport = viewport_size.as_vec2();
+
+            let screen_tl = min.as_vec2();
+            let screen_br = max.as_vec2();
+            let screen_tr = Vec2::new(screen_br.x, screen_tl.y);
+            let screen_bl = Vec2::new(screen_tl.x, screen_br.y);
+
+            let ndc_tl = Self::screen_to_ndc(screen_tl, viewport);
+            let ndc_tr = Self::screen_to_ndc(screen_tr, viewport);
+            let ndc_br = Self::screen_to_ndc(screen_br, viewport);
+            let ndc_bl = Self::screen_to_ndc(screen_bl, viewport);
+
+            let inv = &sim_world.computed_camera.view_proj.inv;
+
+            let ntl = Self::unproject(ndc_tl.extend(NDC_Z_NEAR), inv);
+            let ntr = Self::unproject(ndc_tr.extend(NDC_Z_NEAR), inv);
+            let nbr = Self::unproject(ndc_br.extend(NDC_Z_NEAR), inv);
+            let nbl = Self::unproject(ndc_bl.extend(NDC_Z_NEAR), inv);
+
+            let ftl = Self::unproject(ndc_tl.extend(NDC_Z_FAR), inv);
+            let ftr = Self::unproject(ndc_tr.extend(NDC_Z_FAR), inv);
+            let fbr = Self::unproject(ndc_br.extend(NDC_Z_FAR), inv);
+            let fbl = Self::unproject(ndc_bl.extend(NDC_Z_FAR), inv);
+
+            Frustum::from_corners(ntl, ntr, nbr, nbl, ftl, ftr, fbr, fbl)
+        };
+
+        let mut objects: Vec<Handle<Object>> = vec![];
+        sim_world.quad_tree.with_nodes_in_frustum(&frustum, |node| {
+            for object_handle in node.objects.iter() {
+                if let Some(object) = sim_world.objects.get(*object_handle) {
+                    if frustum.intersects_bounding_sphere(&object.bounding_sphere) {
+                        objects.push(*object_handle);
+                    }
+                }
+            }
+        });
+    }
+
+    /// Update the selected objects by using a ray segment with an origin at
+    /// the specified pos in screen coordinates.
+    fn set_selection_by_ray(&self, _pos: UVec2) {}
+
+    #[inline]
+    fn screen_to_ndc(p: Vec2, viewport_size: Vec2) -> Vec2 {
+        let uv = p / viewport_size;
+        let mut ndc = uv * 2.0 - Vec2::ONE;
+        // Y grows down, so invert, because NDC grows up.
+        ndc.y = -ndc.y;
+        ndc
+    }
+
+    #[inline]
+    fn unproject(ndc: Vec3, inv: &Mat4) -> Vec3 {
+        let clip = Vec4::new(ndc.x, ndc.y, ndc.z, 1.0);
+        let world = inv * clip;
+        world.truncate() / world.w
     }
 
     fn get_interaction_hit(
