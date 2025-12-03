@@ -5,7 +5,7 @@ use winit::{event::MouseButton, keyboard::KeyCode};
 
 use crate::{
     engine::input::InputState,
-    game::{camera::Camera, scenes::world::systems::camera_system::CameraController},
+    game::scenes::world::{sim_world::Camera, systems::camera_system::CameraController},
 };
 
 pub struct FreeCameraControls {

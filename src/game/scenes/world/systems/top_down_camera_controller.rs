@@ -4,8 +4,8 @@ use winit::{event::MouseButton, keyboard::KeyCode};
 use crate::{
     engine::prelude::InputState,
     game::{
-        camera::Camera, interpolate::Interpolate,
-        scenes::world::systems::camera_system::CameraController,
+        interpolate::Interpolate,
+        scenes::world::{sim_world::Camera, systems::camera_system::CameraController},
     },
 };
 

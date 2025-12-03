@@ -1,6 +1,7 @@
-#import world::camera
+#import camera_env::CameraEnv;
 
-@group(0) @binding(0) var<uniform> u_camera: camera::Camera;
+@group(0) @binding(0)
+var<uniform> u_camera: CameraEnv;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -15,7 +16,7 @@ struct VertexOutput {
 @vertex
 fn vertex_main(vertex: VertexInput) -> VertexOutput {
     return VertexOutput(
-        u_camera.mat_proj_view * vertex.position,
+        u_camera.proj_view * vertex.position,
         vertex.color
     );
 }

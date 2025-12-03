@@ -2,13 +2,10 @@ use glam::vec4;
 
 use crate::{
     engine::{input::InputState, prelude::Renderer},
-    game::{
-        camera::Camera,
-        scenes::world::{
-            render::RenderWorld,
-            sim_world::{ComputedCamera, SimWorld},
-            systems::Time,
-        },
+    game::scenes::world::{
+        render::RenderWorld,
+        sim_world::{Camera, ComputedCamera, SimWorld},
+        systems::Time,
     },
 };
 

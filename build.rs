@@ -14,10 +14,8 @@ fn main() {
 }
 
 const COMMON: &[&str] = &[
-    "src/game/common/camera.wgsl",
     "src/game/common/fullscreen.wgsl",
-    "src/game/scenes/world/environment.wgsl",
-    "src/game/scenes/world/frustum.wgsl",
+    "src/game/scenes/world/render/camera_env.wgsl",
     "src/game/scenes/world/render/geometry_buffer.wgsl",
 ];
 

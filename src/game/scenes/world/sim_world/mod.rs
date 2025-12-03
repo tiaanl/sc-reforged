@@ -6,7 +6,6 @@ use glam::{IVec2, Quat, UVec2, Vec2, Vec3, Vec4, vec3};
 use crate::{
     engine::{assets::AssetError, gizmos::GizmoVertex, prelude::Transform, storage::Handle},
     game::{
-        camera::{self, Camera},
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         math::{Frustum, Ray, RaySegment, ViewProjection},
@@ -20,12 +19,14 @@ use crate::{
     },
 };
 
+mod camera;
 mod height_map;
 mod objects;
 mod quad_tree;
 mod terrain;
 mod ui;
 
+pub use camera::Camera;
 pub use height_map::HeightMap;
 pub use objects::Object;
 pub use terrain::Terrain;
@@ -82,7 +83,7 @@ impl ComputedCamera {
 
 /// Holds all the data for the world we are simulating.
 pub struct SimWorld {
-    pub camera: Camera,
+    pub camera: camera::Camera,
     pub computed_camera: ComputedCamera,
 
     pub time_of_day: f32,
