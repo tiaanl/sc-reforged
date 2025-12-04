@@ -4,9 +4,14 @@ use crate::{
     engine::{input::InputState, prelude::Renderer},
     game::scenes::world::{
         render::RenderWorld,
-        sim_world::{Camera, SimWorld},
+        sim_world::{ActiveCamera, Camera, SimWorld},
         systems::Time,
     },
+};
+
+use super::{
+    free_camera_controller::FreeCameraController,
+    top_down_camera_controller::TopDownCameraController,
 };
 
 pub trait CameraController {
@@ -19,29 +24,28 @@ pub trait CameraController {
     );
 }
 
-pub struct CameraSystem<C>
-where
-    C: CameraController,
-{
-    /// The controller used to manipulate the camera.
-    pub controller: C,
+pub struct CameraSystem {
+    /// Control the game camera.
+    pub game_controller: TopDownCameraController,
+    /// Control the debug camera.
+    pub debug_controller: FreeCameraController,
 }
 
-impl<C> CameraSystem<C>
-where
-    C: CameraController,
-{
-    pub fn new(controller: C) -> Self {
-        Self { controller }
+impl CameraSystem {
+    pub fn new(
+        game_controller: TopDownCameraController,
+        debug_controller: FreeCameraController,
+    ) -> Self {
+        Self {
+            game_controller,
+            debug_controller,
+        }
     }
 }
 
-impl<C> CameraSystem<C>
-where
-    C: CameraController,
-{
+impl CameraSystem {
     fn extract_camera(sim_world: &SimWorld, render_world: &mut RenderWorld) {
-        let source = &sim_world.computed_camera;
+        let source = &sim_world.computed_cameras[sim_world.active_camera as usize];
         let target = &mut render_world.camera_env;
 
         target.proj_view = source.view_proj.mat.to_cols_array_2d();
@@ -77,22 +81,30 @@ where
     }
 }
 
-impl<C> CameraSystem<C>
-where
-    C: CameraController,
-{
+impl CameraSystem {
     pub fn input(&mut self, sim_world: &mut SimWorld, time: &Time, input_state: &InputState) {
-        let camera = &mut sim_world.camera;
-
-        self.controller
-            .handle_input(camera, input_state, time.delta_time);
-
-        camera.far = sim_world
+        let far = sim_world
             .day_night_cycle
             .fog_distance
             .sample_sub_frame(sim_world.time_of_day, true);
 
-        sim_world.computed_camera = camera.compute();
+        let c = sim_world.active_camera;
+        let camera = &mut sim_world.cameras[c as usize];
+        camera.far = far;
+
+        match c {
+            ActiveCamera::Game => {
+                self.game_controller
+                    .handle_input(camera, input_state, time.delta_time);
+            }
+
+            ActiveCamera::Debug => {
+                self.debug_controller
+                    .handle_input(camera, input_state, time.delta_time);
+            }
+        }
+
+        sim_world.computed_cameras[c as usize] = camera.compute();
     }
 
     pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {

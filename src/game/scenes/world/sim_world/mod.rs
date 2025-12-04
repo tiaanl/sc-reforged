@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use ahash::HashSet;
 use glam::{IVec2, Quat, Vec3, vec3};
+use strum::{EnumCount, EnumIter};
 
 use crate::{
     engine::{assets::AssetError, gizmos::GizmoVertex, prelude::Transform, storage::Handle},
@@ -25,7 +26,7 @@ mod quad_tree;
 mod terrain;
 mod ui;
 
-pub use camera::Camera;
+pub use camera::{Camera, ComputedCamera};
 pub use height_map::HeightMap;
 pub use objects::Object;
 pub use terrain::Terrain;
@@ -42,10 +43,22 @@ pub struct DayNightCycle {
     pub fog_color: Track<Vec3>,
 }
 
+#[derive(Clone, Copy, EnumCount, EnumIter, PartialEq)]
+#[repr(usize)]
+pub enum ActiveCamera {
+    Game = 0,
+    Debug = 1,
+}
+
 /// Holds all the data for the world we are simulating.
 pub struct SimWorld {
-    pub camera: camera::Camera,
-    pub computed_camera: camera::ComputedCamera,
+    /// Data for each camera.
+    pub cameras: [Camera; ActiveCamera::COUNT],
+
+    /// Computed values for the camera the player is viewing.
+    pub computed_cameras: [ComputedCamera; ActiveCamera::COUNT],
+
+    pub active_camera: ActiveCamera,
 
     pub time_of_day: f32,
     pub day_night_cycle: DayNightCycle,
@@ -153,15 +166,27 @@ impl SimWorld {
         let ui = Ui::new();
 
         Ok(SimWorld {
-            camera: camera::Camera::new(
-                Vec3::ZERO,
-                Quat::IDENTITY,
-                45.0_f32.to_radians(),
-                1.0,
-                10.0,
-                13_300.0,
-            ),
-            computed_camera: camera::ComputedCamera::default(),
+            cameras: [
+                Camera::new(
+                    Vec3::ZERO,
+                    Quat::IDENTITY,
+                    45.0_f32.to_radians(),
+                    1.0,
+                    10.0,
+                    13_300.0,
+                ),
+                Camera::new(
+                    Vec3::ZERO,
+                    Quat::IDENTITY,
+                    45.0_f32.to_radians(),
+                    1.0,
+                    10.0,
+                    13_300.0,
+                ),
+            ],
+            computed_cameras: [ComputedCamera::default(), ComputedCamera::default()],
+
+            active_camera: ActiveCamera::Game,
 
             time_of_day,
             day_night_cycle,

@@ -469,9 +469,11 @@ impl TerrainSystem {
     pub fn extract(&mut self, sim_world: &SimWorld, render_world: &mut RenderWorld) {
         self.chunk_lod_cache.clear();
 
-        let camera_position = sim_world.computed_camera.position;
-        let camera_forward = sim_world.computed_camera.forward;
-        let camera_far = sim_world.camera.far;
+        let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
+
+        let camera_position = computed_camera.position;
+        let camera_forward = computed_camera.forward;
+        let camera_far = sim_world.cameras[sim_world.active_camera as usize].far;
 
         let terrain_chunk_instances = &mut render_world.terrain_chunk_instances;
         let strata_instances = &mut render_world.strata_instances;

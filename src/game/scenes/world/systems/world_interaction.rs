@@ -120,9 +120,9 @@ impl WorldInteractionSystem {
             sim_world.highlighted_chunks.clear();
             sim_world.highlighted_objects.clear();
             if let Some(mouse_position) = input_state.mouse_position() {
-                let camera_ray_segment = sim_world
-                    .computed_camera
-                    .create_ray_segment(mouse_position, viewport_size);
+                let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
+                let camera_ray_segment =
+                    computed_camera.create_ray_segment(mouse_position, viewport_size);
 
                 if let Some(hit) =
                     Self::get_interaction_hit(sim_world, &camera_ray_segment, |_| true)
@@ -204,6 +204,8 @@ impl WorldInteractionSystem {
             const NDC_Z_NEAR: f32 = 0.0;
             const NDC_Z_FAR: f32 = 1.0;
 
+            let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
+
             let viewport = viewport_size.as_vec2();
 
             let screen_tl = min.as_vec2();
@@ -216,7 +218,7 @@ impl WorldInteractionSystem {
             let ndc_br = Self::screen_to_ndc(screen_br, viewport);
             let ndc_bl = Self::screen_to_ndc(screen_bl, viewport);
 
-            let inv = &sim_world.computed_camera.view_proj.inv;
+            let inv = &computed_camera.view_proj.inv;
 
             let ntl = Self::unproject(ndc_tl.extend(NDC_Z_NEAR), inv);
             let ntr = Self::unproject(ndc_tr.extend(NDC_Z_NEAR), inv);

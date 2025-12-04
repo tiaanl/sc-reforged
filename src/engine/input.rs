@@ -122,7 +122,7 @@ impl InputState {
         self.mouse_delta
     }
 
-    pub fn _wheel_delta(&self) -> f32 {
+    pub fn wheel_delta(&self) -> f32 {
         self.wheel_delta
     }
 }

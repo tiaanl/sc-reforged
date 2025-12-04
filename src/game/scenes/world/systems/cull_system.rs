@@ -21,7 +21,7 @@ pub struct CullSystem {
 
 impl CullSystem {
     pub fn calculate_visible_chunks(&mut self, sim_world: &mut SimWorld) {
-        let frustum = &sim_world.computed_camera.frustum;
+        let frustum = &sim_world.computed_cameras[sim_world.active_camera as usize].frustum;
 
         sim_world.visible_chunks.clear();
         sim_world.visible_objects.clear();
@@ -38,7 +38,7 @@ impl CullSystem {
     }
 
     fn debug_quad_tree(&self, sim_world: &mut SimWorld) {
-        let frustum = &sim_world.computed_camera.frustum;
+        let frustum = &sim_world.computed_cameras[sim_world.active_camera as usize].frustum;
 
         match self.debug_quad_tree {
             DebugQuadTreeOptions::None => {}

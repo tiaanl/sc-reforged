@@ -93,7 +93,9 @@ impl Scene for WorldScene {
         let [width, height] = size.to_array().map(|f| f as f32);
         let aspect = width / height.max(1.0);
 
-        self.sim_world.camera.aspect_ratio = aspect;
+        for camera in &mut self.sim_world.cameras {
+            camera.aspect_ratio = aspect;
+        }
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
@@ -166,6 +168,22 @@ impl Scene for WorldScene {
             .default_open(true)
             .show(ctx, |ui| {
                 use crate::game::scenes::world::systems::DebugQuadTreeOptions;
+
+                ui.heading("Camera");
+                ui.horizontal(|ui| {
+                    use crate::game::scenes::world::sim_world::ActiveCamera;
+
+                    ui.selectable_value(
+                        &mut self.sim_world.active_camera,
+                        ActiveCamera::Game,
+                        "Game",
+                    );
+                    ui.selectable_value(
+                        &mut self.sim_world.active_camera,
+                        ActiveCamera::Debug,
+                        "Debug",
+                    );
+                });
 
                 ui.heading("Environment");
                 ui.horizontal(|ui| {

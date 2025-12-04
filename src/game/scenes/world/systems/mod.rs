@@ -13,7 +13,10 @@ use crate::{
             animation::generate_pose,
             render::{RenderStore, RenderWorld},
             sim_world::SimWorld,
-            systems::top_down_camera_controller::TopDownCameraController,
+            systems::{
+                free_camera_controller::FreeCameraController,
+                top_down_camera_controller::TopDownCameraController,
+            },
         },
         skeleton::Skeleton,
     },
@@ -40,7 +43,7 @@ pub struct Time {
 
 /// Shared resources between rendering in the systems and the [RenderWorld].
 pub struct Systems {
-    camera_system: camera_system::CameraSystem<TopDownCameraController>,
+    pub camera_system: camera_system::CameraSystem,
     pub culling: cull_system::CullSystem,
     pub terrain_system: terrain_system::TerrainSystem,
     pub objects_system: objects_system::ObjectsSystem,
@@ -57,24 +60,27 @@ impl Systems {
         campaign: &Campaign,
     ) -> Self {
         Self {
-            camera_system: camera_system::CameraSystem::new({
-                let camera_from = campaign.view_initial.from.extend(2500.0);
-                let camera_to = campaign.view_initial.to.extend(0.0);
+            camera_system: camera_system::CameraSystem::new(
+                {
+                    let camera_from = campaign.view_initial.from.extend(2500.0);
+                    let camera_to = campaign.view_initial.to.extend(0.0);
 
-                let dir = (camera_to - camera_from).normalize();
+                    let dir = (camera_to - camera_from).normalize();
 
-                let flat = Vec2::new(dir.x, dir.y);
-                let yaw = (-dir.x).atan2(dir.y).to_degrees();
-                let pitch = dir.z.atan2(flat.length()).to_degrees();
+                    let flat = Vec2::new(dir.x, dir.y);
+                    let yaw = (-dir.x).atan2(dir.y).to_degrees();
+                    let pitch = dir.z.atan2(flat.length()).to_degrees();
 
-                TopDownCameraController::new(
-                    camera_from,
-                    yaw.to_degrees(),
-                    pitch.to_degrees(),
-                    4_000.0,
-                    100.0,
-                )
-            }),
+                    TopDownCameraController::new(
+                        camera_from,
+                        yaw.to_degrees(),
+                        pitch.to_degrees(),
+                        4_000.0,
+                        100.0,
+                    )
+                },
+                FreeCameraController::new(1000.0, 0.2),
+            ),
             culling: cull_system::CullSystem::default(),
             terrain_system: terrain_system::TerrainSystem::new(renderer, render_store, sim_world),
             objects_system: objects_system::ObjectsSystem::new(renderer, render_store),
