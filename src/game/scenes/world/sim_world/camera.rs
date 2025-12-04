@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use crate::game::math::ViewProjection;
+use crate::game::math::{Frustum, Ray, RaySegment, ViewProjection};
 
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, UVec2, Vec2, Vec3, Vec4};
 
 #[derive(Debug, Default)]
 pub struct Camera {
@@ -99,5 +99,58 @@ impl Camera {
     pub fn calculate_view(&self) -> Mat4 {
         let target = self.position + self.rotation * Self::FORWARD;
         Mat4::look_at_lh(self.position, target, self.rotation * Self::UP)
+    }
+
+    /// Compute the final matrices for this camera.
+    pub fn compute(&self) -> ComputedCamera {
+        let view_proj = self.calculate_view_projection();
+        let frustum = view_proj.frustum();
+        let position = self.position;
+        let forward = (self.rotation * Camera::FORWARD).normalize();
+
+        ComputedCamera {
+            view_proj,
+            frustum,
+            position,
+            forward,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct ComputedCamera {
+    pub view_proj: ViewProjection,
+    pub frustum: Frustum,
+    pub position: Vec3,
+    pub forward: Vec3,
+}
+
+impl ComputedCamera {
+    pub fn create_ray_segment(&self, mouse_position: UVec2, viewport_size: UVec2) -> RaySegment {
+        let viewport_pos = (mouse_position.as_vec2() + Vec2::splat(0.5)) / viewport_size.as_vec2();
+        let ndc_x = viewport_pos.x * 2.0 - 1.0;
+        let ndc_y = 1.0 - viewport_pos.y * 2.0;
+
+        let near_clip = Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+        let far_clip = Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+
+        let mut near_world = self.view_proj.inv * near_clip;
+        let mut far_world = self.view_proj.inv * far_clip;
+
+        // Homogeneous divide.
+        near_world /= near_world.w;
+        far_world /= far_world.w;
+
+        let near_world = near_world.truncate();
+        let far_world = far_world.truncate();
+
+        let direction = far_world - near_world;
+        RaySegment {
+            ray: Ray {
+                origin: near_world,
+                direction: direction.normalize(),
+            },
+            distance: direction.length(),
+        }
     }
 }

@@ -4,7 +4,7 @@ use crate::{
     engine::{input::InputState, prelude::Renderer},
     game::scenes::world::{
         render::RenderWorld,
-        sim_world::{Camera, ComputedCamera, SimWorld},
+        sim_world::{Camera, SimWorld},
         systems::Time,
     },
 };
@@ -92,17 +92,7 @@ where
             .fog_distance
             .sample_sub_frame(sim_world.time_of_day, true);
 
-        let view_proj = camera.calculate_view_projection();
-        let frustum = view_proj.frustum();
-        let position = camera.position;
-        let forward = (camera.rotation * Camera::FORWARD).normalize();
-
-        sim_world.computed_camera = ComputedCamera {
-            view_proj,
-            frustum,
-            position,
-            forward,
-        };
+        sim_world.computed_camera = camera.compute();
     }
 
     pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
