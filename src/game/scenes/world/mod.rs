@@ -170,19 +170,55 @@ impl Scene for WorldScene {
                 use crate::game::scenes::world::systems::DebugQuadTreeOptions;
 
                 ui.heading("Camera");
-                ui.horizontal(|ui| {
+                ui.vertical(|ui| {
                     use crate::game::scenes::world::sim_world::ActiveCamera;
 
-                    ui.selectable_value(
-                        &mut self.sim_world.active_camera,
-                        ActiveCamera::Game,
-                        "Game",
-                    );
-                    ui.selectable_value(
-                        &mut self.sim_world.active_camera,
-                        ActiveCamera::Debug,
-                        "Debug",
-                    );
+                    ui.horizontal(|ui| {
+                        use crate::game::scenes::world::sim_world::ActiveCamera;
+
+                        ui.selectable_value(
+                            &mut self.sim_world.active_camera,
+                            ActiveCamera::Game,
+                            "Game",
+                        );
+                        ui.selectable_value(
+                            &mut self.sim_world.active_camera,
+                            ActiveCamera::Debug,
+                            "Debug",
+                        );
+                    });
+
+                    match self.sim_world.active_camera {
+                        ActiveCamera::Game => {}
+                        ActiveCamera::Debug => {
+                            egui::Grid::new("debug_camera")
+                                .num_columns(2)
+                                .show(ui, |ui| {
+                                    ui.label("Speed");
+                                    let value = &mut self
+                                        .systems
+                                        .camera_system
+                                        .debug_controller
+                                        .movement_speed;
+                                    ui.add(
+                                        egui::widgets::Slider::new(value, 500.0..=10_000.0)
+                                            .fixed_decimals(0),
+                                    );
+                                    ui.end_row();
+
+                                    ui.label("Sensitivity");
+                                    let value = &mut self
+                                        .systems
+                                        .camera_system
+                                        .debug_controller
+                                        .mouse_sensitivity;
+                                    ui.add(
+                                        egui::widgets::Slider::new(value, 0.1..=1.0).step_by(0.01),
+                                    );
+                                    ui.end_row();
+                                });
+                        }
+                    }
                 });
 
                 ui.heading("Environment");
@@ -190,7 +226,8 @@ impl Scene for WorldScene {
                     ui.label("Time of day");
                     ui.add(
                         Slider::new(&mut self.sim_world.time_of_day, 0.0..=24.0)
-                            .drag_value_speed(0.01),
+                            .drag_value_speed(0.01)
+                            .fixed_decimals(2),
                     );
                 });
 
