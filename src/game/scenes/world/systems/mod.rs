@@ -104,6 +104,12 @@ impl Systems {
         sim_world.ui.ui_rects.clear();
 
         self.camera_system.input(sim_world, time, input_state);
+
+        // TODO: This should be the first step in the update system, but that
+        //       would mean all systems should record input state and then
+        //       process it in `update` as well, which is not done right now.
+        self.camera_system.compute_cameras(sim_world);
+
         self.world_interaction_system
             .input(sim_world, input_state, viewport_size);
     }

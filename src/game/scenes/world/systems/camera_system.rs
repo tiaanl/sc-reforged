@@ -1,4 +1,5 @@
 use glam::vec4;
+use strum::IntoEnumIterator;
 
 use crate::{
     engine::{input::InputState, prelude::Renderer},
@@ -103,8 +104,13 @@ impl CameraSystem {
                     .handle_input(camera, input_state, time.delta_time);
             }
         }
+    }
 
-        sim_world.computed_cameras[c as usize] = camera.compute();
+    #[inline]
+    pub fn compute_cameras(&mut self, sim_world: &mut SimWorld) {
+        for c in ActiveCamera::iter() {
+            sim_world.computed_cameras[c as usize] = sim_world.cameras[c as usize].compute();
+        }
     }
 
     pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
