@@ -172,7 +172,9 @@ impl From<ConfigLines> for Campaign {
                     campaign.sky_textures.push(sky_texture);
                 }
 
-                _ => tracing::warn!("Invalid key for Campaign: {}", line.key),
+                _ => {
+                    // tracing::warn!("Invalid key for Campaign: {}", line.key);
+                }
             }
         }
 
