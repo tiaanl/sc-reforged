@@ -211,20 +211,12 @@ impl winit::application::ApplicationHandler for App {
                         *last_frame_time = now;
 
                         {
-                            let _z = tracy_client::span!("update");
-
                             let delta_time = last_frame_duration.as_secs_f32();
-
                             scene.update(delta_time, input);
                         }
 
                         {
-                            let _z = tracy_client::span!("render");
-
-                            let output = {
-                                let _x = tracy_client::span!("get texture");
-                                renderer().surface.get_texture(&renderer().device)
-                            };
+                            let output = renderer().surface.get_texture(&renderer().device);
                             let surface = output
                                 .texture
                                 .create_view(&wgpu::TextureViewDescriptor::default());
@@ -270,7 +262,6 @@ impl winit::application::ApplicationHandler for App {
                             output.present();
 
                             // Frame is done rendering.
-                            tracy_client::frame_mark();
 
                             *frame_index += 1;
 
@@ -326,9 +317,6 @@ impl winit::application::ApplicationHandler for App {
 }
 
 fn main() {
-    let _tracy = tracy_client::Client::start();
-    tracy_client::set_thread_name!("Main thread");
-
     tracing_subscriber::fmt().init();
 
     let opts = match Opts::try_parse() {
