@@ -1,5 +1,7 @@
+use bevy_ecs::component::Component;
 use std::marker::PhantomData;
 
+#[derive(Component)]
 pub struct Handle<T>(usize, PhantomData<T>);
 
 impl<T> Clone for Handle<T> {

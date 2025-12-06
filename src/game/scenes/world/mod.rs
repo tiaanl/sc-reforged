@@ -55,9 +55,9 @@ impl WorldScene {
         let fps_history = vec![FrameTime::default(); 100];
         let fps_history_cursor = 0;
 
-        let sim_world = SimWorld::new(&campaign_def)?;
+        let mut sim_world = SimWorld::new(&campaign_def)?;
 
-        let render_store = RenderStore::new(renderer(), window_size);
+        let mut render_store = RenderStore::new(renderer(), window_size);
 
         let render_worlds = [
             RenderWorld::new(0, renderer(), &render_store),
@@ -65,7 +65,10 @@ impl WorldScene {
             RenderWorld::new(2, renderer(), &render_store),
         ];
 
-        let systems = systems::Systems::new(renderer(), &render_store, &sim_world, &campaign);
+        let systems = systems::Systems::new(&mut sim_world, renderer(), &render_store, &campaign);
+
+        // Prepare the renderer.
+        sim_world.prepare_render_store(&mut render_store)?;
 
         Ok(Self {
             sim_world,
