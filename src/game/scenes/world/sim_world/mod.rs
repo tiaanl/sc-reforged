@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use ahash::HashSet;
+use bevy_ecs::{lifecycle::HookContext, schedule::Schedule, world::World};
 use glam::{IVec2, Quat, Vec3, vec3};
 use strum::{EnumCount, EnumIter};
 
@@ -13,20 +14,24 @@ use crate::{
         models::{ModelName, models},
         scenes::world::{
             animation::motion::Motion,
-            sim_world::{objects::Objects, quad_tree::QuadTree, ui::Ui},
+            render::RenderStore,
+            sim_world::{ecs::PendingRenderStore, objects::Objects, quad_tree::QuadTree, ui::Ui},
         },
         track::Track,
     },
 };
 
 mod camera;
+mod ecs;
 mod height_map;
 mod objects;
 mod quad_tree;
+mod spawner;
 mod terrain;
 mod ui;
 
 pub use camera::{Camera, ComputedCamera};
+pub use ecs::GizmoVertices;
 pub use height_map::HeightMap;
 pub use objects::Object;
 pub use terrain::Terrain;
@@ -52,6 +57,12 @@ pub enum ActiveCamera {
 
 /// Holds all the data for the world we are simulating.
 pub struct SimWorld {
+    /// The ECS hodling the objects in the world.
+    pub world: World,
+
+    /// Schedule for running update systems.
+    pub update_schedule: Schedule,
+
     /// Data for each camera.
     pub cameras: [Camera; ActiveCamera::COUNT],
 
@@ -132,26 +143,51 @@ impl SimWorld {
 
         let mut objects = Objects::new()?;
 
+        let mut world = World::default();
+
+        world.init_resource::<GizmoVertices>();
+
+        world.init_resource::<PendingRenderStore>();
+
+        world.register_component_hooks::<Handle<Model>>().on_insert(
+            |mut world, HookContext { entity, .. }| {
+                if let Some(model_handle) = world.get::<Handle<Model>>(entity).cloned() {
+                    let mut pending_render_store = world.resource_mut::<PendingRenderStore>();
+                    pending_render_store.models.insert(model_handle);
+                }
+            },
+        );
+
+        let update_schedule = Schedule::new(ecs::UpdateSchedule);
+
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;
+
+            let mut spawner = spawner::Spawner::new(&mut world);
 
             for object in mtf.objects.iter() {
                 let object_type = ObjectType::from_string(&object.typ)
                     .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
 
-                let (object_handle, object) = match objects.spawn(
-                    Transform::from_translation(object.position)
-                        .with_euler_rotation(object.rotation * vec3(1.0, 1.0, -1.0)),
-                    object_type,
-                    &object.name,
-                    &object.title,
-                ) {
+                let transform = Transform::from_translation(object.position)
+                    .with_euler_rotation(object.rotation * vec3(1.0, 1.0, -1.0));
+
+                let _ = match spawner.spawn(transform, object_type, &object.name, &object.title) {
                     Ok(handle) => handle,
                     Err(err) => {
                         tracing::warn!("Could not spawn object! ({})", err);
                         continue;
                     }
                 };
+
+                let (object_handle, object) =
+                    match objects.spawn(transform, object_type, &object.name, &object.title) {
+                        Ok(handle) => handle,
+                        Err(err) => {
+                            tracing::warn!("Could not spawn object! ({})", err);
+                            continue;
+                        }
+                    };
 
                 // Insert the object into the quad tree.
                 quad_tree.insert_object(object_handle, &object.bounding_sphere);
@@ -166,6 +202,9 @@ impl SimWorld {
         let ui = Ui::new();
 
         Ok(SimWorld {
+            world,
+            update_schedule,
+
             cameras: [
                 Camera::new(
                     Vec3::ZERO,
@@ -209,5 +248,20 @@ impl SimWorld {
 
             ui,
         })
+    }
+
+    pub fn prepare_render_store(
+        &mut self,
+        render_store: &mut RenderStore,
+    ) -> Result<(), AssetError> {
+        let Some(mut pending) = self.world.get_resource_mut::<PendingRenderStore>() else {
+            return Ok(());
+        };
+
+        for model_handle in pending.models.drain() {
+            render_store.get_or_create_render_model(model_handle)?;
+        }
+
+        Ok(())
     }
 }

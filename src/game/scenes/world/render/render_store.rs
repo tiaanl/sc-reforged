@@ -59,6 +59,7 @@ impl RenderStore {
         model_handle: Handle<Model>,
     ) -> Result<Handle<RenderModel>, AssetError> {
         if let Some(render_model_handle) = self.model_to_render_model.get(&model_handle) {
+            tracing::warn!("Render model already prepared!");
             return Ok(*render_model_handle);
         }
 

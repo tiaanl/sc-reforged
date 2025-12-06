@@ -12,7 +12,7 @@ use crate::{
         math::{BoundingSphere, RaySegment},
         model::{Mesh, Model, ModelRayHit},
         models::{ModelName, models},
-        scenes::world::{render::RenderStore, systems::RenderWrapper},
+        scenes::world::systems::RenderWrapper,
     },
 };
 
@@ -211,24 +211,6 @@ impl Objects {
     #[inline]
     pub fn get(&self, handle: Handle<Object>) -> Option<&Object> {
         self.objects.get(handle)
-    }
-
-    /// Take all models that were used during `spawn` and prepare them to be rendered.
-    pub fn prepare_models(&mut self, render_store: &mut RenderStore) {
-        if self.models_to_prepare.is_empty() {
-            return;
-        }
-
-        let mut models_to_prepare = Vec::default();
-        std::mem::swap(&mut self.models_to_prepare, &mut models_to_prepare);
-
-        tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
-
-        for model_handle in models_to_prepare {
-            if let Err(err) = render_store.get_or_create_render_model(model_handle) {
-                tracing::warn!("Could not prepare model! ({err})");
-            }
-        }
     }
 
     fn build_body_definition_model(body_definition: &BodyDefinition) -> Result<Model, AssetError> {

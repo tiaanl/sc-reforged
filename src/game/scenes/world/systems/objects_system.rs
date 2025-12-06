@@ -1,7 +1,12 @@
+use bevy_ecs::system::{Query, ResMut};
 use glam::Mat4;
 
 use crate::{
-    engine::{gizmos, prelude::*, storage::Handle},
+    engine::{
+        gizmos::{self, create_axis},
+        prelude::*,
+        storage::Handle,
+    },
     game::{
         model::Model,
         scenes::world::{
@@ -9,7 +14,7 @@ use crate::{
                 GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex,
                 RenderWorld,
             },
-            sim_world::SimWorld,
+            sim_world::{GizmoVertices, SimWorld},
         },
     },
     wgsl_shader,
@@ -397,5 +402,15 @@ impl ObjectsSystem {
         }) {
             render_pass.draw_indexed(render_model.alpha_range.clone(), 0, range);
         }
+    }
+}
+
+pub fn object_gizmos(query: Query<&Transform>, mut gizmo_vertices: ResMut<GizmoVertices>) {
+    const AXIS_SIZE: f32 = 100.0;
+
+    for transform in query.iter() {
+        gizmo_vertices
+            .vertices
+            .extend(create_axis(transform.to_mat4(), AXIS_SIZE));
     }
 }

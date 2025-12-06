@@ -54,11 +54,15 @@ pub struct Systems {
 
 impl Systems {
     pub fn new(
+        sim_world: &mut SimWorld,
         renderer: &Renderer,
         render_store: &RenderStore,
-        sim_world: &SimWorld,
         campaign: &Campaign,
     ) -> Self {
+        sim_world
+            .update_schedule
+            .add_systems(objects_system::object_gizmos);
+
         Self {
             camera_system: camera_system::CameraSystem::new(
                 {
@@ -115,6 +119,8 @@ impl Systems {
     }
 
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
+        sim_world.update_schedule.run(&mut sim_world.world);
+
         self.culling.calculate_visible_chunks(sim_world);
         day_night_cycle_system::increment_time_of_day(sim_world, time);
         self.objects_system.render_gizmos(sim_world);
@@ -214,9 +220,6 @@ impl Systems {
         self.camera_system.extract(sim_world, render_world);
         self.terrain_system.extract(sim_world, render_world);
         self.gizmo_system.extract(sim_world, render_world);
-
-        // Make sure all models are prepared to be rendered.
-        sim_world.objects.prepare_models(render_store);
 
         self.objects_system.extract(sim_world, render_store);
 
