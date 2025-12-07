@@ -15,7 +15,7 @@ use crate::{
         scenes::world::{
             animation::motion::Motion,
             render::RenderStore,
-            sim_world::{ecs::PendingRenderStore, objects::Objects, quad_tree::QuadTree, ui::Ui},
+            sim_world::{ecs::PendingRenderStore, quad_tree::QuadTree, ui::Ui},
         },
         track::Track,
     },
@@ -24,7 +24,6 @@ use crate::{
 mod camera;
 mod ecs;
 mod height_map;
-mod objects;
 mod quad_tree;
 mod spawner;
 mod terrain;
@@ -33,7 +32,6 @@ mod ui;
 pub use camera::{Camera, ComputedCamera};
 pub use ecs::GizmoVertices;
 pub use height_map::HeightMap;
-pub use objects::Object;
 pub use terrain::Terrain;
 pub use ui::UiRect;
 
@@ -82,12 +80,6 @@ pub struct SimWorld {
     pub highlighted_chunks: HashSet<IVec2>,
     /// The visible chunks for the current frame.
     pub visible_chunks: Vec<IVec2>,
-
-    pub objects: Objects,
-    pub highlighted_objects: HashSet<Handle<Object>>,
-
-    /// A list of visible objects this frame.
-    pub visible_objects: Vec<Handle<Object>>,
 
     pub gizmo_vertices: Vec<GizmoVertex>,
 
@@ -139,9 +131,7 @@ impl SimWorld {
             Terrain::new(height_map, terrain_texture)
         };
 
-        let mut quad_tree = QuadTree::from_terrain(&terrain);
-
-        let mut objects = Objects::new()?;
+        let quad_tree = QuadTree::from_terrain(&terrain);
 
         let mut world = World::default();
 
@@ -160,10 +150,11 @@ impl SimWorld {
 
         let update_schedule = Schedule::new(ecs::UpdateSchedule);
 
+        let character_profiles = data_dir().load_character_profiles()?;
+        let mut spawner = spawner::Spawner::new(character_profiles, &mut world);
+
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;
-
-            let mut spawner = spawner::Spawner::new(&mut world);
 
             for object in mtf.objects.iter() {
                 let object_type = ObjectType::from_string(&object.typ)
@@ -180,17 +171,8 @@ impl SimWorld {
                     }
                 };
 
-                let (object_handle, object) =
-                    match objects.spawn(transform, object_type, &object.name, &object.title) {
-                        Ok(handle) => handle,
-                        Err(err) => {
-                            tracing::warn!("Could not spawn object! ({})", err);
-                            continue;
-                        }
-                    };
-
                 // Insert the object into the quad tree.
-                quad_tree.insert_object(object_handle, &object.bounding_sphere);
+                // quad_tree.insert_object(object_handle, &object.bounding_sphere);
             }
         }
 
@@ -236,10 +218,6 @@ impl SimWorld {
             highlighted_chunks: HashSet::default(),
             visible_chunks: Vec::default(),
 
-            objects,
-            highlighted_objects: HashSet::default(),
-            visible_objects: Vec::default(),
-
             gizmo_vertices: Vec::with_capacity(1024),
 
             test_model,
@@ -250,18 +228,20 @@ impl SimWorld {
         })
     }
 
-    pub fn prepare_render_store(
-        &mut self,
-        render_store: &mut RenderStore,
-    ) -> Result<(), AssetError> {
-        let Some(mut pending) = self.world.get_resource_mut::<PendingRenderStore>() else {
-            return Ok(());
-        };
-
-        for model_handle in pending.models.drain() {
-            render_store.get_or_create_render_model(model_handle)?;
+    /// Handle all pending render store resources.
+    pub fn process_pending_render_store(&mut self, render_store: &mut RenderStore) {
+        if !self.world.is_resource_changed::<PendingRenderStore>() {
+            return;
         }
 
-        Ok(())
+        let mut pending = HashSet::default();
+        let mut current = self.world.resource_mut::<PendingRenderStore>();
+        std::mem::swap(&mut pending, &mut current.models);
+
+        for model_handle in pending.drain() {
+            if let Err(err) = render_store.get_or_create_render_model(model_handle) {
+                tracing::warn!("Could not create render model! ({err})");
+            }
+        }
     }
 }

@@ -1,15 +1,15 @@
 use glam::{IVec2, Mat4, UVec2, Vec2, Vec3, Vec4};
 
 use crate::{
-    engine::{prelude::InputState, storage::Handle},
+    engine::prelude::InputState,
     game::{
-        math::{Frustum, RaySegment},
-        scenes::world::sim_world::{Object, SimWorld, UiRect},
+        math::Frustum,
+        scenes::world::sim_world::{SimWorld, UiRect},
     },
 };
 
 #[derive(Debug)]
-pub enum InteractionHit {
+pub enum _InteractionHit {
     Terrain {
         _world_position: Vec3,
         distance: f32,
@@ -18,18 +18,18 @@ pub enum InteractionHit {
     Object {
         _world_position: Vec3,
         distance: f32,
-        object: Handle<Object>,
+        object: usize,
     },
 }
 
-impl InteractionHit {
-    pub fn distance(&self) -> f32 {
+impl _InteractionHit {
+    pub fn _distance(&self) -> f32 {
         match self {
-            InteractionHit::Terrain {
+            _InteractionHit::Terrain {
                 distance: _distance,
                 ..
             }
-            | InteractionHit::Object {
+            | _InteractionHit::Object {
                 distance: _distance,
                 ..
             } => *_distance,
@@ -110,32 +110,9 @@ impl WorldInteractionSystem {
             }
 
             self.selection_rect = None;
-        } else if let Some(ref mut selection_rect) = self.selection_rect
-            && let Some(mouse_position) = input_state.mouse_position()
-        {
-            selection_rect.size = mouse_position.as_ivec2() - selection_rect.pos.as_ivec2();
-        }
-
-        if false {
-            sim_world.highlighted_chunks.clear();
-            sim_world.highlighted_objects.clear();
+        } else if let Some(ref mut selection_rect) = self.selection_rect {
             if let Some(mouse_position) = input_state.mouse_position() {
-                let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
-                let camera_ray_segment =
-                    computed_camera.create_ray_segment(mouse_position, viewport_size);
-
-                if let Some(hit) =
-                    Self::get_interaction_hit(sim_world, &camera_ray_segment, |_| true)
-                {
-                    match hit {
-                        InteractionHit::Terrain { chunk_coord, .. } => {
-                            sim_world.highlighted_chunks.insert(chunk_coord);
-                        }
-                        InteractionHit::Object { object, .. } => {
-                            sim_world.highlighted_objects.insert(object);
-                        }
-                    }
-                }
+                selection_rect.size = mouse_position.as_ivec2() - selection_rect.pos.as_ivec2();
             }
         }
     }
@@ -200,7 +177,7 @@ impl WorldInteractionSystem {
         debug_assert!(min.x <= max.x);
         debug_assert!(min.y <= max.y);
 
-        let frustum = {
+        let _frustum = {
             const NDC_Z_NEAR: f32 = 0.0;
             const NDC_Z_FAR: f32 = 1.0;
 
@@ -233,16 +210,16 @@ impl WorldInteractionSystem {
             Frustum::from_corners(ntl, ntr, nbr, nbl, ftl, ftr, fbr, fbl)
         };
 
-        let mut objects: Vec<Handle<Object>> = vec![];
-        sim_world.quad_tree.with_nodes_in_frustum(&frustum, |node| {
-            for object_handle in node.objects.iter() {
-                if let Some(object) = sim_world.objects.get(*object_handle)
-                    && frustum.intersects_bounding_sphere(&object.bounding_sphere)
-                {
-                    objects.push(*object_handle);
-                }
-            }
-        });
+        // let mut objects: Vec<Handle<Object>> = vec![];
+        // sim_world.quad_tree.with_nodes_in_frustum(&frustum, |node| {
+        //     for object_handle in node.objects.iter() {
+        //         if let Some(object) = sim_world.objects.get(*object_handle) {
+        //             if frustum.intersects_bounding_sphere(&object.bounding_sphere) {
+        //                 objects.push(*object_handle);
+        //             }
+        //         }
+        //     }
+        // });
     }
 
     /// Update the selected objects by using a ray segment with an origin at
@@ -263,50 +240,5 @@ impl WorldInteractionSystem {
         let clip = Vec4::new(ndc.x, ndc.y, ndc.z, 1.0);
         let world = inv * clip;
         world.truncate() / world.w
-    }
-
-    fn get_interaction_hit(
-        sim_world: &SimWorld,
-        camera_ray_segment: &RaySegment,
-        object_pred: impl Fn(&Object) -> bool,
-    ) -> Option<InteractionHit> {
-        let mut hits = Vec::default();
-
-        sim_world
-            .quad_tree
-            .with_nodes_ray_segment(camera_ray_segment, |node| {
-                if let Some(chunk_coord) = node.chunk_coord
-                    && let Some(hit) = sim_world
-                        .terrain
-                        .chunk_intersect_ray_segment(chunk_coord, camera_ray_segment)
-                {
-                    hits.push(InteractionHit::Terrain {
-                        _world_position: hit.world_position,
-                        distance: hit.t,
-                        chunk_coord,
-                    });
-                }
-
-                for object_handle in node.objects.iter() {
-                    if let Some(object) = sim_world.objects.get(*object_handle) {
-                        if !object_pred(object) {
-                            continue;
-                        }
-                        if let Some(hit) = object.ray_intersection(camera_ray_segment) {
-                            hits.push(InteractionHit::Object {
-                                _world_position: hit.world_position,
-                                distance: hit.t,
-                                object: *object_handle,
-                            });
-                        }
-                    }
-                }
-            });
-
-        // Reverse sort the hits...
-        hits.sort_by(|a, b| b.distance().partial_cmp(&a.distance()).unwrap());
-
-        // ...and return the last one.
-        hits.pop()
     }
 }
