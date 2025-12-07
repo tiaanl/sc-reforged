@@ -3,10 +3,7 @@ use winit::{event::MouseButton, keyboard::KeyCode};
 
 use crate::{
     engine::prelude::InputState,
-    game::{
-        interpolate::Interpolate,
-        scenes::world::{sim_world::Camera, systems::camera_system::CameraController},
-    },
+    game::{interpolate::Interpolate, scenes::world::sim_world::Camera},
 };
 
 pub struct TopDownCameraControls {
@@ -186,8 +183,8 @@ impl TopDownCameraController {
     }
 }
 
-impl CameraController for TopDownCameraController {
-    fn handle_input(
+impl TopDownCameraController {
+    pub fn handle_input(
         &mut self,
         target_camera: &mut Camera,
         input_state: &InputState,

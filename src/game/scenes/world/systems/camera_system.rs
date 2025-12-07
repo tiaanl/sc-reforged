@@ -1,52 +1,31 @@
+use bevy_ecs::{
+    query::{Changed, With},
+    system::{Query, Res},
+};
 use glam::vec4;
-use strum::IntoEnumIterator;
 
 use crate::{
-    engine::{input::InputState, prelude::Renderer},
+    engine::prelude::Renderer,
     game::scenes::world::{
         render::RenderWorld,
-        sim_world::{ActiveCamera, Camera, SimWorld},
-        systems::Time,
+        sim_world::{
+            ActiveCamera, Camera, CameraController, ComputedCamera, InputStateResource, SimWorld,
+            Time,
+        },
     },
 };
 
-use super::{
-    free_camera_controller::FreeCameraController,
-    top_down_camera_controller::TopDownCameraController,
-};
-
-pub trait CameraController {
-    /// Gather input intent by the user.
-    fn handle_input(
-        &mut self,
-        target_camera: &mut Camera,
-        input_state: &InputState,
-        delta_time: f32,
-    );
-}
-
-pub struct CameraSystem {
-    /// Control the game camera.
-    pub game_controller: TopDownCameraController,
-    /// Control the debug camera.
-    pub debug_controller: FreeCameraController,
-}
+pub struct CameraSystem;
 
 impl CameraSystem {
-    pub fn new(
-        game_controller: TopDownCameraController,
-        debug_controller: FreeCameraController,
-    ) -> Self {
-        Self {
-            game_controller,
-            debug_controller,
-        }
-    }
-}
+    fn extract_camera(sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
+        let source = {
+            let mut query = sim_world
+                .world
+                .query_filtered::<&ComputedCamera, With<ActiveCamera>>();
+            query.single(&sim_world.world).unwrap()
+        };
 
-impl CameraSystem {
-    fn extract_camera(sim_world: &SimWorld, render_world: &mut RenderWorld) {
-        let source = &sim_world.computed_cameras[sim_world.active_camera as usize];
         let target = &mut render_world.camera_env;
 
         target.proj_view = source.view_proj.mat.to_cols_array_2d();
@@ -83,36 +62,6 @@ impl CameraSystem {
 }
 
 impl CameraSystem {
-    pub fn input(&mut self, sim_world: &mut SimWorld, time: &Time, input_state: &InputState) {
-        let far = sim_world
-            .day_night_cycle
-            .fog_distance
-            .sample_sub_frame(sim_world.time_of_day, true);
-
-        let c = sim_world.active_camera;
-        let camera = &mut sim_world.cameras[c as usize];
-        camera.far = far;
-
-        match c {
-            ActiveCamera::Game => {
-                self.game_controller
-                    .handle_input(camera, input_state, time.delta_time);
-            }
-
-            ActiveCamera::Debug => {
-                self.debug_controller
-                    .handle_input(camera, input_state, time.delta_time);
-            }
-        }
-    }
-
-    #[inline]
-    pub fn compute_cameras(&mut self, sim_world: &mut SimWorld) {
-        for c in ActiveCamera::iter() {
-            sim_world.computed_cameras[c as usize] = sim_world.cameras[c as usize].compute();
-        }
-    }
-
     pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
         Self::extract_camera(sim_world, render_world);
         Self::extract_environment(sim_world, render_world);
@@ -124,5 +73,29 @@ impl CameraSystem {
             0,
             bytemuck::bytes_of(&render_world.camera_env),
         );
+    }
+}
+
+pub fn camera_controller_input(
+    mut query: Query<(&mut CameraController, &mut Camera), With<ActiveCamera>>,
+    input_state: Res<InputStateResource>,
+    time: Res<Time>,
+) {
+    for (mut controller, mut camera) in query.iter_mut() {
+        match controller.as_mut() {
+            CameraController::TopDown(controller) => {
+                controller.handle_input(camera.as_mut(), &input_state.0, time.delta_time)
+            }
+
+            CameraController::Free(controller) => {
+                controller.handle_input(camera.as_mut(), &input_state.0, time.delta_time)
+            }
+        }
+    }
+}
+
+pub fn compute_cameras(mut query: Query<(&Camera, &mut ComputedCamera), Changed<Camera>>) {
+    for (camera, mut computed_camera) in query.iter_mut() {
+        *computed_camera = camera.compute();
     }
 }

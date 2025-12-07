@@ -8,7 +8,7 @@ use crate::{
         scenes::world::{
             game_mode::GameMode,
             render::{RenderStore, RenderWorld},
-            sim_world::SimWorld,
+            sim_world::{Camera, SimWorld, Time},
         },
     },
 };
@@ -95,9 +95,11 @@ impl Scene for WorldScene {
         let [width, height] = size.to_array().map(|f| f as f32);
         let aspect = width / height.max(1.0);
 
-        for camera in &mut self.sim_world.cameras {
-            camera.aspect_ratio = aspect;
-        }
+        self.sim_world
+            .world
+            .query::<&mut Camera>()
+            .iter_mut(&mut self.sim_world.world)
+            .for_each(|mut camera| camera.aspect_ratio = aspect);
     }
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
@@ -105,7 +107,7 @@ impl Scene for WorldScene {
 
         // Run systems
         {
-            let time = systems::Time { delta_time };
+            let time = Time { delta_time };
             let viewport_size = renderer().surface.size();
 
             let start = std::time::Instant::now();
@@ -171,10 +173,9 @@ impl Scene for WorldScene {
             .show(ctx, |ui| {
                 use crate::game::scenes::world::systems::DebugQuadTreeOptions;
 
+                /*
                 ui.heading("Camera");
                 ui.vertical(|ui| {
-                    use crate::game::scenes::world::sim_world::ActiveCamera;
-
                     ui.horizontal(|ui| {
                         use crate::game::scenes::world::sim_world::ActiveCamera;
 
@@ -222,6 +223,7 @@ impl Scene for WorldScene {
                         }
                     }
                 });
+                */
 
                 ui.heading("Environment");
                 ui.horizontal(|ui| {

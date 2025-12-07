@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use ahash::HashMap;
+use bevy_ecs::query::With;
 use glam::{IVec2, UVec2, ivec2};
 use wgpu::util::DeviceExt;
 
@@ -10,7 +11,7 @@ use crate::{
         image::images,
         scenes::world::{
             render::{ChunkInstanceData, GeometryBuffer, RenderStore, RenderWorld},
-            sim_world::{SimWorld, Terrain},
+            sim_world::{ActiveCamera, Camera, ComputedCamera, SimWorld, Terrain},
         },
     },
     wgsl_shader,
@@ -466,14 +467,21 @@ impl TerrainSystem {
 }
 
 impl TerrainSystem {
-    pub fn extract(&mut self, sim_world: &SimWorld, render_world: &mut RenderWorld) {
+    pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
         self.chunk_lod_cache.clear();
 
-        let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
+        let (camera, computed_camera) = {
+            let mut query = sim_world
+                .world
+                .query_filtered::<(&Camera, &ComputedCamera), With<ActiveCamera>>();
+            query.single(&sim_world.world).unwrap()
+        };
+
+        // let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
 
         let camera_position = computed_camera.position;
         let camera_forward = computed_camera.forward;
-        let camera_far = sim_world.cameras[sim_world.active_camera as usize].far;
+        let camera_far = camera.far;
 
         let terrain_chunk_instances = &mut render_world.terrain_chunk_instances;
         let strata_instances = &mut render_world.strata_instances;
