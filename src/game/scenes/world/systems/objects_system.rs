@@ -2,11 +2,7 @@ use bevy_ecs::system::{Query, ResMut};
 use glam::Mat4;
 
 use crate::{
-    engine::{
-        gizmos::{self, create_axis},
-        prelude::*,
-        storage::Handle,
-    },
+    engine::{gizmos::create_axis, prelude::*, storage::Handle},
     game::{
         model::Model,
         scenes::world::{
@@ -59,7 +55,7 @@ pub struct RenderWrapper<'a> {
 impl<'a> RenderWrapper<'a> {
     pub fn render_model(&mut self, transform: Mat4, model: Handle<Model>, highlight: f32) {
         let Some(render_model_handle) = self.render_store.render_model_for_model(model) else {
-            tracing::warn!("Missing render model for model!");
+            // tracing::warn!("Missing render model for model!");
             return;
         };
 
@@ -221,18 +217,6 @@ impl ObjectsSystem {
         }
     }
 
-    pub fn render_gizmos(&self, sim_world: &mut SimWorld) {
-        if self.debug_render_bounding_spheres {
-            for (_, object) in sim_world.objects.objects.iter() {
-                sim_world.gizmo_vertices.extend(gizmos::create_iso_sphere(
-                    object.transform.to_mat4(),
-                    object.bounding_sphere.radius,
-                    16,
-                ));
-            }
-        }
-    }
-
     pub fn extract(&mut self, sim_world: &mut SimWorld, render_store: &mut RenderStore) {
         self.models_to_render.clear();
 
@@ -241,23 +225,10 @@ impl ObjectsSystem {
             models_to_render: &mut self.models_to_render,
         };
 
-        sim_world
-            .visible_objects
-            .iter()
-            .filter_map(|object_handle| {
-                sim_world
-                    .objects
-                    .get(*object_handle)
-                    .map(|o| (o, *object_handle))
-            })
-            .for_each(|(object, handle)| {
-                let highlight = if sim_world.highlighted_objects.contains(&handle) {
-                    0.5
-                } else {
-                    0.0
-                };
-                object.gather_models_to_render(&mut wrapper, highlight);
-            });
+        let mut query = sim_world.world.query::<(&Transform, &Handle<Model>)>();
+        for (transform, model_handle) in query.iter(&sim_world.world) {
+            wrapper.render_model(transform.to_mat4(), *model_handle, 0.0);
+        }
     }
 
     pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {

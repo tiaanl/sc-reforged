@@ -59,6 +59,8 @@ impl WorldScene {
 
         let mut render_store = RenderStore::new(renderer(), window_size);
 
+        sim_world.process_pending_render_store(&mut render_store);
+
         let render_worlds = [
             RenderWorld::new(0, renderer(), &render_store),
             RenderWorld::new(1, renderer(), &render_store),
@@ -66,9 +68,6 @@ impl WorldScene {
         ];
 
         let systems = systems::Systems::new(&mut sim_world, renderer(), &render_store, &campaign);
-
-        // Prepare the renderer.
-        sim_world.prepare_render_store(&mut render_store)?;
 
         Ok(Self {
             sim_world,
@@ -381,10 +380,6 @@ impl Scene for WorldScene {
             ui.horizontal(|ui| {
                 ui.label("Visible chunks");
                 ui.label(format!("{}", self.sim_world.visible_chunks.len()));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Visible objects");
-                ui.label(format!("{}", self.sim_world.visible_objects.len()));
             });
             ui.horizontal(|ui| {
                 ui.label("Visible strata");

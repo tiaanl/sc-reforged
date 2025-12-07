@@ -1,12 +1,9 @@
 use glam::{IVec2, Vec2, Vec3, ivec2};
 use slab::Slab;
 
-use crate::{
-    engine::storage::Handle,
-    game::math::{BoundingBox, BoundingSphere, Frustum, RaySegment},
-};
+use crate::game::math::{BoundingBox, BoundingSphere, Frustum, RaySegment};
 
-use super::{objects::Object, terrain::Terrain};
+use super::terrain::Terrain;
 
 pub type NodeId = usize;
 
@@ -28,8 +25,6 @@ pub struct Node {
     children: [Option<NodeId>; 4],
     /// If this node is a leaf and wraps a single terrain chunk, it holds the chunk coord.
     pub chunk_coord: Option<IVec2>,
-    /// A list of objects who's bounding spheres are fully contained inside this node.
-    pub objects: Vec<Handle<Object>>,
 }
 
 impl Node {
@@ -57,57 +52,8 @@ impl QuadTree {
         result
     }
 
-    pub fn insert_object(&mut self, object: Handle<Object>, bounding_sphere: &BoundingSphere) {
-        self.insert_object_at(self.root, object, bounding_sphere);
-    }
-
-    fn insert_object_at(
-        &mut self,
-        node_id: NodeId,
-        object: Handle<Object>,
-        bounding_sphere: &BoundingSphere,
-    ) {
-        // Expand the current node Z to cover the object span so frustum culling of this node stays
-        // correct.
-        self.expand_node_z_to_fit_sphere(node_id, bounding_sphere);
-
-        let target_child = {
-            let node = &self.nodes[node_id];
-            if node.is_leaf {
-                None
-            } else {
-                let mut target: Option<NodeId> = None;
-                for child_id in node.children.iter().flatten() {
-                    let child_min = self.nodes[*child_id].min;
-                    let child_max = self.nodes[*child_id].max;
-
-                    let center = bounding_sphere.center;
-                    let radius = bounding_sphere.radius;
-
-                    if center.x - radius >= child_min.x
-                        && center.x + radius <= child_max.x
-                        && center.y - radius >= child_min.y
-                        && center.y + radius <= child_max.y
-                    {
-                        target = Some(*child_id);
-                        break;
-                    }
-                }
-                target
-            }
-        };
-
-        // If we found a child that fits the sphere, try to insert it there, otherwise, insert the
-        // sphere into this node.
-        if let Some(child_id) = target_child {
-            self.insert_object_at(child_id, object, bounding_sphere);
-        } else {
-            self.nodes[node_id].objects.push(object);
-        }
-    }
-
     /// Expand the Z bounds of the node to fully fit the specified [BoundingSphere].
-    fn expand_node_z_to_fit_sphere(&mut self, node_id: NodeId, sphere: &BoundingSphere) {
+    fn _expand_node_z_to_fit_sphere(&mut self, node_id: NodeId, sphere: &BoundingSphere) {
         let (min_z, max_z) = (
             sphere.center.z - sphere.radius,
             sphere.center.z + sphere.radius,
@@ -153,7 +99,6 @@ impl QuadTree {
             is_leaf,
             level,
             chunk_coord: is_leaf.then_some(chunk_min),
-            objects: Vec::default(),
         };
 
         if !is_leaf {
@@ -204,14 +149,14 @@ impl QuadTree {
         }
     }
 
-    pub fn with_nodes_ray_segment<F>(&self, ray_segment: &RaySegment, mut f: F)
+    pub fn _with_nodes_ray_segment<F>(&self, ray_segment: &RaySegment, mut f: F)
     where
         F: FnMut(&Node),
     {
-        self.traverse_nodes_ray_segment(self.root, ray_segment, &mut f);
+        self._traverse_nodes_ray_segment(self.root, ray_segment, &mut f);
     }
 
-    fn traverse_nodes_ray_segment<F>(&self, node_id: NodeId, ray_segment: &RaySegment, f: &mut F)
+    fn _traverse_nodes_ray_segment<F>(&self, node_id: NodeId, ray_segment: &RaySegment, f: &mut F)
     where
         F: FnMut(&Node),
     {
@@ -229,7 +174,7 @@ impl QuadTree {
 
         if !node.is_leaf {
             for child_id in node.children.iter().flatten() {
-                self.traverse_nodes_ray_segment(*child_id, ray_segment, f);
+                self._traverse_nodes_ray_segment(*child_id, ray_segment, f);
             }
         }
     }
@@ -241,7 +186,6 @@ impl QuadTree {
             for _ in 0..level {
                 print!("  ");
             }
-            println!("objects: {}", node.objects.len());
 
             for child_id in node.children.iter().flatten().cloned() {
                 print_internal(nodes, child_id, level + 1);
