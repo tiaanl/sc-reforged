@@ -9,7 +9,7 @@ use winit::{
 pub use winit::event::MouseButton;
 pub use winit::keyboard::KeyCode;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct InputState {
     /// The current position of the mouse inside the window client area in pixels. Set to `None` If
     /// the mouse is not over the client area.

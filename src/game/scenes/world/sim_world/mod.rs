@@ -1,9 +1,8 @@
 use std::path::PathBuf;
 
 use ahash::HashSet;
-use bevy_ecs::{lifecycle::HookContext, schedule::Schedule, world::World};
-use glam::{IVec2, Quat, Vec3, vec3};
-use strum::{EnumCount, EnumIter};
+use bevy_ecs::{lifecycle::HookContext, resource::Resource, schedule::Schedule, world::World};
+use glam::{IVec2, Quat, Vec2, Vec3, vec3};
 
 use crate::{
     engine::{assets::AssetError, gizmos::GizmoVertex, prelude::Transform, storage::Handle},
@@ -12,27 +11,31 @@ use crate::{
         data_dir::data_dir,
         model::Model,
         models::{ModelName, models},
-        scenes::world::{
-            animation::motion::Motion,
-            render::RenderStore,
-            sim_world::{ecs::PendingRenderStore, quad_tree::QuadTree, ui::Ui},
-        },
+        scenes::world::{animation::motion::Motion, render::RenderStore},
         track::Track,
     },
 };
 
+use ecs::PendingRenderStore;
+use quad_tree::QuadTree;
+use ui::Ui;
+
 mod camera;
 mod ecs;
+mod free_camera_controller;
 mod height_map;
 mod quad_tree;
 mod spawner;
 mod terrain;
+mod top_down_camera_controller;
 mod ui;
 
 pub use camera::{Camera, ComputedCamera};
-pub use ecs::GizmoVertices;
+pub use ecs::{ActiveCamera, CameraController, GizmoVertices, InputStateResource};
+pub use free_camera_controller::FreeCameraController;
 pub use height_map::HeightMap;
 pub use terrain::Terrain;
+pub use top_down_camera_controller::TopDownCameraController;
 pub use ui::UiRect;
 
 /// Holds data for the sun and fog values throughout the day and night.
@@ -46,11 +49,9 @@ pub struct DayNightCycle {
     pub fog_color: Track<Vec3>,
 }
 
-#[derive(Clone, Copy, EnumCount, EnumIter, PartialEq)]
-#[repr(usize)]
-pub enum ActiveCamera {
-    Game = 0,
-    Debug = 1,
+#[derive(Default, Resource)]
+pub struct Time {
+    pub delta_time: f32,
 }
 
 /// Holds all the data for the world we are simulating.
@@ -58,16 +59,11 @@ pub struct SimWorld {
     /// The ECS hodling the objects in the world.
     pub world: World,
 
+    /// Schedule for running input systems.
+    pub input_schedule: Schedule,
+
     /// Schedule for running update systems.
     pub update_schedule: Schedule,
-
-    /// Data for each camera.
-    pub cameras: [Camera; ActiveCamera::COUNT],
-
-    /// Computed values for the camera the player is viewing.
-    pub computed_cameras: [ComputedCamera; ActiveCamera::COUNT],
-
-    pub active_camera: ActiveCamera,
 
     pub time_of_day: f32,
     pub day_night_cycle: DayNightCycle,
@@ -135,6 +131,9 @@ impl SimWorld {
 
         let mut world = World::default();
 
+        world.init_resource::<InputStateResource>();
+        world.init_resource::<Time>();
+
         world.init_resource::<GizmoVertices>();
 
         world.init_resource::<PendingRenderStore>();
@@ -148,6 +147,52 @@ impl SimWorld {
             },
         );
 
+        {
+            let camera_from = campaign.view_initial.from.extend(2500.0);
+            let camera_to = campaign.view_initial.to.extend(0.0);
+
+            let dir = (camera_to - camera_from).normalize();
+
+            let flat = Vec2::new(dir.x, dir.y);
+            let yaw = (-dir.x).atan2(dir.y).to_degrees();
+            let pitch = dir.z.atan2(flat.length()).to_degrees();
+
+            // Game camera.
+            world.spawn((
+                Camera::new(
+                    Vec3::ZERO,
+                    Quat::IDENTITY,
+                    45.0_f32.to_radians(),
+                    1.0,
+                    10.0,
+                    13_300.0,
+                ),
+                CameraController::TopDown(TopDownCameraController::new(
+                    camera_from,
+                    yaw.to_degrees(),
+                    pitch.to_degrees(),
+                    4_000.0,
+                    100.0,
+                )),
+                ActiveCamera,
+            ));
+
+            world.spawn((
+                Camera::new(
+                    Vec3::ZERO,
+                    Quat::IDENTITY,
+                    45.0_f32.to_radians(),
+                    1.0,
+                    10.0,
+                    13_300.0,
+                ),
+                CameraController::Free(FreeCameraController::new(1000.0, 0.2)),
+            ));
+        }
+
+        // Debug camera.
+
+        let input_schedule = Schedule::new(ecs::InputSchedule);
         let update_schedule = Schedule::new(ecs::UpdateSchedule);
 
         let character_profiles = data_dir().load_character_profiles()?;
@@ -185,29 +230,8 @@ impl SimWorld {
 
         Ok(SimWorld {
             world,
+            input_schedule,
             update_schedule,
-
-            cameras: [
-                Camera::new(
-                    Vec3::ZERO,
-                    Quat::IDENTITY,
-                    45.0_f32.to_radians(),
-                    1.0,
-                    10.0,
-                    13_300.0,
-                ),
-                Camera::new(
-                    Vec3::ZERO,
-                    Quat::IDENTITY,
-                    45.0_f32.to_radians(),
-                    1.0,
-                    10.0,
-                    13_300.0,
-                ),
-            ],
-            computed_cameras: [ComputedCamera::default(), ComputedCamera::default()],
-
-            active_camera: ActiveCamera::Game,
 
             time_of_day,
             day_night_cycle,

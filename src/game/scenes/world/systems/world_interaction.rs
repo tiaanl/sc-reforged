@@ -2,10 +2,7 @@ use glam::{IVec2, Mat4, UVec2, Vec2, Vec3, Vec4};
 
 use crate::{
     engine::prelude::InputState,
-    game::{
-        math::Frustum,
-        scenes::world::sim_world::{SimWorld, UiRect},
-    },
+    game::scenes::world::sim_world::{SimWorld, UiRect},
 };
 
 #[derive(Debug)]
@@ -169,14 +166,15 @@ impl WorldInteractionSystem {
     /// Update the selected objects by using a rectangle in screen coordinates.
     fn set_selection_by_rect(
         &mut self,
-        sim_world: &SimWorld,
+        _sim_world: &SimWorld,
         rect: SelectionRect,
-        viewport_size: UVec2,
+        _viewport_size: UVec2,
     ) {
         let (min, max) = rect.min_max();
         debug_assert!(min.x <= max.x);
         debug_assert!(min.y <= max.y);
 
+        /*
         let _frustum = {
             const NDC_Z_NEAR: f32 = 0.0;
             const NDC_Z_FAR: f32 = 1.0;
@@ -209,6 +207,7 @@ impl WorldInteractionSystem {
 
             Frustum::from_corners(ntl, ntr, nbr, nbl, ftl, ftr, fbr, fbl)
         };
+        */
 
         // let mut objects: Vec<Handle<Object>> = vec![];
         // sim_world.quad_tree.with_nodes_in_frustum(&frustum, |node| {
@@ -227,7 +226,7 @@ impl WorldInteractionSystem {
     fn set_selection_by_ray(&self, _pos: UVec2) {}
 
     #[inline]
-    fn screen_to_ndc(p: Vec2, viewport_size: Vec2) -> Vec2 {
+    fn _screen_to_ndc(p: Vec2, viewport_size: Vec2) -> Vec2 {
         let uv = p / viewport_size;
         let mut ndc = uv * 2.0 - Vec2::ONE;
         // Y grows down, so invert, because NDC grows up.
@@ -236,7 +235,7 @@ impl WorldInteractionSystem {
     }
 
     #[inline]
-    fn unproject(ndc: Vec3, inv: &Mat4) -> Vec3 {
+    fn _unproject(ndc: Vec3, inv: &Mat4) -> Vec3 {
         let clip = Vec4::new(ndc.x, ndc.y, ndc.z, 1.0);
         let world = inv * clip;
         world.truncate() / world.w

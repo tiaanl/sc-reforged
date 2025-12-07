@@ -1,4 +1,5 @@
-use glam::{Mat4, UVec2, Vec2, Vec3, Vec4};
+use bevy_ecs::schedule::IntoScheduleConfigs;
+use glam::{Mat4, UVec2, Vec3, Vec4};
 
 use crate::{
     engine::{
@@ -12,11 +13,8 @@ use crate::{
         scenes::world::{
             animation::generate_pose,
             render::{RenderStore, RenderWorld},
-            sim_world::SimWorld,
-            systems::{
-                free_camera_controller::FreeCameraController,
-                top_down_camera_controller::TopDownCameraController,
-            },
+            sim_world::{InputStateResource, SimWorld, Time},
+            systems::camera_system::{camera_controller_input, compute_cameras},
         },
         skeleton::Skeleton,
     },
@@ -28,17 +26,11 @@ mod camera_system;
 mod clear_render_targets;
 mod cull_system;
 mod day_night_cycle_system;
-mod free_camera_controller;
 mod gizmo_system;
 mod objects_system;
 mod terrain_system;
-mod top_down_camera_controller;
 mod ui_system;
 mod world_interaction;
-
-pub struct Time {
-    pub delta_time: f32,
-}
 
 /// Shared resources between rendering in the systems and the [RenderWorld].
 pub struct Systems {
@@ -56,34 +48,18 @@ impl Systems {
         sim_world: &mut SimWorld,
         renderer: &Renderer,
         render_store: &RenderStore,
-        campaign: &Campaign,
+        _campaign: &Campaign,
     ) -> Self {
+        sim_world
+            .input_schedule
+            .add_systems((camera_controller_input, compute_cameras).chain());
+
         sim_world
             .update_schedule
             .add_systems(objects_system::object_gizmos);
 
         Self {
-            camera_system: camera_system::CameraSystem::new(
-                {
-                    let camera_from = campaign.view_initial.from.extend(2500.0);
-                    let camera_to = campaign.view_initial.to.extend(0.0);
-
-                    let dir = (camera_to - camera_from).normalize();
-
-                    let flat = Vec2::new(dir.x, dir.y);
-                    let yaw = (-dir.x).atan2(dir.y).to_degrees();
-                    let pitch = dir.z.atan2(flat.length()).to_degrees();
-
-                    TopDownCameraController::new(
-                        camera_from,
-                        yaw.to_degrees(),
-                        pitch.to_degrees(),
-                        4_000.0,
-                        100.0,
-                    )
-                },
-                FreeCameraController::new(1000.0, 0.2),
-            ),
+            camera_system: camera_system::CameraSystem,
             culling: cull_system::CullSystem::default(),
             terrain_system: terrain_system::TerrainSystem::new(renderer, render_store, sim_world),
             objects_system: objects_system::ObjectsSystem::new(renderer, render_store),
@@ -106,12 +82,22 @@ impl Systems {
         // TODO: This should really be part of a system somewhere.
         sim_world.ui.ui_rects.clear();
 
-        self.camera_system.input(sim_world, time, input_state);
+        {
+            let mut r = sim_world.world.resource_mut::<InputStateResource>();
+            r.0 = input_state.clone();
+        }
+
+        {
+            let mut r = sim_world.world.resource_mut::<Time>();
+            r.delta_time = time.delta_time;
+        }
+
+        sim_world.input_schedule.run(&mut sim_world.world);
 
         // TODO: This should be the first step in the update system, but that
         //       would mean all systems should record input state and then
         //       process it in `update` as well, which is not done right now.
-        self.camera_system.compute_cameras(sim_world);
+        //self.camera_system.compute_cameras(sim_world);
 
         self.world_interaction_system
             .input(sim_world, input_state, viewport_size);

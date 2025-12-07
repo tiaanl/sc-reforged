@@ -1,11 +1,17 @@
 use ahash::HashSet;
 
-use bevy_ecs::{resource::Resource, schedule::ScheduleLabel};
+use bevy_ecs::{component::Component, resource::Resource, schedule::ScheduleLabel};
 
 use crate::{
-    engine::{gizmos::GizmoVertex, storage::Handle},
-    game::model::Model,
+    engine::{gizmos::GizmoVertex, input::InputState, storage::Handle},
+    game::{
+        model::Model,
+        scenes::world::sim_world::{FreeCameraController, TopDownCameraController},
+    },
 };
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, ScheduleLabel)]
+pub struct InputSchedule;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, ScheduleLabel)]
 pub struct UpdateSchedule;
@@ -21,4 +27,19 @@ pub struct PendingRenderStore {
 #[derive(Default, Resource)]
 pub struct GizmoVertices {
     pub vertices: Vec<GizmoVertex>,
+}
+
+/// Marker component to set the active camera.
+#[derive(Component)]
+pub struct ActiveCamera;
+
+/// Wrapper for input state.
+#[derive(Default, Resource)]
+pub struct InputStateResource(pub InputState);
+
+/// Wrapper for camera controllers.
+#[derive(Component)]
+pub enum CameraController {
+    TopDown(TopDownCameraController),
+    Free(FreeCameraController),
 }

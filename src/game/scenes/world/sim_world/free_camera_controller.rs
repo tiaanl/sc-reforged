@@ -3,10 +3,7 @@ use winit::{event::MouseButton, keyboard::KeyCode};
 
 use crate::{
     engine::input::InputState,
-    game::{
-        interpolate::Interpolate,
-        scenes::world::{sim_world::Camera, systems::camera_system::CameraController},
-    },
+    game::{interpolate::Interpolate, scenes::world::sim_world::Camera},
 };
 
 pub struct FreeCameraControls {
@@ -84,8 +81,8 @@ impl FreeCameraController {
     }
 }
 
-impl CameraController for FreeCameraController {
-    fn handle_input(
+impl FreeCameraController {
+    pub fn handle_input(
         &mut self,
         target_camera: &mut Camera,
         input_state: &InputState,
