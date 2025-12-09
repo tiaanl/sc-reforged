@@ -12,7 +12,6 @@ use crate::{
         model::Model,
         models::{ModelName, models},
         scenes::world::{animation::motion::Motion, render::RenderStore},
-        track::Track,
     },
 };
 
@@ -38,20 +37,13 @@ pub use terrain::Terrain;
 pub use top_down_camera_controller::TopDownCameraController;
 pub use ui::UiRect;
 
-/// Holds data for the sun and fog values throughout the day and night.
-#[derive(Default)]
-pub struct DayNightCycle {
-    pub sun_dir: Track<Vec3>,
-    pub sun_color: Track<Vec3>,
-
-    pub fog_distance: Track<f32>,
-    pub fog_near_fraction: Track<f32>,
-    pub fog_color: Track<Vec3>,
-}
-
 #[derive(Default, Resource)]
 pub struct Time {
     pub delta_time: f32,
+}
+
+pub trait Plugin {
+    fn init(self, sim_world: &mut SimWorld);
 }
 
 /// Holds all the data for the world we are simulating.
@@ -64,9 +56,6 @@ pub struct SimWorld {
 
     /// Schedule for running update systems.
     pub update_schedule: Schedule,
-
-    pub time_of_day: f32,
-    pub day_night_cycle: DayNightCycle,
 
     /// Used for determining visible elements in the world.
     pub quad_tree: QuadTree,
@@ -89,24 +78,6 @@ pub struct SimWorld {
 impl SimWorld {
     pub fn new(campaign_def: &CampaignDef) -> Result<Self, AssetError> {
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
-
-        let time_of_day = 12.0;
-        let day_night_cycle = {
-            let mut result = DayNightCycle::default();
-
-            campaign.time_of_day.iter().enumerate().for_each(|(i, t)| {
-                let index = i as u32;
-
-                result.sun_dir.insert(index, t.sun_dir);
-                result.sun_color.insert(index, t.sun_color);
-
-                result.fog_distance.insert(index, t.fog_distance);
-                result.fog_near_fraction.insert(index, t.fog_near_fraction);
-                result.fog_color.insert(index, t.fog_color);
-            });
-
-            result
-        };
 
         let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
 
@@ -233,9 +204,6 @@ impl SimWorld {
             input_schedule,
             update_schedule,
 
-            time_of_day,
-            day_night_cycle,
-
             quad_tree,
 
             terrain,
@@ -250,6 +218,10 @@ impl SimWorld {
 
             ui,
         })
+    }
+
+    pub fn add_plugin<P: Plugin>(&mut self, plugin: P) {
+        plugin.init(self);
     }
 
     /// Handle all pending render store resources.

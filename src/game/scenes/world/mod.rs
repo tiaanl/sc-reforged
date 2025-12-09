@@ -7,6 +7,7 @@ use crate::{
         data_dir::data_dir,
         scenes::world::{
             game_mode::GameMode,
+            plugins::day_night_cycle::DayNightCycleData,
             render::{RenderStore, RenderWorld},
             sim_world::{Camera, SimWorld, Time},
         },
@@ -16,6 +17,7 @@ use crate::{
 pub mod actions;
 pub mod animation;
 mod game_mode;
+mod plugins;
 mod render;
 pub mod sim_world;
 mod systems;
@@ -56,6 +58,30 @@ impl WorldScene {
         let fps_history_cursor = 0;
 
         let mut sim_world = SimWorld::new(&campaign_def)?;
+
+        {
+            use plugins::day_night_cycle::DayNightCyclePlugin;
+
+            let time_of_day = 12.0;
+            let data = {
+                let mut result = DayNightCycleData::default();
+
+                campaign.time_of_day.iter().enumerate().for_each(|(i, t)| {
+                    let index = i as u32;
+
+                    result.sun_dir.insert(index, t.sun_dir);
+                    result.sun_color.insert(index, t.sun_color);
+
+                    result.fog_distance.insert(index, t.fog_distance);
+                    result.fog_near_fraction.insert(index, t.fog_near_fraction);
+                    result.fog_color.insert(index, t.fog_color);
+                });
+
+                result
+            };
+
+            sim_world.add_plugin(DayNightCyclePlugin::new(time_of_day, data));
+        }
 
         let mut render_store = RenderStore::new(renderer(), window_size);
 
@@ -227,9 +253,12 @@ impl Scene for WorldScene {
 
                 ui.heading("Environment");
                 ui.horizontal(|ui| {
+                    use crate::game::scenes::world::plugins::day_night_cycle::DayNightCycle;
+
                     ui.label("Time of day");
+                    let mut day_night_cycle = self.sim_world.world.resource_mut::<DayNightCycle>();
                     ui.add(
-                        Slider::new(&mut self.sim_world.time_of_day, 0.0..=24.0)
+                        Slider::new(&mut day_night_cycle.time_of_day, 0.0..=24.0)
                             .drag_value_speed(0.01)
                             .fixed_decimals(2),
                     );

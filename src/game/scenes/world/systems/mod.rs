@@ -25,7 +25,6 @@ pub use cull_system::DebugQuadTreeOptions;
 mod camera_system;
 mod clear_render_targets;
 mod cull_system;
-mod day_night_cycle_system;
 mod gizmo_system;
 mod objects_system;
 mod terrain_system;
@@ -107,7 +106,6 @@ impl Systems {
         sim_world.update_schedule.run(&mut sim_world.world);
 
         self.culling.calculate_visible_chunks(sim_world);
-        day_night_cycle_system::increment_time_of_day(sim_world, time);
 
         self.world_interaction_system.update(sim_world);
 

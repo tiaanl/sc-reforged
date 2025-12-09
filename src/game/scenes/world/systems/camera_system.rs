@@ -7,6 +7,7 @@ use glam::vec4;
 use crate::{
     engine::prelude::Renderer,
     game::scenes::world::{
+        plugins::day_night_cycle::DayNightCycle,
         render::RenderWorld,
         sim_world::{
             ActiveCamera, Camera, CameraController, ComputedCamera, InputStateResource, SimWorld,
@@ -40,24 +41,17 @@ impl CameraSystem {
     fn extract_environment(sim_world: &SimWorld, render_world: &mut RenderWorld) {
         let target = &mut render_world.camera_env;
 
-        let time_of_day = sim_world.time_of_day;
-        let source = &sim_world.day_night_cycle;
-
-        let sun_dir = source.sun_dir.sample_sub_frame(time_of_day, true);
-        let sun_color = source.sun_color.sample_sub_frame(time_of_day, true);
+        let day_night_cycle = sim_world.world.resource::<DayNightCycle>();
+        let snapshot = day_night_cycle.snapshot();
 
         let ambient_color = vec4(0.3, 0.3, 0.3, 1.0);
 
-        let fog_distance = source.fog_distance.sample_sub_frame(time_of_day, true);
-        let fog_near_fraction = source.fog_near_fraction.sample_sub_frame(time_of_day, true);
-        let fog_color = source.fog_color.sample_sub_frame(time_of_day, true);
-
-        target.sun_dir = sun_dir.extend(0.0).to_array();
-        target.sun_color = sun_color.extend(1.0).to_array();
+        target.sun_dir = snapshot.sun_dir.extend(0.0).to_array();
+        target.sun_color = snapshot.sun_color.extend(1.0).to_array();
         target.ambient_color = ambient_color.to_array();
-        target.fog_color = fog_color.extend(1.0).to_array();
-        target.fog_distance = fog_distance;
-        target.fog_near_fraction = fog_near_fraction;
+        target.fog_color = snapshot.fog_color.extend(1.0).to_array();
+        target.fog_distance = snapshot.fog_distance;
+        target.fog_near_fraction = snapshot.fog_near_fraction;
     }
 }
 
