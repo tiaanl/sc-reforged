@@ -120,10 +120,10 @@ impl FileSystem {
                 Err(_) => None,
             })
             .for_each(|path| {
-                if let Ok(gut_entry) = GutFile::from_path(&path) {
-                    if let Some(name) = path.file_stem() {
-                        gut_files.insert(name.to_string_lossy().to_string(), gut_entry);
-                    }
+                if let Ok(gut_entry) = GutFile::from_path(&path)
+                    && let Some(name) = path.file_stem()
+                {
+                    gut_files.insert(name.to_string_lossy().to_string(), gut_entry);
                 }
             });
 
@@ -139,10 +139,10 @@ impl FileSystem {
     pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         let full_path = self.root_dir.join(path.as_ref());
 
-        if !full_path.exists() {
-            if let Some(gut_file) = self.gut_file_for_path(&path) {
-                return gut_file.load(path);
-            }
+        if !full_path.exists()
+            && let Some(gut_file) = self.gut_file_for_path(&path)
+        {
+            return gut_file.load(path);
         }
 
         let mut file = std::fs::File::open(full_path).map_err(|err| {

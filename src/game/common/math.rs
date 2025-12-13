@@ -73,6 +73,7 @@ impl Frustum {
     }
 
     /// Construct a frustum from 8 corner points.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_corners(
         near_top_left: Vec3,
         near_top_right: Vec3,

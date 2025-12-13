@@ -72,7 +72,7 @@ impl SelectionRect {
 
     #[inline]
     pub fn min_max(&self) -> (UVec2, UVec2) {
-        let n = self.clone().normalize();
+        let n = self.normalize();
         (n.pos, n.pos + n.size.as_uvec2())
     }
 }
@@ -110,10 +110,10 @@ impl WorldInteractionSystem {
             }
 
             self.selection_rect = None;
-        } else if let Some(ref mut selection_rect) = self.selection_rect {
-            if let Some(mouse_position) = input_state.mouse_position() {
-                selection_rect.size = mouse_position.as_ivec2() - selection_rect.pos.as_ivec2();
-            }
+        } else if let Some(ref mut selection_rect) = self.selection_rect
+            && let Some(mouse_position) = input_state.mouse_position()
+        {
+            selection_rect.size = mouse_position.as_ivec2() - selection_rect.pos.as_ivec2();
         }
 
         if false {
@@ -236,10 +236,10 @@ impl WorldInteractionSystem {
         let mut objects: Vec<Handle<Object>> = vec![];
         sim_world.quad_tree.with_nodes_in_frustum(&frustum, |node| {
             for object_handle in node.objects.iter() {
-                if let Some(object) = sim_world.objects.get(*object_handle) {
-                    if frustum.intersects_bounding_sphere(&object.bounding_sphere) {
-                        objects.push(*object_handle);
-                    }
+                if let Some(object) = sim_world.objects.get(*object_handle)
+                    && frustum.intersects_bounding_sphere(&object.bounding_sphere)
+                {
+                    objects.push(*object_handle);
                 }
             }
         });
@@ -275,17 +275,16 @@ impl WorldInteractionSystem {
         sim_world
             .quad_tree
             .with_nodes_ray_segment(camera_ray_segment, |node| {
-                if let Some(chunk_coord) = node.chunk_coord {
-                    if let Some(hit) = sim_world
+                if let Some(chunk_coord) = node.chunk_coord
+                    && let Some(hit) = sim_world
                         .terrain
                         .chunk_intersect_ray_segment(chunk_coord, camera_ray_segment)
-                    {
-                        hits.push(InteractionHit::Terrain {
-                            _world_position: hit.world_position,
-                            distance: hit.t,
-                            chunk_coord,
-                        });
-                    }
+                {
+                    hits.push(InteractionHit::Terrain {
+                        _world_position: hit.world_position,
+                        distance: hit.t,
+                        chunk_coord,
+                    });
                 }
 
                 for object_handle in node.objects.iter() {

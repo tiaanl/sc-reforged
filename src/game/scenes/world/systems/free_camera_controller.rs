@@ -127,12 +127,12 @@ impl CameraController for FreeCameraController {
             }
         }
 
-        if input_state.mouse_pressed(self.controls.mouse_button) {
-            if let Some(delta) = input_state.mouse_delta() {
-                let delta = delta.as_vec2();
-                self.target.yaw -= delta.x * self.mouse_sensitivity;
-                self.target.pitch += delta.y * self.mouse_sensitivity;
-            }
+        if input_state.mouse_pressed(self.controls.mouse_button)
+            && let Some(delta) = input_state.mouse_delta()
+        {
+            let delta = delta.as_vec2();
+            self.target.yaw -= delta.x * self.mouse_sensitivity;
+            self.target.pitch += delta.y * self.mouse_sensitivity;
         }
 
         let rotation = Quat::from_rotation_z(self.target.yaw.to_radians())

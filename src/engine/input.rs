@@ -30,15 +30,13 @@ pub struct InputState {
 impl InputState {
     pub(crate) fn handle_window_event(&mut self, event: WindowEvent) {
         match event {
-            WindowEvent::KeyboardInput { ref event, .. } => {
+            WindowEvent::KeyboardInput { ref event, .. } if !event.repeat => {
                 if let PhysicalKey::Code(key) = event.physical_key {
-                    if !event.repeat {
-                        if event.state == ElementState::Pressed {
-                            self.key_pressed.insert(key);
-                            self.key_just_pressed.insert(key);
-                        } else {
-                            self.key_pressed.remove(&key);
-                        }
+                    if event.state == ElementState::Pressed {
+                        self.key_pressed.insert(key);
+                        self.key_just_pressed.insert(key);
+                    } else {
+                        self.key_pressed.remove(&key);
                     }
                 }
             }
