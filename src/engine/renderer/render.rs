@@ -2,8 +2,6 @@ use std::sync::Arc;
 
 use glam::UVec2;
 
-use crate::global;
-
 use super::mip_maps::MipMaps;
 
 pub struct Renderer {
@@ -126,8 +124,7 @@ impl Renderer {
         }
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        let size = UVec2::new(width, height);
+    pub fn resize(&mut self, size: UVec2) {
         self.surface.resize(&self.device, size);
     }
 
@@ -195,10 +192,6 @@ impl Renderer {
         })
     }
 }
-
-global!(Renderer, scoped_renderer, renderer);
-
-pub use global::ScopedGlobal as ScopedRendererGlobal;
 
 /// A single object passed around during the rendering of a single frame.
 pub struct Frame {

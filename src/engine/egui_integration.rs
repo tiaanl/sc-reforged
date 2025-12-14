@@ -1,16 +1,19 @@
 use winit::event_loop::ActiveEventLoop;
 
-use crate::engine::prelude::renderer;
-
 pub struct EguiIntegration {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
     egui: egui_winit::State,
     egui_renderer: egui_wgpu::Renderer,
 }
 
 impl EguiIntegration {
-    pub fn new(event_loop: &ActiveEventLoop) -> Self {
-        let renderer = renderer();
-
+    pub fn new(
+        event_loop: &ActiveEventLoop,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        output_color_format: wgpu::TextureFormat,
+    ) -> Self {
         let egui = egui_winit::State::new(
             egui::Context::default(),
             egui::ViewportId::default(),
@@ -20,10 +23,11 @@ impl EguiIntegration {
             None,
         );
 
-        let egui_renderer =
-            egui_wgpu::Renderer::new(&renderer.device, renderer.surface.format(), None, 1, false);
+        let egui_renderer = egui_wgpu::Renderer::new(&device, output_color_format, None, 1, false);
 
         Self {
+            device,
+            queue,
             egui,
             egui_renderer,
         }
@@ -44,8 +48,6 @@ impl EguiIntegration {
         view: &wgpu::TextureView,
         run_ui: impl FnMut(&egui::Context),
     ) {
-        let renderer = renderer();
-
         let raw_input = self.egui.take_egui_input(window);
 
         let full_output = self.egui.egui_ctx().run(raw_input, run_ui);
@@ -58,8 +60,9 @@ impl EguiIntegration {
             viewport_output: _,
         } = full_output;
 
+        let winit::dpi::PhysicalSize { width, height } = window.inner_size();
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: renderer.surface.size().to_array(),
+            size_in_pixels: [width, height],
             pixels_per_point,
         };
 
@@ -67,7 +70,7 @@ impl EguiIntegration {
 
         for (id, ref image_delta) in textures_delta.set {
             self.egui_renderer
-                .update_texture(&renderer.device, &renderer.queue, id, image_delta);
+                .update_texture(&self.device, &self.queue, id, image_delta);
         }
 
         for ref id in textures_delta.free {
@@ -80,8 +83,8 @@ impl EguiIntegration {
             .tessellate(shapes, screen_descriptor.pixels_per_point);
 
         self.egui_renderer.update_buffers(
-            &renderer.device,
-            &renderer.queue,
+            &self.device,
+            &self.queue,
             encoder,
             clipped_primitives.as_ref(),
             &screen_descriptor,

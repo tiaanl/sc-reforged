@@ -34,8 +34,8 @@ impl RenderStore {
         let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(renderer);
         let ui_state_bind_group_layout = RenderWorld::create_ui_state_bind_group_layout(renderer);
 
-        let models = RenderModels::new();
-        let textures = RenderTextures::new();
+        let models = RenderModels::new(renderer);
+        let textures = RenderTextures::new(renderer);
 
         let model_to_render_model = HashMap::default();
 
@@ -56,13 +56,16 @@ impl RenderStore {
     #[inline]
     pub fn get_or_create_render_model(
         &mut self,
+        renderer: &Renderer,
         model_handle: Handle<Model>,
     ) -> Result<Handle<RenderModel>, AssetError> {
         if let Some(render_model_handle) = self.model_to_render_model.get(&model_handle) {
             return Ok(*render_model_handle);
         }
 
-        let render_model_handle = self.models.add(&mut self.textures, model_handle)?;
+        let render_model_handle = self
+            .models
+            .add(renderer, &mut self.textures, model_handle)?;
 
         // Cache the new handle.
         self.model_to_render_model

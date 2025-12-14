@@ -1,6 +1,8 @@
 use glam::UVec2;
 use winit::{event::MouseButton, keyboard::KeyCode};
 
+use crate::engine::prelude::Renderer;
+
 use super::{input::InputState, renderer::Frame};
 
 #[allow(unused)]
@@ -31,7 +33,7 @@ pub enum SceneEvent {
 #[allow(unused)]
 pub trait Scene {
     /// Called when the size of the window surface is changed.
-    fn resize(&mut self) {}
+    fn resize(&mut self, size: UVec2) {}
 
     /// Called when an engine event occurs. This includes input events.
     fn event(&mut self, event: SceneEvent) {}
@@ -41,7 +43,7 @@ pub trait Scene {
     fn update(&mut self, delta_time: f32, input: &InputState) {}
 
     /// Called to render the the frame to the surface.
-    fn render(&mut self, frame: &mut Frame);
+    fn render(&mut self, renderer: &Renderer, frame: &mut Frame);
 
     /// Called to allow debug panels to be added to the window.
     #[cfg(feature = "egui")]

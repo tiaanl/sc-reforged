@@ -6,7 +6,7 @@ use crate::{
         assets::AssetError,
         growing_buffer::GrowingBuffer,
         mesh::IndexedMesh,
-        prelude::renderer,
+        prelude::Renderer,
         storage::{Handle, Storage},
     },
     game::{image::BlendMode, model::Model, models::models},
@@ -61,30 +61,30 @@ impl RenderModels {
     const INITIAL_INDEX_COUNT: u32 = 1 << 15;
     const INITIAL_NODES_COUNT: u32 = 1 << 15;
 
-    pub fn new() -> Self {
+    pub fn new(renderer: &Renderer) -> Self {
         let vertices_buffer = GrowingBuffer::new(
-            renderer(),
+            renderer,
             Self::INITIAL_VERTEX_COUNT,
             wgpu::BufferUsages::VERTEX,
             "render_models_vertices",
         );
 
         let indices_buffer = GrowingBuffer::new(
-            renderer(),
+            renderer,
             Self::INITIAL_INDEX_COUNT,
             wgpu::BufferUsages::INDEX,
             "render_models_indices",
         );
 
         let nodes_buffer = GrowingBuffer::new(
-            renderer(),
+            renderer,
             Self::INITIAL_NODES_COUNT,
             wgpu::BufferUsages::STORAGE,
             "render_models_nodes",
         );
 
         let nodes_bind_group_layout =
-            renderer()
+            renderer
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("model_nodes_bind_group_layout"),
@@ -101,7 +101,7 @@ impl RenderModels {
                 });
 
         let nodes_bind_group = Self::create_nodes_bind_group(
-            &renderer().device,
+            &renderer.device,
             &nodes_bind_group_layout,
             nodes_buffer.buffer(),
         );
@@ -128,6 +128,7 @@ impl RenderModels {
 
     pub fn add(
         &mut self,
+        renderer: &Renderer,
         render_textures: &mut RenderTextures,
         model_handle: Handle<Model>,
     ) -> Result<Handle<RenderModel>, AssetError> {
@@ -151,7 +152,7 @@ impl RenderModels {
             .collect();
 
         for mesh in model.meshes.iter() {
-            let texture_handle = render_textures.get_or_create(mesh.image);
+            let texture_handle = render_textures.get_or_create(renderer, mesh.image);
             let texture = render_textures.get(texture_handle).unwrap();
 
             let indexed_mesh = match texture.blend_mode {
@@ -181,15 +182,14 @@ impl RenderModels {
         let mut push_mesh = |mut indexed_mesh: IndexedMesh<RenderVertex>| {
             let vertices_range = self
                 .vertices_buffer
-                .extend(renderer(), &indexed_mesh.vertices);
+                .extend(renderer, &indexed_mesh.vertices);
             // Adjust the indices to point to the range of the vertices.
             indexed_mesh
                 .indices
                 .iter_mut()
                 .for_each(|i| *i += vertices_range.start);
 
-            self.indices_buffer
-                .extend(renderer(), &indexed_mesh.indices)
+            self.indices_buffer.extend(renderer, &indexed_mesh.indices)
         };
 
         let opaque_range = push_mesh(opaque_mesh);
@@ -198,11 +198,11 @@ impl RenderModels {
 
         let nodes_range = {
             let old_capacity = self.nodes_buffer.capacity;
-            let range = self.nodes_buffer.extend(renderer(), &nodes);
+            let range = self.nodes_buffer.extend(renderer, &nodes);
             if self.nodes_buffer.capacity != old_capacity {
                 // The buffer capacity changed, so we have a new buffer; recreate the bind group.
                 self.nodes_bind_group = Self::create_nodes_bind_group(
-                    &renderer().device,
+                    &renderer.device,
                     &self.nodes_bind_group_layout,
                     self.nodes_buffer.buffer(),
                 );

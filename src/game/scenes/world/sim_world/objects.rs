@@ -214,7 +214,7 @@ impl Objects {
     }
 
     /// Take all models that were used during `spawn` and prepare them to be rendered.
-    pub fn prepare_models(&mut self, render_store: &mut RenderStore) {
+    pub fn prepare_models(&mut self, renderer: &Renderer, render_store: &mut RenderStore) {
         if self.models_to_prepare.is_empty() {
             return;
         }
@@ -225,7 +225,7 @@ impl Objects {
         tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
 
         for model_handle in models_to_prepare {
-            if let Err(err) = render_store.get_or_create_render_model(model_handle) {
+            if let Err(err) = render_store.get_or_create_render_model(renderer, model_handle) {
                 tracing::warn!("Could not prepare model! ({err})");
             }
         }

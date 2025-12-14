@@ -206,6 +206,7 @@ impl Systems {
 
     pub fn extract(
         &mut self,
+        renderer: &Renderer,
         sim_world: &mut SimWorld,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
@@ -216,7 +217,7 @@ impl Systems {
         self.gizmo_system.extract(sim_world, render_world);
 
         // Make sure all models are prepared to be rendered.
-        sim_world.objects.prepare_models(render_store);
+        sim_world.objects.prepare_models(renderer, render_store);
 
         self.objects_system.extract(sim_world, render_store);
 

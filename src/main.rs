@@ -37,7 +37,7 @@ enum App {
         /// that is receiving all the input events.
         window: Arc<winit::window::Window>,
         /// The placeholder for the scoped global [Renderer].
-        _global_renderer: ScopedRendererGlobal,
+        renderer: Renderer,
         /// egui integration.
         #[cfg(feature = "egui")]
         egui_integration: engine::egui_integration::EguiIntegration,
@@ -93,10 +93,15 @@ impl winit::application::ApplicationHandler for App {
                     UVec2::new(width, height)
                 };
 
-                let _global_renderer = scoped_renderer(|| Renderer::new(Arc::clone(&window)));
+                let renderer = Renderer::new(Arc::clone(&window));
 
                 #[cfg(feature = "egui")]
-                let egui_integration = engine::egui_integration::EguiIntegration::new(event_loop);
+                let egui_integration = engine::egui_integration::EguiIntegration::new(
+                    event_loop,
+                    renderer.device.clone(),
+                    renderer.queue.clone(),
+                    renderer.surface.format(),
+                );
 
                 let scene: Box<dyn Scene> = {
                     // WorldScene
@@ -127,20 +132,22 @@ impl winit::application::ApplicationHandler for App {
                         .cloned()
                         .unwrap();
 
-                    Box::new(match WorldScene::new(campaign_def, window_size) {
-                        Ok(scene) => scene,
-                        Err(err) => {
-                            tracing::error!("Could not create world scene! - {}", err);
-                            panic!();
-                        }
-                    })
+                    Box::new(
+                        match WorldScene::new(&renderer, campaign_def, window_size) {
+                            Ok(scene) => scene,
+                            Err(err) => {
+                                tracing::error!("Could not create world scene! - {}", err);
+                                panic!();
+                            }
+                        },
+                    )
                 };
 
                 tracing::info!("Application initialized!");
 
                 *self = App::Initialized {
                     window,
-                    _global_renderer,
+                    renderer,
                     #[cfg(feature = "egui")]
                     egui_integration,
                     input: InputState::default(),
@@ -170,6 +177,7 @@ impl winit::application::ApplicationHandler for App {
             }
             App::Initialized {
                 window,
+                renderer,
                 #[cfg(feature = "egui")]
                 egui_integration,
                 input,
@@ -199,8 +207,11 @@ impl winit::application::ApplicationHandler for App {
                     }
 
                     WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
-                        renderer().resize(width, height);
-                        scene.resize();
+                        let size = UVec2::new(width, height);
+
+                        renderer.resize(size);
+
+                        scene.resize(size);
 
                         window.request_redraw();
                     }
@@ -216,12 +227,12 @@ impl winit::application::ApplicationHandler for App {
                         }
 
                         {
-                            let output = renderer().surface.get_texture(&renderer().device);
+                            let output = renderer.surface.get_texture(&renderer.device);
                             let surface = output
                                 .texture
                                 .create_view(&wgpu::TextureViewDescriptor::default());
 
-                            let encoder = renderer().device.create_command_encoder(
+                            let encoder = renderer.device.create_command_encoder(
                                 &wgpu::CommandEncoderDescriptor {
                                     label: Some("main command encoder"),
                                 },
@@ -231,11 +242,11 @@ impl winit::application::ApplicationHandler for App {
                                 encoder,
                                 surface,
                                 frame_index: *frame_index,
-                                size: renderer().surface.size(),
+                                size: renderer.surface.size(),
                             };
 
                             {
-                                scene.render(&mut frame);
+                                scene.render(renderer, &mut frame);
                                 input.reset_current_frame();
                             }
 
@@ -255,7 +266,7 @@ impl winit::application::ApplicationHandler for App {
                                 );
                             }
 
-                            renderer()
+                            renderer
                                 .queue
                                 .submit(std::iter::once(frame.encoder.finish()));
 

@@ -38,6 +38,8 @@ pub struct WorldScene {
     // Systems
     systems: systems::Systems,
 
+    frame_size: UVec2,
+
     game_mode: GameMode,
 
     fps_history: Vec<FrameTime>,
@@ -47,7 +49,11 @@ pub struct WorldScene {
 impl WorldScene {
     const RENDER_FRAME_COUNT: usize = 3;
 
-    pub fn new(campaign_def: CampaignDef, window_size: UVec2) -> Result<Self, AssetError> {
+    pub fn new(
+        renderer: &Renderer,
+        campaign_def: CampaignDef,
+        window_size: UVec2,
+    ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
@@ -57,15 +63,15 @@ impl WorldScene {
 
         let sim_world = SimWorld::new(&campaign_def)?;
 
-        let render_store = RenderStore::new(renderer(), window_size);
+        let render_store = RenderStore::new(renderer, window_size);
 
         let render_worlds = [
-            RenderWorld::new(0, renderer(), &render_store),
-            RenderWorld::new(1, renderer(), &render_store),
-            RenderWorld::new(2, renderer(), &render_store),
+            RenderWorld::new(0, renderer, &render_store),
+            RenderWorld::new(1, renderer, &render_store),
+            RenderWorld::new(2, renderer, &render_store),
         ];
 
-        let systems = systems::Systems::new(renderer(), &render_store, &sim_world, &campaign);
+        let systems = systems::Systems::new(renderer, &render_store, &sim_world, &campaign);
 
         Ok(Self {
             sim_world,
@@ -74,6 +80,7 @@ impl WorldScene {
 
             systems,
 
+            frame_size: renderer.surface.size(),
             game_mode: GameMode::Editor,
 
             fps_history,
@@ -87,10 +94,10 @@ impl WorldScene {
 }
 
 impl Scene for WorldScene {
-    fn resize(&mut self) {
-        let size = renderer().surface.size();
+    fn resize(&mut self, size: UVec2) {
+        self.frame_size = size;
 
-        let [width, height] = size.to_array().map(|f| f as f32);
+        let [width, height] = size.as_vec2().to_array();
         let aspect = width / height.max(1.0);
 
         for camera in &mut self.sim_world.cameras {
@@ -104,11 +111,10 @@ impl Scene for WorldScene {
         // Run systems
         {
             let time = systems::Time { delta_time };
-            let viewport_size = renderer().surface.size();
 
             let start = std::time::Instant::now();
             self.systems
-                .input(&mut self.sim_world, &time, input, viewport_size);
+                .input(&mut self.sim_world, &time, input, self.frame_size);
             frame_time.input = (std::time::Instant::now() - start).as_secs_f64();
 
             let start = std::time::Instant::now();
@@ -125,15 +131,17 @@ impl Scene for WorldScene {
         }
     }
 
-    fn render(&mut self, frame: &mut Frame) {
+    fn render(&mut self, renderer: &Renderer, frame: &mut Frame) {
         let render_world = &mut self.render_worlds[frame.frame_index % Self::RENDER_FRAME_COUNT];
 
         let frame_time = &mut self.fps_history[self.fps_history_cursor];
 
         // Systems
         {
+            // Extract
             let start = std::time::Instant::now();
             self.systems.extract(
+                renderer,
                 &mut self.sim_world,
                 &mut self.render_store,
                 render_world,
@@ -141,11 +149,13 @@ impl Scene for WorldScene {
             );
             frame_time.extract = (std::time::Instant::now() - start).as_secs_f64();
 
+            // Prepare
             let start = std::time::Instant::now();
             self.systems
-                .prepare(&mut self.render_store, render_world, renderer());
+                .prepare(&mut self.render_store, render_world, renderer);
             frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
 
+            // Queue
             let start = std::time::Instant::now();
             self.systems.queue(&self.render_store, render_world, frame);
             frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
