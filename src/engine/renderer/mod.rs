@@ -1,4 +1,4 @@
-mod mip_maps;
+mod mipmaps;
 mod render;
 mod surface;
 

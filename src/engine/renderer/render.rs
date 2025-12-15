@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use glam::UVec2;
 
-use super::mip_maps::MipMaps;
+use super::mipmaps::MipMaps;
 
 pub struct Renderer {
     pub device: wgpu::Device,
@@ -10,7 +10,7 @@ pub struct Renderer {
 
     pub surface: super::surface::Surface,
 
-    mip_maps: MipMaps,
+    mipmaps: MipMaps,
 }
 
 pub trait BufferLayout: Clone {
@@ -91,36 +91,13 @@ impl Renderer {
 
         surface.configure(&device);
 
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("texture_bind_group_layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
-
-        let mip_maps = MipMaps::new(&device, &texture_bind_group_layout, Self::TEXTURE_FORMAT);
+        let mipmaps = MipMaps::new(&device, Self::TEXTURE_FORMAT);
 
         Self {
             device: device.clone(),
             queue: queue.clone(),
             surface,
-            mip_maps,
+            mipmaps,
         }
     }
 
@@ -128,7 +105,7 @@ impl Renderer {
         self.surface.resize(&self.device, size);
     }
 
-    pub fn create_texture_view(&self, label: &str, image: &image::RgbaImage) -> wgpu::TextureView {
+    pub fn create_texture(&self, label: &str, image: &image::RgbaImage) -> wgpu::TextureView {
         let (width, height) = (image.width(), image.height());
 
         let size = wgpu::Extent3d {
@@ -168,8 +145,8 @@ impl Renderer {
             size,
         );
 
-        self.mip_maps
-            .generate_mip_maps(&self.device, &self.queue, &texture, mip_level_count);
+        self.mipmaps
+            .generate_mipmaps(&self.device, &self.queue, &texture, mip_level_count);
 
         texture.create_view(&wgpu::TextureViewDescriptor::default())
     }

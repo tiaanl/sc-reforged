@@ -109,7 +109,7 @@ impl TerrainSystem {
 
         let terrain_texture = {
             let image = images().get(sim_world.terrain.terrain_texture).unwrap();
-            renderer.create_texture_view("terrain_texture", &image.data)
+            renderer.create_texture("terrain_texture", &image.data)
         };
 
         let strata_texture = {
@@ -117,7 +117,7 @@ impl TerrainSystem {
             let image = images()
                 .load_image_direct(path)
                 .expect("Could not load strata texture.");
-            renderer.create_texture_view("strata", &image.data)
+            renderer.create_texture("strata", &image.data)
         };
 
         let terrain_sampler = renderer.create_sampler(
