@@ -171,11 +171,11 @@ impl winit::application::ApplicationHandler for App {
             App::Initialized {
                 window,
                 renderer,
-                #[cfg(feature = "egui")]
-                egui_integration,
                 input,
                 frame_index,
                 last_frame_time,
+                #[cfg(feature = "egui")]
+                egui_integration,
                 scene,
                 ..
             } => {
