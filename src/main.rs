@@ -1,16 +1,24 @@
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
-use engine::prelude::*;
-use game::scenes::world::WorldScene;
+
 use glam::UVec2;
 use winit::dpi::PhysicalPosition;
 
-use crate::game::{
-    data_dir::{DataDir, data_dir, scoped_data_dir},
-    file_system::scoped_file_system,
-    image::{Images, scoped_images},
-    models::{Models, scoped_models},
+use crate::{
+    engine::{
+        context::{EngineContext, EngineEvent},
+        input::InputState,
+        renderer::{Frame, Renderer, Surface},
+        scene::Scene,
+    },
+    game::{
+        data_dir::{DataDir, scoped_data_dir},
+        file_system::scoped_file_system,
+        image::{Images, scoped_images},
+        models::{Models, scoped_models},
+        scenes::loading::LoadingScene,
+    },
 };
 
 mod engine;
@@ -27,11 +35,13 @@ struct Opts {
 
 #[allow(clippy::large_enum_variant)]
 enum App {
-    Uninitialzed(Opts),
+    Uninitialzed(Opts, EngineContext),
     Initialized {
         /// The main window the engine is rendering to. This is also the window
         /// that is receiving all the input events.
         window: Arc<winit::window::Window>,
+        /// The window surface where the scene will be displayed.
+        surface: Surface,
         /// The placeholder for the scoped global [Renderer].
         renderer: Renderer,
         /// The current input state of the engine.
@@ -48,10 +58,10 @@ enum App {
     },
 }
 
-impl winit::application::ApplicationHandler for App {
+impl winit::application::ApplicationHandler<EngineEvent> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         match self {
-            App::Uninitialzed(opts) => {
+            App::Uninitialzed(opts, engine_context) => {
                 event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
                 let mut attributes = winit::window::WindowAttributes::default()
@@ -82,21 +92,22 @@ impl winit::application::ApplicationHandler for App {
                         .create_window(attributes)
                         .expect("create main window"),
                 );
-                let window_size = {
+                let _window_size = {
                     let winit::dpi::PhysicalSize { width, height } = window.inner_size();
                     UVec2::new(width, height)
                 };
 
-                let renderer = Renderer::new(Arc::clone(&window));
+                let (surface, renderer) = engine::renderer::create(Arc::clone(&window));
 
                 #[cfg(feature = "egui")]
                 let egui_integration = engine::egui_integration::EguiIntegration::new(
                     event_loop,
                     renderer.device.clone(),
                     renderer.queue.clone(),
-                    renderer.surface.format(),
+                    surface.format(),
                 );
 
+                /*
                 let scene: Box<dyn Scene> = {
                     // WorldScene
 
@@ -136,11 +147,21 @@ impl winit::application::ApplicationHandler for App {
                         },
                     )
                 };
+                */
+
+                let scene = Box::new(LoadingScene::new(
+                    engine_context.clone(),
+                    &renderer,
+                    crate::game::scenes::world::WorldSceneLoader {
+                        campaign_name: opts.campaign_name.clone(),
+                    },
+                ));
 
                 tracing::info!("Application initialized!");
 
                 *self = App::Initialized {
                     window,
+                    surface,
                     renderer,
                     #[cfg(feature = "egui")]
                     egui_integration,
@@ -165,11 +186,12 @@ impl winit::application::ApplicationHandler for App {
     ) {
         use winit::event::WindowEvent;
         match self {
-            App::Uninitialzed(_) => {
+            App::Uninitialzed(..) => {
                 tracing::warn!("Can't process events for uninitialized application.");
             }
             App::Initialized {
                 window,
+                surface,
                 renderer,
                 input,
                 frame_index,
@@ -201,7 +223,7 @@ impl winit::application::ApplicationHandler for App {
                     WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
                         let size = UVec2::new(width, height);
 
-                        renderer.resize(size);
+                        surface.resize(&renderer.device, size);
 
                         scene.resize(size);
 
@@ -219,8 +241,8 @@ impl winit::application::ApplicationHandler for App {
                         }
 
                         {
-                            let output = renderer.surface.get_texture(&renderer.device);
-                            let surface = output
+                            let output = surface.get_texture(&renderer.device);
+                            let surface_view = output
                                 .texture
                                 .create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -232,9 +254,9 @@ impl winit::application::ApplicationHandler for App {
 
                             let mut frame = Frame {
                                 encoder,
-                                surface,
+                                surface: surface_view,
                                 frame_index: *frame_index,
-                                size: renderer.surface.size(),
+                                size: surface.size(),
                             };
 
                             {
@@ -279,6 +301,15 @@ impl winit::application::ApplicationHandler for App {
             }
         }
     }
+
+    fn user_event(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, event: EngineEvent) {
+        match event {
+            EngineEvent::Exit => {
+                tracing::info!("Exit requested!");
+                event_loop.exit();
+            }
+        }
+    }
 }
 
 fn main() {
@@ -297,9 +328,12 @@ fn main() {
     let _images = scoped_images(|| Images::new().expect("Could not initialize images."));
     let _models = scoped_models(|| Models::new().expect("Could not initialize models."));
 
-    let event_loop = winit::event_loop::EventLoop::new().unwrap();
+    let event_loop: winit::event_loop::EventLoop<EngineEvent> =
+        winit::event_loop::EventLoop::with_user_event()
+            .build()
+            .unwrap();
 
-    let mut app = App::Uninitialzed(opts);
+    let mut app = App::Uninitialzed(opts, EngineContext::new(event_loop.create_proxy()));
     event_loop
         .run_app(&mut app)
         .expect("run application event loop");

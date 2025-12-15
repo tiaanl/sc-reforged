@@ -1,7 +1,7 @@
 use bytemuck::NoUninit;
 
 use crate::{
-    engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, prelude::Renderer},
+    engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, renderer::Renderer},
     game::scenes::world::render::render_store::RenderStore,
 };
 

@@ -5,7 +5,7 @@ use glam::{IVec2, UVec2, ivec2};
 use wgpu::util::DeviceExt;
 
 use crate::{
-    engine::prelude::{Frame, Renderer},
+    engine::renderer::{Frame, Renderer},
     game::{
         image::images,
         scenes::world::{

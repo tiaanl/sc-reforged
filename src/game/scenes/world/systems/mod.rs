@@ -4,7 +4,7 @@ use crate::{
     engine::{
         gizmos::GizmoVertex,
         input::InputState,
-        prelude::{Frame, Renderer},
+        renderer::{Frame, Renderer, Surface},
     },
     game::{
         config::Campaign,
@@ -55,6 +55,7 @@ pub struct Systems {
 impl Systems {
     pub fn new(
         renderer: &Renderer,
+        surface: &Surface,
         render_store: &RenderStore,
         sim_world: &SimWorld,
         campaign: &Campaign,
@@ -85,8 +86,8 @@ impl Systems {
             terrain_system: terrain_system::TerrainSystem::new(renderer, render_store, sim_world),
             objects_system: objects_system::ObjectsSystem::new(renderer, render_store),
             world_interaction_system: world_interaction::WorldInteractionSystem::default(),
-            gizmo_system: gizmo_system::GizmoSystem::new(renderer, render_store),
-            ui_system: ui_system::UiSystem::new(renderer, render_store),
+            gizmo_system: gizmo_system::GizmoSystem::new(renderer, surface, render_store),
+            ui_system: ui_system::UiSystem::new(renderer, surface, render_store),
         }
     }
 
@@ -230,12 +231,13 @@ impl Systems {
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         renderer: &Renderer,
+        surface_size: UVec2,
     ) {
         // Make sure the geometry buffer is the correct size.
-        if renderer.surface.size() != render_store.geometry_buffer.size {
+        if surface_size != render_store.geometry_buffer.size {
             render_store
                 .geometry_buffer
-                .resize(&renderer.device, renderer.surface.size());
+                .resize(&renderer.device, surface_size);
         }
 
         self.camera_system.prepare(render_world, renderer);

@@ -3,7 +3,7 @@
 use ahash::HashMap;
 
 use crate::{
-    engine::prelude::Transform,
+    engine::transform::Transform,
     game::{common::skeleton::Skeleton, scenes::world::animation::pose::Pose},
 };
 use glam::{Mat3, Mat4, Quat, Vec3, Vec4};

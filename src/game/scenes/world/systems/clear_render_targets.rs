@@ -1,6 +1,6 @@
 use glam::Vec3;
 
-use crate::engine::prelude::Frame;
+use crate::engine::renderer::Frame;
 
 use super::super::render::{GeometryBuffer, RenderWorld};
 

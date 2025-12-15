@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use bytemuck::{NoUninit, cast_slice};
 
-use crate::engine::prelude::Renderer;
+use crate::engine::renderer::Renderer;
 
 pub struct GrowingBuffer<T: NoUninit> {
     /// Label used for the buffer.

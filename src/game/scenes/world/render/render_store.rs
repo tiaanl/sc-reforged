@@ -2,7 +2,11 @@ use ahash::HashMap;
 use glam::UVec2;
 
 use crate::{
-    engine::{assets::AssetError, prelude::Renderer, storage::Handle},
+    engine::{
+        assets::AssetError,
+        renderer::{Renderer, Surface},
+        storage::Handle,
+    },
     game::model::Model,
 };
 
@@ -27,9 +31,9 @@ pub struct RenderStore {
 }
 
 impl RenderStore {
-    pub fn new(renderer: &Renderer, size: UVec2) -> Self {
+    pub fn new(renderer: &Renderer, surface: &Surface, size: UVec2) -> Self {
         let geometry_buffer = GeometryBuffer::new(&renderer.device, size);
-        let compositor = Compositor::new(renderer, &geometry_buffer);
+        let compositor = Compositor::new(renderer, surface, &geometry_buffer);
 
         let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(renderer);
         let ui_state_bind_group_layout = RenderWorld::create_ui_state_bind_group_layout(renderer);

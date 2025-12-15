@@ -1,14 +1,23 @@
 use glam::UVec2;
+use winit::keyboard::KeyCode;
 
 use crate::{
-    engine::prelude::*,
+    engine::{
+        assets::AssetError,
+        input::InputState,
+        renderer::{Frame, Renderer, Surface},
+        scene::Scene,
+    },
     game::{
         config::CampaignDef,
         data_dir::data_dir,
-        scenes::world::{
-            game_mode::GameMode,
-            render::{RenderStore, RenderWorld},
-            sim_world::SimWorld,
+        scenes::{
+            loading::SceneLoader,
+            world::{
+                game_mode::GameMode,
+                render::{RenderStore, RenderWorld},
+                sim_world::SimWorld,
+            },
         },
     },
 };
@@ -51,6 +60,7 @@ impl WorldScene {
 
     pub fn new(
         renderer: &Renderer,
+        surface: &Surface,
         campaign_def: CampaignDef,
         window_size: UVec2,
     ) -> Result<Self, AssetError> {
@@ -63,7 +73,7 @@ impl WorldScene {
 
         let sim_world = SimWorld::new(&campaign_def)?;
 
-        let render_store = RenderStore::new(renderer, window_size);
+        let render_store = RenderStore::new(renderer, surface, window_size);
 
         let render_worlds = [
             RenderWorld::new(0, renderer, &render_store),
@@ -71,7 +81,8 @@ impl WorldScene {
             RenderWorld::new(2, renderer, &render_store),
         ];
 
-        let systems = systems::Systems::new(renderer, &render_store, &sim_world, &campaign);
+        let systems =
+            systems::Systems::new(renderer, surface, &render_store, &sim_world, &campaign);
 
         Ok(Self {
             sim_world,
@@ -80,7 +91,7 @@ impl WorldScene {
 
             systems,
 
-            frame_size: renderer.surface.size(),
+            frame_size: surface.size(),
             game_mode: GameMode::Editor,
 
             fps_history,
@@ -153,7 +164,7 @@ impl Scene for WorldScene {
             // Prepare
             let start = std::time::Instant::now();
             self.systems
-                .prepare(&mut self.render_store, render_world, renderer);
+                .prepare(&mut self.render_store, render_world, renderer, frame.size);
             frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
 
             // Queue
@@ -405,5 +416,41 @@ impl Scene for WorldScene {
         });
 
         // self.objects.debug_panel(ctx);
+    }
+}
+
+pub struct WorldSceneLoader {
+    pub campaign_name: Option<String>,
+}
+
+impl SceneLoader for WorldSceneLoader {
+    fn load_scene(
+        self,
+        renderer: &Renderer,
+        surface: &Surface,
+    ) -> Result<Box<dyn Scene>, AssetError> {
+        let campaign_defs = data_dir().load_campaign_defs()?;
+
+        let campaign_name = self.campaign_name.unwrap_or(String::from("training"));
+
+        let Some(campaign_def) = campaign_defs
+            .campaigns
+            .iter()
+            .find(|c| c.base_name == campaign_name)
+            .cloned()
+        else {
+            return Err(AssetError::custom(
+                std::path::PathBuf::new(),
+                "failed to find campaign",
+            ));
+        };
+
+        let window_size = surface.size();
+        Ok(Box::new(WorldScene::new(
+            renderer,
+            surface,
+            campaign_def,
+            window_size,
+        )?))
     }
 }

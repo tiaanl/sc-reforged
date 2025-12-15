@@ -2,8 +2,10 @@ use std::path::PathBuf;
 
 use crate::{
     engine::{
-        prelude::*,
+        assets::AssetError,
+        renderer::Renderer,
         storage::{Handle, Storage},
+        transform::Transform,
     },
     game::{
         config::{BodyDefinition, CharacterProfiles, ObjectType},

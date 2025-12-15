@@ -5,9 +5,12 @@ use std::path::PathBuf;
 use ahash::HashMap;
 use shadow_company_tools::smf;
 
+use crate::engine::assets::AssetError;
+use crate::engine::mesh::IndexedMesh;
+use crate::engine::transform::Transform;
 use crate::game::math::{BoundingBox, Ray, RaySegment};
 use crate::{
-    engine::{prelude::*, storage::Handle},
+    engine::storage::Handle,
     game::{
         image::{Image, images},
         math::BoundingSphere,

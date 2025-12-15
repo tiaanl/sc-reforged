@@ -2,7 +2,7 @@ use glam::vec4;
 use strum::IntoEnumIterator;
 
 use crate::{
-    engine::{input::InputState, prelude::Renderer},
+    engine::{input::InputState, renderer::Renderer},
     game::scenes::world::{
         render::RenderWorld,
         sim_world::{ActiveCamera, Camera, SimWorld},

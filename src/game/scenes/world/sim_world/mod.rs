@@ -5,7 +5,7 @@ use glam::{IVec2, Quat, Vec3, vec3};
 use strum::{EnumCount, EnumIter};
 
 use crate::{
-    engine::{assets::AssetError, gizmos::GizmoVertex, prelude::Transform, storage::Handle},
+    engine::{assets::AssetError, gizmos::GizmoVertex, storage::Handle, transform::Transform},
     game::{
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,

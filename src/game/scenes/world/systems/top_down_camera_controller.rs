@@ -2,7 +2,7 @@ use glam::{Quat, Vec3};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 use crate::{
-    engine::prelude::InputState,
+    engine::input::InputState,
     game::{
         interpolate::Interpolate,
         scenes::world::{sim_world::Camera, systems::camera_system::CameraController},

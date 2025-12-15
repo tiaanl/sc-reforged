@@ -1,7 +1,7 @@
 use glam::{IVec2, Mat4, UVec2, Vec2, Vec3, Vec4};
 
 use crate::{
-    engine::{prelude::InputState, storage::Handle},
+    engine::{input::InputState, storage::Handle},
     game::{
         math::{Frustum, RaySegment},
         scenes::world::sim_world::{Object, SimWorld, UiRect},

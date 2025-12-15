@@ -6,7 +6,7 @@ use crate::{
         assets::AssetError,
         growing_buffer::GrowingBuffer,
         mesh::IndexedMesh,
-        prelude::Renderer,
+        renderer::Renderer,
         storage::{Handle, Storage},
     },
     game::{image::BlendMode, model::Model, models::models},

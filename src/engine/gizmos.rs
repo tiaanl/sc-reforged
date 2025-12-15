@@ -1,11 +1,8 @@
 #![allow(dead_code)]
 
 use glam::{Mat4, Vec3, Vec4};
-use wgpu::vertex_attr_array;
 
 use crate::game::math::{BoundingBox, ViewProjection};
-
-use super::renderer::BufferLayout;
 
 #[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
 #[repr(C)]
@@ -21,21 +18,6 @@ impl GizmoVertex {
             position,
             _padding: 1.0,
             color,
-        }
-    }
-}
-
-impl BufferLayout for GizmoVertex {
-    fn layout() -> wgpu::VertexBufferLayout<'static> {
-        const VERTEX_ATTR_ARRAY: &[wgpu::VertexAttribute] = &vertex_attr_array![
-            0 => Float32x4, // position
-            1 => Float32x4, // color
-        ];
-
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: VERTEX_ATTR_ARRAY,
         }
     }
 }

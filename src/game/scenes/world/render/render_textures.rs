@@ -5,7 +5,7 @@ use glam::UVec2;
 
 use crate::{
     engine::{
-        prelude::Renderer,
+        renderer::Renderer,
         storage::{Handle, Storage},
     },
     game::image::{BlendMode, Image, images},

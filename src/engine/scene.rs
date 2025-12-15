@@ -1,6 +1,6 @@
 use glam::UVec2;
 
-use crate::engine::prelude::Renderer;
+use crate::engine::renderer::Renderer;
 
 use super::{input::InputState, renderer::Frame};
 

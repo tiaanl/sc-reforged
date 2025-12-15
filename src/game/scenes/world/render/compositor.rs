@@ -1,5 +1,5 @@
 use crate::{
-    engine::prelude::{Frame, Renderer},
+    engine::renderer::{Frame, Renderer, Surface},
     game::scenes::world::render::GeometryBuffer,
     wgsl_shader,
 };
@@ -9,7 +9,7 @@ pub struct Compositor {
 }
 
 impl Compositor {
-    pub fn new(renderer: &Renderer, geometry_buffer: &GeometryBuffer) -> Self {
+    pub fn new(renderer: &Renderer, surface: &Surface, geometry_buffer: &GeometryBuffer) -> Self {
         let module = renderer
             .device
             .create_shader_module(wgsl_shader!("compositor"));
@@ -41,7 +41,7 @@ impl Compositor {
                     entry_point: Some("fragment"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: renderer.surface.format(),
+                        format: surface.format(),
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
