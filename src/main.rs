@@ -4,11 +4,7 @@ use clap::Parser;
 use engine::prelude::*;
 use game::scenes::world::WorldScene;
 use glam::UVec2;
-use winit::{
-    dpi::PhysicalPosition,
-    event::{ElementState, KeyEvent},
-    keyboard::PhysicalKey,
-};
+use winit::dpi::PhysicalPosition;
 
 use crate::game::{
     data_dir::{DataDir, data_dir, scoped_data_dir},
@@ -43,8 +39,6 @@ enum App {
         egui_integration: engine::egui_integration::EguiIntegration,
         /// The current input state of the engine.
         input: InputState,
-        /// The last position the mouse was on the window client area.
-        last_mouse_position: Option<UVec2>,
         /// The index of the current frame being rendered.
         frame_index: usize,
         /// The instant that the last frame started to render.
@@ -151,7 +145,6 @@ impl winit::application::ApplicationHandler for App {
                     #[cfg(feature = "egui")]
                     egui_integration,
                     input: InputState::default(),
-                    last_mouse_position: None,
                     frame_index: 0,
                     last_frame_time: Instant::now(),
                     scene,
@@ -181,7 +174,6 @@ impl winit::application::ApplicationHandler for App {
                 #[cfg(feature = "egui")]
                 egui_integration,
                 input,
-                last_mouse_position,
                 frame_index,
                 last_frame_time,
                 scene,
@@ -279,44 +271,6 @@ impl winit::application::ApplicationHandler for App {
                             window.request_redraw();
                         }
                     }
-
-                    WindowEvent::MouseInput { button, state, .. } => {
-                        let position =
-                            last_mouse_position.expect("mouse button without a position?");
-
-                        scene.event(if state.is_pressed() {
-                            SceneEvent::MouseDown { position, button }
-                        } else {
-                            SceneEvent::MouseUp { position, button }
-                        });
-                    }
-
-                    WindowEvent::CursorMoved {
-                        position: PhysicalPosition { x, y },
-                        ..
-                    } => {
-                        let position = UVec2::new(x as u32, y as u32);
-                        *last_mouse_position = Some(position);
-                        scene.event(SceneEvent::MouseMove { position });
-                    }
-
-                    WindowEvent::CursorLeft { .. } => {
-                        *last_mouse_position = None;
-                        scene.event(SceneEvent::MouseLeft);
-                    }
-
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                physical_key: PhysicalKey::Code(code),
-                                state,
-                                ..
-                            },
-                        ..
-                    } => scene.event(match state {
-                        ElementState::Pressed => SceneEvent::KeyDown { key: code },
-                        ElementState::Released => SceneEvent::KeyUp { key: code },
-                    }),
 
                     _ => {}
                 }
