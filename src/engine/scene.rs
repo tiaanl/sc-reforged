@@ -4,21 +4,20 @@ use crate::engine::prelude::Renderer;
 
 use super::{input::InputState, renderer::Frame};
 
-/// A trait that represents a scene in the engine. I splits each stage of the render pipeline into
-/// separate function calls.
-#[allow(unused)]
+/// Trait defining a scene with callbacks for each stage of the render pipeline.
 pub trait Scene {
-    /// Called when the size of the window surface is changed.
-    fn resize(&mut self, size: UVec2) {}
+    /// Handle a window surface resize to the given `size`.
+    fn resize(&mut self, size: UVec2);
 
-    /// Called each frame with the `delta_time` based on the time the last frame took and the state
-    /// of all input devices.
-    fn update(&mut self, delta_time: f32, input: &InputState) {}
+    /// Advance the scene by `delta_time` seconds using the current input state.
+    fn update(&mut self, delta_time: f32, input: &InputState);
 
-    /// Called to render the the frame to the surface.
+    /// Render the scene into the provided frame.
     fn render(&mut self, renderer: &Renderer, frame: &mut Frame);
 
-    /// Called to allow debug panels to be added to the window.
+    /// Hook for adding debug panels.
     #[cfg(feature = "egui")]
-    fn debug_panel(&mut self, egui: &egui::Context, frame_index: u64) {}
+    fn debug_panel(&mut self, egui: &egui::Context, frame_index: u64) {
+        let _ = (egui, frame_index);
+    }
 }
