@@ -34,15 +34,15 @@ enum App {
         window: Arc<winit::window::Window>,
         /// The placeholder for the scoped global [Renderer].
         renderer: Renderer,
-        /// egui integration.
-        #[cfg(feature = "egui")]
-        egui_integration: engine::egui_integration::EguiIntegration,
         /// The current input state of the engine.
         input: InputState,
         /// The index of the current frame being rendered.
-        frame_index: usize,
+        frame_index: u64,
         /// The instant that the last frame started to render.
         last_frame_time: Instant,
+        /// egui integration.
+        #[cfg(feature = "egui")]
+        egui_integration: engine::egui_integration::EguiIntegration,
         /// The scene we are currently rendering to the screen.
         scene: Box<dyn Scene>,
     },

@@ -132,7 +132,8 @@ impl Scene for WorldScene {
     }
 
     fn render(&mut self, renderer: &Renderer, frame: &mut Frame) {
-        let render_world = &mut self.render_worlds[frame.frame_index % Self::RENDER_FRAME_COUNT];
+        let render_world =
+            &mut self.render_worlds[frame.frame_index as usize % Self::RENDER_FRAME_COUNT];
 
         let frame_time = &mut self.fps_history[self.fps_history_cursor];
 
@@ -165,14 +166,14 @@ impl Scene for WorldScene {
     }
 
     #[cfg(feature = "egui")]
-    fn debug_panel(&mut self, ctx: &egui::Context, frame_index: usize) {
+    fn debug_panel(&mut self, ctx: &egui::Context, frame_index: u64) {
         use egui::widgets::Slider;
 
         if !self.in_editor() {
             return;
         }
 
-        let render_world = &mut self.render_worlds[frame_index % Self::RENDER_FRAME_COUNT];
+        let render_world = &mut self.render_worlds[frame_index as usize % Self::RENDER_FRAME_COUNT];
 
         egui::Window::new("World")
             .default_open(true)
