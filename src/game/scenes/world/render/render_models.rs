@@ -226,11 +226,6 @@ impl RenderModels {
         self.models.get(handle)
     }
 
-    #[inline]
-    pub fn _get_mut(&mut self, handle: Handle<RenderModel>) -> Option<&mut RenderModel> {
-        self.models.get_mut(handle)
-    }
-
     fn create_nodes_bind_group(
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,

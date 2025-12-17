@@ -33,11 +33,11 @@ impl RenderStore {
         let geometry_buffer = GeometryBuffer::new(&renderer.device, UVec2::ZERO);
         let compositor = Compositor::new(&renderer.device, surface_format, &geometry_buffer);
 
-        let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(&renderer);
-        let ui_state_bind_group_layout = RenderWorld::create_ui_state_bind_group_layout(&renderer);
+        let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(renderer);
+        let ui_state_bind_group_layout = RenderWorld::create_ui_state_bind_group_layout(renderer);
 
-        let models = RenderModels::new(&renderer);
-        let textures = RenderTextures::new(&renderer);
+        let models = RenderModels::new(renderer);
+        let textures = RenderTextures::new(renderer);
 
         let model_to_render_model = HashMap::default();
 

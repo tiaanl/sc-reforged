@@ -64,12 +64,9 @@ impl Images {
         })
     }
 
+    #[inline]
     pub fn get(&self, handle: Handle<Image>) -> Option<&Image> {
         self.images.get(handle)
-    }
-
-    pub fn _get_mut(&mut self, handle: Handle<Image>) -> Option<&mut Image> {
-        self.images.get_mut(handle)
     }
 
     pub fn load_image(&mut self, path: impl AsRef<Path>) -> Result<Handle<Image>, AssetError> {

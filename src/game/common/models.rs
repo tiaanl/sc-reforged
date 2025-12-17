@@ -108,10 +108,6 @@ impl Models {
     pub fn get(&self, handle: Handle<Model>) -> Option<&Model> {
         self.models.get(handle)
     }
-
-    pub fn _get_mut(&mut self, handle: Handle<Model>) -> Option<&mut Model> {
-        self.models.get_mut(handle)
-    }
 }
 
 global!(Models, scoped_models, models);

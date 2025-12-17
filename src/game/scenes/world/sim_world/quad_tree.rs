@@ -1,5 +1,4 @@
 use glam::{IVec2, Vec2, Vec3, ivec2};
-use slab::Slab;
 
 use crate::{
     engine::storage::Handle,
@@ -43,7 +42,7 @@ impl Node {
 
 #[derive(Debug, Default)]
 pub struct QuadTree {
-    nodes: Slab<Node>,
+    nodes: Vec<Node>,
     root: NodeId,
     pub max_level: usize,
 }
@@ -175,7 +174,9 @@ impl QuadTree {
 
         self.max_level = self.max_level.max(level);
 
-        self.nodes.insert(node)
+        let id = self.nodes.len();
+        self.nodes.push(node);
+        id
     }
 
     pub fn with_nodes_in_frustum<F>(&self, frustum: &Frustum, mut f: F)
@@ -235,7 +236,7 @@ impl QuadTree {
     }
 
     pub fn _print_nodes(&self) {
-        fn print_internal(nodes: &slab::Slab<Node>, node_id: NodeId, level: usize) {
+        fn print_internal(nodes: &[Node], node_id: NodeId, level: usize) {
             let node = &nodes[node_id];
 
             for _ in 0..level {
