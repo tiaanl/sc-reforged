@@ -1,19 +1,22 @@
+use std::sync::Arc;
+
 use glam::UVec2;
 
 use super::mipmaps::MipMaps;
 
+#[derive(Clone)]
 pub struct Renderer {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 
-    mipmaps: MipMaps,
+    mipmaps: Arc<MipMaps>,
 }
 
 impl Renderer {
     const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
-        let mipmaps = MipMaps::new(&device, Self::TEXTURE_FORMAT);
+        let mipmaps = Arc::new(MipMaps::new(&device, Self::TEXTURE_FORMAT));
 
         Self {
             device,

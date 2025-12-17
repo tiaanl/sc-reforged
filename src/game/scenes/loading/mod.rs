@@ -1,60 +1,27 @@
 use glam::UVec2;
 
 use crate::engine::{
-    assets::AssetError,
-    context::EngineContext,
     input::InputState,
-    renderer::{Frame, Renderer, Surface},
-    scene::Scene,
+    renderer::{Frame, Renderer},
+    scene::{LoadContext, Scene, SceneLoader},
 };
 
-pub trait SceneLoader {
-    fn load_scene(
-        self,
-        renderer: &Renderer,
-        surface: &Surface,
-    ) -> Result<Box<dyn Scene>, AssetError>;
-}
-
 pub struct LoadingScene<L: SceneLoader> {
-    engine_context: EngineContext,
-
-    scene_loader: L,
-
-    scene_sender: std::sync::mpsc::Sender<Box<dyn Scene>>,
-    scene_receiver: std::sync::mpsc::Receiver<Box<dyn Scene>>,
-
-    is_loading: bool,
+    _phantom: std::marker::PhantomData<L>,
 }
 
 impl<L: SceneLoader> LoadingScene<L> {
-    pub fn new(engine_context: EngineContext, renderer: &Renderer, scene_loader: L) -> Self {
-        let (scene_sender, scene_receiver) = std::sync::mpsc::channel();
+    pub fn new(load_context: LoadContext, scene_loader: L) -> Self {
         Self {
-            engine_context,
-            scene_loader,
-            scene_sender,
-            scene_receiver,
-            is_loading: false,
+            _phantom: std::marker::PhantomData,
         }
-    }
-
-    fn start_loading(&self) {
-        std::thread::spawn(move || {
-            println!("done!");
-        });
     }
 }
 
 impl<L: SceneLoader> Scene for LoadingScene<L> {
     fn resize(&mut self, _size: UVec2) {}
 
-    fn update(&mut self, _delta_time: f32, _input: &InputState) {
-        if !self.is_loading {
-            self.is_loading = true;
-            self.start_loading();
-        }
-    }
+    fn update(&mut self, _delta_time: f32, _input: &InputState) {}
 
     fn render(&mut self, _renderer: &Renderer, frame: &mut Frame) {
         let _render_pass = frame

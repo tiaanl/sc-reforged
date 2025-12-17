@@ -2,11 +2,7 @@ use ahash::HashMap;
 use glam::UVec2;
 
 use crate::{
-    engine::{
-        assets::AssetError,
-        renderer::{Renderer, Surface},
-        storage::Handle,
-    },
+    engine::{assets::AssetError, renderer::Renderer, scene::LoadContext, storage::Handle},
     game::model::Model,
 };
 
@@ -17,6 +13,8 @@ use super::{
 };
 
 pub struct RenderStore {
+    pub surface_size: UVec2,
+
     pub geometry_buffer: GeometryBuffer,
     pub compositor: Compositor,
 
@@ -31,19 +29,27 @@ pub struct RenderStore {
 }
 
 impl RenderStore {
-    pub fn new(renderer: &Renderer, surface: &Surface, size: UVec2) -> Self {
-        let geometry_buffer = GeometryBuffer::new(&renderer.device, size);
-        let compositor = Compositor::new(renderer, surface, &geometry_buffer);
+    pub fn new(load_context: &LoadContext) -> Self {
+        let geometry_buffer = GeometryBuffer::new(&load_context.renderer.device, UVec2::ZERO);
+        let compositor = Compositor::new(
+            &load_context.renderer.device,
+            load_context.surface_format,
+            &geometry_buffer,
+        );
 
-        let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(renderer);
-        let ui_state_bind_group_layout = RenderWorld::create_ui_state_bind_group_layout(renderer);
+        let camera_bind_group_layout =
+            RenderWorld::create_camera_bind_group_layout(&load_context.renderer);
+        let ui_state_bind_group_layout =
+            RenderWorld::create_ui_state_bind_group_layout(&load_context.renderer);
 
-        let models = RenderModels::new(renderer);
-        let textures = RenderTextures::new(renderer);
+        let models = RenderModels::new(&load_context.renderer);
+        let textures = RenderTextures::new(&load_context.renderer);
 
         let model_to_render_model = HashMap::default();
 
         Self {
+            surface_size: UVec2::ZERO,
+
             geometry_buffer,
             compositor,
 
@@ -57,7 +63,11 @@ impl RenderStore {
         }
     }
 
-    #[inline]
+    pub fn resize(&mut self, device: &wgpu::Device, size: UVec2) {
+        self.surface_size = size;
+        self.geometry_buffer.resize(device, size);
+    }
+
     pub fn get_or_create_render_model(
         &mut self,
         renderer: &Renderer,

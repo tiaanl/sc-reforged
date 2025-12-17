@@ -1,5 +1,9 @@
 use crate::{
-    engine::renderer::{Frame, Renderer, Surface},
+    engine::{
+        gizmos::GizmoVertex,
+        renderer::{Frame, Renderer},
+        scene::LoadContext,
+    },
     game::scenes::world::{
         render::{RenderStore, RenderWorld},
         sim_world::SimWorld,
@@ -12,8 +16,8 @@ pub struct GizmoSystem {
 }
 
 impl GizmoSystem {
-    pub fn new(renderer: &Renderer, surface: &Surface, render_store: &RenderStore) -> Self {
-        let device = &renderer.device;
+    pub fn new(load_context: &LoadContext, render_store: &RenderStore) -> Self {
+        let device = &load_context.renderer.device;
 
         let module = device.create_shader_module(wgsl_shader!("gizmos"));
 
@@ -31,7 +35,7 @@ impl GizmoSystem {
                 entry_point: Some("vertex_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
+                    array_stride: std::mem::size_of::<GizmoVertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x4, // position
@@ -50,7 +54,7 @@ impl GizmoSystem {
                 entry_point: Some("fragment_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: surface.format(),
+                    format: load_context.surface_format,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],

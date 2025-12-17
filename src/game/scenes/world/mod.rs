@@ -4,20 +4,18 @@ use winit::keyboard::KeyCode;
 use crate::{
     engine::{
         assets::AssetError,
+        context::EngineContext,
         input::InputState,
-        renderer::{Frame, Renderer, Surface},
-        scene::Scene,
+        renderer::{Frame, Renderer},
+        scene::{LoadContext, Scene, SceneLoader},
     },
     game::{
         config::CampaignDef,
         data_dir::data_dir,
-        scenes::{
-            loading::SceneLoader,
-            world::{
-                game_mode::GameMode,
-                render::{RenderStore, RenderWorld},
-                sim_world::SimWorld,
-            },
+        scenes::world::{
+            game_mode::GameMode,
+            render::{RenderStore, RenderWorld},
+            sim_world::SimWorld,
         },
     },
 };
@@ -47,7 +45,8 @@ pub struct WorldScene {
     // Systems
     systems: systems::Systems,
 
-    frame_size: UVec2,
+    /// A cache of the last surface size, set during resize and used during render.
+    surface_size: UVec2,
 
     game_mode: GameMode,
 
@@ -58,12 +57,7 @@ pub struct WorldScene {
 impl WorldScene {
     const RENDER_FRAME_COUNT: usize = 3;
 
-    pub fn new(
-        renderer: &Renderer,
-        surface: &Surface,
-        campaign_def: CampaignDef,
-        window_size: UVec2,
-    ) -> Result<Self, AssetError> {
+    pub fn new(load_context: LoadContext, campaign_def: CampaignDef) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
@@ -73,16 +67,15 @@ impl WorldScene {
 
         let sim_world = SimWorld::new(&campaign_def)?;
 
-        let render_store = RenderStore::new(renderer, surface, window_size);
+        let render_store = RenderStore::new(&load_context);
 
         let render_worlds = [
-            RenderWorld::new(0, renderer, &render_store),
-            RenderWorld::new(1, renderer, &render_store),
-            RenderWorld::new(2, renderer, &render_store),
+            RenderWorld::new(0, &load_context.renderer, &render_store),
+            RenderWorld::new(1, &load_context.renderer, &render_store),
+            RenderWorld::new(2, &load_context.renderer, &render_store),
         ];
 
-        let systems =
-            systems::Systems::new(renderer, surface, &render_store, &sim_world, &campaign);
+        let systems = systems::Systems::new(&load_context, &render_store, &sim_world, &campaign);
 
         Ok(Self {
             sim_world,
@@ -91,7 +84,8 @@ impl WorldScene {
 
             systems,
 
-            frame_size: surface.size(),
+            surface_size: UVec2::ZERO,
+
             game_mode: GameMode::Editor,
 
             fps_history,
@@ -106,7 +100,7 @@ impl WorldScene {
 
 impl Scene for WorldScene {
     fn resize(&mut self, size: UVec2) {
-        self.frame_size = size;
+        self.surface_size = size;
 
         let [width, height] = size.as_vec2().to_array();
         let aspect = width / height.max(1.0);
@@ -125,7 +119,7 @@ impl Scene for WorldScene {
 
             let start = std::time::Instant::now();
             self.systems
-                .input(&mut self.sim_world, &time, input, self.frame_size);
+                .input(&mut self.sim_world, &time, input, self.surface_size);
             frame_time.input = (std::time::Instant::now() - start).as_secs_f64();
 
             let start = std::time::Instant::now();
@@ -143,6 +137,11 @@ impl Scene for WorldScene {
     }
 
     fn render(&mut self, renderer: &Renderer, frame: &mut Frame) {
+        if self.render_store.surface_size != self.surface_size {
+            self.render_store
+                .resize(&renderer.device, self.surface_size);
+        }
+
         let render_world =
             &mut self.render_worlds[frame.frame_index as usize % Self::RENDER_FRAME_COUNT];
 
@@ -424,14 +423,15 @@ pub struct WorldSceneLoader {
 }
 
 impl SceneLoader for WorldSceneLoader {
-    fn load_scene(
+    fn load(
         self,
-        renderer: &Renderer,
-        surface: &Surface,
+        _engine_context: EngineContext,
+        load_context: &LoadContext,
     ) -> Result<Box<dyn Scene>, AssetError> {
         let campaign_defs = data_dir().load_campaign_defs()?;
 
         let campaign_name = self.campaign_name.unwrap_or(String::from("training"));
+        tracing::info!("Loading world {}...", campaign_name);
 
         let Some(campaign_def) = campaign_defs
             .campaigns
@@ -445,12 +445,12 @@ impl SceneLoader for WorldSceneLoader {
             ));
         };
 
-        let window_size = surface.size();
         Ok(Box::new(WorldScene::new(
-            renderer,
-            surface,
+            load_context.clone(),
             campaign_def,
-            window_size,
         )?))
     }
 }
+
+unsafe impl Send for WorldSceneLoader {}
+unsafe impl Sync for WorldSceneLoader {}

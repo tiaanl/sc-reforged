@@ -1,7 +1,10 @@
 use glam::{Mat4, UVec2};
 
 use crate::{
-    engine::renderer::{Frame, Renderer, Surface},
+    engine::{
+        renderer::{Frame, Renderer},
+        scene::LoadContext,
+    },
     game::scenes::world::{
         render::{RenderStore, RenderUiRect, RenderWorld},
         sim_world::SimWorld,
@@ -14,59 +17,53 @@ pub struct UiSystem {
 }
 
 impl UiSystem {
-    pub fn new(renderer: &Renderer, surface: &Surface, render_store: &RenderStore) -> Self {
-        let module = renderer
-            .device
-            .create_shader_module(wgsl_shader!("ui_rect"));
+    pub fn new(load_context: &LoadContext, render_store: &RenderStore) -> Self {
+        let device = &load_context.renderer.device;
 
-        let layout = renderer
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("ui_rect_pipeline_layout"),
-                bind_group_layouts: &[&render_store.ui_state_bind_group_layout],
-                push_constant_ranges: &[],
-            });
+        let module = device.create_shader_module(wgsl_shader!("ui_rect"));
 
-        let rect_render_pipeline =
-            renderer
-                .device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("ui_rect_render_pipeline"),
-                    layout: Some(&layout),
-                    vertex: wgpu::VertexState {
-                        module: &module,
-                        entry_point: None,
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<RenderUiRect>()
-                                as wgpu::BufferAddress,
-                            step_mode: wgpu::VertexStepMode::Instance,
-                            attributes: &wgpu::vertex_attr_array![
-                                0 => Float32x2,
-                                1 => Float32x2,
-                                2 => Float32x4,
-                            ],
-                        }],
-                    },
-                    primitive: wgpu::PrimitiveState {
-                        topology: wgpu::PrimitiveTopology::TriangleStrip,
-                        ..Default::default()
-                    },
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: Some(wgpu::FragmentState {
-                        module: &module,
-                        entry_point: None,
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: surface.format(),
-                            blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
-                    }),
-                    multiview: None,
-                    cache: None,
-                });
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("ui_rect_pipeline_layout"),
+            bind_group_layouts: &[&render_store.ui_state_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let rect_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("ui_rect_render_pipeline"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &module,
+                entry_point: None,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<RenderUiRect>() as wgpu::BufferAddress,
+                    step_mode: wgpu::VertexStepMode::Instance,
+                    attributes: &wgpu::vertex_attr_array![
+                        0 => Float32x2,
+                        1 => Float32x2,
+                        2 => Float32x4,
+                    ],
+                }],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &module,
+                entry_point: None,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: load_context.surface_format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview: None,
+            cache: None,
+        });
 
         Self {
             rect_render_pipeline,

@@ -1,54 +1,48 @@
-use crate::{
-    engine::renderer::{Frame, Renderer, Surface},
-    game::scenes::world::render::GeometryBuffer,
-    wgsl_shader,
-};
+use crate::{engine::renderer::Frame, game::scenes::world::render::GeometryBuffer, wgsl_shader};
 
 pub struct Compositor {
     pipeline: wgpu::RenderPipeline,
 }
 
 impl Compositor {
-    pub fn new(renderer: &Renderer, surface: &Surface, geometry_buffer: &GeometryBuffer) -> Self {
-        let module = renderer
-            .device
-            .create_shader_module(wgsl_shader!("compositor"));
+    pub fn new(
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+        geometry_buffer: &GeometryBuffer,
+    ) -> Self {
+        let module = device.create_shader_module(wgsl_shader!("compositor"));
 
-        let layout = renderer
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("compositor_pipeline_layout"),
-                bind_group_layouts: &[&geometry_buffer.bind_group_layout],
-                push_constant_ranges: &[],
-            });
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("compositor_pipeline_layout"),
+            bind_group_layouts: &[&geometry_buffer.bind_group_layout],
+            push_constant_ranges: &[],
+        });
 
-        let pipeline = renderer
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("compositor_pipeline"),
-                layout: Some(&layout),
-                vertex: wgpu::VertexState {
-                    module: &module,
-                    entry_point: Some("vertex"),
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[],
-                },
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &module,
-                    entry_point: Some("fragment"),
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: surface.format(),
-                        blend: None,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                multiview: None,
-                cache: None,
-            });
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("compositor_pipeline"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &module,
+                entry_point: Some("vertex"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &module,
+                entry_point: Some("fragment"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview: None,
+            cache: None,
+        });
 
         Self { pipeline }
     }

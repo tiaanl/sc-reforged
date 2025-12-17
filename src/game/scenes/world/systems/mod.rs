@@ -4,7 +4,8 @@ use crate::{
     engine::{
         gizmos::GizmoVertex,
         input::InputState,
-        renderer::{Frame, Renderer, Surface},
+        renderer::{Frame, Renderer},
+        scene::LoadContext,
     },
     game::{
         config::Campaign,
@@ -54,8 +55,7 @@ pub struct Systems {
 
 impl Systems {
     pub fn new(
-        renderer: &Renderer,
-        surface: &Surface,
+        load_context: &LoadContext,
         render_store: &RenderStore,
         sim_world: &SimWorld,
         campaign: &Campaign,
@@ -83,11 +83,15 @@ impl Systems {
                 FreeCameraController::new(1000.0, 0.2),
             ),
             culling: cull_system::CullSystem::default(),
-            terrain_system: terrain_system::TerrainSystem::new(renderer, render_store, sim_world),
-            objects_system: objects_system::ObjectsSystem::new(renderer, render_store),
+            terrain_system: terrain_system::TerrainSystem::new(
+                &load_context.renderer,
+                render_store,
+                sim_world,
+            ),
+            objects_system: objects_system::ObjectsSystem::new(load_context, render_store),
             world_interaction_system: world_interaction::WorldInteractionSystem::default(),
-            gizmo_system: gizmo_system::GizmoSystem::new(renderer, surface, render_store),
-            ui_system: ui_system::UiSystem::new(renderer, surface, render_store),
+            gizmo_system: gizmo_system::GizmoSystem::new(load_context, render_store),
+            ui_system: ui_system::UiSystem::new(load_context, render_store),
         }
     }
 

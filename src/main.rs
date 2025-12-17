@@ -10,14 +10,14 @@ use crate::{
         context::{EngineContext, EngineEvent},
         input::InputState,
         renderer::{Frame, Renderer, Surface},
-        scene::Scene,
+        scene::{LoadContext, Scene},
     },
     game::{
         data_dir::{DataDir, scoped_data_dir},
         file_system::scoped_file_system,
         image::{Images, scoped_images},
         models::{Models, scoped_models},
-        scenes::loading::LoadingScene,
+        scenes::select_campaign::SelectCampaignScene,
     },
 };
 
@@ -35,8 +35,10 @@ struct Opts {
 
 #[allow(clippy::large_enum_variant)]
 enum App {
-    Uninitialzed(Opts, EngineContext),
+    Uninitialzed(Opts, winit::event_loop::EventLoopProxy<EngineEvent>),
     Initialized {
+        /// Hold a copy of our own context to give out to others.
+        engine_context: EngineContext,
         /// The main window the engine is rendering to. This is also the window
         /// that is receiving all the input events.
         window: Arc<winit::window::Window>,
@@ -55,13 +57,15 @@ enum App {
         egui_integration: engine::egui_integration::EguiIntegration,
         /// The scene we are currently rendering to the screen.
         scene: Box<dyn Scene>,
+        /// A new scene requested to be switched to.
+        requested_scene: Option<Box<dyn Scene>>,
     },
 }
 
 impl winit::application::ApplicationHandler<EngineEvent> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         match self {
-            App::Uninitialzed(opts, engine_context) => {
+            App::Uninitialzed(_opts, event_loop_proxy) => {
                 event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
                 let mut attributes = winit::window::WindowAttributes::default()
@@ -107,59 +111,18 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
                     surface.format(),
                 );
 
-                /*
-                let scene: Box<dyn Scene> = {
-                    // WorldScene
-
-                    // Campaigns and total texture count:
-                    //   training -> 140
-                    //   angola_tutorial -> 149
-                    //   angola -> 368
-                    //   romania -> 289
-                    //   kola -> 213
-                    //   caribbean -> 279
-                    //   kola_2 -> 240
-                    //   ecuador -> 341
-                    //   peru -> 197
-                    //   angola_2 -> 347
-
-                    let campaign_defs = data_dir().load_campaign_defs().unwrap();
-
-                    let campaign_name = opts
-                        .campaign_name
-                        .clone()
-                        .unwrap_or(String::from("training"));
-
-                    let campaign_def = campaign_defs
-                        .campaigns
-                        .iter()
-                        .find(|c| c.base_name == campaign_name)
-                        .cloned()
-                        .unwrap();
-
-                    Box::new(
-                        match WorldScene::new(&renderer, campaign_def, window_size) {
-                            Ok(scene) => scene,
-                            Err(err) => {
-                                tracing::error!("Could not create world scene! - {}", err);
-                                panic!();
-                            }
-                        },
-                    )
+                let load_context = LoadContext {
+                    renderer: renderer.clone(),
+                    surface_format: surface.format(),
                 };
-                */
+                let engine_context = EngineContext::new(event_loop_proxy.clone(), load_context);
 
-                let scene = Box::new(LoadingScene::new(
-                    engine_context.clone(),
-                    &renderer,
-                    crate::game::scenes::world::WorldSceneLoader {
-                        campaign_name: opts.campaign_name.clone(),
-                    },
-                ));
+                let scene = Box::new(SelectCampaignScene::new(engine_context.clone()));
 
                 tracing::info!("Application initialized!");
 
                 *self = App::Initialized {
+                    engine_context: engine_context.clone(),
                     window,
                     surface,
                     renderer,
@@ -169,6 +132,7 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
                     frame_index: 0,
                     last_frame_time: Instant::now(),
                     scene,
+                    requested_scene: None,
                 };
             }
 
@@ -190,6 +154,7 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
                 tracing::warn!("Can't process events for uninitialized application.");
             }
             App::Initialized {
+                engine_context,
                 window,
                 surface,
                 renderer,
@@ -199,6 +164,7 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
                 #[cfg(feature = "egui")]
                 egui_integration,
                 scene,
+                requested_scene,
                 ..
             } => {
                 if window_id != window.id() {
@@ -231,6 +197,12 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
                     }
 
                     WindowEvent::RedrawRequested => {
+                        // If a new scene was requested, switch to it before processing the frame.
+                        if let Some(requested_scene) = requested_scene.take() {
+                            *scene = requested_scene;
+                            scene.resize(surface.size());
+                        }
+
                         let now = Instant::now();
                         let last_frame_duration = now - *last_frame_time;
                         *last_frame_time = now;
@@ -274,6 +246,13 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
                                     |ctx| {
                                         ctx.set_pixels_per_point(1.2);
 
+                                        egui::Window::new("Engine").show(ctx, |ui| {
+                                            if ui.button("Loading").clicked() {
+                                                use crate::game::scenes::select_campaign::SelectCampaignSceneLoader;
+                                                engine_context.switch_scene(SelectCampaignSceneLoader);
+                                            }
+                                        });
+
                                         // Debug stuff from the scene.
                                         scene.debug_panel(ctx, frame.frame_index);
                                     },
@@ -303,10 +282,20 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
     }
 
     fn user_event(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, event: EngineEvent) {
+        let App::Initialized {
+            requested_scene, ..
+        } = self
+        else {
+            return;
+        };
+
         match event {
-            EngineEvent::Exit => {
+            EngineEvent::_Exit => {
                 tracing::info!("Exit requested!");
                 event_loop.exit();
+            }
+            EngineEvent::SwitchScene(new_scene) => {
+                *requested_scene = Some(new_scene);
             }
         }
     }
@@ -333,7 +322,7 @@ fn main() {
             .build()
             .unwrap();
 
-    let mut app = App::Uninitialzed(opts, EngineContext::new(event_loop.create_proxy()));
+    let mut app = App::Uninitialzed(opts, event_loop.create_proxy());
     event_loop
         .run_app(&mut app)
         .expect("run application event loop");

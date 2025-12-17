@@ -4,6 +4,7 @@ use crate::{
     engine::{
         gizmos,
         renderer::{Frame, Renderer},
+        scene::LoadContext,
         storage::Handle,
     },
     game::{
@@ -93,22 +94,20 @@ pub struct ObjectsSystem {
 }
 
 impl ObjectsSystem {
-    pub fn new(renderer: &Renderer, render_store: &RenderStore) -> Self {
-        let module = renderer
-            .device
-            .create_shader_module(wgsl_shader!("objects"));
+    pub fn new(load_context: &LoadContext, render_store: &RenderStore) -> Self {
+        let device = &load_context.renderer.device;
 
-        let layout = renderer
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("objects_pipeline_layout"),
-                bind_group_layouts: &[
-                    &render_store.camera_bind_group_layout,
-                    &render_store.textures.texture_data_bind_group_layout,
-                    &render_store.models.nodes_bind_group_layout,
-                ],
-                push_constant_ranges: &[],
-            });
+        let module = device.create_shader_module(wgsl_shader!("objects"));
+
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("objects_pipeline_layout"),
+            bind_group_layouts: &[
+                &render_store.camera_bind_group_layout,
+                &render_store.textures.texture_data_bind_group_layout,
+                &render_store.models.nodes_bind_group_layout,
+            ],
+            push_constant_ranges: &[],
+        });
 
         let buffers = &[
             wgpu::VertexBufferLayout {
@@ -144,67 +143,61 @@ impl ObjectsSystem {
             ..Default::default()
         };
 
-        let opaque_pipeline =
-            renderer
-                .device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("opaque_objects_pipeline"),
-                    layout: Some(&layout),
-                    vertex: wgpu::VertexState {
-                        module: &module,
-                        entry_point: Some("vertex_main"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers,
-                    },
-                    primitive,
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: wgpu::TextureFormat::Depth32Float,
-                        depth_write_enabled: true,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
-                        stencil: wgpu::StencilState::default(),
-                        bias: wgpu::DepthBiasState::default(),
-                    }),
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: Some(wgpu::FragmentState {
-                        module: &module,
-                        entry_point: Some("fragment_opaque"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: GeometryBuffer::opaque_targets(),
-                    }),
-                    multiview: None,
-                    cache: None,
-                });
+        let opaque_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("opaque_objects_pipeline"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &module,
+                entry_point: Some("vertex_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers,
+            },
+            primitive,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &module,
+                entry_point: Some("fragment_opaque"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: GeometryBuffer::opaque_targets(),
+            }),
+            multiview: None,
+            cache: None,
+        });
 
-        let alpha_pipeline =
-            renderer
-                .device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("alpha_objects_pipeline"),
-                    layout: Some(&layout),
-                    vertex: wgpu::VertexState {
-                        module: &module,
-                        entry_point: Some("vertex_main"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers,
-                    },
-                    primitive,
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: wgpu::TextureFormat::Depth32Float,
-                        depth_write_enabled: false,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
-                        stencil: wgpu::StencilState::default(),
-                        bias: wgpu::DepthBiasState::default(),
-                    }),
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: Some(wgpu::FragmentState {
-                        module: &module,
-                        entry_point: Some("fragment_alpha"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: GeometryBuffer::alpha_targets(),
-                    }),
-                    multiview: None,
-                    cache: None,
-                });
+        let alpha_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("alpha_objects_pipeline"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &module,
+                entry_point: Some("vertex_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers,
+            },
+            primitive,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &module,
+                entry_point: Some("fragment_alpha"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: GeometryBuffer::alpha_targets(),
+            }),
+            multiview: None,
+            cache: None,
+        });
 
         let models_to_render = Vec::default();
         let batches = Vec::default();

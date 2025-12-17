@@ -1,11 +1,12 @@
 use glam::UVec2;
 
-use crate::engine::renderer::Renderer;
+use crate::engine::{assets::AssetError, context::EngineContext, renderer::Renderer};
 
 use super::{input::InputState, renderer::Frame};
 
 /// Trait defining a scene with callbacks for each stage of the render pipeline.
-pub trait Scene {
+/// Scenes are sent across threads when switching via the `EventLoopProxy`, so they must be `Send`.
+pub trait Scene: Send {
     /// Handle a window surface resize to the given `size`.
     fn resize(&mut self, size: UVec2);
 
@@ -20,4 +21,19 @@ pub trait Scene {
     fn debug_panel(&mut self, egui: &egui::Context, frame_index: u64) {
         let _ = (egui, frame_index);
     }
+}
+
+/// Relevant data used to load scenes.
+#[derive(Clone)]
+pub struct LoadContext {
+    pub renderer: Renderer,
+    pub surface_format: wgpu::TextureFormat,
+}
+
+pub trait SceneLoader: Send + Sync + 'static {
+    fn load(
+        self,
+        engine_context: EngineContext,
+        load_context: &LoadContext,
+    ) -> Result<Box<dyn Scene>, AssetError>;
 }
