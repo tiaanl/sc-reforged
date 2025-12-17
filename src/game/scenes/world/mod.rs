@@ -7,7 +7,7 @@ use crate::{
         context::EngineContext,
         input::InputState,
         renderer::{Frame, Renderer},
-        scene::{LoadContext, Scene, SceneLoader},
+        scene::{Scene, SceneLoader},
     },
     game::{
         config::CampaignDef,
@@ -57,7 +57,11 @@ pub struct WorldScene {
 impl WorldScene {
     const RENDER_FRAME_COUNT: usize = 3;
 
-    pub fn new(load_context: LoadContext, campaign_def: CampaignDef) -> Result<Self, AssetError> {
+    pub fn new(
+        renderer: &Renderer,
+        surface_format: wgpu::TextureFormat,
+        campaign_def: CampaignDef,
+    ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
@@ -67,15 +71,21 @@ impl WorldScene {
 
         let sim_world = SimWorld::new(&campaign_def)?;
 
-        let render_store = RenderStore::new(&load_context);
+        let render_store = RenderStore::new(renderer, surface_format);
 
         let render_worlds = [
-            RenderWorld::new(0, &load_context.renderer, &render_store),
-            RenderWorld::new(1, &load_context.renderer, &render_store),
-            RenderWorld::new(2, &load_context.renderer, &render_store),
+            RenderWorld::new(0, renderer, &render_store),
+            RenderWorld::new(1, renderer, &render_store),
+            RenderWorld::new(2, renderer, &render_store),
         ];
 
-        let systems = systems::Systems::new(&load_context, &render_store, &sim_world, &campaign);
+        let systems = systems::Systems::new(
+            renderer,
+            surface_format,
+            &render_store,
+            &sim_world,
+            &campaign,
+        );
 
         Ok(Self {
             sim_world,
@@ -423,14 +433,18 @@ pub struct WorldSceneLoader {
 }
 
 impl SceneLoader for WorldSceneLoader {
-    fn load(
-        self,
+    fn load_scene(
+        self: Box<Self>,
         _engine_context: EngineContext,
-        load_context: &LoadContext,
+        renderer: &Renderer,
+        surface_format: wgpu::TextureFormat,
     ) -> Result<Box<dyn Scene>, AssetError> {
         let campaign_defs = data_dir().load_campaign_defs()?;
 
-        let campaign_name = self.campaign_name.unwrap_or(String::from("training"));
+        let campaign_name = self
+            .campaign_name
+            .clone()
+            .unwrap_or(String::from("training"));
         tracing::info!("Loading world {}...", campaign_name);
 
         let Some(campaign_def) = campaign_defs
@@ -446,7 +460,8 @@ impl SceneLoader for WorldSceneLoader {
         };
 
         Ok(Box::new(WorldScene::new(
-            load_context.clone(),
+            renderer,
+            surface_format,
             campaign_def,
         )?))
     }

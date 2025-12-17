@@ -1,10 +1,7 @@
 use glam::{Mat4, UVec2};
 
 use crate::{
-    engine::{
-        renderer::{Frame, Renderer},
-        scene::LoadContext,
-    },
+    engine::renderer::{Frame, Renderer},
     game::scenes::world::{
         render::{RenderStore, RenderUiRect, RenderWorld},
         sim_world::SimWorld,
@@ -17,8 +14,12 @@ pub struct UiSystem {
 }
 
 impl UiSystem {
-    pub fn new(load_context: &LoadContext, render_store: &RenderStore) -> Self {
-        let device = &load_context.renderer.device;
+    pub fn new(
+        renderer: &Renderer,
+        surface_format: wgpu::TextureFormat,
+        render_store: &RenderStore,
+    ) -> Self {
+        let device = &renderer.device;
 
         let module = device.create_shader_module(wgsl_shader!("ui_rect"));
 
@@ -56,7 +57,7 @@ impl UiSystem {
                 entry_point: None,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: load_context.surface_format,
+                    format: surface_format,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],

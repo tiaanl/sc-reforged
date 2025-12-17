@@ -9,4 +9,4 @@ pub use compositor::Compositor;
 pub use geometry_buffers::GeometryBuffer;
 pub use render_models::{RenderModel, RenderVertex};
 pub use render_store::RenderStore;
-pub use render_world::{ChunkInstanceData, ModelInstanceData, RenderWorld, RenderUiRect};
+pub use render_world::{ChunkInstanceData, ModelInstanceData, RenderUiRect, RenderWorld};

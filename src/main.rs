@@ -10,14 +10,14 @@ use crate::{
         context::{EngineContext, EngineEvent},
         input::InputState,
         renderer::{Frame, Renderer, Surface},
-        scene::{LoadContext, Scene},
+        scene::{Scene, SceneLoader},
     },
     game::{
         data_dir::{DataDir, scoped_data_dir},
         file_system::scoped_file_system,
         image::{Images, scoped_images},
         models::{Models, scoped_models},
-        scenes::select_campaign::SelectCampaignScene,
+        scenes::select_campaign::SelectCampaignSceneLoader,
     },
 };
 
@@ -111,13 +111,15 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
                     surface.format(),
                 );
 
-                let load_context = LoadContext {
-                    renderer: renderer.clone(),
-                    surface_format: surface.format(),
-                };
-                let engine_context = EngineContext::new(event_loop_proxy.clone(), load_context);
+                let engine_context = EngineContext::new(event_loop_proxy.clone());
 
-                let scene = Box::new(SelectCampaignScene::new(engine_context.clone()));
+                let scene = SelectCampaignSceneLoader::load_scene(
+                    Box::new(SelectCampaignSceneLoader),
+                    engine_context.clone(),
+                    &renderer,
+                    surface.format(),
+                )
+                .unwrap();
 
                 tracing::info!("Application initialized!");
 
@@ -283,7 +285,11 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
 
     fn user_event(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, event: EngineEvent) {
         let App::Initialized {
-            requested_scene, ..
+            engine_context,
+            surface,
+            renderer,
+            requested_scene,
+            ..
         } = self
         else {
             return;
@@ -293,6 +299,20 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
             EngineEvent::_Exit => {
                 tracing::info!("Exit requested!");
                 event_loop.exit();
+            }
+            EngineEvent::LoadScene(loader) => {
+                let engine_context = engine_context.clone();
+                let renderer = renderer.clone();
+                let surface_format = surface.format();
+
+                std::thread::spawn(move || {
+                    let scene = loader
+                        .load_scene(engine_context.clone(), &renderer, surface_format)
+                        .unwrap();
+                    engine_context
+                        .event_loop_proxy
+                        .send_event(EngineEvent::SwitchScene(scene))
+                });
             }
             EngineEvent::SwitchScene(new_scene) => {
                 *requested_scene = Some(new_scene);

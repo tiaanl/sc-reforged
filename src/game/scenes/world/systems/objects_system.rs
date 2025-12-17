@@ -4,7 +4,6 @@ use crate::{
     engine::{
         gizmos,
         renderer::{Frame, Renderer},
-        scene::LoadContext,
         storage::Handle,
     },
     game::{
@@ -94,8 +93,8 @@ pub struct ObjectsSystem {
 }
 
 impl ObjectsSystem {
-    pub fn new(load_context: &LoadContext, render_store: &RenderStore) -> Self {
-        let device = &load_context.renderer.device;
+    pub fn new(renderer: &Renderer, render_store: &RenderStore) -> Self {
+        let device = &renderer.device;
 
         let module = device.create_shader_module(wgsl_shader!("objects"));
 

@@ -2,7 +2,7 @@ use ahash::HashMap;
 use glam::UVec2;
 
 use crate::{
-    engine::{assets::AssetError, renderer::Renderer, scene::LoadContext, storage::Handle},
+    engine::{assets::AssetError, renderer::Renderer, storage::Handle},
     game::model::Model,
 };
 
@@ -29,21 +29,15 @@ pub struct RenderStore {
 }
 
 impl RenderStore {
-    pub fn new(load_context: &LoadContext) -> Self {
-        let geometry_buffer = GeometryBuffer::new(&load_context.renderer.device, UVec2::ZERO);
-        let compositor = Compositor::new(
-            &load_context.renderer.device,
-            load_context.surface_format,
-            &geometry_buffer,
-        );
+    pub fn new(renderer: &Renderer, surface_format: wgpu::TextureFormat) -> Self {
+        let geometry_buffer = GeometryBuffer::new(&renderer.device, UVec2::ZERO);
+        let compositor = Compositor::new(&renderer.device, surface_format, &geometry_buffer);
 
-        let camera_bind_group_layout =
-            RenderWorld::create_camera_bind_group_layout(&load_context.renderer);
-        let ui_state_bind_group_layout =
-            RenderWorld::create_ui_state_bind_group_layout(&load_context.renderer);
+        let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(&renderer);
+        let ui_state_bind_group_layout = RenderWorld::create_ui_state_bind_group_layout(&renderer);
 
-        let models = RenderModels::new(&load_context.renderer);
-        let textures = RenderTextures::new(&load_context.renderer);
+        let models = RenderModels::new(&renderer);
+        let textures = RenderTextures::new(&renderer);
 
         let model_to_render_model = HashMap::default();
 

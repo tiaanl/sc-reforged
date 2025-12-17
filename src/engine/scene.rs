@@ -4,6 +4,16 @@ use crate::engine::{assets::AssetError, context::EngineContext, renderer::Render
 
 use super::{input::InputState, renderer::Frame};
 
+/// Trait used to load [Scene]s.
+pub trait SceneLoader: Send + Sync + 'static {
+    fn load_scene(
+        self: Box<Self>,
+        engine_context: EngineContext,
+        renderer: &Renderer,
+        surface_format: wgpu::TextureFormat,
+    ) -> Result<Box<dyn Scene>, AssetError>;
+}
+
 /// Trait defining a scene with callbacks for each stage of the render pipeline.
 /// Scenes are sent across threads when switching via the `EventLoopProxy`, so they must be `Send`.
 pub trait Scene: Send {
@@ -21,19 +31,4 @@ pub trait Scene: Send {
     fn debug_panel(&mut self, egui: &egui::Context, frame_index: u64) {
         let _ = (egui, frame_index);
     }
-}
-
-/// Relevant data used to load scenes.
-#[derive(Clone)]
-pub struct LoadContext {
-    pub renderer: Renderer,
-    pub surface_format: wgpu::TextureFormat,
-}
-
-pub trait SceneLoader: Send + Sync + 'static {
-    fn load(
-        self,
-        engine_context: EngineContext,
-        load_context: &LoadContext,
-    ) -> Result<Box<dyn Scene>, AssetError>;
 }

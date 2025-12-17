@@ -2,7 +2,6 @@ use crate::{
     engine::{
         gizmos::GizmoVertex,
         renderer::{Frame, Renderer},
-        scene::LoadContext,
     },
     game::scenes::world::{
         render::{RenderStore, RenderWorld},
@@ -16,8 +15,12 @@ pub struct GizmoSystem {
 }
 
 impl GizmoSystem {
-    pub fn new(load_context: &LoadContext, render_store: &RenderStore) -> Self {
-        let device = &load_context.renderer.device;
+    pub fn new(
+        renderer: &Renderer,
+        surface_format: wgpu::TextureFormat,
+        render_store: &RenderStore,
+    ) -> Self {
+        let device = &renderer.device;
 
         let module = device.create_shader_module(wgsl_shader!("gizmos"));
 
@@ -54,7 +57,7 @@ impl GizmoSystem {
                 entry_point: Some("fragment_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: load_context.surface_format,
+                    format: surface_format,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],

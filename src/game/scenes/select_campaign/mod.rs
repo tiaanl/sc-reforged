@@ -4,18 +4,38 @@ use crate::{
         context::EngineContext,
         input::InputState,
         renderer::{Frame, Renderer},
-        scene::{LoadContext, Scene, SceneLoader},
+        scene::{Scene, SceneLoader},
     },
     game::{config::CampaignDefs, data_dir::data_dir, scenes::world::WorldSceneLoader},
 };
 
-pub struct SelectCampaignScene {
+pub struct SelectCampaignSceneLoader;
+
+impl SceneLoader for SelectCampaignSceneLoader {
+    fn load_scene(
+        self: Box<Self>,
+        engine_context: EngineContext,
+        _renderer: &Renderer,
+        _surface_format: wgpu::TextureFormat,
+    ) -> Result<Box<dyn Scene>, AssetError> {
+        let _ = self;
+
+        let campaign_defs = data_dir().load_campaign_defs()?;
+
+        Ok(Box::new(SelectCampaignScene {
+            engine_context,
+            campaign_defs,
+        }))
+    }
+}
+
+struct SelectCampaignScene {
     engine_context: EngineContext,
     campaign_defs: CampaignDefs,
 }
 
 impl SelectCampaignScene {
-    pub fn new(engine_context: EngineContext) -> Self {
+    pub fn _new(engine_context: EngineContext) -> Self {
         let campaign_defs = data_dir().load_campaign_defs().unwrap();
         Self {
             engine_context,
@@ -63,17 +83,5 @@ impl Scene for SelectCampaignScene {
                 });
             }
         });
-    }
-}
-
-pub struct SelectCampaignSceneLoader;
-
-impl SceneLoader for SelectCampaignSceneLoader {
-    fn load(
-        self,
-        engine_context: EngineContext,
-        _load_context: &LoadContext,
-    ) -> Result<Box<dyn Scene>, AssetError> {
-        Ok(Box::new(SelectCampaignScene::new(engine_context)))
     }
 }
