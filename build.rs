@@ -15,14 +15,14 @@ fn main() {
 
 const COMMON: &[&str] = &[
     "src/game/common/fullscreen.wgsl",
-    "src/game/scenes/world/render/camera_env.wgsl",
-    "src/game/scenes/world/render/geometry_buffer.wgsl",
+    "src/game/scenes/world/render/shaders/camera_env.wgsl",
+    "src/game/scenes/world/render/shaders/geometry_buffer.wgsl",
 ];
 
 const SHADERS: &[&str] = &[
     "src/engine/gizmos.wgsl",
-    "src/game/scenes/world/render/compositor.wgsl",
-    "src/game/scenes/world/render/terrain.wgsl",
+    "src/game/scenes/world/render/shaders/compositor.wgsl",
+    "src/game/scenes/world/render/shaders/terrain.wgsl",
     "src/game/scenes/world/systems/objects.wgsl",
     "src/game/scenes/world/systems/ui_rect.wgsl",
 ];
