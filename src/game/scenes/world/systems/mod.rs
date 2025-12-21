@@ -31,7 +31,6 @@ mod day_night_cycle_system;
 mod free_camera_controller;
 mod gizmo_system;
 mod top_down_camera_controller;
-mod ui_system;
 mod world_interaction;
 
 pub struct Time {
@@ -47,7 +46,6 @@ pub struct Systems {
 
     world_interaction_system: world_interaction::WorldInteractionSystem,
     gizmo_system: gizmo_system::GizmoSystem,
-    ui_system: ui_system::UiSystem,
 }
 
 impl Systems {
@@ -81,10 +79,9 @@ impl Systems {
                 FreeCameraController::new(1000.0, 0.2),
             ),
             culling: cull_system::CullSystem::default(),
-            world_renderer: WorldRenderer::new(renderer, render_store, sim_world),
+            world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),
             world_interaction_system: world_interaction::WorldInteractionSystem::default(),
             gizmo_system: gizmo_system::GizmoSystem::new(renderer, surface_format, render_store),
-            ui_system: ui_system::UiSystem::new(renderer, surface_format, render_store),
         }
     }
 
@@ -217,12 +214,9 @@ impl Systems {
         sim_world.objects.prepare_models(renderer, render_store);
 
         self.world_renderer
-            .extract(sim_world, render_store, render_world);
+            .extract(sim_world, render_store, render_world, viewport_size);
 
         self.gizmo_system.extract(sim_world, render_world);
-
-        self.ui_system
-            .extract(sim_world, render_store, render_world, viewport_size);
     }
 
     pub fn prepare(
@@ -242,8 +236,6 @@ impl Systems {
         self.camera_system.prepare(render_world, renderer);
         self.world_renderer.prepare(renderer, render_world);
         self.gizmo_system.prepare(render_world, renderer);
-
-        self.ui_system.prepare(render_world, renderer);
     }
 
     pub fn queue(
@@ -269,7 +261,5 @@ impl Systems {
             .render(frame, &render_store.geometry_buffer);
 
         self.gizmo_system.queue(render_world, frame);
-
-        self.ui_system.queue(render_world, frame);
     }
 }

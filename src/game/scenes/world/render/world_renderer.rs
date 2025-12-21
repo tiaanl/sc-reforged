@@ -1,6 +1,11 @@
+use glam::UVec2;
+
 use crate::{
     engine::renderer::{Frame, Renderer},
-    game::scenes::world::{render::GeometryBuffer, sim_world::SimWorld},
+    game::scenes::world::{
+        render::{GeometryBuffer, ui_pipeline::UiPipeline},
+        sim_world::SimWorld,
+    },
 };
 
 use super::{
@@ -13,16 +18,24 @@ pub struct WorldRenderer {
     pub terrain_pipeline: TerrainPipeline,
     // TODO: should not be pub.
     pub model_pipeline: ModelPipeline,
+    ui_pipeline: UiPipeline,
 }
 
 impl WorldRenderer {
-    pub fn new(renderer: &Renderer, render_store: &RenderStore, sim_world: &SimWorld) -> Self {
+    pub fn new(
+        renderer: &Renderer,
+        surface_format: wgpu::TextureFormat,
+        render_store: &RenderStore,
+        sim_world: &SimWorld,
+    ) -> Self {
         let terrain_pipeline = TerrainPipeline::new(renderer, render_store, sim_world);
         let model_pipeline = ModelPipeline::new(renderer, render_store);
+        let ui_pipeline = UiPipeline::new(renderer, surface_format, render_store);
 
         Self {
             terrain_pipeline,
             model_pipeline,
+            ui_pipeline,
         }
     }
 
@@ -32,14 +45,18 @@ impl WorldRenderer {
         sim_world: &mut SimWorld,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
+        viewport_size: UVec2,
     ) {
         self.terrain_pipeline.extract(sim_world, render_world);
         self.model_pipeline.extract(sim_world, render_store);
+        self.ui_pipeline
+            .extract(sim_world, render_store, render_world, viewport_size);
     }
 
     pub fn prepare(&mut self, renderer: &Renderer, render_world: &mut RenderWorld) {
         self.terrain_pipeline.prepare(renderer, render_world);
         self.model_pipeline.prepare(renderer, render_world);
+        self.ui_pipeline.prepare(renderer, render_world);
     }
 
     pub fn queue(
@@ -53,5 +70,6 @@ impl WorldRenderer {
             .queue(render_world, frame, geometry_buffer);
         self.model_pipeline
             .queue(render_store, render_world, frame, geometry_buffer);
+        self.ui_pipeline.queue(render_world, frame);
     }
 }
