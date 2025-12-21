@@ -83,7 +83,7 @@ struct Batch {
     range: std::ops::Range<u32>,
 }
 
-pub struct ObjectsSystem {
+pub struct ModelPipeline {
     opaque_pipeline: wgpu::RenderPipeline,
     alpha_pipeline: wgpu::RenderPipeline,
     models_to_render: Vec<ModelToRender>,
@@ -92,7 +92,7 @@ pub struct ObjectsSystem {
     pub debug_render_bounding_spheres: bool,
 }
 
-impl ObjectsSystem {
+impl ModelPipeline {
     pub fn new(renderer: &Renderer, render_store: &RenderStore) -> Self {
         let device = &renderer.device;
 

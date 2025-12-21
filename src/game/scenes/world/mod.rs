@@ -328,7 +328,7 @@ impl Scene for WorldScene {
                 {
                     ui.heading("Objects");
                     ui.checkbox(
-                        &mut self.systems.objects_system.debug_render_bounding_spheres,
+                        &mut self.systems.model_pipeline.debug_render_bounding_spheres,
                         "Render bounding spheres",
                     );
                 }

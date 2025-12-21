@@ -14,7 +14,7 @@ use crate::{
         math::{BoundingSphere, RaySegment},
         model::{Mesh, Model, ModelRayHit},
         models::{ModelName, models},
-        scenes::world::{render::RenderStore, systems::RenderWrapper},
+        scenes::world::render::{RenderStore, RenderWrapper},
     },
 };
 

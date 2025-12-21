@@ -11,7 +11,7 @@ use crate::{
         models::models,
         scenes::world::{
             animation::generate_pose,
-            render::{RenderStore, RenderWorld, TerrainPipeline},
+            render::{ModelPipeline, RenderStore, RenderWorld, TerrainPipeline},
             sim_world::SimWorld,
             systems::{
                 free_camera_controller::FreeCameraController,
@@ -23,7 +23,6 @@ use crate::{
 };
 
 pub use cull_system::DebugQuadTreeOptions;
-pub use objects_system::RenderWrapper;
 
 mod camera_system;
 mod clear_render_targets;
@@ -31,7 +30,6 @@ mod cull_system;
 mod day_night_cycle_system;
 mod free_camera_controller;
 mod gizmo_system;
-mod objects_system;
 mod top_down_camera_controller;
 mod ui_system;
 mod world_interaction;
@@ -46,8 +44,8 @@ pub struct Systems {
     pub culling: cull_system::CullSystem,
 
     pub terrain_pipeline: TerrainPipeline,
+    pub model_pipeline: ModelPipeline,
 
-    pub objects_system: objects_system::ObjectsSystem,
     world_interaction_system: world_interaction::WorldInteractionSystem,
     gizmo_system: gizmo_system::GizmoSystem,
     ui_system: ui_system::UiSystem,
@@ -85,7 +83,7 @@ impl Systems {
             ),
             culling: cull_system::CullSystem::default(),
             terrain_pipeline: TerrainPipeline::new(renderer, render_store, sim_world),
-            objects_system: objects_system::ObjectsSystem::new(renderer, render_store),
+            model_pipeline: ModelPipeline::new(renderer, render_store),
             world_interaction_system: world_interaction::WorldInteractionSystem::default(),
             gizmo_system: gizmo_system::GizmoSystem::new(renderer, surface_format, render_store),
             ui_system: ui_system::UiSystem::new(renderer, surface_format, render_store),
@@ -119,7 +117,7 @@ impl Systems {
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
         self.culling.calculate_visible_chunks(sim_world);
         day_night_cycle_system::increment_time_of_day(sim_world, time);
-        self.objects_system.render_gizmos(sim_world);
+        self.model_pipeline.render_gizmos(sim_world);
 
         self.world_interaction_system.update(sim_world);
 
@@ -221,7 +219,7 @@ impl Systems {
         // Make sure all models are prepared to be rendered.
         sim_world.objects.prepare_models(renderer, render_store);
 
-        self.objects_system.extract(sim_world, render_store);
+        self.model_pipeline.extract(sim_world, render_store);
 
         self.ui_system
             .extract(sim_world, render_store, render_world, viewport_size);
@@ -243,7 +241,7 @@ impl Systems {
 
         self.camera_system.prepare(render_world, renderer);
         self.terrain_pipeline.prepare(render_world, renderer);
-        self.objects_system.prepare(render_world, renderer);
+        self.model_pipeline.prepare(render_world, renderer);
         self.gizmo_system.prepare(render_world, renderer);
 
         self.ui_system.prepare(render_world, renderer);
@@ -262,7 +260,7 @@ impl Systems {
         );
         self.terrain_pipeline
             .queue(render_world, frame, &render_store.geometry_buffer);
-        self.objects_system.queue(
+        self.model_pipeline.queue(
             render_store,
             render_world,
             frame,
