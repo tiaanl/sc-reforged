@@ -1,14 +1,17 @@
-use glam::{UVec2, Vec3};
+use glam::UVec2;
 
 use crate::{
     engine::renderer::{Frame, Renderer},
-    game::scenes::world::{
-        render::{
-            GeometryBuffer,
-            box_pipeline::{self, BoxPipeline},
-            ui_pipeline::UiPipeline,
+    game::{
+        models::models,
+        scenes::world::{
+            render::{
+                GeometryBuffer,
+                box_pipeline::{self, BoxPipeline},
+                ui_pipeline::UiPipeline,
+            },
+            sim_world::{ObjectData, SimWorld},
         },
-        sim_world::SimWorld,
     },
 };
 
@@ -71,9 +74,23 @@ impl WorldRenderer {
         self.bounding_boxes.clear();
         if self.render_bounding_boxes {
             for (_, object) in sim_world.objects.objects.iter() {
-                self.bounding_boxes.push(box_pipeline::gpu::Instance {
-                    transform: object.transform.to_mat4().to_cols_array_2d(),
-                    half_extent: (Vec3::ONE * 100.0).to_array(),
+                let model_handle = match object.data {
+                    ObjectData::Scenery { model } => model,
+                    ObjectData::Biped { model } => model,
+                    ObjectData::SingleModel { model } => model,
+                };
+                let Some(model) = models().get(model_handle) else {
+                    continue;
+                };
+
+                model.collision_boxes.iter().for_each(|collision_box| {
+                    let transform = object.transform.to_mat4()
+                        * model.skeleton.local_transform(collision_box.node_index);
+                    self.bounding_boxes.push(box_pipeline::gpu::Instance {
+                        transform: transform.to_cols_array_2d(),
+                        min: collision_box.min.extend(0.0).to_array(),
+                        max: collision_box.max.extend(0.0).to_array(),
+                    });
                 });
             }
         }

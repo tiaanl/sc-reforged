@@ -14,7 +14,8 @@ struct InstanceInput {
     @location(3) transform_1: vec4<f32>,
     @location(4) transform_2: vec4<f32>,
     @location(5) transform_3: vec4<f32>,
-    @location(6) half_extent: vec3<f32>,
+    @location(6) aabb_min: vec4<f32>,
+    @location(7) aabb_max: vec4<f32>,
 }
 
 struct VertexOutput {
@@ -24,6 +25,10 @@ struct VertexOutput {
 
 @vertex
 fn vertex(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
+    let aabb_min = instance.aabb_min.xyz;
+    let aabb_max = instance.aabb_max.xyz;
+    let local_position = aabb_min + vertex.position * (aabb_max - aabb_min);
+
     let transform = mat4x4<f32>(
         instance.transform_0,
         instance.transform_1,
@@ -31,9 +36,9 @@ fn vertex(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
         instance.transform_3,
     );
 
-    let world_position = transform * (vec4<f32>(vertex.position * instance.half_extent, 1.0));
+    let world_position = transform * vec4<f32>(local_position, 1.0);
 
-    let clip_position = u_camera_env.proj_view * world_position;
+    let clip_position  = u_camera_env.proj_view * world_position;
 
     return VertexOutput(clip_position, vertex.tex_coord);
 }
