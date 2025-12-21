@@ -565,7 +565,7 @@ impl TerrainPipeline {
             .sort_unstable_by_key(|instance| instance.lod);
     }
 
-    pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {
+    pub fn prepare(&mut self, renderer: &Renderer, render_world: &mut RenderWorld) {
         // Upload the chunk instance data.
         render_world
             .terrain_chunk_instances_buffer

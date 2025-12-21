@@ -251,7 +251,7 @@ impl ModelPipeline {
             });
     }
 
-    pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {
+    pub fn prepare(&mut self, renderer: &Renderer, render_world: &mut RenderWorld) {
         self.models_to_render
             .sort_unstable_by(|a, b| a.key.cmp(&b.key));
 

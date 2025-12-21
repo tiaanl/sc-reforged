@@ -319,7 +319,11 @@ impl Scene for WorldScene {
                 {
                     ui.heading("Terrain");
                     ui.checkbox(
-                        &mut self.systems.terrain_pipeline.debug_render_terrain_wireframe,
+                        &mut self
+                            .systems
+                            .world_renderer
+                            .terrain_pipeline
+                            .debug_render_terrain_wireframe,
                         "Render terrain wireframe",
                     );
                 }
@@ -328,7 +332,11 @@ impl Scene for WorldScene {
                 {
                     ui.heading("Objects");
                     ui.checkbox(
-                        &mut self.systems.model_pipeline.debug_render_bounding_spheres,
+                        &mut self
+                            .systems
+                            .world_renderer
+                            .model_pipeline
+                            .debug_render_bounding_spheres,
                         "Render bounding spheres",
                     );
                 }
