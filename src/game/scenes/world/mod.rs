@@ -319,7 +319,7 @@ impl Scene for WorldScene {
                 {
                     ui.heading("Terrain");
                     ui.checkbox(
-                        &mut self.systems.terrain_system.debug_render_terrain_wireframe,
+                        &mut self.systems.terrain_pipeline.debug_render_terrain_wireframe,
                         "Render terrain wireframe",
                     );
                 }

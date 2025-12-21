@@ -16,7 +16,7 @@ use crate::{
     wgsl_shader,
 };
 
-pub struct TerrainSystem {
+pub struct TerrainPipeline {
     /// Dimensions of the terrain in chunks.
     chunks_dim: UVec2,
 
@@ -50,7 +50,7 @@ pub struct TerrainSystem {
     pub debug_render_terrain_wireframe: bool,
 }
 
-impl TerrainSystem {
+impl TerrainPipeline {
     const STRATA_DESCENT: f32 = -20_000.0;
 
     const INDEX_RANGES: [std::ops::Range<u32>; 4] = [0..384, 384..480, 480..504, 504..510];
@@ -465,7 +465,7 @@ impl TerrainSystem {
     }
 }
 
-impl TerrainSystem {
+impl TerrainPipeline {
     pub fn extract(&mut self, sim_world: &SimWorld, render_world: &mut RenderWorld) {
         self.chunk_lod_cache.clear();
 
