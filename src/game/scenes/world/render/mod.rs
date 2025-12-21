@@ -1,3 +1,4 @@
+mod box_pipeline;
 mod compositor;
 mod geometry_buffers;
 mod model_pipeline;

@@ -339,6 +339,10 @@ impl Scene for WorldScene {
                             .debug_render_bounding_spheres,
                         "Render bounding spheres",
                     );
+                    ui.checkbox(
+                        &mut self.systems.world_renderer.render_bounding_boxes,
+                        "Render bounding boxes",
+                    );
                 }
 
                 {
