@@ -57,11 +57,7 @@ impl Terrain {
 
         let chunks = Self::build_chunks(&height_map, chunk_dim);
 
-        let min_max: Vec<quad_tree::MinMax> = chunks
-            .iter()
-            .map(|chunk| quad_tree::MinMax(chunk.bounding_box.min.z, chunk.bounding_box.max.z))
-            .collect();
-
+        let min_max = Self::build_chunk_min_max(&height_map, chunk_dim);
         let quad_tree = quad_tree::QuadTree::build(
             chunk_dim,
             Vec2::splat(Self::CELLS_PER_CHUNK as f32 * height_map.cell_size),
@@ -161,6 +157,35 @@ impl Terrain {
         let t = forward_distance * inv_step;
 
         (t.floor() as i32).clamp(0, (Self::LOD_MAX - 1) as i32) as u32
+    }
+
+    fn build_chunk_min_max(height_map: &HeightMap, chunk_dim: UVec2) -> Vec<quad_tree::MinMax> {
+        let area = chunk_dim.x as usize * chunk_dim.y as usize;
+        let mut min_max = Vec::with_capacity(area);
+
+        for chunk_y in 0..chunk_dim.y {
+            for chunk_x in 0..chunk_dim.x {
+                let min_node = UVec2::new(chunk_x, chunk_y) * Self::CELLS_PER_CHUNK;
+                let max_node = min_node + UVec2::splat(Self::CELLS_PER_CHUNK);
+
+                let mut min_z = f32::INFINITY;
+                let mut max_z = f32::NEG_INFINITY;
+
+                for node_y in min_node.y..=max_node.y {
+                    for node_x in min_node.x..=max_node.x {
+                        let altitude = height_map
+                            .node_at(IVec2::new(node_x as i32, node_y as i32))
+                            .w;
+                        min_z = min_z.min(altitude);
+                        max_z = max_z.max(altitude);
+                    }
+                }
+
+                min_max.push(quad_tree::MinMax(min_z, max_z));
+            }
+        }
+
+        min_max
     }
 
     fn build_chunks(height_map: &HeightMap, chunk_dim: UVec2) -> Vec<Chunk> {
