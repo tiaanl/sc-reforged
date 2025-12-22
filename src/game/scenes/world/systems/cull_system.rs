@@ -1,5 +1,3 @@
-use glam::IVec2;
-
 use crate::game::scenes::world::sim_world::SimWorld;
 
 /// Calculate visible elements for the current frame.

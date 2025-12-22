@@ -103,11 +103,9 @@ impl Model {
     ) -> Option<ModelRayHit> {
         debug_assert!(ray_segment.distance.is_finite());
         debug_assert!(!ray_segment.is_degenerate());
-        debug_assert!(ray_segment.ray.direction.is_normalized());
-        debug_assert!(!ray_segment.ray.direction.is_nan());
 
         let world_dir = ray_segment.ray.direction;
-        let t_max_world = ray_segment.t_max(); // equals distance when direction is normalized
+        let t_max_world = ray_segment.distance;
         let world_end = ray_segment.ray.origin + world_dir * t_max_world;
 
         let mut best: Option<ModelRayHit> = None;
@@ -130,10 +128,7 @@ impl Model {
             }
 
             let local_segment = RaySegment {
-                ray: Ray {
-                    origin: local_origin,
-                    direction: local_dir,
-                },
+                ray: Ray::new(local_origin, local_dir),
                 distance: local_len,
             };
 

@@ -2,7 +2,7 @@ use glam::{Mat4, UVec2, Vec2, Vec3, Vec4};
 
 use crate::{
     engine::{
-        gizmos::{GizmoVertex, create_bounding_box},
+        gizmos::GizmoVertex,
         input::InputState,
         renderer::{Frame, Renderer},
     },

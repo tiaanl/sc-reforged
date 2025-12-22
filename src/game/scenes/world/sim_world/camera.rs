@@ -146,10 +146,7 @@ impl ComputedCamera {
 
         let direction = far_world - near_world;
         RaySegment {
-            ray: Ray {
-                origin: near_world,
-                direction: direction.normalize(),
-            },
+            ray: Ray::new(near_world, direction),
             distance: direction.length(),
         }
     }

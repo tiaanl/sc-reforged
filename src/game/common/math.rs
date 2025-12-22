@@ -2,6 +2,20 @@
 
 use glam::{Mat4, Vec3, Vec4};
 
+pub mod eps {
+    /// Boundary classification.
+    pub const CLASSIFY: f32 = 1e-5;
+
+    /// Plane-plane-plane intersection degeneracy.
+    pub const PLANE_INTERSECT: f32 = 1e-6;
+
+    /// Möller–Trumbore determinant threshold.
+    pub const TRIANGLE: f32 = 1e-7;
+
+    /// Are denominators zero?
+    pub const DENOM: f32 = 1e-8;
+}
+
 /// Represents a view into the world by way of matrices.
 #[derive(Clone, Debug, Default)]
 pub struct ViewProjection {
@@ -20,19 +34,27 @@ impl ViewProjection {
     }
 
     #[inline]
-    pub fn unproject_ndc(&self, point: Vec3) -> Vec3 {
-        self.inv.project_point3(point)
+    pub fn unproject_ndc_point(&self, p: Vec3) -> Vec3 {
+        self.inv.project_point3(p)
     }
 
     pub fn corners(&self) -> [Vec3; 8] {
-        const NDC: &[(f32, f32)] = &[(-1.0, 1.0), (1.0, 1.0), (1.0, -1.0), (-1.0, -1.0)];
+        // Order: ntl, ntr, nbr, nbl, ftl, ftr, fbr, fbl
+        const XS: [f32; 2] = [-1.0, 1.0];
+        const YS: [f32; 2] = [1.0, -1.0];
 
-        let mut result = [Vec3::ZERO; 8];
-        for (i, &(x, y)) in NDC.iter().enumerate() {
-            result[i] = self.unproject_ndc(Vec3::new(x, y, 0.0)); // near
-            result[i + 4] = self.unproject_ndc(Vec3::new(x, y, 1.0)); // far
+        let mut out = [Vec3::ZERO; 8];
+
+        let mut i = 0;
+        for &y in YS.iter() {
+            for &x in XS.iter() {
+                out[i] = self.unproject_ndc_point(Vec3::new(x, y, 0.0));
+                out[i + 4] = self.unproject_ndc_point(Vec3::new(x, y, 1.0));
+                i += 1;
+            }
         }
-        result
+
+        out
     }
 
     pub fn frustum(&self) -> Frustum {
@@ -45,7 +67,7 @@ impl ViewProjection {
         let right = Plane::from_row(r3 - r0);
         let bottom = Plane::from_row(r3 + r1);
         let top = Plane::from_row(r3 - r1);
-        let near = Plane::from_row(r2); // wgpu (D3D/Metal, 0..1 Z)
+        let near = Plane::from_row(r2); // wgpu
         let far = Plane::from_row(r3 - r2);
 
         Frustum::from_planes(left, right, bottom, top, near, far)
@@ -133,7 +155,7 @@ impl Frustum {
             let n1n2 = n1.cross(n2);
 
             let denom = n1.dot(n2n3);
-            if denom.abs() < 1e-6 {
+            if denom.abs() < eps::PLANE_INTERSECT {
                 // Planes are nearly parallel / degenerate
                 return None;
             }
@@ -159,18 +181,6 @@ impl Frustum {
         ])
     }
 
-    pub fn intersects_bounding_box(&self, b: &BoundingBox) -> bool {
-        const EPS: f32 = 1e-5;
-        for pl in &self.planes {
-            let mask = pl.normal.cmplt(Vec3::ZERO);
-            let p = Vec3::select(mask, b.min, b.max);
-            if pl.signed_distance(p) < -EPS {
-                return false;
-            }
-        }
-        true
-    }
-
     pub fn intersects_bounding_sphere(&self, bounding_sphere: &BoundingSphere) -> bool {
         self.planes
             .iter()
@@ -178,59 +188,61 @@ impl Frustum {
     }
 
     pub fn vs_bounding_box(&self, bounding_box: &BoundingBox) -> Containment {
-        const EPS: f32 = 1e-5;
+        let mut result = Containment::Inside;
 
-        for plane in self.planes.iter() {
-            // For plane n·x + d >= 0:
-            //   p = vertex furthest along normal (positive vertex)
-            //   q = vertex furthest opposite normal (negative vertex)
-            let mask = plane.normal.cmplt(Vec3::ZERO);
+        for pl in &self.planes {
+            let mask = pl.normal.cmplt(Vec3::ZERO);
 
+            // Positive vertex (furthest along normal)
             let p = Vec3::select(mask, bounding_box.min, bounding_box.max);
-            if plane.signed_distance(p) < -EPS {
+            if pl.signed_distance(p) < -eps::CLASSIFY {
                 return Containment::Outside;
             }
 
+            // Negative vertex (furthest opposite normal)
             let q = Vec3::select(mask, bounding_box.max, bounding_box.min);
-            if plane.signed_distance(q) < -EPS {
-                return Containment::Intersect;
+            if pl.signed_distance(q) < -eps::CLASSIFY {
+                result = Containment::Intersect;
             }
         }
 
-        Containment::Inside
+        result
+    }
+
+    #[inline]
+    pub fn intersects_bounding_box(&self, bounding_box: &BoundingBox) -> bool {
+        self.vs_bounding_box(bounding_box) != Containment::Outside
     }
 }
 
 #[derive(Debug)]
 pub struct Ray {
     pub origin: Vec3,
-    pub direction: Vec3,
+    pub direction: Vec3, // Always normalized.
 }
 
 impl Ray {
-    pub fn point_at(&self, distance: f32) -> Vec3 {
-        debug_assert!(self.direction.is_normalized());
-
-        self.origin + self.direction * distance
+    pub fn new(origin: Vec3, direction: Vec3) -> Self {
+        let direction = direction.normalize_or_zero();
+        debug_assert!(direction.length_squared() > 0.0);
+        Self { origin, direction }
     }
 
-    pub fn intersect_plane(&self, plane: &Plane) -> Option<Vec3> {
-        let denom = self.direction.dot(plane.normal);
+    pub fn at(&self, t: f32) -> Vec3 {
+        debug_assert!(self.direction.is_normalized());
 
-        // Check if the ray is parallel to the plane
-        if denom.abs() < 1e-6 {
+        self.origin + self.direction * t
+    }
+
+    pub fn intersect_plane(&self, plane: &Plane) -> Option<f32> {
+        debug_assert!(self.direction.is_normalized());
+
+        let denom = plane.normal.dot(self.direction);
+        if denom.abs() < eps::DENOM {
             return None;
         }
-
-        let t = ((plane.normal * plane.distance) - self.origin).dot(plane.normal) / denom;
-
-        // Check if the intersection is behind the ray's origin
-        if t < 0.0 {
-            return None;
-        }
-
-        // Compute the intersection point
-        Some(self.origin + t * self.direction)
+        let t = -(plane.normal.dot(self.origin) + plane.distance) / denom;
+        if t < 0.0 { None } else { Some(t) }
     }
 }
 
@@ -242,13 +254,7 @@ pub struct RaySegment {
 impl RaySegment {
     #[inline]
     pub fn is_degenerate(&self) -> bool {
-        self.distance <= 0.0 || self.ray.direction.length_squared() == 0.0
-    }
-
-    #[inline]
-    pub fn t_max(&self) -> f32 {
-        let len = self.ray.direction.length();
-        if len == 0.0 { 0.0 } else { self.distance / len }
+        self.distance <= 0.0
     }
 }
 
@@ -263,7 +269,7 @@ impl Plane {
         let normal = row.truncate();
         let length = normal.length();
 
-        if length <= f32::EPSILON || !length.is_finite() {
+        if length <= eps::DENOM || !length.is_finite() {
             return Self {
                 normal: Vec3::Z,
                 distance: 0.0,
@@ -278,13 +284,16 @@ impl Plane {
     }
 
     pub fn from_points(a: Vec3, b: Vec3, c: Vec3) -> Self {
-        let ab = b - a;
-        let ac = c - a;
+        let normal = (b - a).cross(c - a).normalize_or_zero();
 
-        let normal = ab.cross(ac).normalize();
+        if normal.length_squared() == 0.0 {
+            return Self {
+                normal: Vec3::Z,
+                distance: 0.0,
+            };
+        }
 
         let distance = -normal.dot(a);
-
         Self { normal, distance }
     }
 
@@ -294,21 +303,22 @@ impl Plane {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct BoundingBox {
     pub min: Vec3,
     pub max: Vec3,
 }
 
 impl BoundingBox {
-    pub fn from_iter(iter: impl Iterator<Item = Vec3>) -> Self {
+    pub fn from_points(iter: impl IntoIterator<Item = Vec3>) -> Self {
         let mut result = Self::default();
-        iter.for_each(|i| result.expand(i));
+        iter.into_iter().for_each(|i| result.expand(i));
         result
     }
 
+    #[inline]
     pub fn center(&self) -> Vec3 {
-        self.min + (self.max - self.min)
+        (self.min + self.max) * 0.5
     }
 
     pub fn expand(&mut self, p: Vec3) {
@@ -319,6 +329,12 @@ impl BoundingBox {
     pub fn expand_to_include(&mut self, other: &BoundingBox) {
         self.min = self.min.min(other.min);
         self.max = self.max.max(other.max);
+    }
+
+    pub fn union(&self, other: &BoundingBox) -> BoundingBox {
+        let mut result = *self;
+        result.expand_to_include(other);
+        result
     }
 
     pub fn fully_contains_sphere(&self, sphere: &BoundingSphere) -> bool {
@@ -335,8 +351,6 @@ impl BoundingBox {
 
     /// Return (t_enter, t_exit, enter_normal)
     pub fn intersect_ray_segment(&self, ray_segment: &RaySegment) -> Option<(f32, f32, Vec3)> {
-        const EPSILON: f32 = 1e-8;
-
         if ray_segment.is_degenerate() {
             return None;
         }
@@ -351,7 +365,7 @@ impl BoundingBox {
             let min_a = self.min[axis];
             let max_a = self.max[axis];
 
-            if direction.abs() < EPSILON {
+            if direction.abs() < eps::DENOM {
                 // Parallel to slab; must be inside.
                 if origin < min_a || origin > max_a {
                     return None;
@@ -381,7 +395,7 @@ impl BoundingBox {
 
         // Clip to segment range.
         let t_lo = 0.0;
-        let t_hi = ray_segment.t_max();
+        let t_hi = ray_segment.distance;
         if t_max < t_lo || t_min > t_hi {
             return None;
         }
@@ -390,6 +404,15 @@ impl BoundingBox {
         let t_exit = t_max.min(t_hi);
 
         Some((t_enter, t_exit, enter_normal))
+    }
+}
+
+impl Default for BoundingBox {
+    fn default() -> Self {
+        Self {
+            min: Vec3::INFINITY,
+            max: Vec3::NEG_INFINITY,
+        }
     }
 }
 
@@ -523,7 +546,7 @@ impl BoundingSphere {
         let t1 = (-b - sqrt_disc) * inv_2a;
         let t2 = (-b + sqrt_disc) * inv_2a;
 
-        let t_max = ray_segment.t_max();
+        let t_max = ray_segment.distance;
         let t_hit = if (0.0..=t_max).contains(&t1) {
             t1
         } else if (0.0..=t_max).contains(&t2) {
@@ -571,14 +594,11 @@ pub fn triangle_intersect_ray(
     let perpendicular_to_direction_and_edge_0_2 = ray.direction.cross(edge_0_2);
     let determinant = edge_0_1.dot(perpendicular_to_direction_and_edge_0_2);
 
-    // Epsilon tuned for f32; adjust if your scale is extreme.
-    const EPS: f32 = 1e-7;
-
     if cull_backfaces {
-        if determinant <= EPS {
+        if determinant <= eps::TRIANGLE {
             return None;
         }
-    } else if determinant.abs() <= EPS {
+    } else if determinant.abs() <= eps::TRIANGLE {
         // Parallel or degenerate triangle.
         return None;
     }
