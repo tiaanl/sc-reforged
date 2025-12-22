@@ -10,12 +10,12 @@ use crate::{
 
 #[derive(Debug)]
 pub enum InteractionHit {
-    Terrain {
+    _Terrain {
         _world_position: Vec3,
         distance: f32,
         chunk_coord: IVec2,
     },
-    Object {
+    _Object {
         _world_position: Vec3,
         distance: f32,
         object: Handle<Object>,
@@ -23,13 +23,13 @@ pub enum InteractionHit {
 }
 
 impl InteractionHit {
-    pub fn distance(&self) -> f32 {
+    pub fn _distance(&self) -> f32 {
         match self {
-            InteractionHit::Terrain {
+            InteractionHit::_Terrain {
                 distance: _distance,
                 ..
             }
-            | InteractionHit::Object {
+            | InteractionHit::_Object {
                 distance: _distance,
                 ..
             } => *_distance,
@@ -128,10 +128,10 @@ impl WorldInteractionSystem {
                     Self::get_interaction_hit(sim_world, &camera_ray_segment, |_| true)
                 {
                     match hit {
-                        InteractionHit::Terrain { chunk_coord, .. } => {
+                        InteractionHit::_Terrain { chunk_coord, .. } => {
                             sim_world.highlighted_chunks.insert(chunk_coord);
                         }
-                        InteractionHit::Object { object, .. } => {
+                        InteractionHit::_Object { object, .. } => {
                             sim_world.highlighted_objects.insert(object);
                         }
                     }
@@ -147,7 +147,7 @@ impl WorldInteractionSystem {
 
             if size.x > Self::DRAG_THRESHOLD && size.y > Self::DRAG_THRESHOLD {
                 const THICKNESS: u32 = 1;
-                debug_assert!(THICKNESS <= Self::DRAG_THRESHOLD);
+                // debug_assert!(THICKNESS <= Self::DRAG_THRESHOLD);
 
                 sim_world.ui.ui_rects.push(UiRect {
                     pos,
@@ -200,7 +200,7 @@ impl WorldInteractionSystem {
         debug_assert!(min.x <= max.x);
         debug_assert!(min.y <= max.y);
 
-        let frustum = {
+        let _frustum = {
             const NDC_Z_NEAR: f32 = 0.0;
             const NDC_Z_FAR: f32 = 1.0;
 
@@ -232,17 +232,6 @@ impl WorldInteractionSystem {
 
             Frustum::from_corners(ntl, ntr, nbr, nbl, ftl, ftr, fbr, fbl)
         };
-
-        let mut objects: Vec<Handle<Object>> = vec![];
-        sim_world.quad_tree.with_nodes_in_frustum(&frustum, |node| {
-            for object_handle in node.objects.iter() {
-                if let Some(object) = sim_world.objects.get(*object_handle)
-                    && frustum.intersects_bounding_sphere(&object.bounding_sphere)
-                {
-                    objects.push(*object_handle);
-                }
-            }
-        });
     }
 
     /// Update the selected objects by using a ray segment with an origin at
@@ -266,47 +255,10 @@ impl WorldInteractionSystem {
     }
 
     fn get_interaction_hit(
-        sim_world: &SimWorld,
-        camera_ray_segment: &RaySegment,
-        object_pred: impl Fn(&Object) -> bool,
+        _sim_world: &SimWorld,
+        _camera_ray_segment: &RaySegment,
+        _object_pred: impl Fn(&Object) -> bool,
     ) -> Option<InteractionHit> {
-        let mut hits = Vec::default();
-
-        sim_world
-            .quad_tree
-            .with_nodes_ray_segment(camera_ray_segment, |node| {
-                if let Some(chunk_coord) = node.chunk_coord
-                    && let Some(hit) = sim_world
-                        .terrain
-                        .chunk_intersect_ray_segment(chunk_coord, camera_ray_segment)
-                {
-                    hits.push(InteractionHit::Terrain {
-                        _world_position: hit.world_position,
-                        distance: hit.t,
-                        chunk_coord,
-                    });
-                }
-
-                for object_handle in node.objects.iter() {
-                    if let Some(object) = sim_world.objects.get(*object_handle) {
-                        if !object_pred(object) {
-                            continue;
-                        }
-                        if let Some(hit) = object.ray_intersection(camera_ray_segment) {
-                            hits.push(InteractionHit::Object {
-                                _world_position: hit.world_position,
-                                distance: hit.t,
-                                object: *object_handle,
-                            });
-                        }
-                    }
-                }
-            });
-
-        // Reverse sort the hits...
-        hits.sort_by(|a, b| b.distance().partial_cmp(&a.distance()).unwrap());
-
-        // ...and return the last one.
-        hits.pop()
+        None
     }
 }

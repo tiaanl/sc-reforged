@@ -11,7 +11,7 @@ use crate::{
         config::{BodyDefinition, CharacterProfiles, ObjectType},
         data_dir::data_dir,
         image::images,
-        math::{BoundingSphere, RaySegment},
+        math::{BoundingBox, RaySegment},
         model::{Mesh, Model, ModelRayHit},
         models::{ModelName, models},
         scenes::world::render::{RenderStore, RenderWrapper},
@@ -33,7 +33,7 @@ pub enum ObjectData {
 
 pub struct Object {
     pub transform: Transform,
-    pub bounding_sphere: BoundingSphere,
+    pub _bounding_box: BoundingBox,
     pub data: ObjectData,
 }
 
@@ -56,7 +56,7 @@ impl Object {
 
     /// Intersect this object with a world-space ray segment using the model's collision boxes.
     /// Returns Some((t, world_position)) for the closest hit, or None if no hit.
-    pub fn ray_intersection(&self, ray_segment: &RaySegment) -> Option<ModelRayHit> {
+    pub fn _ray_intersection(&self, ray_segment: &RaySegment) -> Option<ModelRayHit> {
         // Quad tree already applied coarse culling; do only fine model test here.
         let object_to_world = self.transform.to_mat4();
 
@@ -99,7 +99,7 @@ impl Objects {
         name: &str,
         title: &str,
     ) -> Result<(Handle<Object>, &Object), AssetError> {
-        let mut bounding_sphere = BoundingSphere::ZERO;
+        let mut bounding_box = BoundingBox::default();
 
         let object_data = match object_type {
             ObjectType::Scenery
@@ -142,7 +142,7 @@ impl Objects {
             | ObjectType::StructureWall => {
                 let (model_handle, model) = models().load_model(ModelName::Object(name.into()))?;
 
-                bounding_sphere.expand_to_include(&model.bounding_sphere);
+                bounding_box.expand_to_include(&model.bounding_box);
 
                 self.models_to_prepare.push(model_handle);
 
@@ -188,7 +188,7 @@ impl Objects {
             _ => {
                 let (model_handle, model) = models().load_model(ModelName::Object(name.into()))?;
 
-                bounding_sphere.expand_to_include(&model.bounding_sphere);
+                bounding_box.expand_to_include(&model.bounding_box);
 
                 self.models_to_prepare.push(model_handle);
 
@@ -198,12 +198,9 @@ impl Objects {
             }
         };
 
-        // Move to bounding sphere into position.
-        bounding_sphere.center += transform.translation;
-
         let handle = self.objects.insert(Object {
             transform,
-            bounding_sphere,
+            _bounding_box: bounding_box,
             data: object_data,
         });
 
@@ -245,7 +242,7 @@ impl Objects {
             collision_boxes: Vec::with_capacity(
                 body_model.collision_boxes.len() + head_model.collision_boxes.len(),
             ),
-            bounding_sphere: BoundingSphere::ZERO,
+            bounding_box: BoundingBox::default(),
             name_lookup: body_model.name_lookup.clone(),
         };
 
@@ -265,8 +262,8 @@ impl Objects {
             .collision_boxes
             .extend(body_model.collision_boxes.iter().cloned());
         new_model
-            .bounding_sphere
-            .expand_to_include(&body_model.bounding_sphere);
+            .bounding_box
+            .expand_to_include(&body_model.bounding_box);
 
         // Merge the head model meshes.
         for mesh in head_model.meshes.iter() {
@@ -284,8 +281,8 @@ impl Objects {
             .collision_boxes
             .extend(head_model.collision_boxes.iter().cloned());
         new_model
-            .bounding_sphere
-            .expand_to_include(&head_model.bounding_sphere);
+            .bounding_box
+            .expand_to_include(&head_model.bounding_box);
 
         Ok(new_model)
     }

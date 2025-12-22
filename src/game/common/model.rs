@@ -13,7 +13,6 @@ use crate::{
     engine::storage::Handle,
     game::{
         image::{Image, images},
-        math::BoundingSphere,
         skeleton::{Bone, Skeleton},
     },
 };
@@ -33,7 +32,7 @@ pub struct Model {
     /// A collection of collision boxes in the model, each associated with a specific node.
     pub collision_boxes: Vec<CollisionBox>,
     /// A bounding sphere surrounding all the vertices in the model.
-    pub bounding_sphere: BoundingSphere,
+    pub bounding_box: BoundingBox,
     /// Look up node indices according to original node names.
     pub name_lookup: NameLookup,
 }
@@ -44,7 +43,7 @@ impl Model {
             skeleton,
             meshes: Vec::default(),
             collision_boxes: Vec::default(),
-            bounding_sphere: BoundingSphere::ZERO,
+            bounding_box: BoundingBox::default(),
             name_lookup: HashMap::default(),
         }
     }
@@ -326,24 +325,21 @@ impl TryFrom<smf::Model> for Model {
                 .collect(),
         };
 
-        let mut bounding_sphere = BoundingSphere::default();
+        let mut bounding_box = BoundingBox::default();
+
         for mesh in meshes.iter() {
             let local = skeleton.local_transform(mesh.node_index);
-            let b = BoundingSphere::from_positions_ritter(
-                mesh.mesh
-                    .vertices
-                    .iter()
-                    .map(|v| local.transform_point3(v.position)),
-            );
-
-            bounding_sphere.expand_to_include(&b);
+            mesh.mesh.vertices.iter().for_each(|v| {
+                let local = local.transform_point3(v.position);
+                bounding_box.expand(local);
+            });
         }
 
         Ok(Model {
             skeleton,
             meshes,
             collision_boxes,
-            bounding_sphere,
+            bounding_box,
             name_lookup: names,
         })
     }

@@ -271,8 +271,24 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
+    pub fn from_iter(iter: impl Iterator<Item = Vec3>) -> Self {
+        let mut result = Self::default();
+        iter.for_each(|i| result.expand(i));
+        result
+    }
+
     pub fn center(&self) -> Vec3 {
         self.min + (self.max - self.min)
+    }
+
+    pub fn expand(&mut self, p: Vec3) {
+        self.min = self.min.min(p);
+        self.max = self.max.max(p);
+    }
+
+    pub fn expand_to_include(&mut self, other: &BoundingBox) {
+        self.min = self.min.min(other.min);
+        self.max = self.max.max(other.max);
     }
 
     pub fn fully_contains_sphere(&self, sphere: &BoundingSphere) -> bool {

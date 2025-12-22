@@ -13,7 +13,7 @@ use crate::{
         models::{ModelName, models},
         scenes::world::{
             animation::motion::Motion,
-            sim_world::{objects::Objects, quad_tree::QuadTree, ui::Ui},
+            sim_world::{objects::Objects, ui::Ui},
         },
         track::Track,
     },
@@ -22,7 +22,6 @@ use crate::{
 mod camera;
 mod height_map;
 mod objects;
-mod quad_tree;
 mod terrain;
 mod ui;
 
@@ -62,9 +61,6 @@ pub struct SimWorld {
 
     pub time_of_day: f32,
     pub day_night_cycle: DayNightCycle,
-
-    /// Used for determining visible elements in the world.
-    pub quad_tree: QuadTree,
 
     pub terrain: Terrain,
     /// A list of chunks that should be highlighted during rendering.
@@ -128,8 +124,6 @@ impl SimWorld {
             Terrain::new(height_map, terrain_texture)
         };
 
-        let mut quad_tree = QuadTree::from_terrain(&terrain);
-
         let mut objects = Objects::new()?;
 
         if let Some(ref mtf_name) = campaign.mtf_name {
@@ -139,7 +133,7 @@ impl SimWorld {
                 let object_type = ObjectType::from_string(&object.typ)
                     .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
 
-                let (object_handle, object) = match objects.spawn(
+                let _ = match objects.spawn(
                     Transform::from_translation(object.position)
                         .with_euler_rotation(object.rotation * vec3(1.0, 1.0, -1.0)),
                     object_type,
@@ -152,9 +146,6 @@ impl SimWorld {
                         continue;
                     }
                 };
-
-                // Insert the object into the quad tree.
-                quad_tree.insert_object(object_handle, &object.bounding_sphere);
             }
         }
 
@@ -190,8 +181,6 @@ impl SimWorld {
 
             time_of_day,
             day_night_cycle,
-
-            quad_tree,
 
             terrain,
             highlighted_chunks: HashSet::default(),

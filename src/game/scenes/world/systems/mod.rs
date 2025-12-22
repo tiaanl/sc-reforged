@@ -22,8 +22,6 @@ use crate::{
     },
 };
 
-pub use cull_system::DebugQuadTreeOptions;
-
 mod camera_system;
 mod clear_render_targets;
 mod cull_system;
@@ -112,8 +110,6 @@ impl Systems {
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
         self.culling.calculate_visible_chunks(sim_world);
         day_night_cycle_system::increment_time_of_day(sim_world, time);
-
-        self.world_renderer.model_pipeline.render_gizmos(sim_world);
 
         self.world_interaction_system.update(sim_world);
 

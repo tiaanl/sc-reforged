@@ -198,8 +198,6 @@ impl Scene for WorldScene {
         egui::Window::new("World")
             .default_open(true)
             .show(ctx, |ui| {
-                use crate::game::scenes::world::systems::DebugQuadTreeOptions;
-
                 ui.heading("Camera");
                 ui.vertical(|ui| {
                     use crate::game::scenes::world::sim_world::ActiveCamera;
@@ -262,59 +260,6 @@ impl Scene for WorldScene {
                     );
                 });
 
-                // Quad tree
-                {
-                    ui.heading("Quad Tree");
-                    if ui
-                        .radio(
-                            matches!(
-                                self.systems.culling.debug_quad_tree,
-                                DebugQuadTreeOptions::None
-                            ),
-                            "None",
-                        )
-                        .clicked()
-                    {
-                        self.systems.culling.debug_quad_tree = DebugQuadTreeOptions::None;
-                    }
-
-                    ui.horizontal(|ui| {
-                        if ui
-                            .radio(
-                                matches!(
-                                    self.systems.culling.debug_quad_tree,
-                                    DebugQuadTreeOptions::Level(_)
-                                ),
-                                "Level",
-                            )
-                            .clicked()
-                        {
-                            self.systems.culling.debug_quad_tree = DebugQuadTreeOptions::Level(0);
-                        };
-                        if let DebugQuadTreeOptions::Level(level) =
-                            &mut self.systems.culling.debug_quad_tree
-                        {
-                            ui.add(egui::widgets::Slider::new(
-                                level,
-                                0..=(self.sim_world.quad_tree.max_level),
-                            ));
-                        }
-                    });
-
-                    if ui
-                        .radio(
-                            matches!(
-                                self.systems.culling.debug_quad_tree,
-                                DebugQuadTreeOptions::All
-                            ),
-                            "All",
-                        )
-                        .clicked()
-                    {
-                        self.systems.culling.debug_quad_tree = DebugQuadTreeOptions::All;
-                    }
-                }
-
                 // Terrain
                 {
                     ui.heading("Terrain");
@@ -331,14 +276,6 @@ impl Scene for WorldScene {
                 // Objects
                 {
                     ui.heading("Objects");
-                    ui.checkbox(
-                        &mut self
-                            .systems
-                            .world_renderer
-                            .model_pipeline
-                            .debug_render_bounding_spheres,
-                        "Render bounding spheres",
-                    );
                     ui.checkbox(
                         &mut self.systems.world_renderer.render_bounding_boxes,
                         "Render bounding boxes",
@@ -367,11 +304,11 @@ impl Scene for WorldScene {
                 let scale = rect.height() as f64 / (1.0 / 288.0);
 
                 const COLORS: &[egui::Color32] = &[
-                    egui::Color32::from_rgb(255, 0, 0),
-                    egui::Color32::from_rgb(0, 255, 0),
-                    egui::Color32::from_rgb(0, 0, 255),
-                    egui::Color32::from_rgb(255, 255, 0),
-                    egui::Color32::from_rgb(255, 0, 255),
+                    egui::Color32::from_rgb(255, 0, 0),   // input
+                    egui::Color32::from_rgb(0, 255, 0),   // update
+                    egui::Color32::from_rgb(0, 0, 255),   // extract
+                    egui::Color32::from_rgb(255, 255, 0), // prepare
+                    egui::Color32::from_rgb(255, 0, 255), // queue
                 ];
 
                 for i in 0..self.fps_history.len() {
