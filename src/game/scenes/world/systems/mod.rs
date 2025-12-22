@@ -2,7 +2,7 @@ use glam::{Mat4, UVec2, Vec2, Vec3, Vec4};
 
 use crate::{
     engine::{
-        gizmos::GizmoVertex,
+        gizmos::{GizmoVertex, create_bounding_box},
         input::InputState,
         renderer::{Frame, Renderer},
     },
@@ -113,6 +113,7 @@ impl Systems {
 
         self.world_interaction_system.update(sim_world);
 
+        #[allow(clippy::collapsible_if)]
         if false {
             if let Some(model) = models().get(sim_world.test_model) {
                 let pose = generate_pose(

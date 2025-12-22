@@ -52,6 +52,13 @@ impl ViewProjection {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Containment {
+    Outside,
+    Intersect,
+    Inside,
+}
+
 #[derive(Default)]
 pub struct Frustum {
     /// [left, right, bottom, top, near, far]
@@ -168,6 +175,29 @@ impl Frustum {
         self.planes
             .iter()
             .all(|plane| plane.signed_distance(bounding_sphere.center) >= -bounding_sphere.radius)
+    }
+
+    pub fn vs_bounding_box(&self, bounding_box: &BoundingBox) -> Containment {
+        const EPS: f32 = 1e-5;
+
+        for plane in self.planes.iter() {
+            // For plane n·x + d >= 0:
+            //   p = vertex furthest along normal (positive vertex)
+            //   q = vertex furthest opposite normal (negative vertex)
+            let mask = plane.normal.cmplt(Vec3::ZERO);
+
+            let p = Vec3::select(mask, bounding_box.min, bounding_box.max);
+            if plane.signed_distance(p) < -EPS {
+                return Containment::Outside;
+            }
+
+            let q = Vec3::select(mask, bounding_box.max, bounding_box.min);
+            if plane.signed_distance(q) < -EPS {
+                return Containment::Intersect;
+            }
+        }
+
+        Containment::Inside
     }
 }
 

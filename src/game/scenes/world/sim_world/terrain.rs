@@ -1,4 +1,4 @@
-use glam::{IVec2, UVec2, Vec3};
+use glam::{IVec2, UVec2, Vec2, Vec3};
 
 use crate::{
     engine::storage::Handle,
@@ -8,7 +8,7 @@ use crate::{
     },
 };
 
-use super::height_map::HeightMap;
+use super::{height_map::HeightMap, quad_tree};
 
 // Size of each terrain:
 //
@@ -36,6 +36,7 @@ pub struct Terrain {
     pub chunks: Vec<Chunk>,
     pub terrain_texture: Handle<Image>,
     // pub water_image: Option<Handle<Image>>,
+    pub quad_tree: quad_tree::QuadTree,
 }
 
 impl Terrain {
@@ -56,11 +57,23 @@ impl Terrain {
 
         let chunks = Self::build_chunks(&height_map, chunk_dim);
 
+        let min_max: Vec<quad_tree::MinMax> = chunks
+            .iter()
+            .map(|chunk| quad_tree::MinMax(chunk.bounding_box.min.z, chunk.bounding_box.max.z))
+            .collect();
+
+        let quad_tree = quad_tree::QuadTree::build(
+            chunk_dim,
+            Vec2::splat(Self::CELLS_PER_CHUNK as f32 * height_map.cell_size),
+            &min_max,
+        );
+
         Self {
             height_map,
             chunk_dim,
             chunks,
             terrain_texture,
+            quad_tree,
         }
     }
 

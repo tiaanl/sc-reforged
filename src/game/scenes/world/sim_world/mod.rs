@@ -22,6 +22,7 @@ use crate::{
 mod camera;
 mod height_map;
 mod objects;
+mod quad_tree;
 mod terrain;
 mod ui;
 
