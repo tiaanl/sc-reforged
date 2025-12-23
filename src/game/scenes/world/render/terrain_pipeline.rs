@@ -485,12 +485,16 @@ impl TerrainPipeline {
 
         for visible_coord in sim_world.visible_chunks.iter() {
             let mut lod_at = |coord: IVec2| {
-                sim_world.terrain.chunk_at(coord).map(|chunk| {
-                    *self.chunk_lod_cache.entry(coord).or_insert({
-                        let center = chunk.bounding_box.center();
-                        Terrain::calculate_lod(camera_position, camera_forward, camera_far, center)
+                if let Some(lod) = self.chunk_lod_cache.get(&coord) {
+                    return Some(*lod);
+                }
+
+                sim_world
+                    .terrain
+                    .chunk_lod(coord, camera_position, camera_forward, camera_far)
+                    .inspect(|&lod| {
+                        self.chunk_lod_cache.insert(coord, lod);
                     })
-                })
             };
 
             let center_lod = lod_at(*visible_coord).expect("Center chunk is always valid!");

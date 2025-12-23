@@ -81,6 +81,25 @@ impl Terrain {
         self.chunks.get(index)
     }
 
+    /// Calculate the LOD for a chunk coordinate based on its bounds center.
+    pub fn chunk_lod(
+        &self,
+        coord: IVec2,
+        camera_position: Vec3,
+        camera_forward: Vec3,
+        camera_far: f32,
+    ) -> Option<u32> {
+        let chunk = self.chunk_at(coord)?;
+        let center = chunk.bounding_box.center();
+
+        Some(Self::calculate_lod(
+            camera_position,
+            camera_forward,
+            camera_far,
+            center,
+        ))
+    }
+
     pub fn _chunk_intersect_ray_segment(
         &self,
         chunk_coord: IVec2,
