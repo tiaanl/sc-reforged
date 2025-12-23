@@ -108,7 +108,7 @@ impl QuadTree {
         1_u32 << level
     }
 
-    pub fn node_aabb(&self, level: usize, ix: u32, iy: u32) -> BoundingBox {
+    pub fn node_bounding_box(&self, level: usize, ix: u32, iy: u32) -> BoundingBox {
         let level_data = &self.levels[level];
         debug_assert!(ix < level_data.size.x && iy < level_data.size.y);
 
@@ -128,9 +128,9 @@ impl QuadTree {
     }
 
     #[inline]
-    pub fn _root_aabb(&self) -> BoundingBox {
+    pub fn _root_bounding_box(&self) -> BoundingBox {
         let root_level = self.levels.len() - 1;
-        self.node_aabb(root_level, 0, 0)
+        self.node_bounding_box(root_level, 0, 0)
     }
 }
 
@@ -163,9 +163,9 @@ impl QuadTree {
         stack.push((root_level, 0, 0));
 
         while let Some((level, ix, iy)) = stack.pop() {
-            let aabb = self.node_aabb(level, ix, iy);
+            let bounding_box = self.node_bounding_box(level, ix, iy);
 
-            match frustum.vs_bounding_box(&aabb) {
+            match frustum.vs_bounding_box(&bounding_box) {
                 Containment::Outside => continue,
 
                 Containment::Intersect => {

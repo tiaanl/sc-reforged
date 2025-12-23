@@ -24,16 +24,9 @@ use super::{height_map::HeightMap, quad_tree};
 //   romania           256 x 256   32 x 32
 //   training          64 x 64     8 x 8
 
-pub struct Chunk {
-    pub _min_node: IVec2,
-    pub _max_node: IVec2,
-    pub bounding_box: BoundingBox,
-}
-
 pub struct Terrain {
     pub height_map: HeightMap,
     pub chunk_dim: UVec2,
-    pub chunks: Vec<Chunk>,
     pub terrain_texture: Handle<Image>,
     // pub water_image: Option<Handle<Image>>,
     pub quad_tree: quad_tree::QuadTree,
@@ -55,8 +48,6 @@ impl Terrain {
             height_map.size.y.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
         );
 
-        let chunks = Self::build_chunks(&height_map, chunk_dim);
-
         let min_max = Self::build_chunk_min_max(&height_map, chunk_dim);
         let quad_tree = quad_tree::QuadTree::build(
             chunk_dim,
@@ -67,18 +58,21 @@ impl Terrain {
         Self {
             height_map,
             chunk_dim,
-            chunks,
             terrain_texture,
             quad_tree,
         }
     }
 
-    pub fn chunk_at(&self, coord: IVec2) -> Option<&Chunk> {
-        let coord = coord
-            .clamp(IVec2::ZERO, self.chunk_dim.as_ivec2())
-            .as_uvec2();
-        let index = coord.y as usize * self.chunk_dim.x as usize + coord.x as usize;
-        self.chunks.get(index)
+    pub fn chunk_bounding_box(&self, coord: IVec2) -> Option<BoundingBox> {
+        if coord.x < 0 || coord.y < 0 {
+            return None;
+        }
+        let coord = coord.as_uvec2();
+        if coord.x >= self.chunk_dim.x || coord.y >= self.chunk_dim.y {
+            return None;
+        }
+
+        Some(self.quad_tree.node_bounding_box(0, coord.x, coord.y))
     }
 
     /// Calculate the LOD for a chunk coordinate based on its bounds center.
@@ -89,8 +83,8 @@ impl Terrain {
         camera_forward: Vec3,
         camera_far: f32,
     ) -> Option<u32> {
-        let chunk = self.chunk_at(coord)?;
-        let center = chunk.bounding_box.center();
+        let bounding_box = self.chunk_bounding_box(coord)?;
+        let center = bounding_box.center();
 
         Some(Self::calculate_lod(
             camera_position,
@@ -105,7 +99,17 @@ impl Terrain {
         chunk_coord: IVec2,
         ray_segment: &RaySegment,
     ) -> Option<RayTriangleHit> {
-        let chunk = self.chunk_at(chunk_coord).unwrap();
+        if chunk_coord.x < 0 || chunk_coord.y < 0 {
+            return None;
+        }
+
+        let chunk_coord = chunk_coord.as_uvec2();
+        if chunk_coord.x >= self.chunk_dim.x || chunk_coord.y >= self.chunk_dim.y {
+            return None;
+        }
+
+        let min_node = (chunk_coord * Self::CELLS_PER_CHUNK).as_ivec2();
+        let max_node = min_node + IVec2::splat(Self::CELLS_PER_CHUNK as i32);
 
         let height_map = &self.height_map;
 
@@ -118,8 +122,8 @@ impl Terrain {
 
         let mut closest: Option<RayTriangleHit> = None;
 
-        for y in chunk._min_node.y..chunk._max_node.y {
-            for x in chunk._min_node.x..chunk._max_node.x {
+        for y in min_node.y..max_node.y {
+            for x in min_node.x..max_node.x {
                 let node_coord = IVec2::new(x, y);
                 let vertices =
                     INDICES.map(|offset| height_map.world_position_at_node(node_coord + offset));
@@ -205,36 +209,5 @@ impl Terrain {
         }
 
         min_max
-    }
-
-    fn build_chunks(height_map: &HeightMap, chunk_dim: UVec2) -> Vec<Chunk> {
-        let mut chunks = Vec::with_capacity(chunk_dim.x as usize * chunk_dim.y as usize);
-
-        for y in 0..chunk_dim.y {
-            for x in 0..chunk_dim.x {
-                let min_node =
-                    UVec2::new(x * Self::CELLS_PER_CHUNK, y * Self::CELLS_PER_CHUNK).as_ivec2();
-                let max_node = min_node + IVec2::splat(Self::CELLS_PER_CHUNK as i32);
-
-                let mut min = height_map.world_position_at_node(min_node);
-                let mut max = height_map.world_position_at_node(max_node);
-
-                for yy in min_node.y..=max_node.y {
-                    for xx in min_node.x..=max_node.x {
-                        let altitude = height_map.node_at(IVec2::new(xx, yy)).w;
-                        min.z = min.z.min(altitude);
-                        max.z = max.z.max(altitude);
-                    }
-                }
-
-                chunks.push(Chunk {
-                    _min_node: min_node,
-                    _max_node: max_node,
-                    bounding_box: BoundingBox { min, max },
-                })
-            }
-        }
-
-        chunks
     }
 }
