@@ -225,11 +225,16 @@ impl Objects {
     }
 
     pub fn finalize(&mut self) {
-        let bounding_boxes: Vec<BoundingBox> = self
+        let bounding_boxes = self
             .objects
             .iter()
-            .map(|(_, object)| object.bounding_box.transformed(object.transform.to_mat4()))
-            .collect();
+            .map(|(handle, object)| {
+                (
+                    handle,
+                    object.bounding_box.transformed(object.transform.to_mat4()),
+                )
+            })
+            .collect::<Vec<_>>();
 
         self.static_bvh.rebuild(&bounding_boxes);
     }

@@ -199,11 +199,12 @@ impl QuadTree {
     }
 
     pub fn visible_chunks(&self, frustum: &Frustum, out: &mut Vec<IVec2>) {
+        out.clear();
+
         // TODO: Don't allocate every time.
         let mut rects = Vec::default();
         self.visible_chunk_rects(frustum, &mut rects);
 
-        out.clear();
         for rect in rects {
             for y in rect.min.y..rect.max.y {
                 for x in rect.min.x..rect.max.x {
