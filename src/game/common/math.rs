@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat3, Mat4, Vec3, Vec4};
 
 pub mod eps {
     /// Boundary classification.
@@ -317,6 +317,11 @@ impl BoundingBox {
     }
 
     #[inline]
+    pub fn is_valid(&self) -> bool {
+        self.min.is_finite() && self.max.is_finite() && self.min.cmple(self.max).all()
+    }
+
+    #[inline]
     pub fn center(&self) -> Vec3 {
         (self.min + self.max) * 0.5
     }
@@ -335,6 +340,34 @@ impl BoundingBox {
         let mut result = *self;
         result.expand_to_include(other);
         result
+    }
+
+    /// Transform a local-space bounding box by an affine [Mat4] and return the
+    /// world-space axis-aligned bounding box.
+    /// Uses "abs(linear) * extents".
+    pub fn transformed(&self, world: Mat4) -> BoundingBox {
+        let center = (self.min + self.max) * 0.5;
+        let extent = (self.max - self.min) * 0.5;
+
+        let world_center = world.transform_point3(center);
+
+        let mat = Mat3::from_mat4(world);
+
+        // Component-wise abs of the linear map, applied to extents.
+        let col_0 = mat.x_axis;
+        let col_1 = mat.y_axis;
+        let col_2 = mat.z_axis;
+
+        let world_extent = Vec3::new(
+            col_0.x.abs() * extent.x + col_1.x.abs() * extent.y + col_2.x.abs() * extent.z,
+            col_0.y.abs() * extent.x + col_1.y.abs() * extent.y + col_2.y.abs() * extent.z,
+            col_0.z.abs() * extent.x + col_1.z.abs() * extent.y + col_2.z.abs() * extent.z,
+        );
+
+        Self {
+            min: world_center - world_extent,
+            max: world_center + world_extent,
+        }
     }
 
     pub fn fully_contains_sphere(&self, sphere: &BoundingSphere) -> bool {

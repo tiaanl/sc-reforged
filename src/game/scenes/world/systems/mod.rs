@@ -113,6 +113,14 @@ impl Systems {
 
         self.world_interaction_system.update(sim_world);
 
+        {
+            // Test BVH.
+            sim_world
+                .objects
+                .static_bvh
+                .test(&mut sim_world.gizmo_vertices);
+        }
+
         #[allow(clippy::collapsible_if)]
         if false {
             if let Some(model) = models().get(sim_world.test_model) {

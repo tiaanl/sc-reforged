@@ -18,6 +18,8 @@ use crate::{
     },
 };
 
+use super::static_bvh::StaticBvh;
+
 pub enum ObjectData {
     Scenery {
         model: Handle<Model>,
@@ -33,7 +35,7 @@ pub enum ObjectData {
 
 pub struct Object {
     pub transform: Transform,
-    pub _bounding_box: BoundingBox,
+    pub bounding_box: BoundingBox,
     pub data: ObjectData,
 }
 
@@ -77,6 +79,8 @@ pub struct Objects {
     /// A list for all objects iun the world.
     pub objects: Storage<Object>,
 
+    pub static_bvh: StaticBvh,
+
     /// Keep a list of handles to try and load.
     models_to_prepare: Vec<Handle<Model>>,
 }
@@ -85,9 +89,12 @@ impl Objects {
     pub fn new() -> Result<Self, AssetError> {
         let character_profiles = data_dir().load_character_profiles()?;
 
+        let static_bvh = StaticBvh::new(8);
+
         Ok(Self {
             character_profiles,
             objects: Storage::default(),
+            static_bvh,
             models_to_prepare: Vec::default(),
         })
     }
@@ -170,6 +177,9 @@ impl Objects {
                 };
 
                 let model = Self::build_body_definition_model(body_definition)?;
+
+                bounding_box.expand_to_include(&model.bounding_box);
+
                 let model_handle = models().add(
                     ModelName::BodyDefinition(
                         character_profile.character.clone(),
@@ -198,9 +208,11 @@ impl Objects {
             }
         };
 
+        debug_assert!(bounding_box.is_valid(), "invalid bounding box for {name:?}");
+
         let handle = self.objects.insert(Object {
             transform,
-            _bounding_box: bounding_box,
+            bounding_box,
             data: object_data,
         });
 
@@ -210,6 +222,16 @@ impl Objects {
     #[inline]
     pub fn get(&self, handle: Handle<Object>) -> Option<&Object> {
         self.objects.get(handle)
+    }
+
+    pub fn finalize(&mut self) {
+        let bounding_boxes: Vec<BoundingBox> = self
+            .objects
+            .iter()
+            .map(|(_, object)| object.bounding_box.transformed(object.transform.to_mat4()))
+            .collect();
+
+        self.static_bvh.rebuild(&bounding_boxes);
     }
 
     /// Take all models that were used during `spawn` and prepare them to be rendered.

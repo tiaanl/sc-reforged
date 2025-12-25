@@ -23,6 +23,7 @@ mod camera;
 mod height_map;
 mod objects;
 mod quad_tree;
+mod static_bvh;
 mod terrain;
 mod ui;
 
@@ -149,6 +150,9 @@ impl SimWorld {
                 };
             }
         }
+
+        // TODO: Can also do the [RenderModel] creation here?
+        objects.finalize();
 
         // quad_tree._print_nodes();
 
