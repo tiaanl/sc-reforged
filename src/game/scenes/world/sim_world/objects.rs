@@ -35,7 +35,7 @@ pub enum ObjectData {
 
 #[derive(Clone, Copy, Debug)]
 pub enum RayIntersectionMode {
-    CollisionBoxes,
+    _CollisionBoxes,
     Meshes,
 }
 
@@ -79,11 +79,14 @@ impl Object {
 
         let model = models().get(model_handle)?;
         match mode {
-            RayIntersectionMode::CollisionBoxes => {
+            RayIntersectionMode::_CollisionBoxes => {
                 model.intersect_ray_segment_with_transform(object_to_world, ray_segment)
             }
-            RayIntersectionMode::Meshes => model
-                .intersect_ray_segment_meshes_with_transform(object_to_world, ray_segment, false),
+            RayIntersectionMode::Meshes => model.intersect_ray_segment_meshes_with_transform(
+                object_to_world,
+                ray_segment,
+                false,
+            ),
         }
     }
 }
