@@ -6,7 +6,7 @@ use crate::{
         storage::Handle,
     },
     game::{
-        math::{BoundingBox, Containment, Frustum},
+        math::{BoundingBox, Containment, Frustum, RaySegment},
         scenes::world::sim_world::Object,
     },
 };
@@ -144,6 +144,50 @@ impl StaticBvh {
                         stack.push((right, false));
                     }
                 },
+            }
+        }
+    }
+
+    /// Ray query. Writes object IDs whose bounding boxes intersect the ray segment into `out`.
+    pub fn objects_intersect_ray_segment(
+        &self,
+        ray_segment: &RaySegment,
+        out: &mut Vec<Handle<Object>>,
+    ) {
+        out.clear();
+
+        if self.nodes.is_empty() || ray_segment.is_degenerate() {
+            return;
+        }
+
+        let mut stack: Vec<usize> = Vec::new();
+        stack.push(0);
+
+        while let Some(node_index) = stack.pop() {
+            let node = &self.nodes[node_index];
+            if node
+                .bounding_box
+                .intersect_ray_segment(ray_segment)
+                .is_none()
+            {
+                continue;
+            }
+
+            match node.kind {
+                NodeKind::Leaf { start, count } => {
+                    for &item_index in self.indices[start..start + count].iter() {
+                        if self.bounding_boxes[item_index]
+                            .intersect_ray_segment(ray_segment)
+                            .is_some()
+                        {
+                            out.push(self.objects[item_index]);
+                        }
+                    }
+                }
+                NodeKind::Internal { left, right } => {
+                    stack.push(left);
+                    stack.push(right);
+                }
             }
         }
     }

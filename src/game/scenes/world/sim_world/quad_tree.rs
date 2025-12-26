@@ -2,7 +2,7 @@ use core::f32;
 
 use glam::{IVec2, UVec2, Vec2};
 
-use crate::game::math::{BoundingBox, Containment, Frustum};
+use crate::game::math::{BoundingBox, Containment, Frustum, RaySegment};
 
 pub struct MinMax(pub f32, pub f32);
 
@@ -209,6 +209,45 @@ impl QuadTree {
             for y in rect.min.y..rect.max.y {
                 for x in rect.min.x..rect.max.x {
                     out.push(IVec2::new(x as i32, y as i32));
+                }
+            }
+        }
+    }
+
+    pub fn ray_intersect_chunks(&self, ray_segment: &RaySegment, out: &mut Vec<IVec2>) {
+        out.clear();
+
+        if ray_segment.is_degenerate() {
+            return;
+        }
+
+        debug_assert!(!self.levels.is_empty(), "how can this be empty?");
+
+        let root_level = self.levels.len() - 1;
+        let mut stack: Vec<(usize, u32, u32)> = Vec::default();
+        stack.push((root_level, 0, 0));
+
+        while let Some((level, ix, iy)) = stack.pop() {
+            let bounding_box = self.node_bounding_box(level, ix, iy);
+            if bounding_box.intersect_ray_segment(ray_segment).is_none() {
+                continue;
+            }
+
+            if level == 0 {
+                out.push(IVec2::new(ix as i32, iy as i32));
+                continue;
+            }
+
+            let child_level = level - 1;
+            let child = &self.levels[child_level];
+
+            for dy in 0..2_u32 {
+                for dx in 0..2_u32 {
+                    let cx = ix * 2 + dx;
+                    let cy = iy * 2 + dy;
+                    if cx < child.size.x && cy < child.size.y {
+                        stack.push((child_level, cx, cy));
+                    }
                 }
             }
         }

@@ -58,7 +58,7 @@ impl Object {
 
     /// Intersect this object with a world-space ray segment using the model's collision boxes.
     /// Returns Some((t, world_position)) for the closest hit, or None if no hit.
-    pub fn _ray_intersection(&self, ray_segment: &RaySegment) -> Option<ModelRayHit> {
+    pub fn ray_intersection(&self, ray_segment: &RaySegment) -> Option<ModelRayHit> {
         // Quad tree already applied coarse culling; do only fine model test here.
         let object_to_world = self.transform.to_mat4();
 

@@ -141,7 +141,7 @@ impl Model {
                 bbox.intersect_ray_segment(&local_segment)
             {
                 // Compute local/world-space hit and normal.
-                let local_hit = local_origin + local_dir * t_enter_local;
+                let local_hit = local_segment.ray.at(t_enter_local);
                 let world_hit = node_to_world.transform_point3(local_hit);
                 let normal_world = node_to_world
                     .transform_vector3(enter_normal_local)
