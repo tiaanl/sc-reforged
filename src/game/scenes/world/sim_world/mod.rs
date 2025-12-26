@@ -53,6 +53,9 @@ pub enum ActiveCamera {
 
 /// Holds all the data for the world we are simulating.
 pub struct SimWorld {
+    /// Instant that the simulation started.
+    pub sim_start: std::time::Instant,
+
     /// Data for each camera.
     pub cameras: [Camera; ActiveCamera::COUNT],
 
@@ -162,6 +165,8 @@ impl SimWorld {
         let ui = Ui::new();
 
         Ok(SimWorld {
+            sim_start: std::time::Instant::now(),
+
             cameras: [
                 Camera::new(
                     Vec3::ZERO,

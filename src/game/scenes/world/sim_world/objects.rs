@@ -14,7 +14,7 @@ use crate::{
         math::{BoundingBox, RaySegment},
         model::{Mesh, Model, ModelRayHit},
         models::{ModelName, models},
-        scenes::world::render::{RenderStore, RenderWrapper},
+        scenes::world::render::{ModelRenderFlags, RenderStore, RenderWrapper},
     },
 };
 
@@ -46,20 +46,14 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn gather_models_to_render(&self, renderer: &mut RenderWrapper, highlight: f32) {
-        match self.data {
-            ObjectData::Scenery { model } => {
-                renderer.render_model(self.transform.to_mat4(), model, highlight)
-            }
+    pub fn gather_models_to_render(&self, renderer: &mut RenderWrapper, flags: ModelRenderFlags) {
+        let model = match self.data {
+            ObjectData::Scenery { model } => model,
+            ObjectData::Biped { model } => model,
+            ObjectData::SingleModel { model } => model,
+        };
 
-            ObjectData::Biped { model } => {
-                renderer.render_model(self.transform.to_mat4(), model, highlight);
-            }
-
-            ObjectData::SingleModel { model } => {
-                renderer.render_model(self.transform.to_mat4(), model, highlight)
-            }
-        }
+        renderer.render_model(self.transform.to_mat4(), model, flags);
     }
 
     /// Intersect this object with a world-space ray segment using the selected model data.

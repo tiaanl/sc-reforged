@@ -18,4 +18,4 @@ pub use render_world::{ChunkInstanceData, ModelInstanceData, RenderUiRect, Rende
 pub use world_renderer::WorldRenderer;
 
 // TODO: Figure out another way to get the models to render from [SimWorld].
-pub use model_pipeline::RenderWrapper;
+pub use model_pipeline::{ModelRenderFlags, RenderWrapper};

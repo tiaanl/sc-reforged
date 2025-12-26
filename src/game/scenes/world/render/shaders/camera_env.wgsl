@@ -1,17 +1,20 @@
 #define_import_path camera_env
 
 struct CameraEnv {
-    proj_view: mat4x4<f32>,
-    frustum: array<vec4<f32>, 6>,
-    position: vec4<f32>,
-    forward: vec4<f32>,
+    proj_view: mat4x4<f32>,       // [64]
+    frustum: array<vec4<f32>, 6>, // [96]
+    position: vec4<f32>,          // [16]
+    forward: vec4<f32>,           // [16]
 
-    sun_dir: vec4<f32>,       // x, y, z, 0
-    sun_color: vec4<f32>,     // r, g, b, 1
-    ambient_color: vec4<f32>, // r, g, b, 1
-    fog_color: vec4<f32>,     // r, g, b, 1
-    fog_distance: f32,
-    fog_near_fraction: f32,
+    sun_dir: vec4<f32>,       // x, y, z, 0 [16]
+    sun_color: vec4<f32>,     // r, g, b, 1 [16]
+    ambient_color: vec4<f32>, // r, g, b, 1 [16]
+    fog_color: vec4<f32>,     // r, g, b, 1 [16]
+    fog_distance: f32,        // [4]
+    fog_near_fraction: f32,   // [4]
+
+    // The current time in seconds since the simulation started.
+    sim_time: f32,  // [4]
 }
 
 /// Diffuse + ambient lighting, modulated by shadow visibility.

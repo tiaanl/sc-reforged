@@ -1686,6 +1686,7 @@ name = "sc-reforged"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "bitflags 2.10.0",
  "bytemuck",
  "byteorder",
  "clap",

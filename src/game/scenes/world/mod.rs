@@ -125,7 +125,10 @@ impl Scene for WorldScene {
 
         // Run systems
         {
-            let time = systems::Time { delta_time };
+            let time = systems::Time {
+                delta_time,
+                sim_time: (std::time::Instant::now() - self.sim_world.sim_start).as_secs_f32(),
+            };
 
             let start = std::time::Instant::now();
             self.systems

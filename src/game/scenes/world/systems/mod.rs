@@ -31,12 +31,19 @@ mod gizmo_system;
 mod top_down_camera_controller;
 mod world_interaction;
 
+#[derive(Default)]
 pub struct Time {
+    /// Time elapsed since the last frame was rendered.
     pub delta_time: f32,
+    /// Time in seconds since the simulation started.
+    pub sim_time: f32,
 }
 
 /// Shared resources between rendering in the systems and the [RenderWorld].
 pub struct Systems {
+    /// Cache the sim time to pass to the [CameraEnvironment].
+    sim_time: f32,
+
     pub camera_system: camera_system::CameraSystem,
     pub culling: cull_system::CullSystem,
 
@@ -55,6 +62,8 @@ impl Systems {
         campaign: &Campaign,
     ) -> Self {
         Self {
+            sim_time: 0.0,
+
             camera_system: camera_system::CameraSystem::new(
                 {
                     let camera_from = campaign.view_initial.from.extend(2500.0);
@@ -108,6 +117,8 @@ impl Systems {
     }
 
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
+        self.sim_time = time.sim_time;
+
         self.culling.calculate_visible_chunks(sim_world);
         day_night_cycle_system::increment_time_of_day(sim_world, time);
 
@@ -213,6 +224,7 @@ impl Systems {
         render_world: &mut RenderWorld,
         viewport_size: UVec2,
     ) {
+        render_world.camera_env.sim_time = self.sim_time;
         self.camera_system.extract(sim_world, render_world);
 
         // Make sure all models are prepared to be rendered.

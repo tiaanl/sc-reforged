@@ -41,11 +41,17 @@ enum RenderNodeIndex {
     Base(u32),
 }
 
+bitflags::bitflags! {
+    pub struct ModelRenderFlags : u32 {
+        const HIGHLIGHTED = 1 << 0;
+    }
+}
+
 struct ModelToRender {
     key: RenderKey,
     transform: Mat4,
     first_node_index: RenderNodeIndex,
-    highlight: f32,
+    flags: ModelRenderFlags,
 }
 
 /// Wrapper passed to objects so they can specify what they want rendered in the scene.
@@ -55,7 +61,7 @@ pub struct RenderWrapper<'a> {
 }
 
 impl<'a> RenderWrapper<'a> {
-    pub fn render_model(&mut self, transform: Mat4, model: Handle<Model>, highlight: f32) {
+    pub fn render_model(&mut self, transform: Mat4, model: Handle<Model>, flags: ModelRenderFlags) {
         let Some(render_model_handle) = self.render_store.render_model_for_model(model) else {
             tracing::warn!("Missing render model for model!");
             return;
@@ -72,7 +78,7 @@ impl<'a> RenderWrapper<'a> {
             },
             transform,
             first_node_index: RenderNodeIndex::Base(render_model.nodes_range.start),
-            highlight,
+            flags,
         });
     }
 }
@@ -126,7 +132,7 @@ impl ModelPipeline {
                     7 => Float32x4,  // model_mat_2
                     8 => Float32x4,  // model_mat_3
                     9 => Uint32,     // first_node_index
-                    10 => Float32,   // highlight
+                    10 => Uint32,    // flags
                 ],
             },
         ];
@@ -225,12 +231,12 @@ impl ModelPipeline {
                     .map(|o| (o, *object_handle))
             })
             .for_each(|(object, handle)| {
-                let highlight = if sim_world.highlighted_objects.contains(&handle) {
-                    0.5
-                } else {
-                    0.0
-                };
-                object.gather_models_to_render(&mut wrapper, highlight);
+                let mut flags = ModelRenderFlags::empty();
+                flags.set(
+                    ModelRenderFlags::HIGHLIGHTED,
+                    sim_world.highlighted_objects.contains(&handle),
+                );
+                object.gather_models_to_render(&mut wrapper, flags);
             });
     }
 
@@ -246,7 +252,7 @@ impl ModelPipeline {
                 first_node_index: match instance.first_node_index {
                     RenderNodeIndex::Base(i) => i,
                 },
-                highlight: instance.highlight,
+                flags: instance.flags.bits(),
                 _pad: Default::default(),
             })
             .collect();

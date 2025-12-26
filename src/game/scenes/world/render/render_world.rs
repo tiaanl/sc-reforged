@@ -19,7 +19,8 @@ pub struct CameraEnvironment {
     pub fog_color: [f32; 4],     // r, g, b, 1
     pub fog_distance: f32,
     pub fog_near_fraction: f32,
-    pub _pad: [u32; 6],
+    pub sim_time: f32,
+    pub _pad: [u32; 5],
 }
 
 #[derive(Clone, Copy, Default, NoUninit)]
@@ -35,7 +36,7 @@ pub struct ChunkInstanceData {
 pub struct ModelInstanceData {
     pub transform: [[f32; 4]; 4],
     pub first_node_index: u32,
-    pub highlight: f32,
+    pub flags: u32,
     pub _pad: [u32; 2],
 }
 
