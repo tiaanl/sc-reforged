@@ -8,7 +8,7 @@ use shadow_company_tools::smf;
 use crate::engine::assets::AssetError;
 use crate::engine::mesh::IndexedMesh;
 use crate::engine::transform::Transform;
-use crate::game::math::{BoundingBox, Ray, RaySegment};
+use crate::game::math::{BoundingBox, Ray, RaySegment, triangle_intersect_ray_segment};
 use crate::{
     engine::storage::Handle,
     game::{
@@ -78,7 +78,14 @@ impl Model {
     }
 }
 
-/// Result of a model ray-segment intersection against collision boxes.
+/// Result of a model ray-segment intersection.
+#[derive(Clone, Copy, Debug)]
+pub enum ModelRayHitKind {
+    CollisionBox { collision_box_index: usize },
+    MeshTriangle { mesh_index: usize, triangle_index: usize },
+}
+
+/// Result of a model ray-segment intersection.
 #[derive(Clone, Copy, Debug)]
 pub struct ModelRayHit {
     /// Parameter along the input ray: `hit = origin + direction * t`.
@@ -87,10 +94,9 @@ pub struct ModelRayHit {
     pub world_position: Vec3,
     /// World-space surface normal (unit length).
     pub normal: Vec3,
-    /// Node the collision box belongs to.
+    /// Node the hit belongs to.
     pub node_index: NodeIndex,
-    /// Index into `Model::collision_boxes`.
-    pub collision_box_index: usize,
+    pub kind: ModelRayHitKind,
 }
 
 impl Model {
@@ -160,8 +166,96 @@ impl Model {
                         world_position: world_hit,
                         normal: normal_world,
                         node_index: cb.node_index,
-                        collision_box_index: i,
+                        kind: ModelRayHitKind::CollisionBox {
+                            collision_box_index: i,
+                        },
                     });
+                }
+            }
+        }
+
+        best
+    }
+
+    /// Intersect a world-space ray segment with this model's mesh triangles, applying an
+    /// object-to-world transform for the model instance. Returns the closest hit, if any.
+    pub fn intersect_ray_segment_meshes_with_transform(
+        &self,
+        object_to_world: Mat4,
+        ray_segment: &RaySegment,
+        cull_backfaces: bool,
+    ) -> Option<ModelRayHit> {
+        debug_assert!(ray_segment.distance.is_finite());
+        debug_assert!(!ray_segment.is_degenerate());
+
+        let world_dir = ray_segment.ray.direction;
+        let t_max_world = ray_segment.distance;
+        let world_end = ray_segment.ray.origin + world_dir * t_max_world;
+
+        let mut best: Option<ModelRayHit> = None;
+        let mut best_t = f32::INFINITY;
+
+        for (mesh_index, mesh) in self.meshes.iter().enumerate() {
+            if mesh.mesh.indices.len() < 3 {
+                continue;
+            }
+
+            let node_to_world = object_to_world * self.skeleton.local_transform(mesh.node_index);
+            let world_to_node = node_to_world.inverse();
+
+            // Transform the segment endpoints into node-local space.
+            let local_origin = world_to_node.transform_point3(ray_segment.ray.origin);
+            let local_end = world_to_node.transform_point3(world_end);
+            let local_dir = local_end - local_origin;
+
+            // Skip degenerate local rays.
+            let local_len = local_dir.length();
+            debug_assert!(local_len.is_finite());
+            if local_len <= f32::EPSILON {
+                continue;
+            }
+
+            let local_segment = RaySegment {
+                ray: Ray::new(local_origin, local_dir),
+                distance: local_len,
+            };
+
+            for (triangle_index, tri) in mesh.mesh.indices.chunks_exact(3).enumerate() {
+                let i0 = tri[0] as usize;
+                let i1 = tri[1] as usize;
+                let i2 = tri[2] as usize;
+
+                let v0 = mesh.mesh.vertices[i0].position;
+                let v1 = mesh.mesh.vertices[i1].position;
+                let v2 = mesh.mesh.vertices[i2].position;
+
+                if let Some(hit) =
+                    triangle_intersect_ray_segment(v0, v1, v2, &local_segment, cull_backfaces)
+                {
+                    let world_hit = node_to_world.transform_point3(hit.world_position);
+                    let normal_world = node_to_world
+                        .transform_vector3(hit.normal)
+                        .normalize_or_zero();
+
+                    // Recover t along the original (normalized) world ray.
+                    let delta_world = world_hit - ray_segment.ray.origin;
+                    let t_world = delta_world.dot(world_dir);
+
+                    // Keep only hits within the segment range and closest first.
+                    if (0.0..=t_max_world).contains(&t_world) && t_world < best_t {
+                        best_t = t_world;
+                        debug_assert!(normal_world.is_normalized() || normal_world.length() == 0.0);
+                        best = Some(ModelRayHit {
+                            t: t_world,
+                            world_position: world_hit,
+                            normal: normal_world,
+                            node_index: mesh.node_index,
+                            kind: ModelRayHitKind::MeshTriangle {
+                                mesh_index,
+                                triangle_index,
+                            },
+                        });
+                    }
                 }
             }
         }

@@ -93,7 +93,7 @@ impl ModelPipeline {
     pub fn new(renderer: &Renderer, render_store: &RenderStore) -> Self {
         let device = &renderer.device;
 
-        let module = device.create_shader_module(wgsl_shader!("objects"));
+        let module = device.create_shader_module(wgsl_shader!("models"));
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("objects_pipeline_layout"),

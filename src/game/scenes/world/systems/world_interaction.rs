@@ -4,7 +4,7 @@ use crate::{
     engine::{input::InputState, storage::Handle},
     game::{
         math::{Frustum, RaySegment},
-        scenes::world::sim_world::{Object, SimWorld, UiRect},
+        scenes::world::sim_world::{Object, RayIntersectionMode, SimWorld, UiRect},
     },
 };
 
@@ -291,7 +291,8 @@ impl WorldInteractionSystem {
                 continue;
             }
 
-            if let Some(hit) = object.ray_intersection(camera_ray_segment)
+            if let Some(hit) =
+                object.ray_intersection(camera_ray_segment, RayIntersectionMode::Meshes)
                 && hit.t < best_object_t
             {
                 best_object_t = hit.t;

@@ -138,5 +138,7 @@ fn fragment_alpha(vertex: VertexOutput) -> geometry_buffer::AlphaGeometryBuffer 
         1.0,
     );
 
-    return geometry_buffer::to_alpha_geometry_buffer(lit.rgb, base_color.a, 1.0);
+    let h = mix(lit.rgb, vec3<f32>(1.0, 0.0, 0.0), vertex.highlight);
+
+    return geometry_buffer::to_alpha_geometry_buffer(h, base_color.a, 1.0);
 }

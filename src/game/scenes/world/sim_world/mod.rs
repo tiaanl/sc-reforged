@@ -29,7 +29,7 @@ mod ui;
 
 pub use camera::{Camera, ComputedCamera};
 pub use height_map::HeightMap;
-pub use objects::{Object, ObjectData};
+pub use objects::{Object, ObjectData, RayIntersectionMode};
 pub use terrain::Terrain;
 pub use ui::UiRect;
 

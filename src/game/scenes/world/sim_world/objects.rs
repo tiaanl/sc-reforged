@@ -33,6 +33,12 @@ pub enum ObjectData {
     },
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum RayIntersectionMode {
+    CollisionBoxes,
+    Meshes,
+}
+
 pub struct Object {
     pub transform: Transform,
     pub bounding_box: BoundingBox,
@@ -56,9 +62,12 @@ impl Object {
         }
     }
 
-    /// Intersect this object with a world-space ray segment using the model's collision boxes.
-    /// Returns Some((t, world_position)) for the closest hit, or None if no hit.
-    pub fn ray_intersection(&self, ray_segment: &RaySegment) -> Option<ModelRayHit> {
+    /// Intersect this object with a world-space ray segment using the selected model data.
+    pub fn ray_intersection(
+        &self,
+        ray_segment: &RaySegment,
+        mode: RayIntersectionMode,
+    ) -> Option<ModelRayHit> {
         // Quad tree already applied coarse culling; do only fine model test here.
         let object_to_world = self.transform.to_mat4();
 
@@ -69,7 +78,13 @@ impl Object {
         };
 
         let model = models().get(model_handle)?;
-        model.intersect_ray_segment_with_transform(object_to_world, ray_segment)
+        match mode {
+            RayIntersectionMode::CollisionBoxes => {
+                model.intersect_ray_segment_with_transform(object_to_world, ray_segment)
+            }
+            RayIntersectionMode::Meshes => model
+                .intersect_ray_segment_meshes_with_transform(object_to_world, ray_segment, false),
+        }
     }
 }
 
