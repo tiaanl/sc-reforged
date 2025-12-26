@@ -1,10 +1,7 @@
-use glam::{Vec3, Vec4};
+use glam::Vec3;
 
 use crate::{
-    engine::{
-        gizmos::{GizmoVertex, create_bounding_box},
-        storage::Handle,
-    },
+    engine::storage::Handle,
     game::{
         math::{BoundingBox, Containment, Frustum, RaySegment},
         scenes::world::sim_world::Object,
@@ -33,28 +30,6 @@ pub struct StaticBvh {
 }
 
 impl StaticBvh {
-    pub(crate) fn test(&self, gizmo_vertices: &mut Vec<GizmoVertex>) {
-        fn do_node(nodes: &[Node], index: usize, gizmo_vertices: &mut Vec<GizmoVertex>) {
-            let node = &nodes[index];
-            gizmo_vertices.extend(create_bounding_box(
-                &node.bounding_box,
-                Vec4::new(1.0, 0.0, 0.0, 1.0),
-            ));
-
-            match node.kind {
-                NodeKind::Leaf { .. } => {}
-                NodeKind::Internal { left, right } => {
-                    do_node(nodes, left, gizmo_vertices);
-                    do_node(nodes, right, gizmo_vertices);
-                }
-            }
-        }
-
-        if !self.nodes.is_empty() {
-            do_node(&self.nodes, 0, gizmo_vertices);
-        }
-    }
-
     pub fn new(leaf_size: usize) -> Self {
         Self {
             nodes: Vec::new(),

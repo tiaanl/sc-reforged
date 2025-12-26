@@ -152,11 +152,12 @@ fn fragment_alpha(vertex: VertexOutput) -> geometry_buffer::AlphaGeometryBuffer 
 }
 
 fn highlight(color: vec4<f32>) -> vec4<f32> {
-    const HIGHLIGHT_COLOR = vec4<f32>(1.0, 1.0, 1.0, 0.5);
+    const HIGHLIGHT_COLOR = vec4<f32>(1.0, 1.0, 1.0, 0.2);
 
     let intensity = sin(u_camera_env.sim_time * 3.0) * 0.5 + 0.5;
 
-    let rgb = mix(color.rgb, HIGHLIGHT_COLOR.rgb, intensity * HIGHLIGHT_COLOR.a);
+    let highlight_rgb = mix(color.rgb, HIGHLIGHT_COLOR.rgb, HIGHLIGHT_COLOR.a);
+    let rgb = mix(color.rgb, highlight_rgb, intensity * intensity);
 
     return vec4<f32>(rgb, color.a);
 }
