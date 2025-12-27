@@ -376,7 +376,33 @@ impl Scene for WorldScene {
             });
         });
 
-        // self.objects.debug_panel(ctx);
+        // TODO: Should probably move somewhere.
+        if !self.sim_world.selected_objects.is_empty() {
+            egui::Window::new("Selected")
+                .resizable(false)
+                .default_width(400.0)
+                .show(ctx, |ui| {
+                    use crate::{
+                        engine::storage::Handle,
+                        game::scenes::world::sim_world::{Object, ObjectData},
+                    };
+
+                    let mut selected: Vec<Handle<Object>> =
+                        self.sim_world.selected_objects.iter().cloned().collect();
+
+                    for handle in selected.drain(..) {
+                        if let Some(object) = self.sim_world.objects.get_mut(handle) {
+                            ui.heading(format!("{} ({})", &object.title, &object.name));
+
+                            match &object.data {
+                                ObjectData::Scenery { .. } => {}
+                                ObjectData::Biped { order_queue, .. } => order_queue.ui(ui),
+                                ObjectData::SingleModel { .. } => {}
+                            }
+                        }
+                    }
+                });
+        }
     }
 }
 

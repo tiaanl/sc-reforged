@@ -63,7 +63,7 @@ impl<T> Storage<T> {
     }
 
     #[inline]
-    pub fn _get_mut(&mut self, id: Handle<T>) -> Option<&mut T> {
+    pub fn get_mut(&mut self, id: Handle<T>) -> Option<&mut T> {
         self.0.get_mut(id.0)
     }
 

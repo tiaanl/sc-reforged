@@ -76,7 +76,7 @@ impl WorldRenderer {
             for (_, object) in sim_world.objects.objects.iter() {
                 let model_handle = match object.data {
                     ObjectData::Scenery { model } => model,
-                    ObjectData::Biped { model } => model,
+                    ObjectData::Biped { model, .. } => model,
                     ObjectData::SingleModel { model } => model,
                 };
                 let Some(model) = models().get(model_handle) else {

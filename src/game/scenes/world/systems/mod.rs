@@ -31,6 +31,8 @@ mod gizmo_system;
 mod top_down_camera_controller;
 mod world_interaction;
 
+pub use world_interaction::InteractionHit;
+
 #[derive(Default)]
 pub struct Time {
     /// Time elapsed since the last frame was rendered.

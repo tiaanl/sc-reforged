@@ -14,23 +14,47 @@ use crate::{
         math::{BoundingBox, RaySegment},
         model::{Mesh, Model, ModelRayHit},
         models::{ModelName, models},
-        scenes::world::render::{ModelRenderFlags, RenderStore, RenderWrapper},
+        scenes::world::{
+            render::{ModelRenderFlags, RenderStore, RenderWrapper},
+            sim_world::orders::Order,
+            systems::InteractionHit,
+        },
     },
 };
 
-use super::static_bvh::StaticBvh;
+use super::{order_queue::OrderQueue, static_bvh::StaticBvh};
 
+#[derive(Debug)]
 pub enum ObjectData {
     Scenery {
         model: Handle<Model>,
     },
     Biped {
         model: Handle<Model>,
+        order_queue: OrderQueue,
     },
     /// Temporary for use with more complicated objects that is not implemented yet.
     SingleModel {
         model: Handle<Model>,
     },
+}
+
+impl ObjectData {
+    fn interact(&mut self, hit: &InteractionHit) {
+        match self {
+            ObjectData::Scenery { .. } => {}
+            ObjectData::Biped { order_queue, .. } => match hit {
+                InteractionHit::Terrain { world_position, .. } => {
+                    // User clicked on the terrain, order a move.
+                    order_queue.enqueue(Order::Move {
+                        world_position: *world_position,
+                    });
+                }
+                InteractionHit::Object { .. } => {}
+            },
+            ObjectData::SingleModel { .. } => {}
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -39,7 +63,10 @@ pub enum RayIntersectionMode {
     Meshes,
 }
 
+#[derive(Debug)]
 pub struct Object {
+    pub name: String,
+    pub title: String,
     pub transform: Transform,
     pub bounding_box: BoundingBox,
     pub data: ObjectData,
@@ -49,7 +76,7 @@ impl Object {
     pub fn gather_models_to_render(&self, renderer: &mut RenderWrapper, flags: ModelRenderFlags) {
         let model = match self.data {
             ObjectData::Scenery { model } => model,
-            ObjectData::Biped { model } => model,
+            ObjectData::Biped { model, .. } => model,
             ObjectData::SingleModel { model } => model,
         };
 
@@ -67,7 +94,7 @@ impl Object {
 
         let model_handle = match &self.data {
             ObjectData::Scenery { model }
-            | ObjectData::Biped { model }
+            | ObjectData::Biped { model, .. }
             | ObjectData::SingleModel { model } => *model,
         };
 
@@ -82,6 +109,11 @@ impl Object {
                 false,
             ),
         }
+    }
+
+    /// The user is interacting with the object.
+    pub fn interact(&mut self, hit: &InteractionHit) {
+        self.data.interact(hit);
     }
 }
 
@@ -204,6 +236,7 @@ impl Objects {
 
                 ObjectData::Biped {
                     model: model_handle,
+                    order_queue: OrderQueue::default(),
                 }
             }
 
@@ -223,6 +256,8 @@ impl Objects {
         debug_assert!(bounding_box.is_valid(), "invalid bounding box for {name:?}");
 
         let handle = self.objects.insert(Object {
+            name: name.to_string(),
+            title: title.to_string(),
             transform,
             bounding_box,
             data: object_data,
@@ -234,6 +269,11 @@ impl Objects {
     #[inline]
     pub fn get(&self, handle: Handle<Object>) -> Option<&Object> {
         self.objects.get(handle)
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self, handle: Handle<Object>) -> Option<&mut Object> {
+        self.objects.get_mut(handle)
     }
 
     pub fn finalize(&mut self) {

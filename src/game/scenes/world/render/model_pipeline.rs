@@ -234,7 +234,7 @@ impl ModelPipeline {
                 let mut flags = ModelRenderFlags::empty();
                 flags.set(
                     ModelRenderFlags::HIGHLIGHTED,
-                    sim_world.highlighted_objects.contains(&handle),
+                    sim_world.selected_objects.contains(&handle),
                 );
                 object.gather_models_to_render(&mut wrapper, flags);
             });

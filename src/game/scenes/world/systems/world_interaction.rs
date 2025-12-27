@@ -11,9 +11,9 @@ use crate::{
 #[derive(Debug)]
 pub enum InteractionHit {
     Terrain {
-        _world_position: Vec3,
+        world_position: Vec3,
         _distance: f32,
-        chunk_coord: IVec2,
+        _chunk_coord: IVec2,
     },
     Object {
         _world_position: Vec3,
@@ -88,18 +88,18 @@ impl WorldInteractionSystem {
         use winit::event::MouseButton;
 
         if input_state.mouse_just_pressed(MouseButton::Left) {
+            // Start dragging the selection rect.
             self.selection_rect = input_state.mouse_position().map(|pos| SelectionRect {
                 pos,
                 size: IVec2::ZERO,
             });
         } else if input_state.mouse_just_released(MouseButton::Left) {
+            // If the selection rect is larger than the threshold, that confirms that we drew a selection rect and not just clicked.
             if let Some(rect) = self.selection_rect {
-                if rect.size.x.abs() > Self::DRAG_THRESHOLD as i32
-                    && rect.size.y.abs() > Self::DRAG_THRESHOLD as i32
-                {
+                if rect.size.abs().min_element() > Self::DRAG_THRESHOLD as i32 {
                     self.set_selection_by_rect(sim_world, rect, viewport_size);
                 } else {
-                    self.set_selection_by_ray(sim_world, rect.pos, viewport_size);
+                    self.interact_with(sim_world, rect.pos, viewport_size);
                 }
             }
 
@@ -108,29 +108,6 @@ impl WorldInteractionSystem {
             && let Some(mouse_position) = input_state.mouse_position()
         {
             selection_rect.size = mouse_position.as_ivec2() - selection_rect.pos.as_ivec2();
-        }
-
-        if false {
-            sim_world.highlighted_chunks.clear();
-            sim_world.highlighted_objects.clear();
-            if let Some(mouse_position) = input_state.mouse_position() {
-                let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
-                let camera_ray_segment =
-                    computed_camera.create_ray_segment(mouse_position, viewport_size);
-
-                if let Some(hit) =
-                    Self::get_interaction_hit(sim_world, &camera_ray_segment, |_| true)
-                {
-                    match hit {
-                        InteractionHit::Terrain { chunk_coord, .. } => {
-                            sim_world.highlighted_chunks.insert(chunk_coord);
-                        }
-                        InteractionHit::Object { object, .. } => {
-                            sim_world.highlighted_objects.insert(object);
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -228,22 +205,29 @@ impl WorldInteractionSystem {
         };
     }
 
-    /// Update the selected objects by using a ray segment with an origin at
-    /// the specified pos in screen coordinates.
-    fn set_selection_by_ray(&self, sim_world: &mut SimWorld, pos: UVec2, viewport_size: UVec2) {
-        sim_world.highlighted_chunks.clear();
-        sim_world.highlighted_objects.clear();
-
+    /// The user clicked somewhere and wants to interact with an object.
+    fn interact_with(&mut self, sim_world: &mut SimWorld, pos: UVec2, viewport_size: UVec2) {
+        // Shoot a ray into the scene from the camera to see what we can hit.
         let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
         let camera_ray_segment = computed_camera.create_ray_segment(pos, viewport_size);
 
-        if let Some(hit) = Self::get_interaction_hit(sim_world, &camera_ray_segment, |_| true) {
-            match hit {
-                InteractionHit::Terrain { chunk_coord, .. } => {
-                    sim_world.highlighted_chunks.insert(chunk_coord);
+        if let Some(hit) = Self::get_interaction_hit(sim_world, &camera_ray_segment) {
+            if sim_world.selected_objects.is_empty() {
+                if let InteractionHit::Object {
+                    _world_position,
+                    _distance,
+                    object,
+                } = hit
+                {
+                    // Select the object that was clicked on.
+                    sim_world.selected_objects.insert(object);
                 }
-                InteractionHit::Object { object, .. } => {
-                    sim_world.highlighted_objects.insert(object);
+            } else {
+                // Interact with all selected objects.
+                for &handle in sim_world.selected_objects.iter() {
+                    if let Some(object) = sim_world.objects.get_mut(handle) {
+                        object.interact(&hit)
+                    }
                 }
             }
         }
@@ -268,7 +252,6 @@ impl WorldInteractionSystem {
     fn get_interaction_hit(
         sim_world: &SimWorld,
         camera_ray_segment: &RaySegment,
-        object_pred: impl Fn(&Object) -> bool,
     ) -> Option<InteractionHit> {
         if camera_ray_segment.is_degenerate() {
             return None;
@@ -283,14 +266,10 @@ impl WorldInteractionSystem {
             .static_bvh
             .objects_intersect_ray_segment(camera_ray_segment, &mut object_candidates);
 
-        for handle in object_candidates {
-            let Some(object) = sim_world.objects.get(handle) else {
-                continue;
-            };
-            if !object_pred(object) {
-                continue;
-            }
-
+        for (handle, object) in object_candidates
+            .iter()
+            .filter_map(|&handle| sim_world.objects.get(handle).map(|object| (handle, object)))
+        {
             if let Some(hit) =
                 object.ray_intersection(camera_ray_segment, RayIntersectionMode::Meshes)
                 && hit.t < best_object_t
@@ -330,9 +309,9 @@ impl WorldInteractionSystem {
                     })
                 } else {
                     Some(InteractionHit::Terrain {
-                        _world_position: terrain_position,
+                        world_position: terrain_position,
                         _distance: best_terrain_t,
-                        chunk_coord,
+                        _chunk_coord: chunk_coord,
                     })
                 }
             }
@@ -342,9 +321,9 @@ impl WorldInteractionSystem {
                 object,
             }),
             (None, Some((chunk_coord, terrain_position))) => Some(InteractionHit::Terrain {
-                _world_position: terrain_position,
+                world_position: terrain_position,
                 _distance: best_terrain_t,
-                chunk_coord,
+                _chunk_coord: chunk_coord,
             }),
             (None, None) => None,
         }

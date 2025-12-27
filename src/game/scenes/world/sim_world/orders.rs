@@ -1,3 +1,5 @@
+use glam::Vec3;
+
 // 1  -> order_move
 // 3  -> order_move_to_use_vehicle
 // 4  -> order_move_to_attack
@@ -35,34 +37,52 @@
 // 36 -> order_move_to_transfer_item_weapons_locker (alt entry)
 // 37 -> order_move_to_transfer_item_from_body (alt entry)
 
-pub enum _Order {
-    Move,
-    MoveToUseVehicle,
-    MoveToAttack,
-    MoveToCutFence,
-    MoveToCrawlThroughFence,
-    MoveToClimbWall,
-    MoveToPickUp,
-    MoveToUseStructure,
-    MoveToDropItem,
-    MoveToActivateStructure,
-    MoveToTransferItem,
-    MoveToTransferItemWeaponsLocker,
-    MoveToTransferItemFromBody,
-    MoveToInvestigate,
-    MoveToUseLadder,
-    MoveToInvestigateBody,
-    MoveToUseCover,
-    MoveToAvoidVehicle,
-    Track,
-    TrackToAttack,
-    ForceAttack,
-    EquipSelf,
-    UnequipSelf,
-    MoveToPlaceItem,
-    DefensiveAttack,
-    Info,
-    ChangeState,
-    ExitStructure,
-    UseSpecialItem,
+#[derive(Debug)]
+pub enum Order {
+    Move { world_position: Vec3 },
+    // MoveToUseVehicle,
+    // MoveToAttack,
+    // MoveToCutFence,
+    // MoveToCrawlThroughFence,
+    // MoveToClimbWall,
+    // MoveToPickUp,
+    // MoveToUseStructure,
+    // MoveToDropItem,
+    // MoveToActivateStructure,
+    // MoveToTransferItem,
+    // MoveToTransferItemWeaponsLocker,
+    // MoveToTransferItemFromBody,
+    // MoveToInvestigate,
+    // MoveToUseLadder,
+    // MoveToInvestigateBody,
+    // MoveToUseCover,
+    // MoveToAvoidVehicle,
+    // Track,
+    // TrackToAttack,
+    // ForceAttack,
+    // EquipSelf,
+    // UnequipSelf,
+    // MoveToPlaceItem,
+    // DefensiveAttack,
+    // Info,
+    // ChangeState,
+    // ExitStructure,
+    // UseSpecialItem,
+}
+
+impl Order {
+    pub fn ui(&self, ui: &mut egui::Ui) {
+        match self {
+            Self::Move { world_position } => {
+                ui.vertical(|ui| {
+                    ui.heading("Move");
+                    ui.horizontal(|ui| {
+                        ui.label(format!("{:.0}", world_position.x));
+                        ui.label(format!("{:.0}", world_position.y));
+                        ui.label(format!("{:.0}", world_position.z));
+                    });
+                });
+            }
+        }
+    }
 }
