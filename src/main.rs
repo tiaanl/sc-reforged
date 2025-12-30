@@ -17,7 +17,7 @@ use crate::{
         file_system::scoped_file_system,
         image::{Images, scoped_images},
         models::{Models, scoped_models},
-        scenes::select_campaign::SelectCampaignSceneLoader,
+        scenes::{select_campaign::SelectCampaignSceneLoader, world::WorldSceneLoader},
     },
 };
 
@@ -65,7 +65,7 @@ enum App {
 impl winit::application::ApplicationHandler<EngineEvent> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         match self {
-            App::Uninitialzed(_opts, event_loop_proxy) => {
+            App::Uninitialzed(opts, event_loop_proxy) => {
                 event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
                 let mut attributes = winit::window::WindowAttributes::default()
@@ -113,13 +113,25 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
 
                 let engine_context = EngineContext::new(event_loop_proxy.clone());
 
-                let scene = SelectCampaignSceneLoader::load_scene(
-                    Box::new(SelectCampaignSceneLoader),
-                    engine_context.clone(),
-                    &renderer,
-                    surface.format(),
-                )
-                .unwrap();
+                let scene = if let Some(ref campaign_name) = opts.campaign_name {
+                    WorldSceneLoader::load_scene(
+                        Box::new(WorldSceneLoader {
+                            campaign_name: campaign_name.clone(),
+                        }),
+                        engine_context.clone(),
+                        &renderer,
+                        surface.format(),
+                    )
+                    .unwrap()
+                } else {
+                    SelectCampaignSceneLoader::load_scene(
+                        Box::new(SelectCampaignSceneLoader),
+                        engine_context.clone(),
+                        &renderer,
+                        surface.format(),
+                    )
+                    .unwrap()
+                };
 
                 tracing::info!("Application initialized!");
 

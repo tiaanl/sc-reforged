@@ -78,9 +78,8 @@ impl Scene for SelectCampaignScene {
             }
 
             if let Some(campaign_name) = load_campaign {
-                self.engine_context.switch_scene(WorldSceneLoader {
-                    campaign_name: Some(campaign_name),
-                });
+                self.engine_context
+                    .switch_scene(WorldSceneLoader { campaign_name });
             }
         });
     }

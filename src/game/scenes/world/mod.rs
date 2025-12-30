@@ -416,7 +416,7 @@ impl Scene for WorldScene {
 }
 
 pub struct WorldSceneLoader {
-    pub campaign_name: Option<String>,
+    pub campaign_name: String,
 }
 
 impl SceneLoader for WorldSceneLoader {
@@ -428,10 +428,7 @@ impl SceneLoader for WorldSceneLoader {
     ) -> Result<Box<dyn Scene>, AssetError> {
         let campaign_defs = data_dir().load_campaign_defs()?;
 
-        let campaign_name = self
-            .campaign_name
-            .clone()
-            .unwrap_or(String::from("training"));
+        let campaign_name = self.campaign_name.clone();
         tracing::info!("Loading world {}...", campaign_name);
 
         let Some(campaign_def) = campaign_defs
