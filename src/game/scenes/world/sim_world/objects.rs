@@ -16,7 +16,10 @@ use crate::{
         models::{ModelName, models},
         scenes::world::{
             render::{ModelRenderFlags, RenderStore, RenderWrapper},
-            sim_world::orders::Order,
+            sim_world::{
+                orders::{Order, OrderKind},
+                sequences::Sequencer,
+            },
             systems::InteractionHit,
         },
     },
@@ -24,7 +27,6 @@ use crate::{
 
 use super::{order_queue::OrderQueue, static_bvh::StaticBvh};
 
-#[derive(Debug)]
 pub enum ObjectData {
     Scenery {
         model: Handle<Model>,
@@ -32,6 +34,7 @@ pub enum ObjectData {
     Biped {
         model: Handle<Model>,
         order_queue: OrderQueue,
+        sequencer: Sequencer,
     },
     /// Temporary for use with more complicated objects that is not implemented yet.
     SingleModel {
@@ -46,9 +49,12 @@ impl ObjectData {
             ObjectData::Biped { order_queue, .. } => match hit {
                 InteractionHit::Terrain { world_position, .. } => {
                     // User clicked on the terrain, order a move.
-                    order_queue.enqueue(Order::Move {
-                        world_position: *world_position,
-                    });
+                    order_queue.enqueue(
+                        OrderKind::Move {
+                            world_position: *world_position,
+                        }
+                        .into(),
+                    );
                 }
                 InteractionHit::Object { .. } => {}
             },
@@ -63,7 +69,6 @@ pub enum RayIntersectionMode {
     Meshes,
 }
 
-#[derive(Debug)]
 pub struct Object {
     pub name: String,
     pub title: String,
@@ -237,6 +242,7 @@ impl Objects {
                 ObjectData::Biped {
                     model: model_handle,
                     order_queue: OrderQueue::default(),
+                    sequencer: Sequencer::default(),
                 }
             }
 

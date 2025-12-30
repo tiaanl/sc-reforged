@@ -392,11 +392,20 @@ impl Scene for WorldScene {
 
                     for handle in selected.drain(..) {
                         if let Some(object) = self.sim_world.objects.get_mut(handle) {
-                            ui.heading(format!("{} ({})", &object.title, &object.name));
+                            use crate::engine::egui_integration::UiExt;
 
-                            match &object.data {
+                            ui.h1(format!("{} ({})", &object.title, &object.name));
+
+                            match &mut object.data {
                                 ObjectData::Scenery { .. } => {}
-                                ObjectData::Biped { order_queue, .. } => order_queue.ui(ui),
+                                ObjectData::Biped {
+                                    order_queue,
+                                    sequencer,
+                                    ..
+                                } => {
+                                    sequencer.ui(ui, &self.sim_world.sequences);
+                                    order_queue.ui(ui);
+                                }
                                 ObjectData::SingleModel { .. } => {}
                             }
                         }

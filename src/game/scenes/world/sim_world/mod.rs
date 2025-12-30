@@ -13,7 +13,7 @@ use crate::{
         models::{ModelName, models},
         scenes::world::{
             animation::motion::Motion,
-            sim_world::{objects::Objects, ui::Ui},
+            sim_world::{objects::Objects, sequences::Sequences, ui::Ui},
         },
         track::Track,
     },
@@ -25,6 +25,7 @@ mod objects;
 mod order_queue;
 mod orders;
 mod quad_tree;
+mod sequences;
 mod static_bvh;
 mod terrain;
 mod ui;
@@ -32,6 +33,8 @@ mod ui;
 pub use camera::{Camera, ComputedCamera};
 pub use height_map::HeightMap;
 pub use objects::{Object, ObjectData, RayIntersectionMode};
+pub use order_queue::OrderQueue;
+pub use orders::OrderKind;
 pub use terrain::Terrain;
 pub use ui::UiRect;
 
@@ -86,6 +89,8 @@ pub struct SimWorld {
     pub test_model: Handle<Model>,
     pub test_motion: Motion,
     pub timer: f32,
+
+    pub sequences: Sequences,
 
     pub ui: Ui,
 }
@@ -164,6 +169,8 @@ impl SimWorld {
         let (test_model, _) = models().load_model(ModelName::Body(String::from("man1_enemy")))?;
         let test_motion = data_dir().load_motion("bipedal_stand_idle_smoke")?;
 
+        let sequences = Sequences::new()?;
+
         let ui = Ui::new();
 
         Ok(SimWorld {
@@ -207,6 +214,8 @@ impl SimWorld {
             test_model,
             test_motion,
             timer: 0.0,
+
+            sequences,
 
             ui,
         })

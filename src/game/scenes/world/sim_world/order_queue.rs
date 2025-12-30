@@ -1,20 +1,32 @@
 use std::collections::VecDeque;
 
+use crate::{engine::egui_integration::UiExt, game::scenes::world::systems::Time};
+
 use super::orders::Order;
 
 /// A queue of orders that will be completed in FIFO order.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct OrderQueue {
-    orders: VecDeque<Order>,
+    /// List FIFO queue of pending orders that still need to be performed.
+    pending: VecDeque<Order>,
+    /// The current order being performed.
     current: Option<Order>,
 }
 
 impl OrderQueue {
-    pub fn enqueue(&mut self, order: Order) {
-        self.orders.push_back(order);
+    pub fn update(&mut self, _time: &Time) {
+        // If there is no current order, but there are pending orders, grab
+        // the next order from the queue.
+        if self.current.is_none() && !self.pending.is_empty() {
+            self.current = self.pending.pop_front();
+        }
     }
 
-    pub fn _current(&self) -> Option<&Order> {
+    pub fn enqueue(&mut self, order: Order) {
+        self.pending.push_back(order);
+    }
+
+    pub fn current(&self) -> Option<&Order> {
         self.current.as_ref()
     }
 
@@ -29,11 +41,15 @@ impl OrderQueue {
             .fill(ui.visuals().extreme_bg_color)
             .show(ui, |ui| {
                 if let Some(current) = &self.current {
+                    ui.h2("Current");
                     current.ui(ui);
                 }
 
-                for order in self.orders.iter() {
-                    order.ui(ui);
+                if !self.pending.is_empty() {
+                    ui.h2("Pending");
+                    for order in self.pending.iter() {
+                        order.ui(ui);
+                    }
                 }
             });
     }

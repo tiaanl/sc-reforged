@@ -28,6 +28,7 @@ mod cull_system;
 mod day_night_cycle_system;
 mod free_camera_controller;
 mod gizmo_system;
+mod object_system;
 mod top_down_camera_controller;
 mod world_interaction;
 
@@ -48,6 +49,8 @@ pub struct Systems {
 
     pub camera_system: camera_system::CameraSystem,
     pub culling: cull_system::CullSystem,
+
+    object_system: object_system::ObjectSystem,
 
     pub world_renderer: WorldRenderer,
 
@@ -88,6 +91,7 @@ impl Systems {
                 FreeCameraController::new(1000.0, 0.2),
             ),
             culling: cull_system::CullSystem::default(),
+            object_system: object_system::ObjectSystem,
             world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),
             world_interaction_system: world_interaction::WorldInteractionSystem::default(),
             gizmo_system: gizmo_system::GizmoSystem::new(renderer, surface_format, render_store),
@@ -120,6 +124,8 @@ impl Systems {
 
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
         self.sim_time = time.sim_time;
+
+        self.object_system.update(sim_world, time);
 
         self.culling.calculate_visible_chunks(sim_world);
         day_night_cycle_system::increment_time_of_day(sim_world, time);

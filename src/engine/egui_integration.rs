@@ -1,3 +1,4 @@
+use egui::Widget;
 use winit::event_loop::ActiveEventLoop;
 
 pub struct EguiIntegration {
@@ -22,6 +23,21 @@ impl EguiIntegration {
             None,
             None,
         );
+
+        egui.egui_ctx().all_styles_mut(|style| {
+            style.text_styles.insert(
+                egui::TextStyle::Name("h1".into()),
+                egui::FontId::new(18.0, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("h2".into()),
+                egui::FontId::new(16.0, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("h3".into()),
+                egui::FontId::new(14.0, egui::FontFamily::Proportional),
+            );
+        });
 
         let egui_renderer = egui_wgpu::Renderer::new(&device, output_color_format, None, 1, false);
 
@@ -110,5 +126,43 @@ impl EguiIntegration {
             clipped_primitives.as_ref(),
             &screen_descriptor,
         );
+    }
+}
+
+pub trait UiExt {
+    fn h1(&mut self, text: impl Into<String>) -> egui::Response;
+    fn h2(&mut self, text: impl Into<String>) -> egui::Response;
+    fn h3(&mut self, text: impl Into<String>) -> egui::Response;
+}
+
+impl UiExt for egui::Ui {
+    #[inline]
+    fn h1(&mut self, text: impl Into<String>) -> egui::Response {
+        egui::Label::new(
+            egui::RichText::new(text)
+                .text_style(egui::TextStyle::Name("h1".into()))
+                .strong(),
+        )
+        .ui(self)
+    }
+
+    #[inline]
+    fn h2(&mut self, text: impl Into<String>) -> egui::Response {
+        egui::Label::new(
+            egui::RichText::new(text)
+                .text_style(egui::TextStyle::Name("h2".into()))
+                .strong(),
+        )
+        .ui(self)
+    }
+
+    #[inline]
+    fn h3(&mut self, text: impl Into<String>) -> egui::Response {
+        egui::Label::new(
+            egui::RichText::new(text)
+                .text_style(egui::TextStyle::Name("h3".into()))
+                .strong(),
+        )
+        .ui(self)
     }
 }

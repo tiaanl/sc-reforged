@@ -6,6 +6,7 @@ use crate::game::{skeleton::Skeleton, track::Track};
 /// Holds key frames for a skeleton. Vec indices correspond to [BoneIndex] in the skeleton.
 #[derive(Default)]
 pub struct Motion {
+    pub name: String,
     pub bone_ids: Vec<super::BoneIndex>,
     pub translations: HashMap<u32, Track<Vec3>>,
     pub rotations: HashMap<u32, Track<Quat>>,
@@ -13,8 +14,9 @@ pub struct Motion {
 
 impl Motion {
     /// Create an [Animation] with the bone structure of the given [Skeleton] and empty tracks.
-    pub fn from_skeleton(skeleton: &Skeleton) -> Self {
+    pub fn from_skeleton(name: String, skeleton: &Skeleton) -> Self {
         Self {
+            name,
             bone_ids: (0..skeleton.bones.len() as super::BoneIndex).collect(),
             translations: HashMap::with_capacity(skeleton.bones.len()),
             rotations: HashMap::with_capacity(skeleton.bones.len()),

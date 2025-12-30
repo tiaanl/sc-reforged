@@ -58,6 +58,11 @@ pub struct Storage<T>(generational_arena::Arena<T>);
 
 impl<T> Storage<T> {
     #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(generational_arena::Arena::with_capacity(capacity))
+    }
+
+    #[inline]
     pub fn get(&self, id: Handle<T>) -> Option<&T> {
         self.0.get(id.0)
     }
@@ -71,6 +76,13 @@ impl<T> Storage<T> {
     pub fn iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
         self.0
             .iter()
+            .map(|(index, value)| (Handle(index, std::marker::PhantomData), value))
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (Handle<T>, &mut T)> {
+        self.0
+            .iter_mut()
             .map(|(index, value)| (Handle(index, std::marker::PhantomData), value))
     }
 

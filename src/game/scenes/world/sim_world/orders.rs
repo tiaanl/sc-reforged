@@ -1,5 +1,7 @@
 use glam::Vec3;
 
+use crate::engine::egui_integration::UiExt;
+
 // 1  -> order_move
 // 3  -> order_move_to_use_vehicle
 // 4  -> order_move_to_attack
@@ -37,8 +39,7 @@ use glam::Vec3;
 // 36 -> order_move_to_transfer_item_weapons_locker (alt entry)
 // 37 -> order_move_to_transfer_item_from_body (alt entry)
 
-#[derive(Debug)]
-pub enum Order {
+pub enum OrderKind {
     Move { world_position: Vec3 },
     // MoveToUseVehicle,
     // MoveToAttack,
@@ -70,12 +71,17 @@ pub enum Order {
     // UseSpecialItem,
 }
 
+pub struct Order {
+    pub kind: OrderKind,
+    pub complete: bool,
+}
+
 impl Order {
     pub fn ui(&self, ui: &mut egui::Ui) {
-        match self {
-            Self::Move { world_position } => {
+        match self.kind {
+            OrderKind::Move { world_position } => {
                 ui.vertical(|ui| {
-                    ui.heading("Move");
+                    ui.h3("Move");
                     ui.horizontal(|ui| {
                         ui.label(format!("{:.0}", world_position.x));
                         ui.label(format!("{:.0}", world_position.y));
@@ -83,6 +89,15 @@ impl Order {
                     });
                 });
             }
+        }
+    }
+}
+
+impl From<OrderKind> for Order {
+    fn from(kind: OrderKind) -> Self {
+        Self {
+            kind,
+            complete: false,
         }
     }
 }

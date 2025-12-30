@@ -105,6 +105,7 @@ impl DataDir {
 
         let bones_len = bmf.bone_ids.len();
         let mut motion = Motion {
+            name: name.to_string(),
             bone_ids: bmf.bone_ids.iter().map(|&id| id as _).collect(),
             translations: HashMap::with_capacity(bones_len),
             rotations: HashMap::with_capacity(bones_len),
