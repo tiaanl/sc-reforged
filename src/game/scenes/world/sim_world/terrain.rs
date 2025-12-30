@@ -1,3 +1,4 @@
+use bevy_ecs::resource::Resource;
 use glam::{IVec2, UVec2, Vec2, Vec3};
 
 use crate::{
@@ -24,6 +25,7 @@ use super::{height_map::HeightMap, quad_tree};
 //   romania           256 x 256   32 x 32
 //   training          64 x 64     8 x 8
 
+#[derive(Resource)]
 pub struct Terrain {
     pub height_map: HeightMap,
     pub chunk_dim: UVec2,

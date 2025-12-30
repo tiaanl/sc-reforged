@@ -12,7 +12,7 @@ use crate::{
                 GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex,
                 RenderWorld,
             },
-            sim_world::SimWorld,
+            sim_world::{Objects, SimWorld},
         },
     },
     wgsl_shader,
@@ -221,20 +221,19 @@ impl ModelPipeline {
             models_to_render: &mut self.models_to_render,
         };
 
-        sim_world
-            .visible_objects
+        let state = sim_world.state();
+        let visible_objects = &state.visible_objects;
+        let selected_objects = &state.selected_objects;
+        let objects = sim_world.ecs.resource::<Objects>();
+
+        visible_objects
             .iter()
-            .filter_map(|object_handle| {
-                sim_world
-                    .objects
-                    .get(*object_handle)
-                    .map(|o| (o, *object_handle))
-            })
+            .filter_map(|object_handle| objects.get(*object_handle).map(|o| (o, *object_handle)))
             .for_each(|(object, handle)| {
                 let mut flags = ModelRenderFlags::empty();
                 flags.set(
                     ModelRenderFlags::HIGHLIGHTED,
-                    sim_world.selected_objects.contains(&handle),
+                    selected_objects.contains(&handle),
                 );
                 object.gather_models_to_render(&mut wrapper, flags);
             });

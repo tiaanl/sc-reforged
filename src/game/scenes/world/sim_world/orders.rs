@@ -73,7 +73,7 @@ pub enum OrderKind {
 
 pub struct Order {
     pub kind: OrderKind,
-    pub complete: bool,
+    pub _complete: bool,
 }
 
 impl Order {
@@ -97,7 +97,7 @@ impl From<OrderKind> for Order {
     fn from(kind: OrderKind) -> Self {
         Self {
             kind,
-            complete: false,
+            _complete: false,
         }
     }
 }

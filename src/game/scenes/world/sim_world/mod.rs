@@ -1,25 +1,33 @@
 use std::path::PathBuf;
 
 use ahash::HashSet;
-use glam::{IVec2, Quat, Vec3, vec3};
+use bevy_ecs::prelude::*;
+use bevy_ecs::resource::Resource;
+use glam::{IVec2, Quat, Vec3};
 use strum::{EnumCount, EnumIter};
 
 use crate::{
-    engine::{assets::AssetError, gizmos::GizmoVertex, storage::Handle, transform::Transform},
+    engine::{assets::AssetError, input::InputState, storage::Handle, transform::Transform},
     game::{
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
-        model::Model,
-        models::{ModelName, models},
         scenes::world::{
-            animation::motion::Motion,
-            sim_world::{objects::Objects, sequences::Sequences, ui::Ui},
+            sim_world::{
+                ecs::{GizmoVertices, Viewport},
+                sequences::Sequences,
+                ui::Ui,
+            },
+            systems::{
+                Time, cull_system, day_night_cycle_system, object_system,
+                world_interaction::{self, WorldInteraction},
+            },
         },
         track::Track,
     },
 };
 
 mod camera;
+pub mod ecs;
 mod height_map;
 mod objects;
 mod order_queue;
@@ -32,14 +40,14 @@ mod ui;
 
 pub use camera::{Camera, ComputedCamera};
 pub use height_map::HeightMap;
-pub use objects::{Object, ObjectData, RayIntersectionMode};
+pub use objects::{Object, ObjectData, Objects, RayIntersectionMode};
 pub use order_queue::OrderQueue;
 pub use orders::OrderKind;
 pub use terrain::Terrain;
 pub use ui::UiRect;
 
 /// Holds data for the sun and fog values throughout the day and night.
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct DayNightCycle {
     pub sun_dir: Track<Vec3>,
     pub sun_color: Track<Vec3>,
@@ -56,8 +64,8 @@ pub enum ActiveCamera {
     Debug = 1,
 }
 
-/// Holds all the data for the world we are simulating.
-pub struct SimWorld {
+#[derive(Resource)]
+pub struct SimWorldState {
     /// Instant that the simulation started.
     pub sim_start: std::time::Instant,
 
@@ -70,52 +78,64 @@ pub struct SimWorld {
     pub active_camera: ActiveCamera,
 
     pub time_of_day: f32,
-    pub day_night_cycle: DayNightCycle,
 
-    pub terrain: Terrain,
     /// A list of chunks that should be highlighted during rendering.
     pub highlighted_chunks: HashSet<IVec2>,
     /// The visible chunks for the current frame.
     pub visible_chunks: Vec<IVec2>,
 
-    pub objects: Objects,
     pub selected_objects: HashSet<Handle<Object>>,
 
     /// A list of visible objects this frame.
     pub visible_objects: Vec<Handle<Object>>,
 
-    pub gizmo_vertices: Vec<GizmoVertex>,
-
-    pub test_model: Handle<Model>,
-    pub test_motion: Motion,
-    pub timer: f32,
-
-    pub sequences: Sequences,
+    // pub gizmo_vertices: Vec<GizmoVertex>,
+    pub _sequences: Sequences,
 
     pub ui: Ui,
+}
+
+/// Holds all the data for the world we are simulating.
+pub struct SimWorld {
+    pub ecs: World,
+    pub update_schedule: Schedule,
 }
 
 impl SimWorld {
     pub fn new(campaign_def: &CampaignDef) -> Result<Self, AssetError> {
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
 
+        let mut ecs = World::default();
+
+        ecs.init_resource::<Time>();
+        ecs.init_resource::<InputState>();
+
+        ecs.init_resource::<WorldInteraction>();
+
+        ecs.insert_resource(GizmoVertices::with_capacity(1024));
+
         let time_of_day = 12.0;
-        let day_night_cycle = {
-            let mut result = DayNightCycle::default();
 
-            campaign.time_of_day.iter().enumerate().for_each(|(i, t)| {
-                let index = i as u32;
+        {
+            let day_night_cycle = {
+                let mut result = DayNightCycle::default();
 
-                result.sun_dir.insert(index, t.sun_dir);
-                result.sun_color.insert(index, t.sun_color);
+                campaign.time_of_day.iter().enumerate().for_each(|(i, t)| {
+                    let index = i as u32;
 
-                result.fog_distance.insert(index, t.fog_distance);
-                result.fog_near_fraction.insert(index, t.fog_near_fraction);
-                result.fog_color.insert(index, t.fog_color);
-            });
+                    result.sun_dir.insert(index, t.sun_dir);
+                    result.sun_color.insert(index, t.sun_color);
 
-            result
-        };
+                    result.fog_distance.insert(index, t.fog_distance);
+                    result.fog_near_fraction.insert(index, t.fog_near_fraction);
+                    result.fog_color.insert(index, t.fog_color);
+                });
+
+                result
+            };
+
+            ecs.insert_resource(day_night_cycle);
+        }
 
         let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
 
@@ -136,8 +156,11 @@ impl SimWorld {
             Terrain::new(height_map, terrain_texture)
         };
 
+        ecs.insert_resource(terrain);
+
         let mut objects = Objects::new()?;
 
+        let mut command_queue = bevy_ecs::world::CommandQueue::default();
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;
 
@@ -145,9 +168,11 @@ impl SimWorld {
                 let object_type = ObjectType::from_string(&object.typ)
                     .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
 
+                let commands = Commands::new(&mut command_queue, &ecs);
                 let _ = match objects.spawn(
+                    commands,
                     Transform::from_translation(object.position)
-                        .with_euler_rotation(object.rotation * vec3(1.0, 1.0, -1.0)),
+                        .with_euler_rotation(object.rotation * Vec3::new(1.0, 1.0, -1.0)),
                     object_type,
                     &object.name,
                     &object.title,
@@ -160,22 +185,19 @@ impl SimWorld {
                 };
             }
         }
+        command_queue.apply(&mut ecs);
 
         // TODO: Can also do the [RenderModel] creation here?
         objects.finalize();
 
-        // quad_tree._print_nodes();
-
-        let (test_model, _) = models().load_model(ModelName::Body(String::from("man1_enemy")))?;
-        let test_motion = data_dir().load_motion("bipedal_stand_idle_smoke")?;
+        ecs.insert_resource(objects);
 
         let sequences = Sequences::new()?;
 
         let ui = Ui::new();
 
-        Ok(SimWorld {
+        let sim_world_state = SimWorldState {
             sim_start: std::time::Instant::now(),
-
             cameras: [
                 Camera::new(
                     Vec3::ZERO,
@@ -195,29 +217,52 @@ impl SimWorld {
                 ),
             ],
             computed_cameras: [ComputedCamera::default(), ComputedCamera::default()],
-
             active_camera: ActiveCamera::Game,
 
             time_of_day,
-            day_night_cycle,
 
-            terrain,
             highlighted_chunks: HashSet::default(),
             visible_chunks: Vec::default(),
 
-            objects,
             selected_objects: HashSet::default(),
             visible_objects: Vec::default(),
 
-            gizmo_vertices: Vec::with_capacity(1024),
-
-            test_model,
-            test_motion,
-            timer: 0.0,
-
-            sequences,
+            // gizmo_vertices: Vec::with_capacity(1024),
+            _sequences: sequences,
 
             ui,
+        };
+
+        ecs.insert_resource(sim_world_state);
+
+        ecs.init_resource::<Viewport>();
+
+        // Update schedule.
+        let mut update_schedule = Schedule::default();
+        update_schedule.add_systems(
+            (
+                day_night_cycle_system::increment_time_of_day,
+                cull_system::calculate_visible_chunks,
+                object_system::update,
+                world_interaction::input,
+                world_interaction::update,
+            )
+                .chain(),
+        );
+
+        Ok(SimWorld {
+            ecs,
+            update_schedule,
         })
+    }
+
+    #[inline]
+    pub fn state(&self) -> &SimWorldState {
+        self.ecs.resource::<SimWorldState>()
+    }
+
+    #[inline]
+    pub fn state_mut(&mut self) -> Mut<'_, SimWorldState> {
+        self.ecs.resource_mut::<SimWorldState>()
     }
 }

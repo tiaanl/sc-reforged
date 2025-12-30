@@ -26,7 +26,7 @@ impl OrderQueue {
         self.pending.push_back(order);
     }
 
-    pub fn current(&self) -> Option<&Order> {
+    pub fn _current(&self) -> Option<&Order> {
         self.current.as_ref()
     }
 

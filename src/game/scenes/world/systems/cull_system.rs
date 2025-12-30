@@ -1,20 +1,28 @@
-use crate::game::scenes::world::sim_world::SimWorld;
+use bevy_ecs::prelude::*;
+
+use crate::game::scenes::world::sim_world::{Objects, SimWorldState, Terrain};
 
 /// Calculate visible elements for the current frame.
-#[derive(Default)]
-pub struct CullSystem {}
+pub fn calculate_visible_chunks(
+    mut state: ResMut<SimWorldState>,
+    terrain: Res<Terrain>,
+    objects: Res<Objects>,
+) {
+    let frustum = {
+        state.computed_cameras[state.active_camera as usize]
+            .frustum
+            .clone()
+    };
 
-impl CullSystem {
-    pub fn calculate_visible_chunks(&mut self, sim_world: &mut SimWorld) {
-        let frustum = &sim_world.computed_cameras[sim_world.active_camera as usize].frustum;
+    {
+        let visible_chunks = &mut state.visible_chunks;
+        terrain.quad_tree.visible_chunks(&frustum, visible_chunks);
+    }
 
-        sim_world
-            .terrain
-            .quad_tree
-            .visible_chunks(frustum, &mut sim_world.visible_chunks);
-        sim_world
-            .objects
+    {
+        let visible_objects = &mut state.visible_objects;
+        objects
             .static_bvh
-            .objects_in_frustum(frustum, &mut sim_world.visible_objects);
+            .objects_in_frustum(&frustum, visible_objects);
     }
 }

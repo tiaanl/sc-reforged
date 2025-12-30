@@ -1,10 +1,13 @@
+use bevy_ecs::prelude::*;
 use glam::{IVec2, Mat4, UVec2, Vec2, Vec3, Vec4};
 
 use crate::{
     engine::{input::InputState, storage::Handle},
     game::{
         math::{Frustum, RaySegment},
-        scenes::world::sim_world::{Object, RayIntersectionMode, SimWorld, UiRect},
+        scenes::world::sim_world::{
+            Object, Objects, RayIntersectionMode, SimWorldState, Terrain, UiRect, ecs::Viewport,
+        },
     },
 };
 
@@ -71,261 +74,259 @@ impl SelectionRect {
     }
 }
 
-#[derive(Default)]
-pub struct WorldInteractionSystem {
+#[derive(Default, Resource)]
+pub struct WorldInteraction {
     selection_rect: Option<SelectionRect>,
 }
 
-impl WorldInteractionSystem {
-    const DRAG_THRESHOLD: u32 = 2;
+const DRAG_THRESHOLD: u32 = 2;
 
-    pub fn input(
-        &mut self,
-        sim_world: &mut SimWorld,
-        input_state: &InputState,
-        viewport_size: UVec2,
-    ) {
-        use winit::event::MouseButton;
+pub fn input(
+    mut world_interaction: ResMut<WorldInteraction>,
+    mut state: ResMut<SimWorldState>,
+    mut objects: ResMut<Objects>,
+    terrain: Res<Terrain>,
+    input_state: Res<InputState>,
+    viewport: Res<Viewport>,
+) {
+    use winit::event::MouseButton;
 
-        if input_state.mouse_just_pressed(MouseButton::Left) {
-            // Start dragging the selection rect.
-            self.selection_rect = input_state.mouse_position().map(|pos| SelectionRect {
-                pos,
-                size: IVec2::ZERO,
-            });
-        } else if input_state.mouse_just_released(MouseButton::Left) {
-            // If the selection rect is larger than the threshold, that confirms that we drew a selection rect and not just clicked.
-            if let Some(rect) = self.selection_rect {
-                if rect.size.abs().min_element() > Self::DRAG_THRESHOLD as i32 {
-                    self.set_selection_by_rect(sim_world, rect, viewport_size);
-                } else {
-                    self.interact_with(sim_world, rect.pos, viewport_size);
-                }
-            }
-
-            self.selection_rect = None;
-        } else if let Some(ref mut selection_rect) = self.selection_rect
-            && let Some(mouse_position) = input_state.mouse_position()
-        {
-            selection_rect.size = mouse_position.as_ivec2() - selection_rect.pos.as_ivec2();
-        }
-    }
-
-    pub fn update(&mut self, sim_world: &mut SimWorld) {
-        if let Some(rect) = &self.selection_rect {
-            let SelectionRect { pos, size } = rect.normalize();
-            let size = size.as_uvec2();
-
-            if size.x > Self::DRAG_THRESHOLD && size.y > Self::DRAG_THRESHOLD {
-                const THICKNESS: u32 = 1;
-                // debug_assert!(THICKNESS <= Self::DRAG_THRESHOLD);
-
-                sim_world.ui.ui_rects.push(UiRect {
-                    pos,
-                    size,
-                    color: Vec4::new(0.0, 0.0, 0.0, 0.5),
-                });
-
-                // Left
-                sim_world.ui.ui_rects.push(UiRect {
-                    pos,
-                    size: UVec2::new(THICKNESS, size.y),
-                    color: Vec4::new(1.0, 1.0, 1.0, 0.5),
-                });
-
-                // Right
-                sim_world.ui.ui_rects.push(UiRect {
-                    pos: UVec2::new(pos.x + size.x - THICKNESS, pos.y),
-                    size: UVec2::new(THICKNESS, size.y),
-                    color: Vec4::new(1.0, 1.0, 1.0, 0.5),
-                });
-
-                // Top
-                sim_world.ui.ui_rects.push(UiRect {
-                    pos: UVec2::new(pos.x + THICKNESS, pos.y),
-                    size: UVec2::new(size.x.max(THICKNESS * 2) - THICKNESS * 2, THICKNESS),
-                    color: Vec4::new(1.0, 1.0, 1.0, 0.5),
-                });
-
-                // Bottom
-                sim_world.ui.ui_rects.push(UiRect {
-                    pos: UVec2::new(
-                        pos.x + THICKNESS,
-                        (pos.y + size.y).max(THICKNESS) - THICKNESS,
-                    ),
-                    size: UVec2::new(size.x.max(THICKNESS * 2) - THICKNESS * 2, THICKNESS),
-                    color: Vec4::new(1.0, 1.0, 1.0, 0.5),
-                });
-            }
-        }
-    }
-
-    /// Update the selected objects by using a rectangle in screen coordinates.
-    fn set_selection_by_rect(
-        &mut self,
-        sim_world: &SimWorld,
-        rect: SelectionRect,
-        viewport_size: UVec2,
-    ) {
-        let (min, max) = rect.min_max();
-        debug_assert!(min.x <= max.x);
-        debug_assert!(min.y <= max.y);
-
-        let _frustum = {
-            const NDC_Z_NEAR: f32 = 0.0;
-            const NDC_Z_FAR: f32 = 1.0;
-
-            let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
-
-            let viewport = viewport_size.as_vec2();
-
-            let screen_tl = min.as_vec2();
-            let screen_br = max.as_vec2();
-            let screen_tr = Vec2::new(screen_br.x, screen_tl.y);
-            let screen_bl = Vec2::new(screen_tl.x, screen_br.y);
-
-            let ndc_tl = Self::screen_to_ndc(screen_tl, viewport);
-            let ndc_tr = Self::screen_to_ndc(screen_tr, viewport);
-            let ndc_br = Self::screen_to_ndc(screen_br, viewport);
-            let ndc_bl = Self::screen_to_ndc(screen_bl, viewport);
-
-            let inv = &computed_camera.view_proj.inv;
-
-            let ntl = Self::unproject(ndc_tl.extend(NDC_Z_NEAR), inv);
-            let ntr = Self::unproject(ndc_tr.extend(NDC_Z_NEAR), inv);
-            let nbr = Self::unproject(ndc_br.extend(NDC_Z_NEAR), inv);
-            let nbl = Self::unproject(ndc_bl.extend(NDC_Z_NEAR), inv);
-
-            let ftl = Self::unproject(ndc_tl.extend(NDC_Z_FAR), inv);
-            let ftr = Self::unproject(ndc_tr.extend(NDC_Z_FAR), inv);
-            let fbr = Self::unproject(ndc_br.extend(NDC_Z_FAR), inv);
-            let fbl = Self::unproject(ndc_bl.extend(NDC_Z_FAR), inv);
-
-            Frustum::from_corners(ntl, ntr, nbr, nbl, ftl, ftr, fbr, fbl)
-        };
-    }
-
-    /// The user clicked somewhere and wants to interact with an object.
-    fn interact_with(&mut self, sim_world: &mut SimWorld, pos: UVec2, viewport_size: UVec2) {
-        // Shoot a ray into the scene from the camera to see what we can hit.
-        let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
-        let camera_ray_segment = computed_camera.create_ray_segment(pos, viewport_size);
-
-        if let Some(hit) = Self::get_interaction_hit(sim_world, &camera_ray_segment) {
-            if sim_world.selected_objects.is_empty() {
-                if let InteractionHit::Object {
-                    _world_position,
-                    _distance,
-                    object,
-                } = hit
-                {
-                    // Select the object that was clicked on.
-                    sim_world.selected_objects.insert(object);
-                }
+    if input_state.mouse_just_pressed(MouseButton::Left) {
+        // Start dragging the selection rect.
+        world_interaction.selection_rect = input_state.mouse_position().map(|pos| SelectionRect {
+            pos,
+            size: IVec2::ZERO,
+        });
+    } else if input_state.mouse_just_released(MouseButton::Left) {
+        // If the selection rect is larger than the threshold, that confirms that we drew a selection rect and not just clicked.
+        if let Some(rect) = world_interaction.selection_rect {
+            if rect.size.abs().min_element() > DRAG_THRESHOLD as i32 {
+                set_selection_by_rect(&state, rect, viewport.size);
             } else {
-                // Interact with all selected objects.
-                for &handle in sim_world.selected_objects.iter() {
-                    if let Some(object) = sim_world.objects.get_mut(handle) {
-                        object.interact(&hit)
-                    }
-                }
+                interact_with(&mut state, &mut objects, &terrain, rect.pos, viewport.size);
             }
+        }
+
+        world_interaction.selection_rect = None;
+    } else if let Some(ref mut selection_rect) = world_interaction.selection_rect
+        && let Some(mouse_position) = input_state.mouse_position()
+    {
+        selection_rect.size = mouse_position.as_ivec2() - selection_rect.pos.as_ivec2();
+    }
+}
+
+pub fn update(world_interaction: Res<WorldInteraction>, mut state: ResMut<SimWorldState>) {
+    if let Some(rect) = &world_interaction.selection_rect {
+        let SelectionRect { pos, size } = rect.normalize();
+        let size = size.as_uvec2();
+
+        if size.x > DRAG_THRESHOLD && size.y > DRAG_THRESHOLD {
+            const THICKNESS: u32 = 1;
+            // debug_assert!(THICKNESS <= Self::DRAG_THRESHOLD);
+
+            state.ui.ui_rects.push(UiRect {
+                pos,
+                size,
+                color: Vec4::new(0.0, 0.0, 0.0, 0.5),
+            });
+
+            // Left
+            state.ui.ui_rects.push(UiRect {
+                pos,
+                size: UVec2::new(THICKNESS, size.y),
+                color: Vec4::new(1.0, 1.0, 1.0, 0.5),
+            });
+
+            // Right
+            state.ui.ui_rects.push(UiRect {
+                pos: UVec2::new(pos.x + size.x - THICKNESS, pos.y),
+                size: UVec2::new(THICKNESS, size.y),
+                color: Vec4::new(1.0, 1.0, 1.0, 0.5),
+            });
+
+            // Top
+            state.ui.ui_rects.push(UiRect {
+                pos: UVec2::new(pos.x + THICKNESS, pos.y),
+                size: UVec2::new(size.x.max(THICKNESS * 2) - THICKNESS * 2, THICKNESS),
+                color: Vec4::new(1.0, 1.0, 1.0, 0.5),
+            });
+
+            // Bottom
+            state.ui.ui_rects.push(UiRect {
+                pos: UVec2::new(
+                    pos.x + THICKNESS,
+                    (pos.y + size.y).max(THICKNESS) - THICKNESS,
+                ),
+                size: UVec2::new(size.x.max(THICKNESS * 2) - THICKNESS * 2, THICKNESS),
+                color: Vec4::new(1.0, 1.0, 1.0, 0.5),
+            });
         }
     }
+}
 
-    #[inline]
-    fn screen_to_ndc(p: Vec2, viewport_size: Vec2) -> Vec2 {
-        let uv = p / viewport_size;
-        let mut ndc = uv * 2.0 - Vec2::ONE;
-        // Y grows down, so invert, because NDC grows up.
-        ndc.y = -ndc.y;
-        ndc
-    }
+/// Update the selected objects by using a rectangle in screen coordinates.
+fn set_selection_by_rect(state: &SimWorldState, rect: SelectionRect, viewport_size: UVec2) {
+    let (min, max) = rect.min_max();
+    debug_assert!(min.x <= max.x);
+    debug_assert!(min.y <= max.y);
 
-    #[inline]
-    fn unproject(ndc: Vec3, inv: &Mat4) -> Vec3 {
-        let clip = Vec4::new(ndc.x, ndc.y, ndc.z, 1.0);
-        let world = inv * clip;
-        world.truncate() / world.w
-    }
+    let _frustum = {
+        const NDC_Z_NEAR: f32 = 0.0;
+        const NDC_Z_FAR: f32 = 1.0;
 
-    fn get_interaction_hit(
-        sim_world: &SimWorld,
-        camera_ray_segment: &RaySegment,
-    ) -> Option<InteractionHit> {
-        if camera_ray_segment.is_degenerate() {
-            return None;
-        }
+        let computed_camera = &state.computed_cameras[state.active_camera as usize];
 
-        let mut best_object_t = f32::INFINITY;
-        let mut best_object_hit: Option<(Handle<Object>, Vec3)> = None;
+        let viewport = viewport_size.as_vec2();
 
-        let mut object_candidates = Vec::new();
-        sim_world
-            .objects
-            .static_bvh
-            .objects_intersect_ray_segment(camera_ray_segment, &mut object_candidates);
+        let screen_tl = min.as_vec2();
+        let screen_br = max.as_vec2();
+        let screen_tr = Vec2::new(screen_br.x, screen_tl.y);
+        let screen_bl = Vec2::new(screen_tl.x, screen_br.y);
 
-        for (handle, object) in object_candidates
-            .iter()
-            .filter_map(|&handle| sim_world.objects.get(handle).map(|object| (handle, object)))
-        {
-            if let Some(hit) =
-                object.ray_intersection(camera_ray_segment, RayIntersectionMode::Meshes)
-                && hit.t < best_object_t
-            {
-                best_object_t = hit.t;
-                best_object_hit = Some((handle, hit.world_position));
-            }
-        }
+        let ndc_tl = screen_to_ndc(screen_tl, viewport);
+        let ndc_tr = screen_to_ndc(screen_tr, viewport);
+        let ndc_br = screen_to_ndc(screen_br, viewport);
+        let ndc_bl = screen_to_ndc(screen_bl, viewport);
 
-        let mut best_terrain_t = f32::INFINITY;
-        let mut best_terrain_hit: Option<(IVec2, Vec3)> = None;
+        let inv = &computed_camera.view_proj.inv;
 
-        let mut chunk_candidates = Vec::new();
-        sim_world
-            .terrain
-            .quad_tree
-            .ray_intersect_chunks(camera_ray_segment, &mut chunk_candidates);
+        let ntl = unproject(ndc_tl.extend(NDC_Z_NEAR), inv);
+        let ntr = unproject(ndc_tr.extend(NDC_Z_NEAR), inv);
+        let nbr = unproject(ndc_br.extend(NDC_Z_NEAR), inv);
+        let nbl = unproject(ndc_bl.extend(NDC_Z_NEAR), inv);
 
-        for chunk_coord in chunk_candidates {
-            if let Some(hit) = sim_world
-                .terrain
-                ._chunk_intersect_ray_segment(chunk_coord, camera_ray_segment)
-                && hit.t < best_terrain_t
-            {
-                best_terrain_t = hit.t;
-                best_terrain_hit = Some((chunk_coord, hit.world_position));
-            }
-        }
+        let ftl = unproject(ndc_tl.extend(NDC_Z_FAR), inv);
+        let ftr = unproject(ndc_tr.extend(NDC_Z_FAR), inv);
+        let fbr = unproject(ndc_br.extend(NDC_Z_FAR), inv);
+        let fbl = unproject(ndc_bl.extend(NDC_Z_FAR), inv);
 
-        match (best_object_hit, best_terrain_hit) {
-            (Some((object, world_position)), Some((chunk_coord, terrain_position))) => {
-                if best_object_t <= best_terrain_t {
-                    Some(InteractionHit::Object {
-                        _world_position: world_position,
-                        _distance: best_object_t,
-                        object,
-                    })
-                } else {
-                    Some(InteractionHit::Terrain {
-                        world_position: terrain_position,
-                        _distance: best_terrain_t,
-                        _chunk_coord: chunk_coord,
-                    })
-                }
-            }
-            (Some((object, world_position)), None) => Some(InteractionHit::Object {
-                _world_position: world_position,
-                _distance: best_object_t,
+        Frustum::from_corners(ntl, ntr, nbr, nbl, ftl, ftr, fbr, fbl)
+    };
+}
+
+/// The user clicked somewhere and wants to interact with an object.
+fn interact_with(
+    state: &mut SimWorldState,
+    objects: &mut Objects,
+    terrain: &Terrain,
+    pos: UVec2,
+    viewport_size: UVec2,
+) {
+    // Shoot a ray into the scene from the camera to see what we can hit.
+    let computed_camera = &state.computed_cameras[state.active_camera as usize];
+    let camera_ray_segment = computed_camera.create_ray_segment(pos, viewport_size);
+
+    if let Some(hit) = get_interaction_hit(objects, terrain, &camera_ray_segment) {
+        if state.selected_objects.is_empty() {
+            if let InteractionHit::Object {
+                _world_position,
+                _distance,
                 object,
-            }),
-            (None, Some((chunk_coord, terrain_position))) => Some(InteractionHit::Terrain {
-                world_position: terrain_position,
-                _distance: best_terrain_t,
-                _chunk_coord: chunk_coord,
-            }),
-            (None, None) => None,
+            } = hit
+            {
+                // Select the object that was clicked on.
+                state.selected_objects.insert(object);
+            }
+        } else {
+            // Interact with all selected objects.
+            for &handle in state.selected_objects.iter() {
+                if let Some(object) = objects.get_mut(handle) {
+                    object.interact(&hit)
+                }
+            }
         }
+    }
+}
+
+#[inline]
+fn screen_to_ndc(p: Vec2, viewport_size: Vec2) -> Vec2 {
+    let uv = p / viewport_size;
+    let mut ndc = uv * 2.0 - Vec2::ONE;
+    // Y grows down, so invert, because NDC grows up.
+    ndc.y = -ndc.y;
+    ndc
+}
+
+#[inline]
+fn unproject(ndc: Vec3, inv: &Mat4) -> Vec3 {
+    let clip = Vec4::new(ndc.x, ndc.y, ndc.z, 1.0);
+    let world = inv * clip;
+    world.truncate() / world.w
+}
+
+fn get_interaction_hit(
+    objects: &Objects,
+    terrain: &Terrain,
+    camera_ray_segment: &RaySegment,
+) -> Option<InteractionHit> {
+    if camera_ray_segment.is_degenerate() {
+        return None;
+    }
+
+    let mut best_object_t = f32::INFINITY;
+    let mut best_object_hit: Option<(Handle<Object>, Vec3)> = None;
+
+    let mut object_candidates = Vec::new();
+
+    objects
+        .static_bvh
+        .objects_intersect_ray_segment(camera_ray_segment, &mut object_candidates);
+
+    for (handle, object) in object_candidates
+        .iter()
+        .filter_map(|&handle| objects.get(handle).map(|object| (handle, object)))
+    {
+        if let Some(hit) = object.ray_intersection(camera_ray_segment, RayIntersectionMode::Meshes)
+            && hit.t < best_object_t
+        {
+            best_object_t = hit.t;
+            best_object_hit = Some((handle, hit.world_position));
+        }
+    }
+
+    let mut best_terrain_t = f32::INFINITY;
+    let mut best_terrain_hit: Option<(IVec2, Vec3)> = None;
+
+    let mut chunk_candidates = Vec::new();
+    terrain
+        .quad_tree
+        .ray_intersect_chunks(camera_ray_segment, &mut chunk_candidates);
+
+    for chunk_coord in chunk_candidates {
+        if let Some(hit) = terrain._chunk_intersect_ray_segment(chunk_coord, camera_ray_segment)
+            && hit.t < best_terrain_t
+        {
+            best_terrain_t = hit.t;
+            best_terrain_hit = Some((chunk_coord, hit.world_position));
+        }
+    }
+
+    match (best_object_hit, best_terrain_hit) {
+        (Some((object, world_position)), Some((chunk_coord, terrain_position))) => {
+            if best_object_t <= best_terrain_t {
+                Some(InteractionHit::Object {
+                    _world_position: world_position,
+                    _distance: best_object_t,
+                    object,
+                })
+            } else {
+                Some(InteractionHit::Terrain {
+                    world_position: terrain_position,
+                    _distance: best_terrain_t,
+                    _chunk_coord: chunk_coord,
+                })
+            }
+        }
+        (Some((object, world_position)), None) => Some(InteractionHit::Object {
+            _world_position: world_position,
+            _distance: best_object_t,
+            object,
+        }),
+        (None, Some((chunk_coord, terrain_position))) => Some(InteractionHit::Terrain {
+            world_position: terrain_position,
+            _distance: best_terrain_t,
+            _chunk_coord: chunk_coord,
+        }),
+        (None, None) => None,
     }
 }

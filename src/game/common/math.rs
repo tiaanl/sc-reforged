@@ -81,7 +81,7 @@ pub enum Containment {
     Inside,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Frustum {
     /// [left, right, bottom, top, near, far]
     pub planes: [Plane; 6],

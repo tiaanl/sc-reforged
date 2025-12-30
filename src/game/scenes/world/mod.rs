@@ -15,7 +15,8 @@ use crate::{
         scenes::world::{
             game_mode::GameMode,
             render::{RenderStore, RenderWorld},
-            sim_world::SimWorld,
+            sim_world::{SimWorld, ecs::Viewport},
+            systems::Time,
         },
     },
 };
@@ -115,7 +116,10 @@ impl Scene for WorldScene {
         let [width, height] = size.as_vec2().to_array();
         let aspect = width / height.max(1.0);
 
-        for camera in &mut self.sim_world.cameras {
+        self.sim_world.ecs.resource_mut::<Viewport>().resize(size);
+
+        let state = &mut self.sim_world.state_mut();
+        for camera in &mut state.cameras {
             camera.aspect_ratio = aspect;
         }
     }
@@ -125,9 +129,17 @@ impl Scene for WorldScene {
 
         // Run systems
         {
+            let sim_start = self.sim_world.state().sim_start;
+
+            {
+                let mut time = self.sim_world.ecs.resource_mut::<Time>();
+                time.delta_time = delta_time;
+                time.sim_time = (std::time::Instant::now() - sim_start).as_secs_f32();
+            }
+
             let time = systems::Time {
                 delta_time,
-                sim_time: (std::time::Instant::now() - self.sim_world.sim_start).as_secs_f32(),
+                sim_time: (std::time::Instant::now() - sim_start).as_secs_f32(),
             };
 
             let start = std::time::Instant::now();
@@ -192,6 +204,8 @@ impl Scene for WorldScene {
     fn debug_panel(&mut self, ctx: &egui::Context, frame_index: u64) {
         use egui::widgets::Slider;
 
+        use crate::game::scenes::world::sim_world::Objects;
+
         if !self.in_editor() {
             return;
         }
@@ -205,22 +219,16 @@ impl Scene for WorldScene {
                 ui.vertical(|ui| {
                     use crate::game::scenes::world::sim_world::ActiveCamera;
 
+                    let mut state = self.sim_world.state_mut();
+
                     ui.horizontal(|ui| {
                         use crate::game::scenes::world::sim_world::ActiveCamera;
 
-                        ui.selectable_value(
-                            &mut self.sim_world.active_camera,
-                            ActiveCamera::Game,
-                            "Game",
-                        );
-                        ui.selectable_value(
-                            &mut self.sim_world.active_camera,
-                            ActiveCamera::Debug,
-                            "Debug",
-                        );
+                        ui.selectable_value(&mut state.active_camera, ActiveCamera::Game, "Game");
+                        ui.selectable_value(&mut state.active_camera, ActiveCamera::Debug, "Debug");
                     });
 
-                    match self.sim_world.active_camera {
+                    match state.active_camera {
                         ActiveCamera::Game => {}
                         ActiveCamera::Debug => {
                             egui::Grid::new("debug_camera")
@@ -253,15 +261,19 @@ impl Scene for WorldScene {
                     }
                 });
 
-                ui.heading("Environment");
-                ui.horizontal(|ui| {
-                    ui.label("Time of day");
-                    ui.add(
-                        Slider::new(&mut self.sim_world.time_of_day, 0.0..=24.0)
-                            .drag_value_speed(0.01)
-                            .fixed_decimals(2),
-                    );
-                });
+                {
+                    let mut state = self.sim_world.state_mut();
+
+                    ui.heading("Environment");
+                    ui.horizontal(|ui| {
+                        ui.label("Time of day");
+                        ui.add(
+                            Slider::new(&mut state.time_of_day, 0.0..=24.0)
+                                .drag_value_speed(0.01)
+                                .fixed_decimals(2),
+                        );
+                    });
+                }
 
                 // Terrain
                 {
@@ -282,12 +294,6 @@ impl Scene for WorldScene {
                     ui.checkbox(
                         &mut self.systems.world_renderer.render_bounding_boxes,
                         "Render bounding boxes",
-                    );
-                }
-
-                {
-                    ui.add(
-                        Slider::new(&mut self.sim_world.timer, 0.0..=240.0).drag_value_speed(0.1),
                     );
                 }
             });
@@ -354,17 +360,19 @@ impl Scene for WorldScene {
             });
 
         egui::Window::new("Stats").show(ctx, |ui| {
+            let state = self.sim_world.state();
+
             ui.horizontal(|ui| {
                 ui.label("Frame index");
                 ui.label(format!("{frame_index}"));
             });
             ui.horizontal(|ui| {
                 ui.label("Visible chunks");
-                ui.label(format!("{}", self.sim_world.visible_chunks.len()));
+                ui.label(format!("{}", state.visible_chunks.len()));
             });
             ui.horizontal(|ui| {
                 ui.label("Visible objects");
-                ui.label(format!("{}", self.sim_world.visible_objects.len()));
+                ui.label(format!("{}", state.visible_objects.len()));
             });
             ui.horizontal(|ui| {
                 ui.label("Visible strata");
@@ -377,7 +385,7 @@ impl Scene for WorldScene {
         });
 
         // TODO: Should probably move somewhere.
-        if !self.sim_world.selected_objects.is_empty() {
+        if !self.sim_world.state().selected_objects.is_empty() {
             egui::Window::new("Selected")
                 .resizable(false)
                 .default_width(400.0)
@@ -387,23 +395,26 @@ impl Scene for WorldScene {
                         game::scenes::world::sim_world::{Object, ObjectData},
                     };
 
-                    let mut selected: Vec<Handle<Object>> =
-                        self.sim_world.selected_objects.iter().cloned().collect();
+                    let mut selected: Vec<Handle<Object>> = self
+                        .sim_world
+                        .state()
+                        .selected_objects
+                        .iter()
+                        .cloned()
+                        .collect();
 
                     for handle in selected.drain(..) {
-                        if let Some(object) = self.sim_world.objects.get_mut(handle) {
+                        let mut objects = self.sim_world.ecs.resource_mut::<Objects>();
+
+                        if let Some(object) = objects.get_mut(handle) {
                             use crate::engine::egui_integration::UiExt;
 
                             ui.h1(format!("{} ({})", &object.title, &object.name));
 
                             match &mut object.data {
                                 ObjectData::Scenery { .. } => {}
-                                ObjectData::Biped {
-                                    order_queue,
-                                    sequencer,
-                                    ..
-                                } => {
-                                    sequencer.ui(ui, &self.sim_world.sequences);
+                                ObjectData::Biped { order_queue, .. } => {
+                                    // sequencer.ui(ui, &state.sequences);
                                     order_queue.ui(ui);
                                 }
                                 ObjectData::SingleModel { .. } => {}

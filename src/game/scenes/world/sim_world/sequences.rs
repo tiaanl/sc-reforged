@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{
     collections::{VecDeque, hash_map::Entry},
     path::PathBuf,
@@ -155,9 +157,7 @@ impl Sequences {
                             )
                             .collect() };
 
-                        let handle = storage.insert(sequence_def);
-
-                        handle
+                        storage.insert(sequence_def)
                     });
                 }
 
@@ -193,9 +193,7 @@ impl Sequencer {
             .entries
             .iter()
             .filter_map(|entry| {
-                let Some(motion) = sequences.get_motion(entry.motion) else {
-                    return None;
-                };
+                let motion = sequences.get_motion(entry.motion)?;
 
                 let motion_time = motion.max_frame_num() as f32;
 

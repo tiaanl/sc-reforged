@@ -5,7 +5,7 @@ use crate::{
     },
     game::scenes::world::{
         render::{RenderStore, RenderWorld},
-        sim_world::SimWorld,
+        sim_world::{SimWorld, ecs::GizmoVertices},
     },
     wgsl_shader,
 };
@@ -74,10 +74,11 @@ impl GizmoSystem {
     pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
         // Move all the sim world vertices to the render world vertices.
         render_world.gizmo_vertices.clear();
-        std::mem::swap(
-            &mut sim_world.gizmo_vertices,
-            &mut render_world.gizmo_vertices,
-        );
+
+        sim_world
+            .ecs
+            .resource_mut::<GizmoVertices>()
+            .swap(&mut render_world.gizmo_vertices);
     }
 
     pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {

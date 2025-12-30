@@ -10,7 +10,7 @@ use crate::{
                 box_pipeline::{self, BoxPipeline},
                 ui_pipeline::UiPipeline,
             },
-            sim_world::{ObjectData, SimWorld},
+            sim_world::{ObjectData, Objects, SimWorld},
         },
     },
 };
@@ -71,9 +71,11 @@ impl WorldRenderer {
         self.ui_pipeline
             .extract(sim_world, render_store, render_world, viewport_size);
 
+        let objects = sim_world.ecs.resource::<Objects>();
+
         self.bounding_boxes.clear();
         if self.render_bounding_boxes {
-            for (_, object) in sim_world.objects.objects.iter() {
+            for (_, object) in objects.objects.iter() {
                 let model_handle = match object.data {
                     ObjectData::Scenery { model } => model,
                     ObjectData::Biped { model, .. } => model,

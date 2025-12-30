@@ -78,6 +78,8 @@ impl UiPipeline {
         render_world: &mut RenderWorld,
         viewport_size: UVec2,
     ) {
+        let state = sim_world.state();
+
         let proj = Mat4::orthographic_rh(
             0.0,
             viewport_size.x as f32,
@@ -93,7 +95,7 @@ impl UiPipeline {
         render_world.ui_rects.clear();
         render_world
             .ui_rects
-            .extend(sim_world.ui.ui_rects.iter().map(|rect| {
+            .extend(state.ui.ui_rects.iter().map(|rect| {
                 let min = rect.pos.as_vec2();
                 let max = min + rect.size.as_vec2();
                 RenderUiRect {

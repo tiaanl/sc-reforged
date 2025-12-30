@@ -58,7 +58,8 @@ impl TerrainPipeline {
         [0..512, 512..640, 640..672, 672..680];
 
     pub fn new(renderer: &Renderer, render_store: &RenderStore, sim_world: &SimWorld) -> Self {
-        let height_map = &sim_world.terrain.height_map;
+        let terrain = sim_world.ecs.resource::<Terrain>();
+        let height_map = &terrain.height_map;
 
         let cells_dim = height_map.size;
         let chunks_dim = cells_dim / Terrain::CELLS_PER_CHUNK;
@@ -108,7 +109,7 @@ impl TerrainPipeline {
         };
 
         let terrain_texture = {
-            let image = images().get(sim_world.terrain.terrain_texture).unwrap();
+            let image = images().get(terrain.terrain_texture).unwrap();
             renderer.create_texture("terrain_texture", &image.data)
         };
 
@@ -469,11 +470,13 @@ impl TerrainPipeline {
     pub fn extract(&mut self, sim_world: &SimWorld, render_world: &mut RenderWorld) {
         self.chunk_lod_cache.clear();
 
-        let computed_camera = &sim_world.computed_cameras[sim_world.active_camera as usize];
+        let state = sim_world.state();
+
+        let computed_camera = &state.computed_cameras[state.active_camera as usize];
 
         let camera_position = computed_camera.position;
         let camera_forward = computed_camera.forward;
-        let camera_far = sim_world.cameras[sim_world.active_camera as usize].far;
+        let camera_far = state.cameras[state.active_camera as usize].far;
 
         let terrain_chunk_instances = &mut render_world.terrain_chunk_instances;
         let strata_instances = &mut render_world.strata_instances;
@@ -483,14 +486,15 @@ impl TerrainPipeline {
         strata_instances.clear();
         *strata_instances_side_count = [0; 4];
 
-        for visible_coord in sim_world.visible_chunks.iter() {
+        let terrain = sim_world.ecs.resource::<Terrain>();
+
+        for visible_coord in state.visible_chunks.iter() {
             let mut lod_at = |coord: IVec2| {
                 if let Some(lod) = self.chunk_lod_cache.get(&coord) {
                     return Some(*lod);
                 }
 
-                sim_world
-                    .terrain
+                terrain
                     .chunk_lod(coord, camera_position, camera_forward, camera_far)
                     .inspect(|&lod| {
                         self.chunk_lod_cache.insert(coord, lod);
@@ -512,7 +516,7 @@ impl TerrainPipeline {
 
             // Highlight the chunk.
             const HIGHLIGHT: u32 = 1 << 15;
-            if sim_world.highlighted_chunks.contains(visible_coord) {
+            if state.highlighted_chunks.contains(visible_coord) {
                 flags |= HIGHLIGHT;
             }
 

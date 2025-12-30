@@ -1,40 +1,37 @@
-use glam::{Mat4, UVec2, Vec2, Vec3, Vec4};
+use bevy_ecs::prelude::*;
+use glam::{UVec2, Vec2};
 
 use crate::{
     engine::{
-        gizmos::GizmoVertex,
         input::InputState,
         renderer::{Frame, Renderer},
     },
     game::{
         config::Campaign,
-        models::models,
         scenes::world::{
-            animation::generate_pose,
             render::{RenderStore, RenderWorld, WorldRenderer},
-            sim_world::SimWorld,
+            sim_world::{Objects, SimWorld},
             systems::{
                 free_camera_controller::FreeCameraController,
                 top_down_camera_controller::TopDownCameraController,
             },
         },
-        skeleton::Skeleton,
     },
 };
 
 mod camera_system;
 mod clear_render_targets;
-mod cull_system;
-mod day_night_cycle_system;
+pub mod cull_system;
+pub mod day_night_cycle_system;
 mod free_camera_controller;
 mod gizmo_system;
-mod object_system;
+pub mod object_system;
 mod top_down_camera_controller;
-mod world_interaction;
+pub mod world_interaction;
 
 pub use world_interaction::InteractionHit;
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct Time {
     /// Time elapsed since the last frame was rendered.
     pub delta_time: f32,
@@ -48,13 +45,9 @@ pub struct Systems {
     sim_time: f32,
 
     pub camera_system: camera_system::CameraSystem,
-    pub culling: cull_system::CullSystem,
-
-    object_system: object_system::ObjectSystem,
 
     pub world_renderer: WorldRenderer,
 
-    world_interaction_system: world_interaction::WorldInteractionSystem,
     gizmo_system: gizmo_system::GizmoSystem,
 }
 
@@ -90,10 +83,7 @@ impl Systems {
                 },
                 FreeCameraController::new(1000.0, 0.2),
             ),
-            culling: cull_system::CullSystem::default(),
-            object_system: object_system::ObjectSystem,
             world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),
-            world_interaction_system: world_interaction::WorldInteractionSystem::default(),
             gizmo_system: gizmo_system::GizmoSystem::new(renderer, surface_format, render_store),
         }
     }
@@ -103,13 +93,21 @@ impl Systems {
         sim_world: &mut SimWorld,
         time: &Time,
         input_state: &InputState,
-        viewport_size: UVec2,
+        _viewport_size: UVec2,
     ) {
+        {
+            let mut res = sim_world.ecs.resource_mut::<InputState>();
+            *res = input_state.clone();
+        }
+
         // TODO: Not nice that we have to pass in a `viewport_size` here, but don't know where else
         //       to put it for now.
 
-        // TODO: This should really be part of a system somewhere.
-        sim_world.ui.ui_rects.clear();
+        {
+            // TODO: This should really be part of a system somewhere.
+            let mut state = sim_world.state_mut();
+            state.ui.ui_rects.clear();
+        }
 
         self.camera_system.input(sim_world, time, input_state);
 
@@ -117,103 +115,12 @@ impl Systems {
         //       would mean all systems should record input state and then
         //       process it in `update` as well, which is not done right now.
         self.camera_system.compute_cameras(sim_world);
-
-        self.world_interaction_system
-            .input(sim_world, input_state, viewport_size);
     }
 
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
         self.sim_time = time.sim_time;
 
-        self.object_system.update(sim_world, time);
-
-        self.culling.calculate_visible_chunks(sim_world);
-        day_night_cycle_system::increment_time_of_day(sim_world, time);
-
-        self.world_interaction_system.update(sim_world);
-
-        #[allow(clippy::collapsible_if)]
-        if false {
-            if let Some(model) = models().get(sim_world.test_model) {
-                let pose = generate_pose(
-                    &model.skeleton,
-                    &sim_world.test_motion,
-                    sim_world.timer,
-                    true,
-                );
-
-                fn draw_bone(
-                    skeleton: &Skeleton,
-                    pose: &[Mat4],
-                    bone_index: u32,
-                    origin: &Mat4,
-                    gizmo_vertices: &mut Vec<GizmoVertex>,
-                    color: Option<Vec4>,
-                    level: usize,
-                ) {
-                    static COLORS: &[Vec4] = &[
-                        Vec4::new(1.0, 0.0, 0.0, 1.0),
-                        Vec4::new(0.0, 1.0, 0.0, 1.0),
-                        Vec4::new(0.0, 0.0, 1.0, 1.0),
-                        Vec4::new(1.0, 1.0, 0.0, 1.0),
-                        Vec4::new(1.0, 0.0, 1.0, 1.0),
-                        Vec4::new(1.0, 1.0, 1.0, 1.0),
-                    ];
-
-                    let start = (origin * pose[bone_index as usize]).w_axis.truncate();
-
-                    for (index, _) in skeleton
-                        .bones
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, b)| b.parent == bone_index)
-                    {
-                        let end = (origin * pose[index]).w_axis.truncate();
-
-                        let this_color = color.unwrap_or(COLORS[level.min(COLORS.len() - 1)]);
-
-                        gizmo_vertices.extend_from_slice(&[
-                            GizmoVertex::new(start, this_color),
-                            GizmoVertex::new(end, this_color),
-                        ]);
-
-                        draw_bone(
-                            skeleton,
-                            pose,
-                            index as u32,
-                            origin,
-                            gizmo_vertices,
-                            color,
-                            level + 1,
-                        );
-                    }
-                }
-
-                draw_bone(
-                    &model.skeleton,
-                    &pose.bones,
-                    0,
-                    &Mat4::IDENTITY,
-                    &mut sim_world.gizmo_vertices,
-                    Some(Vec4::new(1.0, 1.0, 1.0, 1.0)),
-                    0,
-                );
-
-                let rest_pose: Vec<Mat4> = (0..model.skeleton.bones.len() as u32)
-                    .map(|b| model.skeleton.local_transform(b))
-                    .collect();
-
-                draw_bone(
-                    &model.skeleton,
-                    &rest_pose,
-                    0,
-                    &Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
-                    &mut sim_world.gizmo_vertices,
-                    Some(Vec4::new(0.0, 0.0, 1.0, 1.0)),
-                    0,
-                );
-            }
-        }
+        sim_world.update_schedule.run(&mut sim_world.ecs);
     }
 
     pub fn extract(
@@ -228,7 +135,8 @@ impl Systems {
         self.camera_system.extract(sim_world, render_world);
 
         // Make sure all models are prepared to be rendered.
-        sim_world.objects.prepare_models(renderer, render_store);
+        let mut objects = sim_world.ecs.resource_mut::<Objects>();
+        objects.prepare_models(renderer, render_store);
 
         self.world_renderer
             .extract(sim_world, render_store, render_world, viewport_size);

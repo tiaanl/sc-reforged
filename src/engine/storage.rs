@@ -1,3 +1,6 @@
+use bevy_ecs::component::Component;
+
+#[derive(Component)]
 pub struct Handle<T>(generational_arena::Index, std::marker::PhantomData<T>);
 
 impl<T> Clone for Handle<T> {

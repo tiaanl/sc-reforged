@@ -5,7 +5,7 @@ use crate::{
     engine::{input::InputState, renderer::Renderer},
     game::scenes::world::{
         render::RenderWorld,
-        sim_world::{ActiveCamera, Camera, SimWorld},
+        sim_world::{ActiveCamera, Camera, DayNightCycle, SimWorld},
         systems::Time,
     },
 };
@@ -46,7 +46,9 @@ impl CameraSystem {
 
 impl CameraSystem {
     fn extract_camera(sim_world: &SimWorld, render_world: &mut RenderWorld) {
-        let source = &sim_world.computed_cameras[sim_world.active_camera as usize];
+        let state = sim_world.state();
+
+        let source = &state.computed_cameras[state.active_camera as usize];
         let target = &mut render_world.camera_env;
 
         target.proj_view = source.view_proj.mat.to_cols_array_2d();
@@ -59,10 +61,12 @@ impl CameraSystem {
     }
 
     fn extract_environment(sim_world: &SimWorld, render_world: &mut RenderWorld) {
+        let state = sim_world.state();
+
         let target = &mut render_world.camera_env;
 
-        let time_of_day = sim_world.time_of_day;
-        let source = &sim_world.day_night_cycle;
+        let time_of_day = state.time_of_day;
+        let source = &sim_world.ecs.resource::<DayNightCycle>();
 
         let sun_dir = source.sun_dir.sample_sub_frame(time_of_day, true);
         let sun_color = source.sun_color.sample_sub_frame(time_of_day, true);
@@ -84,13 +88,15 @@ impl CameraSystem {
 
 impl CameraSystem {
     pub fn input(&mut self, sim_world: &mut SimWorld, time: &Time, input_state: &InputState) {
-        let far = sim_world
-            .day_night_cycle
+        let day_night_cycle = sim_world.ecs.resource::<DayNightCycle>();
+        let time_of_day = sim_world.state().time_of_day;
+        let far = day_night_cycle
             .fog_distance
-            .sample_sub_frame(sim_world.time_of_day, true);
+            .sample_sub_frame(time_of_day, true);
 
-        let c = sim_world.active_camera;
-        let camera = &mut sim_world.cameras[c as usize];
+        let state = &mut sim_world.state_mut();
+        let c = state.active_camera;
+        let camera = &mut state.cameras[c as usize];
         camera.far = far;
 
         match c {
@@ -108,8 +114,9 @@ impl CameraSystem {
 
     #[inline]
     pub fn compute_cameras(&mut self, sim_world: &mut SimWorld) {
+        let mut state = sim_world.state_mut();
         for c in ActiveCamera::iter() {
-            sim_world.computed_cameras[c as usize] = sim_world.cameras[c as usize].compute();
+            state.computed_cameras[c as usize] = state.cameras[c as usize].compute();
         }
     }
 

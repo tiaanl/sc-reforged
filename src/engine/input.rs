@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use bevy_ecs::prelude::*;
 use glam::{IVec2, UVec2};
 use winit::{
     event::{ElementState, MouseScrollDelta, WindowEvent},
@@ -9,7 +10,7 @@ use winit::{
 pub use winit::event::MouseButton;
 pub use winit::keyboard::KeyCode;
 
-#[derive(Default)]
+#[derive(Clone, Default, Resource)]
 pub struct InputState {
     /// The current position of the mouse inside the window client area in pixels. Set to `None` If
     /// the mouse is not over the client area.

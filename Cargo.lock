@@ -225,6 +225,7 @@ dependencies = [
  "slotmap",
  "smallvec",
  "thiserror 2.0.17",
+ "tracing",
  "variadics_please",
 ]
 

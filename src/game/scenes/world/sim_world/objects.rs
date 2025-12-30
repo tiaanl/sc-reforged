@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use bevy_ecs::prelude::*;
+
 use crate::{
     engine::{
         assets::AssetError,
@@ -17,7 +19,8 @@ use crate::{
         scenes::world::{
             render::{ModelRenderFlags, RenderStore, RenderWrapper},
             sim_world::{
-                orders::{Order, OrderKind},
+                ecs::{BoundingBoxComponent, TransformComponent},
+                orders::OrderKind,
                 sequences::Sequencer,
             },
             systems::InteractionHit,
@@ -122,6 +125,7 @@ impl Object {
     }
 }
 
+#[derive(Resource)]
 pub struct Objects {
     character_profiles: CharacterProfiles,
 
@@ -150,6 +154,7 @@ impl Objects {
 
     pub fn spawn(
         &mut self,
+        mut commands: Commands,
         transform: Transform,
         object_type: ObjectType,
         name: &str,
@@ -202,6 +207,12 @@ impl Objects {
 
                 self.models_to_prepare.push(model_handle);
 
+                commands.spawn((
+                    TransformComponent(transform.clone()),
+                    model_handle,
+                    BoundingBoxComponent(bounding_box),
+                ));
+
                 ObjectData::Scenery {
                     model: model_handle,
                 }
@@ -239,6 +250,12 @@ impl Objects {
 
                 self.models_to_prepare.push(model_handle);
 
+                commands.spawn((
+                    TransformComponent(transform.clone()),
+                    model_handle,
+                    BoundingBoxComponent(bounding_box),
+                ));
+
                 ObjectData::Biped {
                     model: model_handle,
                     order_queue: OrderQueue::default(),
@@ -252,6 +269,12 @@ impl Objects {
                 bounding_box.expand_to_include(&model.bounding_box);
 
                 self.models_to_prepare.push(model_handle);
+
+                commands.spawn((
+                    TransformComponent(transform.clone()),
+                    model_handle,
+                    BoundingBoxComponent(bounding_box),
+                ));
 
                 ObjectData::SingleModel {
                     model: model_handle,
