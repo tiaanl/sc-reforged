@@ -29,6 +29,9 @@ pub struct TerrainPipeline {
     /// Bind group for all terrain GPU resources.
     terrain_bind_group: wgpu::BindGroup,
 
+    /// A *transient* cache of visible chunk coords for the current frame.
+    pub visible_chunks_cache: Vec<IVec2>,
+
     /// A *transient* cache of LOD's for the current frame.
     chunk_lod_cache: HashMap<IVec2, u32>,
 
@@ -420,14 +423,15 @@ impl TerrainPipeline {
 
             terrain_bind_group,
 
+            visible_chunks_cache: Vec::default(),
+            chunk_lod_cache: HashMap::default(),
+
             terrain_pipeline,
             terrain_wireframe_pipeline,
             strata_pipeline,
 
             strata_vertex_buffer,
             strata_index_buffer,
-
-            chunk_lod_cache: HashMap::default(),
 
             debug_render_terrain_wireframe: false,
         }
@@ -494,7 +498,11 @@ impl TerrainPipeline {
         let terrain = sim_world.ecs.resource::<Terrain>();
 
         let state = sim_world.state();
-        for visible_coord in state.visible_chunks.iter() {
+
+        terrain
+            .quad_tree
+            .visible_chunks(&computed_camera.frustum, &mut self.visible_chunks_cache);
+        for visible_coord in self.visible_chunks_cache.iter() {
             let mut lod_at = |coord: IVec2| {
                 if let Some(lod) = self.chunk_lod_cache.get(&coord) {
                     return Some(*lod);

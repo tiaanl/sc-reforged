@@ -364,7 +364,14 @@ impl Scene for WorldScene {
             });
             ui.horizontal(|ui| {
                 ui.label("Visible chunks");
-                ui.label(format!("{}", state.visible_chunks.len()));
+                ui.label(
+                    self.systems
+                        .world_renderer
+                        .terrain_pipeline
+                        .visible_chunks_cache
+                        .len()
+                        .to_string(),
+                );
             });
             ui.horizontal(|ui| {
                 ui.label("Visible objects");

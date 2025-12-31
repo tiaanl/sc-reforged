@@ -70,8 +70,6 @@ pub struct SimWorldState {
 
     /// A list of chunks that should be highlighted during rendering.
     pub highlighted_chunks: HashSet<IVec2>,
-    /// The visible chunks for the current frame.
-    pub visible_chunks: Vec<IVec2>,
 
     pub selected_objects: HashSet<Handle<Object>>,
 
@@ -229,7 +227,6 @@ impl SimWorld {
             time_of_day,
 
             highlighted_chunks: HashSet::default(),
-            visible_chunks: Vec::default(),
 
             selected_objects: HashSet::default(),
             visible_objects: Vec::default(),
