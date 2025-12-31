@@ -5,6 +5,12 @@ use glam::UVec2;
 
 use crate::{engine::gizmos::GizmoVertex, game::math::BoundingBox};
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum UpdateSet {
+    Input,
+    Update,
+}
+
 #[derive(Component)]
 pub struct ActiveCamera;
 

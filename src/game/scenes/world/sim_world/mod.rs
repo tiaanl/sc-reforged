@@ -245,20 +245,39 @@ impl SimWorld {
         ecs.init_resource::<Viewport>();
 
         // Update schedule.
-        let mut update_schedule = Schedule::default();
-        update_schedule.add_systems(
-            (
-                top_down_camera_controller::input,
-                free_camera_controller::input,
-                camera_system::compute_cameras,
-                day_night_cycle_system::increment_time_of_day,
-                cull_system::calculate_visible_chunks,
-                object_system::update,
-                world_interaction::input,
-                world_interaction::update,
-            )
-                .chain(),
-        );
+        let update_schedule = {
+            use ecs::UpdateSet::*;
+
+            let mut schedule = Schedule::default();
+
+            schedule.configure_sets((Input, Update).chain());
+
+            schedule.add_systems(
+                (
+                    (
+                        top_down_camera_controller::input,
+                        free_camera_controller::input,
+                    ),
+                    camera_system::compute_cameras,
+                    world_interaction::input,
+                )
+                    .in_set(Input)
+                    .chain(),
+            );
+
+            schedule.add_systems(
+                (
+                    day_night_cycle_system::increment_time_of_day,
+                    cull_system::calculate_visible_chunks,
+                    object_system::update,
+                    world_interaction::update,
+                )
+                    .in_set(Update)
+                    .chain(),
+            );
+
+            schedule
+        };
 
         Ok(SimWorld {
             ecs,
