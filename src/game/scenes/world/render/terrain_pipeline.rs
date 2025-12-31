@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use ahash::HashMap;
+use bevy_ecs::prelude::*;
 use glam::{IVec2, UVec2, ivec2};
 use wgpu::util::DeviceExt;
 
@@ -10,7 +11,7 @@ use crate::{
         image::images,
         scenes::world::{
             render::{ChunkInstanceData, GeometryBuffer, RenderStore, RenderWorld},
-            sim_world::{SimWorld, Terrain},
+            sim_world::{Camera, ComputedCamera, SimWorld, Terrain, ecs::ActiveCamera},
         },
     },
     wgsl_shader,
@@ -467,16 +468,20 @@ impl TerrainPipeline {
 }
 
 impl TerrainPipeline {
-    pub fn extract(&mut self, sim_world: &SimWorld, render_world: &mut RenderWorld) {
+    pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
         self.chunk_lod_cache.clear();
 
-        let state = sim_world.state();
-
-        let computed_camera = &state.computed_cameras[state.active_camera as usize];
+        let (camera, computed_camera) = {
+            sim_world
+                .ecs
+                .query_filtered::<(&Camera, &ComputedCamera), With<ActiveCamera>>()
+                .single(&sim_world.ecs)
+                .unwrap()
+        };
 
         let camera_position = computed_camera.position;
         let camera_forward = computed_camera.forward;
-        let camera_far = state.cameras[state.active_camera as usize].far;
+        let camera_far = camera.far;
 
         let terrain_chunk_instances = &mut render_world.terrain_chunk_instances;
         let strata_instances = &mut render_world.strata_instances;
@@ -488,6 +493,7 @@ impl TerrainPipeline {
 
         let terrain = sim_world.ecs.resource::<Terrain>();
 
+        let state = sim_world.state();
         for visible_coord in state.visible_chunks.iter() {
             let mut lod_at = |coord: IVec2| {
                 if let Some(lod) = self.chunk_lod_cache.get(&coord) {

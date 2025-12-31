@@ -15,7 +15,7 @@ use crate::{
         scenes::world::{
             game_mode::GameMode,
             render::{RenderStore, RenderWorld},
-            sim_world::{SimWorld, ecs::Viewport},
+            sim_world::{Camera, SimWorld, ecs::Viewport},
             systems::Time,
         },
     },
@@ -30,7 +30,6 @@ mod systems;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct FrameTime {
-    input: f64,
     update: f64,
     extract: f64,
     prepare: f64,
@@ -65,8 +64,6 @@ impl WorldScene {
     ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
-        let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
-
         let fps_history = vec![FrameTime::default(); 100];
         let fps_history_cursor = 0;
 
@@ -80,13 +77,7 @@ impl WorldScene {
             RenderWorld::new(2, renderer, &render_store),
         ];
 
-        let systems = systems::Systems::new(
-            renderer,
-            surface_format,
-            &render_store,
-            &sim_world,
-            &campaign,
-        );
+        let systems = systems::Systems::new(renderer, surface_format, &render_store, &sim_world);
 
         Ok(Self {
             sim_world,
@@ -118,8 +109,12 @@ impl Scene for WorldScene {
 
         self.sim_world.ecs.resource_mut::<Viewport>().resize(size);
 
-        let state = &mut self.sim_world.state_mut();
-        for camera in &mut state.cameras {
+        for mut camera in self
+            .sim_world
+            .ecs
+            .query::<&mut Camera>()
+            .query_mut(&mut self.sim_world.ecs)
+        {
             camera.aspect_ratio = aspect;
         }
     }
@@ -142,10 +137,10 @@ impl Scene for WorldScene {
                 sim_time: (std::time::Instant::now() - sim_start).as_secs_f32(),
             };
 
-            let start = std::time::Instant::now();
-            self.systems
-                .input(&mut self.sim_world, &time, input, self.surface_size);
-            frame_time.input = (std::time::Instant::now() - start).as_secs_f64();
+            {
+                let mut res = self.sim_world.ecs.resource_mut::<InputState>();
+                *res = input.clone();
+            }
 
             let start = std::time::Instant::now();
             self.systems.update(&mut self.sim_world, &time);
@@ -215,6 +210,7 @@ impl Scene for WorldScene {
         egui::Window::new("World")
             .default_open(true)
             .show(ctx, |ui| {
+                /*
                 ui.heading("Camera");
                 ui.vertical(|ui| {
                     use crate::game::scenes::world::sim_world::ActiveCamera;
@@ -260,6 +256,7 @@ impl Scene for WorldScene {
                         }
                     }
                 });
+                */
 
                 {
                     let mut state = self.sim_world.state_mut();
@@ -330,7 +327,6 @@ impl Scene for WorldScene {
                     let mut bottom = rect.bottom();
 
                     for (c, value) in [
-                        frame_time.input,
                         frame_time.update,
                         frame_time.extract,
                         frame_time.prepare,

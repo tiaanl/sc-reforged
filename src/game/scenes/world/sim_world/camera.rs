@@ -1,10 +1,10 @@
-#![allow(dead_code)]
-
 use crate::game::math::{Frustum, Ray, RaySegment, ViewProjection};
 
+use bevy_ecs::prelude::*;
 use glam::{Mat4, Quat, UVec2, Vec2, Vec3, Vec4};
 
-#[derive(Debug, Default)]
+#[derive(Component, Debug, Default)]
+#[require(ComputedCamera)]
 pub struct Camera {
     pub position: Vec3,
     pub rotation: Quat,
@@ -42,7 +42,7 @@ impl Camera {
         ViewProjection::from_projection_view(self.calculate_projection(), self.calculate_view())
     }
 
-    pub fn look_at(&mut self, camera_to: Vec3) {
+    pub fn _look_at(&mut self, camera_to: Vec3) {
         let forward = (camera_to - self.position).normalize();
         let world_up = Self::UP;
         let right = world_up.cross(forward).normalize();
@@ -51,7 +51,7 @@ impl Camera {
         self.rotation = Quat::from_mat3(&rotation_matrix);
     }
 
-    pub fn view_slice_planes(&self, count: u32, lambda: f32) -> Vec<[Vec3; 4]> {
+    pub fn _view_slice_planes(&self, count: u32, lambda: f32) -> Vec<[Vec3; 4]> {
         fn cascade_view_splits(near: f32, far: f32, count: u32, lambda: f32) -> Vec<f32> {
             assert!(count >= 1 && far > near);
             let mut d = Vec::with_capacity(count as usize + 1);
@@ -117,7 +117,7 @@ impl Camera {
     }
 }
 
-#[derive(Default)]
+#[derive(Component, Default)]
 pub struct ComputedCamera {
     pub view_proj: ViewProjection,
     pub frustum: Frustum,

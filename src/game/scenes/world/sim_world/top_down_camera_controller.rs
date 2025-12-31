@@ -1,3 +1,4 @@
+use bevy_ecs::prelude::*;
 use glam::{Quat, Vec3};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
@@ -5,7 +6,10 @@ use crate::{
     engine::input::InputState,
     game::{
         interpolate::Interpolate,
-        scenes::world::{sim_world::Camera, systems::camera_system::CameraController},
+        scenes::world::{
+            sim_world::{Camera, ecs::ActiveCamera},
+            systems::Time,
+        },
     },
 };
 
@@ -71,6 +75,7 @@ struct Input {
     yaw_direction: f32,
 }
 
+#[derive(Component)]
 pub struct TopDownCameraController {
     /// The speed at which movements will be calculated.
     movement_speed: f32,
@@ -186,25 +191,27 @@ impl TopDownCameraController {
     }
 }
 
-impl CameraController for TopDownCameraController {
-    fn handle_input(
-        &mut self,
-        target_camera: &mut Camera,
-        input_state: &InputState,
-        delta_time: f32,
-    ) {
-        let input = self.gather_input(input_state);
+pub fn input(
+    mut cameras: Query<(&mut Camera, &mut TopDownCameraController), With<ActiveCamera>>,
+    input_state: Res<InputState>,
+    time: Res<Time>,
+) {
+    let delta_time = time.delta_time;
 
-        let move_rotation = Quat::from_rotation_z(self.current.yaw.to_radians());
+    for (mut camera, mut controller) in cameras.iter_mut() {
+        let input = controller.gather_input(&input_state);
 
-        self.desired.position +=
-            (move_rotation * input.move_direction) * self.movement_speed * delta_time;
+        let move_rotation = Quat::from_rotation_z(controller.current.yaw.to_radians());
 
-        self.desired.pitch += input.pitch_direction * self.rotation_speed * delta_time;
-        self.desired.yaw += input.yaw_direction * self.rotation_speed * delta_time;
+        let movement_speed = controller.movement_speed;
+        controller.desired.position +=
+            (move_rotation * input.move_direction) * movement_speed * delta_time;
 
-        self.current = Interpolate::interpolate(self.current, self.desired, 0.1);
+        controller.desired.pitch += input.pitch_direction * controller.rotation_speed * delta_time;
+        controller.desired.yaw += input.yaw_direction * controller.rotation_speed * delta_time;
 
-        self.update_camera(move_rotation, target_camera);
+        controller.current = Interpolate::interpolate(controller.current, controller.desired, 0.1);
+
+        controller.update_camera(move_rotation, &mut camera);
     }
 }

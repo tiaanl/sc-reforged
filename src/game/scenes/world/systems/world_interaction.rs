@@ -6,7 +6,8 @@ use crate::{
     game::{
         math::{Frustum, RaySegment},
         scenes::world::sim_world::{
-            Object, Objects, RayIntersectionMode, SimWorldState, Terrain, UiRect, ecs::Viewport,
+            ComputedCamera, Object, Objects, RayIntersectionMode, SimWorldState, Terrain, UiRect,
+            ecs::{ActiveCamera, Viewport},
         },
     },
 };
@@ -85,6 +86,7 @@ pub fn input(
     mut world_interaction: ResMut<WorldInteraction>,
     mut state: ResMut<SimWorldState>,
     mut objects: ResMut<Objects>,
+    computed_camera: Single<&ComputedCamera, With<ActiveCamera>>,
     terrain: Res<Terrain>,
     input_state: Res<InputState>,
     viewport: Res<Viewport>,
@@ -101,9 +103,16 @@ pub fn input(
         // If the selection rect is larger than the threshold, that confirms that we drew a selection rect and not just clicked.
         if let Some(rect) = world_interaction.selection_rect {
             if rect.size.abs().min_element() > DRAG_THRESHOLD as i32 {
-                set_selection_by_rect(&state, rect, viewport.size);
+                set_selection_by_rect(rect, &computed_camera, viewport.size);
             } else {
-                interact_with(&mut state, &mut objects, &terrain, rect.pos, viewport.size);
+                interact_with(
+                    &mut state,
+                    &computed_camera,
+                    &mut objects,
+                    &terrain,
+                    rect.pos,
+                    viewport.size,
+                );
             }
         }
 
@@ -165,7 +174,11 @@ pub fn update(world_interaction: Res<WorldInteraction>, mut state: ResMut<SimWor
 }
 
 /// Update the selected objects by using a rectangle in screen coordinates.
-fn set_selection_by_rect(state: &SimWorldState, rect: SelectionRect, viewport_size: UVec2) {
+fn set_selection_by_rect(
+    rect: SelectionRect,
+    computed_camera: &ComputedCamera,
+    viewport_size: UVec2,
+) {
     let (min, max) = rect.min_max();
     debug_assert!(min.x <= max.x);
     debug_assert!(min.y <= max.y);
@@ -173,8 +186,6 @@ fn set_selection_by_rect(state: &SimWorldState, rect: SelectionRect, viewport_si
     let _frustum = {
         const NDC_Z_NEAR: f32 = 0.0;
         const NDC_Z_FAR: f32 = 1.0;
-
-        let computed_camera = &state.computed_cameras[state.active_camera as usize];
 
         let viewport = viewport_size.as_vec2();
 
@@ -207,13 +218,13 @@ fn set_selection_by_rect(state: &SimWorldState, rect: SelectionRect, viewport_si
 /// The user clicked somewhere and wants to interact with an object.
 fn interact_with(
     state: &mut SimWorldState,
+    computed_camera: &ComputedCamera,
     objects: &mut Objects,
     terrain: &Terrain,
     pos: UVec2,
     viewport_size: UVec2,
 ) {
     // Shoot a ray into the scene from the camera to see what we can hit.
-    let computed_camera = &state.computed_cameras[state.active_camera as usize];
     let camera_ray_segment = computed_camera.create_ray_segment(pos, viewport_size);
 
     if let Some(hit) = get_interaction_hit(objects, terrain, &camera_ray_segment) {

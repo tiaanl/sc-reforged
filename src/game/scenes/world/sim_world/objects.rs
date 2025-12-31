@@ -18,11 +18,7 @@ use crate::{
         models::{ModelName, models},
         scenes::world::{
             render::{ModelRenderFlags, RenderStore, RenderWrapper},
-            sim_world::{
-                ecs::{BoundingBoxComponent, TransformComponent},
-                orders::OrderKind,
-                sequences::Sequencer,
-            },
+            sim_world::{ecs::BoundingBoxComponent, orders::OrderKind, sequences::Sequencer},
             systems::InteractionHit,
         },
     },
@@ -208,7 +204,7 @@ impl Objects {
                 self.models_to_prepare.push(model_handle);
 
                 commands.spawn((
-                    TransformComponent(transform.clone()),
+                    transform.clone(),
                     model_handle,
                     BoundingBoxComponent(bounding_box),
                 ));
@@ -251,7 +247,7 @@ impl Objects {
                 self.models_to_prepare.push(model_handle);
 
                 commands.spawn((
-                    TransformComponent(transform.clone()),
+                    transform.clone(),
                     model_handle,
                     BoundingBoxComponent(bounding_box),
                 ));
@@ -271,7 +267,7 @@ impl Objects {
                 self.models_to_prepare.push(model_handle);
 
                 commands.spawn((
-                    TransformComponent(transform.clone()),
+                    transform.clone(),
                     model_handle,
                     BoundingBoxComponent(bounding_box),
                 ));

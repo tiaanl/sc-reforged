@@ -1,3 +1,4 @@
+use bevy_ecs::prelude::*;
 use glam::{Quat, Vec3};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
@@ -5,7 +6,10 @@ use crate::{
     engine::input::InputState,
     game::{
         interpolate::Interpolate,
-        scenes::world::{sim_world::Camera, systems::camera_system::CameraController},
+        scenes::world::{
+            sim_world::{Camera, ecs::ActiveCamera},
+            systems::Time,
+        },
     },
 };
 
@@ -56,6 +60,7 @@ impl Interpolate for State {
     }
 }
 
+#[derive(Component)]
 pub struct FreeCameraController {
     /// Current state of the camera. This will be interpolated towards the
     /// `target_state`.
@@ -84,34 +89,33 @@ impl FreeCameraController {
     }
 }
 
-impl CameraController for FreeCameraController {
-    fn handle_input(
-        &mut self,
-        target_camera: &mut Camera,
-        input_state: &InputState,
-        delta_time: f32,
-    ) {
+pub fn input(
+    mut cameras: Query<(&mut Camera, &mut FreeCameraController), With<ActiveCamera>>,
+    input_state: Res<InputState>,
+    time: Res<Time>,
+) {
+    for (mut camera, mut controller) in cameras.iter_mut() {
         let direction = {
             let mut direction = Vec3::ZERO;
 
-            if input_state.key_pressed(self.controls.forward) {
+            if input_state.key_pressed(controller.controls.forward) {
                 direction += Camera::FORWARD;
             }
-            if input_state.key_pressed(self.controls.back) {
+            if input_state.key_pressed(controller.controls.back) {
                 direction -= Camera::FORWARD
             }
 
-            if input_state.key_pressed(self.controls.right) {
+            if input_state.key_pressed(controller.controls.right) {
                 direction += Camera::RIGHT;
             }
-            if input_state.key_pressed(self.controls.left) {
+            if input_state.key_pressed(controller.controls.left) {
                 direction -= Camera::RIGHT;
             }
 
-            if input_state.key_pressed(self.controls.up) {
+            if input_state.key_pressed(controller.controls.up) {
                 direction += Camera::UP;
             }
-            if input_state.key_pressed(self.controls.down) {
+            if input_state.key_pressed(controller.controls.down) {
                 direction -= Camera::UP;
             }
 
@@ -121,32 +125,33 @@ impl CameraController for FreeCameraController {
         {
             let delta = input_state.wheel_delta();
             if delta < 0.0 {
-                self.movement_speed *= 0.9;
+                controller.movement_speed *= 0.9;
             } else if delta > 0.0 {
-                self.movement_speed *= 1.1;
+                controller.movement_speed *= 1.1;
             }
         }
 
-        if input_state.mouse_pressed(self.controls.mouse_button)
+        if input_state.mouse_pressed(controller.controls.mouse_button)
             && let Some(delta) = input_state.mouse_delta()
         {
             let delta = delta.as_vec2();
-            self.target.yaw -= delta.x * self.mouse_sensitivity;
-            self.target.pitch += delta.y * self.mouse_sensitivity;
+            controller.target.yaw -= delta.x * controller.mouse_sensitivity;
+            controller.target.pitch += delta.y * controller.mouse_sensitivity;
         }
 
-        let rotation = Quat::from_rotation_z(self.target.yaw.to_radians())
-            * Quat::from_rotation_x(self.target.pitch.to_radians());
+        let rotation = Quat::from_rotation_z(controller.target.yaw.to_radians())
+            * Quat::from_rotation_x(controller.target.pitch.to_radians());
 
         // Translate in the direction to the new forward direction.
-        self.target.position += rotation * direction * self.movement_speed * delta_time;
+        let movement_speed = controller.movement_speed;
+        controller.target.position += rotation * direction * movement_speed * time.delta_time;
 
         // Interpolate.
-        self.current = Interpolate::interpolate(self.current, self.target, 0.2);
+        controller.current = Interpolate::interpolate(controller.current, controller.target, 0.2);
 
         // Set the actual values.
-        target_camera.rotation = Quat::from_rotation_z(self.current.yaw.to_radians())
-            * Quat::from_rotation_x(self.current.pitch.to_radians());
-        target_camera.position = self.current.position;
+        camera.rotation = Quat::from_rotation_z(controller.current.yaw.to_radians())
+            * Quat::from_rotation_x(controller.current.pitch.to_radians());
+        camera.position = controller.current.position;
     }
 }

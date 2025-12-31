@@ -3,13 +3,10 @@
 use bevy_ecs::prelude::*;
 use glam::UVec2;
 
-use crate::{
-    engine::{gizmos::GizmoVertex, transform::Transform},
-    game::math::BoundingBox,
-};
+use crate::{engine::gizmos::GizmoVertex, game::math::BoundingBox};
 
 #[derive(Component)]
-pub struct TransformComponent(pub Transform);
+pub struct ActiveCamera;
 
 #[derive(Component)]
 pub struct BoundingBoxComponent(pub BoundingBox);
