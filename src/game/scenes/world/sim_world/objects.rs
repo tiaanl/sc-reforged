@@ -17,7 +17,7 @@ use crate::{
         model::{Mesh, Model, ModelRayHit},
         models::{ModelName, models},
         scenes::world::{
-            render::{ModelRenderFlags, RenderStore, RenderWrapper},
+            render::RenderStore,
             sim_world::{ecs::BoundingBoxComponent, orders::OrderKind, sequences::Sequencer},
             systems::InteractionHit,
         },
@@ -77,16 +77,6 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn gather_models_to_render(&self, renderer: &mut RenderWrapper, flags: ModelRenderFlags) {
-        let model = match self.data {
-            ObjectData::Scenery { model } => model,
-            ObjectData::Biped { model, .. } => model,
-            ObjectData::SingleModel { model } => model,
-        };
-
-        renderer.render_model(self.transform.to_mat4(), model, flags);
-    }
-
     /// Intersect this object with a world-space ray segment using the selected model data.
     pub fn ray_intersection(
         &self,

@@ -6,15 +6,11 @@ use crate::{
         renderer::{Frame, Renderer},
         storage::Handle,
     },
-    game::{
-        model::Model,
-        scenes::world::{
-            render::{
-                GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex,
-                RenderWorld,
-            },
-            sim_world::{ComputedCamera, Object, Objects, SimWorld, ecs::ActiveCamera},
+    game::scenes::world::{
+        render::{
+            GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld,
         },
+        sim_world::{ComputedCamera, Object, Objects, SimWorld, ecs::ActiveCamera},
     },
     wgsl_shader,
 };
@@ -53,35 +49,6 @@ struct ModelToRender {
     transform: Mat4,
     first_node_index: RenderNodeIndex,
     flags: ModelRenderFlags,
-}
-
-/// Wrapper passed to objects so they can specify what they want rendered in the scene.
-pub struct RenderWrapper<'a> {
-    render_store: &'a mut RenderStore,
-    models_to_render: &'a mut Vec<ModelToRender>,
-}
-
-impl<'a> RenderWrapper<'a> {
-    pub fn render_model(&mut self, transform: Mat4, model: Handle<Model>, flags: ModelRenderFlags) {
-        let Some(render_model_handle) = self.render_store.render_model_for_model(model) else {
-            tracing::warn!("Missing render model for model!");
-            return;
-        };
-
-        let Some(render_model) = self.render_store.models.get(render_model_handle) else {
-            tracing::warn!("Missing render model for render model handle!");
-            return;
-        };
-
-        self.models_to_render.push(ModelToRender {
-            key: RenderKey {
-                render_model: render_model_handle,
-            },
-            transform,
-            first_node_index: RenderNodeIndex::Base(render_model.nodes_range.start),
-            flags,
-        });
-    }
 }
 
 struct Batch {
@@ -220,11 +187,6 @@ impl ModelPipeline {
     pub fn extract(&mut self, sim_world: &mut SimWorld, render_store: &mut RenderStore) {
         self.models_to_render.clear();
 
-        let mut wrapper = RenderWrapper {
-            render_store,
-            models_to_render: &mut self.models_to_render,
-        };
-
         let computed_camera = {
             sim_world
                 .ecs
@@ -250,7 +212,33 @@ impl ModelPipeline {
                     ModelRenderFlags::HIGHLIGHTED,
                     selected_objects.contains(&handle),
                 );
-                object.gather_models_to_render(&mut wrapper, flags);
+
+                use crate::game::scenes::world::sim_world::ObjectData;
+
+                let model = match &object.data {
+                    ObjectData::Scenery { model }
+                    | ObjectData::Biped { model, .. }
+                    | ObjectData::SingleModel { model } => *model,
+                };
+
+                let Some(render_model_handle) = render_store.render_model_for_model(model) else {
+                    tracing::warn!("Missing render model for model!");
+                    return;
+                };
+
+                let Some(render_model) = render_store.models.get(render_model_handle) else {
+                    tracing::warn!("Missing render model for render model handle!");
+                    return;
+                };
+
+                self.models_to_render.push(ModelToRender {
+                    key: RenderKey {
+                        render_model: render_model_handle,
+                    },
+                    transform: object.transform.to_mat4(),
+                    first_node_index: RenderNodeIndex::Base(render_model.nodes_range.start),
+                    flags,
+                });
             });
     }
 
