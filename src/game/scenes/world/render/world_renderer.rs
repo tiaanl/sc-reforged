@@ -8,6 +8,7 @@ use crate::{
             render::{
                 GeometryBuffer,
                 box_pipeline::{self, BoxPipeline},
+                terrain_pipeline::TerrainRenderSnapshot,
                 ui_pipeline::UiPipeline,
             },
             sim_world::{ObjectData, Objects, SimWorld},
@@ -33,6 +34,8 @@ pub struct WorldRenderer {
 
     /// Bounding boxes extracted from the sim world.
     bounding_boxes: Vec<box_pipeline::gpu::Instance>,
+
+    pub terrain_render_snapshot: TerrainRenderSnapshot,
 }
 
 impl WorldRenderer {
@@ -55,6 +58,8 @@ impl WorldRenderer {
 
             render_bounding_boxes: false,
             bounding_boxes: Vec::default(),
+
+            terrain_render_snapshot: TerrainRenderSnapshot::default(),
         }
     }
 
@@ -66,7 +71,8 @@ impl WorldRenderer {
         render_world: &mut RenderWorld,
         viewport_size: UVec2,
     ) {
-        self.terrain_pipeline.extract(sim_world, render_world);
+        self.terrain_pipeline
+            .extract(sim_world, &mut self.terrain_render_snapshot);
         self.model_pipeline.extract(sim_world, render_store);
         self.ui_pipeline
             .extract(sim_world, render_store, render_world, viewport_size);
@@ -99,7 +105,8 @@ impl WorldRenderer {
     }
 
     pub fn prepare(&mut self, renderer: &Renderer, render_world: &mut RenderWorld) {
-        self.terrain_pipeline.prepare(renderer, render_world);
+        self.terrain_pipeline
+            .prepare(renderer, render_world, &self.terrain_render_snapshot);
         self.model_pipeline.prepare(renderer, render_world);
         self.ui_pipeline.prepare(renderer, render_world);
         if !self.bounding_boxes.is_empty() {
@@ -114,8 +121,12 @@ impl WorldRenderer {
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
     ) {
-        self.terrain_pipeline
-            .queue(render_world, frame, geometry_buffer);
+        self.terrain_pipeline.queue(
+            render_world,
+            frame,
+            geometry_buffer,
+            &self.terrain_render_snapshot,
+        );
         self.model_pipeline
             .queue(render_store, render_world, frame, geometry_buffer);
         self.ui_pipeline.queue(render_world, frame);

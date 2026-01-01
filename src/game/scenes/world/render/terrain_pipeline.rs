@@ -10,12 +10,23 @@ use crate::{
     game::{
         image::images,
         scenes::world::{
-            render::{ChunkInstanceData, GeometryBuffer, RenderStore, RenderWorld},
+            render::{GeometryBuffer, RenderStore, RenderWorld},
             sim_world::{Camera, ComputedCamera, SimWorld, Terrain, ecs::ActiveCamera},
         },
     },
     wgsl_shader,
 };
+
+/// A snapshot of data for terrain elements to be rendered.
+#[derive(Default)]
+pub struct TerrainRenderSnapshot {
+    /// Data for each chunk instance to render.    
+    pub chunk_instances: Vec<gpu::ChunkInstanceData>,
+    /// Data for each strata instance to render.
+    pub strata_instances: Vec<gpu::ChunkInstanceData>,
+    /// Amount of instances per side. [south, west, north, east]
+    pub strata_instances_side_count: [u32; 4],
+}
 
 pub struct TerrainPipeline {
     /// Dimensions of the terrain in chunks.
@@ -275,7 +286,7 @@ impl TerrainPipeline {
                         entry_point: Some("vertex_terrain"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<ChunkInstanceData>()
+                            array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
                                 as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Instance,
                             attributes: &instance_attrs,
@@ -311,7 +322,7 @@ impl TerrainPipeline {
                         entry_point: Some("vertex_wireframe"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<ChunkInstanceData>()
+                            array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
                                 as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Instance,
                             attributes: &instance_attrs,
@@ -352,7 +363,7 @@ impl TerrainPipeline {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[
                             wgpu::VertexBufferLayout {
-                                array_stride: std::mem::size_of::<ChunkInstanceData>()
+                                array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
                                     as wgpu::BufferAddress,
                                 step_mode: wgpu::VertexStepMode::Instance,
                                 attributes: &instance_attrs,
@@ -440,7 +451,7 @@ impl TerrainPipeline {
     /// Build a list of instances per LOD.
     /// `chunk_instances` *must* be sorted by LOD.
     fn build_draw_commands(
-        chunk_instances: &[ChunkInstanceData],
+        chunk_instances: &[gpu::ChunkInstanceData],
         ranges: &[std::ops::Range<u32>],
     ) -> [(std::ops::Range<u32>, std::ops::Range<u32>); Terrain::LOD_COUNT as usize] {
         // TODO: This is probably not needed.
@@ -472,7 +483,7 @@ impl TerrainPipeline {
 }
 
 impl TerrainPipeline {
-    pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
+    pub fn extract(&mut self, sim_world: &mut SimWorld, snapshot: &mut TerrainRenderSnapshot) {
         self.chunk_lod_cache.clear();
 
         let (camera, computed_camera) = {
@@ -487,11 +498,11 @@ impl TerrainPipeline {
         let camera_forward = computed_camera.forward;
         let camera_far = camera.far;
 
-        let terrain_chunk_instances = &mut render_world.terrain_chunk_instances;
-        let strata_instances = &mut render_world.strata_instances;
-        let strata_instances_side_count = &mut render_world.strata_instances_side_count;
+        let chunk_instances = &mut snapshot.chunk_instances;
+        let strata_instances = &mut snapshot.strata_instances;
+        let strata_instances_side_count = &mut snapshot.strata_instances_side_count;
 
-        terrain_chunk_instances.clear();
+        chunk_instances.clear();
         strata_instances.clear();
         *strata_instances_side_count = [0; 4];
 
@@ -534,13 +545,13 @@ impl TerrainPipeline {
                 flags |= HIGHLIGHT;
             }
 
-            let chunk_instance = ChunkInstanceData {
+            let chunk_instance = gpu::ChunkInstanceData {
                 coord: visible_coord.as_uvec2().to_array(),
                 lod: center_lod,
                 flags,
             };
 
-            terrain_chunk_instances.push(chunk_instance);
+            chunk_instances.push(chunk_instance);
 
             const SOUTH: u32 = 0;
             const WEST: u32 = 1;
@@ -548,14 +559,14 @@ impl TerrainPipeline {
             const EAST: u32 = 3;
 
             if visible_coord.x == 0 {
-                let chunk_instance = ChunkInstanceData {
+                let chunk_instance = gpu::ChunkInstanceData {
                     flags: chunk_instance.flags | (EAST << 8),
                     ..chunk_instance
                 };
                 strata_instances.push(chunk_instance);
                 strata_instances_side_count[EAST as usize] += 1;
             } else if visible_coord.x == self.chunks_dim.x as i32 - 1 {
-                let chunk_instance = ChunkInstanceData {
+                let chunk_instance = gpu::ChunkInstanceData {
                     flags: chunk_instance.flags | (WEST << 8),
                     ..chunk_instance
                 };
@@ -564,14 +575,14 @@ impl TerrainPipeline {
             }
 
             if visible_coord.y == 0 {
-                let chunk_instance = ChunkInstanceData {
+                let chunk_instance = gpu::ChunkInstanceData {
                     flags: chunk_instance.flags | (SOUTH << 8),
                     ..chunk_instance
                 };
                 strata_instances.push(chunk_instance);
                 strata_instances_side_count[SOUTH as usize] += 1;
             } else if visible_coord.y == self.chunks_dim.y as i32 - 1 {
-                let chunk_instance = ChunkInstanceData {
+                let chunk_instance = gpu::ChunkInstanceData {
                     flags: chunk_instance.flags | (NORTH << 8),
                     ..chunk_instance
                 };
@@ -582,21 +593,24 @@ impl TerrainPipeline {
 
         strata_instances.sort_unstable_by_key(|instance| instance.flags >> 8 & 0b11);
 
-        render_world
-            .terrain_chunk_instances
+        snapshot
+            .chunk_instances
             .sort_unstable_by_key(|instance| instance.lod);
     }
 
-    pub fn prepare(&mut self, renderer: &Renderer, render_world: &mut RenderWorld) {
-        // Upload the chunk instance data.
+    pub fn prepare(
+        &mut self,
+        renderer: &Renderer,
+        render_world: &mut RenderWorld,
+        snapshot: &TerrainRenderSnapshot,
+    ) {
         render_world
             .terrain_chunk_instances_buffer
-            .write(renderer, &render_world.terrain_chunk_instances);
+            .write(renderer, &snapshot.chunk_instances);
 
-        // Upload the strata data.
         render_world
             .strata_instances_buffer
-            .write(renderer, &render_world.strata_instances);
+            .write(renderer, &snapshot.strata_instances);
     }
 
     pub fn queue(
@@ -604,6 +618,7 @@ impl TerrainPipeline {
         render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
+        snapshot: &TerrainRenderSnapshot,
     ) {
         let mut render_pass =
             geometry_buffer.begin_opaque_render_pass(&mut frame.encoder, "terrain_render_pass");
@@ -625,7 +640,7 @@ impl TerrainPipeline {
 
             const INDEX_START: [u32; 4] = [0, 72, 112, 136];
 
-            for (i, strata_instance) in render_world.strata_instances.iter().enumerate() {
+            for (i, strata_instance) in snapshot.strata_instances.iter().enumerate() {
                 let side = strata_instance.flags >> 8 & 0b11;
                 let lod = strata_instance.lod;
 
@@ -650,10 +665,8 @@ impl TerrainPipeline {
             render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
-            let draw_commands = Self::build_draw_commands(
-                &render_world.terrain_chunk_instances,
-                &Self::INDEX_RANGES,
-            );
+            let draw_commands =
+                Self::build_draw_commands(&snapshot.chunk_instances, &Self::INDEX_RANGES);
 
             for (indices, instances) in draw_commands {
                 if instances.is_empty() {
@@ -673,10 +686,8 @@ impl TerrainPipeline {
             render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
-            let draw_commands = Self::build_draw_commands(
-                &render_world.terrain_chunk_instances,
-                &Self::WIREFRAME_INDEX_RANGES,
-            );
+            let draw_commands =
+                Self::build_draw_commands(&snapshot.chunk_instances, &Self::WIREFRAME_INDEX_RANGES);
 
             for (indices, instances) in draw_commands {
                 if instances.is_empty() {
@@ -804,4 +815,16 @@ fn generate_strata_indices() -> Vec<u32> {
     }
 
     indices
+}
+
+pub mod gpu {
+    use bytemuck::NoUninit;
+
+    #[derive(Clone, Copy, Default, NoUninit)]
+    #[repr(C)]
+    pub struct ChunkInstanceData {
+        pub coord: [u32; 2],
+        pub lod: u32,
+        pub flags: u32,
+    }
 }

@@ -367,8 +367,8 @@ impl Scene for WorldScene {
                 ui.label(
                     self.systems
                         .world_renderer
-                        .terrain_pipeline
-                        .visible_chunks_cache
+                        .terrain_render_snapshot
+                        .chunk_instances
                         .len()
                         .to_string(),
                 );
@@ -379,7 +379,14 @@ impl Scene for WorldScene {
             });
             ui.horizontal(|ui| {
                 ui.label("Visible strata");
-                ui.label(format!("{}", render_world.strata_instances.len()));
+                ui.label(format!(
+                    "{}",
+                    self.systems
+                        .world_renderer
+                        .terrain_render_snapshot
+                        .chunk_instances
+                        .len()
+                ));
             });
             ui.horizontal(|ui| {
                 ui.label("Gizmo vertices");

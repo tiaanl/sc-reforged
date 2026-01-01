@@ -14,7 +14,7 @@ pub use compositor::Compositor;
 pub use geometry_buffers::GeometryBuffer;
 pub use render_models::{RenderModel, RenderVertex};
 pub use render_store::RenderStore;
-pub use render_world::{ChunkInstanceData, ModelInstanceData, RenderUiRect, RenderWorld};
+pub use render_world::{ModelInstanceData, RenderUiRect, RenderWorld};
 pub use world_renderer::WorldRenderer;
 
 // TODO: Figure out another way to get the models to render from [SimWorld].

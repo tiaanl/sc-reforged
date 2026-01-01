@@ -2,7 +2,9 @@ use bytemuck::NoUninit;
 
 use crate::{
     engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, renderer::Renderer},
-    game::scenes::world::render::render_store::RenderStore,
+    game::scenes::world::render::{
+        render_store::RenderStore, terrain_pipeline::gpu::ChunkInstanceData,
+    },
 };
 
 #[derive(Clone, Copy, Debug, Default, NoUninit)]
@@ -21,14 +23,6 @@ pub struct CameraEnvironment {
     pub fog_near_fraction: f32,
     pub sim_time: f32,
     pub _pad: [u32; 5],
-}
-
-#[derive(Clone, Copy, Default, NoUninit)]
-#[repr(C)]
-pub struct ChunkInstanceData {
-    pub coord: [u32; 2],
-    pub lod: u32,
-    pub flags: u32,
 }
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -61,16 +55,9 @@ pub struct RenderWorld {
     pub camera_env_buffer: wgpu::Buffer,
     pub camera_env_bind_group: wgpu::BindGroup,
 
-    /// A list of terrain chunks to render.
-    pub terrain_chunk_instances: Vec<ChunkInstanceData>,
     /// Buffer holding terrain chunk instance data for chunks to be rendered per frame.
     pub terrain_chunk_instances_buffer: GrowingBuffer<ChunkInstanceData>,
 
-    /// A list of strata blocks to render.  This is a different list from `terrain_chunk_instances`,
-    /// because strata's only render on the edge chunks.
-    pub strata_instances: Vec<ChunkInstanceData>,
-    /// Amount of instances per side. [south, west, north, east]
-    pub strata_instances_side_count: [u32; 4],
     /// Buffer holding instance data for strata to be rendered per frame.
     pub strata_instances_buffer: GrowingBuffer<ChunkInstanceData>,
 
@@ -108,7 +95,6 @@ impl RenderWorld {
             });
 
         let capacity = 1 << 7;
-        let terrain_chunk_instances = Vec::with_capacity(capacity as usize);
         let terrain_chunk_instances_buffer = GrowingBuffer::new(
             renderer,
             capacity,
@@ -117,7 +103,6 @@ impl RenderWorld {
         );
 
         let capacity = 1 << 7;
-        let strata_instances = Vec::with_capacity(capacity as usize);
         let strata_instances_buffer = GrowingBuffer::new(
             renderer,
             capacity,
@@ -170,12 +155,9 @@ impl RenderWorld {
             camera_env_buffer,
             camera_env_bind_group,
 
-            terrain_chunk_instances,
             terrain_chunk_instances_buffer,
 
             strata_instances_buffer,
-            strata_instances,
-            strata_instances_side_count: [0; 4],
 
             model_instances,
 
