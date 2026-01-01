@@ -1,3 +1,4 @@
+use bevy_ecs::prelude::*;
 use glam::Mat4;
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
                 GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex,
                 RenderWorld,
             },
-            sim_world::{Objects, SimWorld},
+            sim_world::{ComputedCamera, Object, Objects, SimWorld, ecs::ActiveCamera},
         },
     },
     wgsl_shader,
@@ -91,6 +92,7 @@ struct Batch {
 pub struct ModelPipeline {
     opaque_pipeline: wgpu::RenderPipeline,
     alpha_pipeline: wgpu::RenderPipeline,
+    pub visible_objects_cache: Vec<Handle<Object>>,
     models_to_render: Vec<ModelToRender>,
     batches: Vec<Batch>,
 }
@@ -208,6 +210,8 @@ impl ModelPipeline {
             opaque_pipeline,
             alpha_pipeline,
 
+            visible_objects_cache: Vec::default(),
+
             models_to_render,
             batches,
         }
@@ -221,12 +225,23 @@ impl ModelPipeline {
             models_to_render: &mut self.models_to_render,
         };
 
-        let state = sim_world.state();
-        let visible_objects = &state.visible_objects;
-        let selected_objects = &state.selected_objects;
-        let objects = sim_world.ecs.resource::<Objects>();
+        let computed_camera = {
+            sim_world
+                .ecs
+                .query_filtered::<&ComputedCamera, With<ActiveCamera>>()
+                .single(&sim_world.ecs)
+                .unwrap()
+        };
 
-        visible_objects
+        let objects = sim_world.ecs.resource::<Objects>();
+        objects
+            .static_bvh
+            .objects_in_frustum(&computed_camera.frustum, &mut self.visible_objects_cache);
+
+        let state = sim_world.state();
+        let selected_objects = &state.selected_objects;
+
+        self.visible_objects_cache
             .iter()
             .filter_map(|object_handle| objects.get(*object_handle).map(|o| (o, *object_handle)))
             .for_each(|(object, handle)| {

@@ -19,7 +19,7 @@ use crate::{
                 ui::Ui,
             },
             systems::{
-                Time, camera_system, cull_system, day_night_cycle_system, object_system,
+                Time, camera_system, day_night_cycle_system, object_system,
                 world_interaction::{self, WorldInteraction},
             },
         },
@@ -72,9 +72,6 @@ pub struct SimWorldState {
     pub highlighted_chunks: HashSet<IVec2>,
 
     pub selected_objects: HashSet<Handle<Object>>,
-
-    /// A list of visible objects this frame.
-    pub visible_objects: Vec<Handle<Object>>,
 
     // pub gizmo_vertices: Vec<GizmoVertex>,
     pub _sequences: Sequences,
@@ -229,7 +226,6 @@ impl SimWorld {
             highlighted_chunks: HashSet::default(),
 
             selected_objects: HashSet::default(),
-            visible_objects: Vec::default(),
 
             // gizmo_vertices: Vec::with_capacity(1024),
             _sequences: sequences,
@@ -265,7 +261,6 @@ impl SimWorld {
             schedule.add_systems(
                 (
                     day_night_cycle_system::increment_time_of_day,
-                    cull_system::calculate_visible_chunks,
                     object_system::update,
                     world_interaction::update,
                 )

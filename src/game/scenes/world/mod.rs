@@ -356,8 +356,6 @@ impl Scene for WorldScene {
             });
 
         egui::Window::new("Stats").show(ctx, |ui| {
-            let state = self.sim_world.state();
-
             ui.horizontal(|ui| {
                 ui.label("Frame index");
                 ui.label(format!("{frame_index}"));
@@ -375,7 +373,14 @@ impl Scene for WorldScene {
             });
             ui.horizontal(|ui| {
                 ui.label("Visible objects");
-                ui.label(format!("{}", state.visible_objects.len()));
+                ui.label(format!(
+                    "{}",
+                    self.systems
+                        .world_renderer
+                        .model_pipeline
+                        .visible_objects_cache
+                        .len()
+                ));
             });
             ui.horizontal(|ui| {
                 ui.label("Visible strata");
