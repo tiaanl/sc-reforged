@@ -431,41 +431,6 @@ impl TerrainPipeline {
         }
     }
 
-    /// Build a list of instances per LOD.
-    /// `chunk_instances` *must* be sorted by LOD.
-    fn build_draw_commands(
-        chunk_instances: &[gpu::ChunkInstanceData],
-        ranges: &[std::ops::Range<u32>],
-    ) -> [(std::ops::Range<u32>, std::ops::Range<u32>); Terrain::LOD_COUNT as usize] {
-        // TODO: This is probably not needed.
-        debug_assert!(chunk_instances.is_sorted_by_key(|instance| instance.lod));
-
-        let mut counts = [0_u32; Terrain::LOD_COUNT as usize];
-
-        // Count the number of each LOD.
-        for instance in chunk_instances {
-            let lod = instance.lod.min(Terrain::LOD_MAX) as usize;
-            counts[lod] += 1;
-        }
-
-        // Create starting indices by accumulating the LOD counts.
-        let mut offsets = [0_u32; Terrain::LOD_COUNT as usize];
-        let mut acc = 0;
-        for i in 0..counts.len() {
-            offsets[i] = acc;
-            acc += counts[i];
-        }
-
-        [
-            (ranges[0].clone(), offsets[0]..offsets[0] + counts[0]),
-            (ranges[1].clone(), offsets[1]..offsets[1] + counts[1]),
-            (ranges[2].clone(), offsets[2]..offsets[2] + counts[2]),
-            (ranges[3].clone(), offsets[3]..offsets[3] + counts[3]),
-        ]
-    }
-}
-
-impl TerrainPipeline {
     pub fn prepare(
         &mut self,
         renderer: &Renderer,
@@ -564,6 +529,41 @@ impl TerrainPipeline {
                 render_pass.draw_indexed(indices, 0, instances);
             }
         }
+    }
+}
+
+impl TerrainPipeline {
+    /// Build a list of instances per LOD.
+    /// `chunk_instances` *must* be sorted by LOD.
+    fn build_draw_commands(
+        chunk_instances: &[gpu::ChunkInstanceData],
+        ranges: &[std::ops::Range<u32>],
+    ) -> [(std::ops::Range<u32>, std::ops::Range<u32>); Terrain::LOD_COUNT as usize] {
+        // TODO: This is probably not needed.
+        debug_assert!(chunk_instances.is_sorted_by_key(|instance| instance.lod));
+
+        let mut counts = [0_u32; Terrain::LOD_COUNT as usize];
+
+        // Count the number of each LOD.
+        for instance in chunk_instances {
+            let lod = instance.lod.min(Terrain::LOD_MAX) as usize;
+            counts[lod] += 1;
+        }
+
+        // Create starting indices by accumulating the LOD counts.
+        let mut offsets = [0_u32; Terrain::LOD_COUNT as usize];
+        let mut acc = 0;
+        for i in 0..counts.len() {
+            offsets[i] = acc;
+            acc += counts[i];
+        }
+
+        [
+            (ranges[0].clone(), offsets[0]..offsets[0] + counts[0]),
+            (ranges[1].clone(), offsets[1]..offsets[1] + counts[1]),
+            (ranges[2].clone(), offsets[2]..offsets[2] + counts[2]),
+            (ranges[3].clone(), offsets[3]..offsets[3] + counts[3]),
+        ]
     }
 }
 
