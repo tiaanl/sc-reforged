@@ -15,7 +15,11 @@ pub use geometry_buffers::GeometryBuffer;
 pub use render_models::{RenderModel, RenderVertex};
 pub use render_store::RenderStore;
 pub use render_world::{ModelInstanceData, RenderUiRect, RenderWorld};
+pub use terrain_pipeline::TerrainRenderSnapshot;
 pub use world_renderer::WorldRenderer;
 
-// TODO: Figure out another way to get the models to render from [SimWorld].
-// pub use model_pipeline::ModelRenderFlags;
+pub mod gpu {
+    use super::*;
+
+    pub use terrain_pipeline::gpu::ChunkInstanceData;
+}

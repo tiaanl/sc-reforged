@@ -1,8 +1,5 @@
 use std::path::PathBuf;
 
-use ahash::HashMap;
-use bevy_ecs::prelude::*;
-use glam::{IVec2, UVec2, ivec2};
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -11,7 +8,7 @@ use crate::{
         image::images,
         scenes::world::{
             render::{GeometryBuffer, RenderStore, RenderWorld},
-            sim_world::{Camera, ComputedCamera, SimWorld, Terrain, ecs::ActiveCamera},
+            sim_world::{SimWorld, Terrain},
         },
     },
     wgsl_shader,
@@ -29,9 +26,6 @@ pub struct TerrainRenderSnapshot {
 }
 
 pub struct TerrainPipeline {
-    /// Dimensions of the terrain in chunks.
-    chunks_dim: UVec2,
-
     /// Buffer holding indices to render a single chunk at various LOD's.
     chunk_indices_buffer: wgpu::Buffer,
     /// Buffer holding indices to render a wireframe over a single chunk of various LOD's.
@@ -39,12 +33,6 @@ pub struct TerrainPipeline {
 
     /// Bind group for all terrain GPU resources.
     terrain_bind_group: wgpu::BindGroup,
-
-    /// A *transient* cache of visible chunk coords for the current frame.
-    pub visible_chunks_cache: Vec<IVec2>,
-
-    /// A *transient* cache of LOD's for the current frame.
-    chunk_lod_cache: HashMap<IVec2, u32>,
 
     /// Pipeline to render the terrain chunks.
     terrain_pipeline: wgpu::RenderPipeline,
@@ -427,15 +415,10 @@ impl TerrainPipeline {
         };
 
         Self {
-            chunks_dim,
-
             chunk_indices_buffer,
             chunk_wireframe_indices_buffer,
 
             terrain_bind_group,
-
-            visible_chunks_cache: Vec::default(),
-            chunk_lod_cache: HashMap::default(),
 
             terrain_pipeline,
             terrain_wireframe_pipeline,
@@ -483,121 +466,6 @@ impl TerrainPipeline {
 }
 
 impl TerrainPipeline {
-    pub fn extract(&mut self, sim_world: &mut SimWorld, snapshot: &mut TerrainRenderSnapshot) {
-        self.chunk_lod_cache.clear();
-
-        let (camera, computed_camera) = {
-            sim_world
-                .ecs
-                .query_filtered::<(&Camera, &ComputedCamera), With<ActiveCamera>>()
-                .single(&sim_world.ecs)
-                .unwrap()
-        };
-
-        let camera_position = computed_camera.position;
-        let camera_forward = computed_camera.forward;
-        let camera_far = camera.far;
-
-        let chunk_instances = &mut snapshot.chunk_instances;
-        let strata_instances = &mut snapshot.strata_instances;
-        let strata_instances_side_count = &mut snapshot.strata_instances_side_count;
-
-        chunk_instances.clear();
-        strata_instances.clear();
-        *strata_instances_side_count = [0; 4];
-
-        let terrain = sim_world.ecs.resource::<Terrain>();
-
-        let state = sim_world.state();
-
-        terrain
-            .quad_tree
-            .visible_chunks(&computed_camera.frustum, &mut self.visible_chunks_cache);
-        for visible_coord in self.visible_chunks_cache.iter() {
-            let mut lod_at = |coord: IVec2| {
-                if let Some(lod) = self.chunk_lod_cache.get(&coord) {
-                    return Some(*lod);
-                }
-
-                terrain
-                    .chunk_lod(coord, camera_position, camera_forward, camera_far)
-                    .inspect(|&lod| {
-                        self.chunk_lod_cache.insert(coord, lod);
-                    })
-            };
-
-            let center_lod = lod_at(*visible_coord).expect("Center chunk is always valid!");
-
-            let mut flags = 0_u32;
-
-            let neighbors = [ivec2(0, 1), ivec2(-1, 0), ivec2(0, -1), ivec2(1, 0)]
-                .map(|offset| lod_at(*visible_coord + offset));
-            for (i, neighbor_lod) in neighbors.iter().enumerate() {
-                // A higher LOD means the resolution is lower, so we check greater than here.
-                if neighbor_lod.unwrap_or(center_lod) > center_lod {
-                    flags |= 1 << i;
-                }
-            }
-
-            // Highlight the chunk.
-            const HIGHLIGHT: u32 = 1 << 15;
-            if state.highlighted_chunks.contains(visible_coord) {
-                flags |= HIGHLIGHT;
-            }
-
-            let chunk_instance = gpu::ChunkInstanceData {
-                coord: visible_coord.as_uvec2().to_array(),
-                lod: center_lod,
-                flags,
-            };
-
-            chunk_instances.push(chunk_instance);
-
-            const SOUTH: u32 = 0;
-            const WEST: u32 = 1;
-            const NORTH: u32 = 2;
-            const EAST: u32 = 3;
-
-            if visible_coord.x == 0 {
-                let chunk_instance = gpu::ChunkInstanceData {
-                    flags: chunk_instance.flags | (EAST << 8),
-                    ..chunk_instance
-                };
-                strata_instances.push(chunk_instance);
-                strata_instances_side_count[EAST as usize] += 1;
-            } else if visible_coord.x == self.chunks_dim.x as i32 - 1 {
-                let chunk_instance = gpu::ChunkInstanceData {
-                    flags: chunk_instance.flags | (WEST << 8),
-                    ..chunk_instance
-                };
-                strata_instances.push(chunk_instance);
-                strata_instances_side_count[WEST as usize] += 1;
-            }
-
-            if visible_coord.y == 0 {
-                let chunk_instance = gpu::ChunkInstanceData {
-                    flags: chunk_instance.flags | (SOUTH << 8),
-                    ..chunk_instance
-                };
-                strata_instances.push(chunk_instance);
-                strata_instances_side_count[SOUTH as usize] += 1;
-            } else if visible_coord.y == self.chunks_dim.y as i32 - 1 {
-                let chunk_instance = gpu::ChunkInstanceData {
-                    flags: chunk_instance.flags | (NORTH << 8),
-                    ..chunk_instance
-                };
-                strata_instances.push(chunk_instance);
-                strata_instances_side_count[NORTH as usize] += 1;
-            }
-        }
-
-        strata_instances.sort_unstable_by_key(|instance| instance.flags >> 8 & 0b11);
-
-        snapshot
-            .chunk_instances
-            .sort_unstable_by_key(|instance| instance.lod);
-    }
-
     pub fn prepare(
         &mut self,
         renderer: &Renderer,

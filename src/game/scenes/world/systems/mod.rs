@@ -6,12 +6,14 @@ use crate::{
     game::scenes::world::{
         render::{RenderStore, RenderWorld, WorldRenderer},
         sim_world::{Objects, SimWorld},
+        systems::extract::TerrainExtract,
     },
 };
 
 pub mod camera_system;
 mod clear_render_targets;
 pub mod day_night_cycle_system;
+mod extract;
 mod gizmo_system;
 pub mod object_system;
 pub mod world_interaction;
@@ -31,6 +33,8 @@ pub struct Systems {
     /// Cache the sim time to pass to the [CameraEnvironment].
     sim_time: f32,
 
+    terrain_extract: TerrainExtract,
+
     // pub camera_system: camera_system::CameraSystem,
     pub world_renderer: WorldRenderer,
 
@@ -46,6 +50,8 @@ impl Systems {
     ) -> Self {
         Self {
             sim_time: 0.0,
+
+            terrain_extract: TerrainExtract::default(),
 
             world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),
             gizmo_system: gizmo_system::GizmoSystem::new(renderer, surface_format, render_store),
@@ -66,6 +72,9 @@ impl Systems {
         render_world: &mut RenderWorld,
         viewport_size: UVec2,
     ) {
+        self.terrain_extract
+            .extract(sim_world, &mut self.world_renderer.terrain_render_snapshot);
+
         render_world.camera_env.sim_time = self.sim_time;
 
         camera_system::extract(sim_world, render_world);

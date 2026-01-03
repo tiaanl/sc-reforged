@@ -71,8 +71,6 @@ impl WorldRenderer {
         render_world: &mut RenderWorld,
         viewport_size: UVec2,
     ) {
-        self.terrain_pipeline
-            .extract(sim_world, &mut self.terrain_render_snapshot);
         self.model_pipeline.extract(sim_world, render_store);
         self.ui_pipeline
             .extract(sim_world, render_store, render_world, viewport_size);
