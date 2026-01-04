@@ -18,10 +18,7 @@ use crate::{
                 top_down_camera_controller::TopDownCameraController,
                 ui::Ui,
             },
-            systems::{
-                Time, camera_system, day_night_cycle_system, object_system,
-                world_interaction::{self, WorldInteraction},
-            },
+            systems::{Time, world_interaction::WorldInteraction},
         },
         track::Track,
     },
@@ -29,7 +26,7 @@ use crate::{
 
 mod camera;
 pub mod ecs;
-mod free_camera_controller;
+pub mod free_camera_controller;
 mod height_map;
 mod objects;
 mod order_queue;
@@ -38,7 +35,7 @@ mod quad_tree;
 mod sequences;
 mod static_bvh;
 mod terrain;
-mod top_down_camera_controller;
+pub mod top_down_camera_controller;
 mod ui;
 
 pub use camera::Camera;
@@ -82,7 +79,6 @@ pub struct SimWorldState {
 /// Holds all the data for the world we are simulating.
 pub struct SimWorld {
     pub ecs: World,
-    pub update_schedule: Schedule,
 }
 
 impl SimWorld {
@@ -237,44 +233,7 @@ impl SimWorld {
 
         ecs.init_resource::<Viewport>();
 
-        // Update schedule.
-        let update_schedule = {
-            use ecs::UpdateSet::*;
-
-            let mut schedule = Schedule::default();
-
-            schedule.configure_sets((Input, Update).chain());
-
-            schedule.add_systems(
-                (
-                    (
-                        top_down_camera_controller::input,
-                        free_camera_controller::input,
-                    ),
-                    camera_system::compute_cameras,
-                    world_interaction::input,
-                )
-                    .in_set(Input)
-                    .chain(),
-            );
-
-            schedule.add_systems(
-                (
-                    day_night_cycle_system::increment_time_of_day,
-                    object_system::update,
-                    world_interaction::update,
-                )
-                    .in_set(Update)
-                    .chain(),
-            );
-
-            schedule
-        };
-
-        Ok(SimWorld {
-            ecs,
-            update_schedule,
-        })
+        Ok(SimWorld { ecs })
     }
 
     #[inline]

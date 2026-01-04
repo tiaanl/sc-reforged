@@ -7,7 +7,7 @@ use crate::{
         render::{
             GizmoRenderPipeline, GizmoRenderSnapshot, RenderStore, RenderWorld, WorldRenderer,
         },
-        sim_world::{Objects, SimWorld},
+        sim_world::{Objects, SimWorld, ecs, free_camera_controller, top_down_camera_controller},
     },
 };
 
@@ -34,6 +34,8 @@ pub struct Systems {
     /// Cache the sim time to pass to the [CameraEnvironment].
     sim_time: f32,
 
+    pub update_schedule: Schedule,
+
     terrain_extract: TerrainExtract,
     model_extract: ModelsExtract,
     gizmo_extract: GizmoExtract,
@@ -52,8 +54,44 @@ impl Systems {
         render_store: &RenderStore,
         sim_world: &mut SimWorld,
     ) -> Self {
+        // Update schedule.
+        let update_schedule = {
+            use ecs::UpdateSet::*;
+
+            let mut schedule = Schedule::default();
+
+            schedule.configure_sets((Input, Update).chain());
+
+            schedule.add_systems(
+                (
+                    (
+                        top_down_camera_controller::input,
+                        free_camera_controller::input,
+                    ),
+                    camera_system::compute_cameras,
+                    world_interaction::input,
+                )
+                    .in_set(Input)
+                    .chain(),
+            );
+
+            schedule.add_systems(
+                (
+                    day_night_cycle_system::increment_time_of_day,
+                    object_system::update,
+                    world_interaction::update,
+                )
+                    .in_set(Update)
+                    .chain(),
+            );
+
+            schedule
+        };
+
         Self {
             sim_time: 0.0,
+
+            update_schedule,
 
             terrain_extract: TerrainExtract::new(sim_world),
             model_extract: ModelsExtract::new(sim_world),
@@ -69,7 +107,7 @@ impl Systems {
     pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
         self.sim_time = time.sim_time;
 
-        sim_world.update_schedule.run(&mut sim_world.ecs);
+        self.update_schedule.run(&mut sim_world.ecs);
     }
 
     pub fn extract(
