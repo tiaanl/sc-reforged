@@ -7,26 +7,32 @@ use crate::game::scenes::world::{
     sim_world::{Camera, ComputedCamera, SimWorld, Terrain, ecs::ActiveCamera},
 };
 
-#[derive(Default)]
 pub struct TerrainExtract {
     /// A cache for chunk LOD's cleared and rebuilt on each extract.
     chunk_lod_cache: HashMap<IVec2, u32>,
 
     /// A cache for a list of visible chunks calculated on each extract.
     pub visible_chunks_cache: Vec<IVec2>,
+
+    /// ECS query for the active camera.
+    active_camera_query: QueryState<(&'static Camera, &'static ComputedCamera), With<ActiveCamera>>,
 }
 
 impl TerrainExtract {
-    pub fn extract(&mut self, sim_world: &mut SimWorld, snapshot: &mut TerrainRenderSnapshot) {
+    pub fn new(sim_world: &mut SimWorld) -> Self {
+        let active_camera_query = sim_world.ecs.query_filtered();
+
+        Self {
+            chunk_lod_cache: HashMap::default(),
+            visible_chunks_cache: Vec::default(),
+            active_camera_query,
+        }
+    }
+
+    pub fn extract(&mut self, sim_world: &SimWorld, snapshot: &mut TerrainRenderSnapshot) {
         self.chunk_lod_cache.clear();
 
-        let (camera, computed_camera) = {
-            sim_world
-                .ecs
-                .query_filtered::<(&Camera, &ComputedCamera), With<ActiveCamera>>()
-                .single(&sim_world.ecs)
-                .unwrap()
-        };
+        let (camera, computed_camera) = self.active_camera_query.single(&sim_world.ecs).unwrap();
 
         let camera_position = computed_camera.position;
         let camera_forward = computed_camera.forward;

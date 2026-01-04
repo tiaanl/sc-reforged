@@ -50,14 +50,14 @@ impl Systems {
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
         render_store: &RenderStore,
-        sim_world: &SimWorld,
+        sim_world: &mut SimWorld,
     ) -> Self {
         Self {
             sim_time: 0.0,
 
-            terrain_extract: TerrainExtract::default(),
-            model_extract: ModelsExtract::default(),
-            gizmo_extract: GizmoExtract::default(),
+            terrain_extract: TerrainExtract::new(sim_world),
+            model_extract: ModelsExtract::new(sim_world),
+            gizmo_extract: GizmoExtract::new(sim_world),
 
             world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),
 

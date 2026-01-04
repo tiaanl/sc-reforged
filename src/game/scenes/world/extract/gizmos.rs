@@ -7,6 +7,10 @@ use crate::game::scenes::world::{
 pub struct GizmoExtract {}
 
 impl GizmoExtract {
+    pub fn new(_sim_world: &mut SimWorld) -> Self {
+        Self {}
+    }
+
     pub fn extract(&mut self, sim_world: &mut SimWorld, snapshot: &mut GizmoRenderSnapshot) {
         snapshot.vertices.clear();
 

@@ -8,22 +8,25 @@ use crate::{
     },
 };
 
-#[derive(Default)]
 pub struct ModelsExtract {
     visible_objects_cache: Vec<Handle<Object>>,
+
+    /// ECS query for the active camera.
+    active_camera_query: QueryState<&'static ComputedCamera, With<ActiveCamera>>,
 }
 
 impl ModelsExtract {
-    pub fn extract(&mut self, sim_world: &mut SimWorld, snapshot: &mut ModelRenderSnapshot) {
+    pub fn new(sim_world: &mut SimWorld) -> Self {
+        Self {
+            visible_objects_cache: Vec::default(),
+            active_camera_query: sim_world.ecs.query_filtered(),
+        }
+    }
+
+    pub fn extract(&mut self, sim_world: &SimWorld, snapshot: &mut ModelRenderSnapshot) {
         snapshot.models.clear();
 
-        let computed_camera = {
-            sim_world
-                .ecs
-                .query_filtered::<&ComputedCamera, With<ActiveCamera>>()
-                .single(&sim_world.ecs)
-                .unwrap()
-        };
+        let computed_camera = self.active_camera_query.single(&sim_world.ecs).unwrap();
 
         let objects = sim_world.ecs.resource::<Objects>();
         objects
