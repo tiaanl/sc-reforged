@@ -63,7 +63,6 @@ pub struct RenderWorld {
 
     pub model_instances: GrowingBuffer<ModelInstanceData>,
 
-    pub gizmo_vertices: Vec<GizmoVertex>,
     pub gizmo_vertices_buffer: GrowingBuffer<GizmoVertex>,
 
     pub ui_state: UiState,
@@ -117,7 +116,6 @@ impl RenderWorld {
             format!("model_instances:{index}"),
         );
 
-        let gizmo_vertices = Vec::default();
         let gizmo_vertices_buffer = GrowingBuffer::new(
             renderer,
             1024,
@@ -161,7 +159,6 @@ impl RenderWorld {
 
             model_instances,
 
-            gizmo_vertices,
             gizmo_vertices_buffer,
 
             ui_state: UiState::default(),

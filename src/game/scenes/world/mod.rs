@@ -205,8 +205,6 @@ impl Scene for WorldScene {
             return;
         }
 
-        let render_world = &mut self.render_worlds[frame_index as usize % Self::RENDER_FRAME_COUNT];
-
         egui::Window::new("World")
             .default_open(true)
             .show(ctx, |ui| {
@@ -395,7 +393,10 @@ impl Scene for WorldScene {
             });
             ui.horizontal(|ui| {
                 ui.label("Gizmo vertices");
-                ui.label(format!("{}", render_world.gizmo_vertices.len()));
+                ui.label(format!(
+                    "{}",
+                    self.systems.gizmo_render_snapshot.vertices.len()
+                ));
             });
         });
 

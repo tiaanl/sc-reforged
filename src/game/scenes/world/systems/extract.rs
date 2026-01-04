@@ -6,10 +6,12 @@ use crate::{
     engine::storage::Handle,
     game::scenes::world::{
         render::{
-            ModelRenderFlags, ModelRenderSnapshot, ModelToRender, TerrainRenderSnapshot, gpu,
+            GizmoRenderSnapshot, ModelRenderFlags, ModelRenderSnapshot, ModelToRender,
+            TerrainRenderSnapshot, gpu,
         },
         sim_world::{
-            Camera, ComputedCamera, Object, Objects, SimWorld, Terrain, ecs::ActiveCamera,
+            Camera, ComputedCamera, Object, Objects, SimWorld, Terrain,
+            ecs::{ActiveCamera, GizmoVertices},
         },
     },
 };
@@ -196,5 +198,19 @@ impl ModelExtract {
                     flags,
                 });
             });
+    }
+}
+
+#[derive(Default)]
+pub struct GizmoExtract {}
+
+impl GizmoExtract {
+    pub fn extract(&mut self, sim_world: &mut SimWorld, snapshot: &mut GizmoRenderSnapshot) {
+        snapshot.vertices.clear();
+
+        sim_world
+            .ecs
+            .resource_mut::<GizmoVertices>()
+            .swap(&mut snapshot.vertices);
     }
 }

@@ -3,12 +3,14 @@ use crate::{
         gizmos::GizmoVertex,
         renderer::{Frame, Renderer},
     },
-    game::scenes::world::{
-        render::{RenderStore, RenderWorld},
-        sim_world::{SimWorld, ecs::GizmoVertices},
-    },
+    game::scenes::world::render::{RenderStore, RenderWorld},
     wgsl_shader,
 };
+
+#[derive(Default)]
+pub struct GizmoRenderSnapshot {
+    pub vertices: Vec<GizmoVertex>,
+}
 
 pub struct GizmoRenderPipeline {
     pipeline: wgpu::RenderPipeline,
@@ -71,23 +73,23 @@ impl GizmoRenderPipeline {
 }
 
 impl GizmoRenderPipeline {
-    pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
-        // Move all the sim world vertices to the render world vertices.
-        render_world.gizmo_vertices.clear();
-
-        sim_world
-            .ecs
-            .resource_mut::<GizmoVertices>()
-            .swap(&mut render_world.gizmo_vertices);
-    }
-
-    pub fn prepare(&mut self, render_world: &mut RenderWorld, renderer: &Renderer) {
+    pub fn prepare(
+        &mut self,
+        render_world: &mut RenderWorld,
+        renderer: &Renderer,
+        snapshot: &GizmoRenderSnapshot,
+    ) {
         render_world
             .gizmo_vertices_buffer
-            .write(renderer, &render_world.gizmo_vertices);
+            .write(renderer, &snapshot.vertices);
     }
 
-    pub fn queue(&mut self, render_world: &RenderWorld, frame: &mut Frame) {
+    pub fn queue(
+        &mut self,
+        render_world: &RenderWorld,
+        snapshot: &GizmoRenderSnapshot,
+        frame: &mut Frame,
+    ) {
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -106,6 +108,6 @@ impl GizmoRenderPipeline {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, render_world.gizmo_vertices_buffer.slice(..));
         render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
-        render_pass.draw(0..(render_world.gizmo_vertices.len() as u32), 0..1);
+        render_pass.draw(0..(snapshot.vertices.len() as u32), 0..1);
     }
 }

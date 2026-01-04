@@ -4,9 +4,11 @@ use glam::UVec2;
 use crate::{
     engine::renderer::{Frame, Renderer},
     game::scenes::world::{
-        render::{GizmoRenderPipeline, RenderStore, RenderWorld, WorldRenderer},
+        render::{
+            GizmoRenderPipeline, GizmoRenderSnapshot, RenderStore, RenderWorld, WorldRenderer,
+        },
         sim_world::{Objects, SimWorld},
-        systems::extract::{ModelExtract, TerrainExtract},
+        systems::extract::{GizmoExtract, ModelExtract, TerrainExtract},
     },
 };
 
@@ -34,10 +36,12 @@ pub struct Systems {
 
     terrain_extract: TerrainExtract,
     model_extract: ModelExtract,
+    gizmo_extract: GizmoExtract,
 
     // pub camera_system: camera_system::CameraSystem,
     pub world_renderer: WorldRenderer,
 
+    pub gizmo_render_snapshot: GizmoRenderSnapshot,
     gizmo_render_pipeline: GizmoRenderPipeline,
 }
 
@@ -53,8 +57,11 @@ impl Systems {
 
             terrain_extract: TerrainExtract::default(),
             model_extract: ModelExtract::default(),
+            gizmo_extract: GizmoExtract::default(),
 
             world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),
+
+            gizmo_render_snapshot: GizmoRenderSnapshot::default(),
             gizmo_render_pipeline: GizmoRenderPipeline::new(renderer, surface_format, render_store),
         }
     }
@@ -79,6 +86,9 @@ impl Systems {
         self.model_extract
             .extract(sim_world, &mut self.world_renderer.model_render_snapshot);
 
+        self.gizmo_extract
+            .extract(sim_world, &mut self.gizmo_render_snapshot);
+
         render_world.camera_env.sim_time = self.sim_time;
 
         camera_system::extract(sim_world, render_world);
@@ -89,8 +99,6 @@ impl Systems {
 
         self.world_renderer
             .extract(sim_world, render_store, render_world, viewport_size);
-
-        self.gizmo_render_pipeline.extract(sim_world, render_world);
     }
 
     pub fn prepare(
@@ -110,7 +118,8 @@ impl Systems {
         camera_system::prepare(render_world, renderer);
         self.world_renderer
             .prepare(renderer, render_store, render_world);
-        self.gizmo_render_pipeline.prepare(render_world, renderer);
+        self.gizmo_render_pipeline
+            .prepare(render_world, renderer, &self.gizmo_render_snapshot);
     }
 
     pub fn queue(
@@ -135,6 +144,7 @@ impl Systems {
             .compositor
             .render(frame, &render_store.geometry_buffer);
 
-        self.gizmo_render_pipeline.queue(render_world, frame);
+        self.gizmo_render_pipeline
+            .queue(render_world, &self.gizmo_render_snapshot, frame);
     }
 }
