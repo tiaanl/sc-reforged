@@ -18,7 +18,7 @@ use crate::{
         models::{ModelName, models},
         scenes::world::{
             render::RenderStore,
-            sim_world::{ecs::BoundingBoxComponent, orders::OrderKind, sequences::Sequencer},
+            sim_world::{ecs::BoundingBoxComponent, orders::*, sequences::Sequencer},
             systems::InteractionHit,
         },
     },
@@ -33,7 +33,7 @@ pub enum ObjectData {
     Biped {
         model: Handle<Model>,
         order_queue: OrderQueue,
-        sequencer: Sequencer,
+        _sequencer: Sequencer,
     },
     /// Temporary for use with more complicated objects that is not implemented yet.
     SingleModel {
@@ -48,12 +48,11 @@ impl ObjectData {
             ObjectData::Biped { order_queue, .. } => match hit {
                 InteractionHit::Terrain { world_position, .. } => {
                     // User clicked on the terrain, order a move.
-                    order_queue.enqueue(
-                        OrderKind::Move {
-                            world_position: *world_position,
-                        }
-                        .into(),
-                    );
+                    order_queue.enqueue(Order::Move(OrderMove {
+                        target_location: *world_position,
+                        move_speed: 10.0,
+                        rotation_speed: 0.1,
+                    }));
                 }
                 InteractionHit::Object { .. } => {}
             },
@@ -240,12 +239,13 @@ impl Objects {
                     transform.clone(),
                     model_handle,
                     BoundingBoxComponent(bounding_box),
+                    Order::default(),
                 ));
 
                 ObjectData::Biped {
                     model: model_handle,
                     order_queue: OrderQueue::default(),
-                    sequencer: Sequencer::default(),
+                    _sequencer: Sequencer::default(),
                 }
             }
 

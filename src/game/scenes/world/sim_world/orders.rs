@@ -1,6 +1,7 @@
-use glam::Vec3;
+use bevy_ecs::prelude::*;
+use glam::{Quat, Vec3};
 
-use crate::engine::egui_integration::UiExt;
+use crate::engine::{egui_integration::UiExt, transform::Transform};
 
 // 1  -> order_move
 // 3  -> order_move_to_use_vehicle
@@ -39,8 +40,11 @@ use crate::engine::egui_integration::UiExt;
 // 36 -> order_move_to_transfer_item_weapons_locker (alt entry)
 // 37 -> order_move_to_transfer_item_from_body (alt entry)
 
-pub enum OrderKind {
-    Move { world_position: Vec3 },
+#[derive(Component, Default)]
+pub enum Order {
+    #[default]
+    Idle,
+    Move(OrderMove),
     // MoveToUseVehicle,
     // MoveToAttack,
     // MoveToCutFence,
@@ -71,15 +75,20 @@ pub enum OrderKind {
     // UseSpecialItem,
 }
 
-pub struct Order {
-    pub kind: OrderKind,
-    pub _complete: bool,
-}
-
 impl Order {
     pub fn ui(&self, ui: &mut egui::Ui) {
-        match self.kind {
-            OrderKind::Move { world_position } => {
+        match self {
+            Order::Idle => {
+                ui.vertical(|ui| {
+                    ui.h3("Idle");
+                });
+            }
+
+            Order::Move(OrderMove {
+                target_location: world_position,
+                move_speed,
+                rotation_speed,
+            }) => {
                 ui.vertical(|ui| {
                     ui.h3("Move");
                     ui.horizontal(|ui| {
@@ -87,17 +96,45 @@ impl Order {
                         ui.label(format!("{:.0}", world_position.y));
                         ui.label(format!("{:.0}", world_position.z));
                     });
+                    ui.label(format!("Move speed: {move_speed}"));
+                    ui.label(format!("Rotate speed: {rotation_speed}"));
                 });
             }
         }
     }
 }
 
-impl From<OrderKind> for Order {
-    fn from(kind: OrderKind) -> Self {
-        Self {
-            kind,
-            _complete: false,
+pub struct OrderMove {
+    pub target_location: Vec3,
+    pub move_speed: f32,
+    pub rotation_speed: f32,
+}
+
+impl OrderMove {
+    pub fn update(&mut self, transform: &mut Transform, delta_time: f32) {
+        let to_target = self.target_location - transform.translation;
+        let distance_sq = to_target.length_squared();
+        if distance_sq <= 1.0e-6 {
+            return;
+        }
+
+        let direction = to_target * distance_sq.sqrt().recip();
+
+        let current_forward = transform.rotation * Vec3::Y;
+        let delta_rot = Quat::from_rotation_arc(current_forward, direction);
+        let (axis, angle) = delta_rot.to_axis_angle();
+        let max_angle = self.rotation_speed * delta_time;
+        if angle > 1.0e-6 {
+            let clamped = angle.min(max_angle);
+            let step = Quat::from_axis_angle(axis, clamped);
+            transform.rotation = step * transform.rotation;
+        }
+
+        let move_step = self.move_speed * delta_time;
+        if move_step >= distance_sq.sqrt() {
+            transform.translation = self.target_location;
+        } else {
+            transform.translation += direction * move_step;
         }
     }
 }

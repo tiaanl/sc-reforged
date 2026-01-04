@@ -16,7 +16,7 @@ use super::extract::*;
 pub mod camera_system;
 mod clear_render_targets;
 pub mod day_night_cycle_system;
-pub mod object_system;
+mod orders;
 pub mod world_interaction;
 
 pub use world_interaction::InteractionHit;
@@ -78,7 +78,7 @@ impl Systems {
             schedule.add_systems(
                 (
                     day_night_cycle_system::increment_time_of_day,
-                    object_system::update,
+                    orders::process_biped_orders,
                     world_interaction::update,
                 )
                     .in_set(Update)

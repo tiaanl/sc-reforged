@@ -14,7 +14,7 @@ pub struct OrderQueue {
 }
 
 impl OrderQueue {
-    pub fn update(&mut self, _time: &Time) {
+    pub fn _update(&mut self, _time: &Time) {
         // If there is no current order, but there are pending orders, grab
         // the next order from the queue.
         if self.current.is_none() && !self.pending.is_empty() {

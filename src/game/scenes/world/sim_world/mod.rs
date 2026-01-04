@@ -42,8 +42,7 @@ pub use camera::Camera;
 pub use camera::ComputedCamera;
 pub use height_map::HeightMap;
 pub use objects::{Object, ObjectData, Objects, RayIntersectionMode};
-pub use order_queue::OrderQueue;
-pub use orders::OrderKind;
+pub use orders::Order;
 pub use terrain::Terrain;
 pub use ui::UiRect;
 
