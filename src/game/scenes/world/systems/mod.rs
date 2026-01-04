@@ -8,14 +8,14 @@ use crate::{
             GizmoRenderPipeline, GizmoRenderSnapshot, RenderStore, RenderWorld, WorldRenderer,
         },
         sim_world::{Objects, SimWorld},
-        systems::extract::{GizmoExtract, ModelExtract, TerrainExtract},
     },
 };
+
+use super::extract::*;
 
 pub mod camera_system;
 mod clear_render_targets;
 pub mod day_night_cycle_system;
-mod extract;
 pub mod object_system;
 pub mod world_interaction;
 
@@ -35,7 +35,7 @@ pub struct Systems {
     sim_time: f32,
 
     terrain_extract: TerrainExtract,
-    model_extract: ModelExtract,
+    model_extract: ModelsExtract,
     gizmo_extract: GizmoExtract,
 
     // pub camera_system: camera_system::CameraSystem,
@@ -56,7 +56,7 @@ impl Systems {
             sim_time: 0.0,
 
             terrain_extract: TerrainExtract::default(),
-            model_extract: ModelExtract::default(),
+            model_extract: ModelsExtract::default(),
             gizmo_extract: GizmoExtract::default(),
 
             world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),

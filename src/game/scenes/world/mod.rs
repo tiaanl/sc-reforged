@@ -23,6 +23,7 @@ use crate::{
 
 pub mod actions;
 pub mod animation;
+mod extract;
 mod game_mode;
 mod render;
 pub mod sim_world;
