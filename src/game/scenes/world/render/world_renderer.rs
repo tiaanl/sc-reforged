@@ -6,7 +6,7 @@ use crate::{
         models::models,
         scenes::world::{
             render::{
-                GeometryBuffer,
+                GeometryBuffer, ModelRenderSnapshot,
                 box_pipeline::{self, BoxPipeline},
                 terrain_pipeline::TerrainRenderSnapshot,
                 ui_pipeline::UiPipeline,
@@ -36,6 +36,7 @@ pub struct WorldRenderer {
     bounding_boxes: Vec<box_pipeline::gpu::Instance>,
 
     pub terrain_render_snapshot: TerrainRenderSnapshot,
+    pub model_render_snapshot: ModelRenderSnapshot,
 }
 
 impl WorldRenderer {
@@ -60,6 +61,7 @@ impl WorldRenderer {
             bounding_boxes: Vec::default(),
 
             terrain_render_snapshot: TerrainRenderSnapshot::default(),
+            model_render_snapshot: ModelRenderSnapshot::default(),
         }
     }
 
@@ -71,7 +73,6 @@ impl WorldRenderer {
         render_world: &mut RenderWorld,
         viewport_size: UVec2,
     ) {
-        self.model_pipeline.extract(sim_world, render_store);
         self.ui_pipeline
             .extract(sim_world, render_store, render_world, viewport_size);
 
@@ -102,10 +103,20 @@ impl WorldRenderer {
         }
     }
 
-    pub fn prepare(&mut self, renderer: &Renderer, render_world: &mut RenderWorld) {
+    pub fn prepare(
+        &mut self,
+        renderer: &Renderer,
+        render_store: &mut RenderStore,
+        render_world: &mut RenderWorld,
+    ) {
         self.terrain_pipeline
             .prepare(renderer, render_world, &self.terrain_render_snapshot);
-        self.model_pipeline.prepare(renderer, render_world);
+        self.model_pipeline.prepare(
+            renderer,
+            render_store,
+            render_world,
+            &mut self.model_render_snapshot,
+        );
         self.ui_pipeline.prepare(renderer, render_world);
         if !self.bounding_boxes.is_empty() {
             self.box_pipeline.prepare(renderer, &self.bounding_boxes);

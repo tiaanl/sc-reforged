@@ -1,4 +1,3 @@
-use bevy_ecs::prelude::*;
 use glam::Mat4;
 
 use crate::{
@@ -6,61 +5,55 @@ use crate::{
         renderer::{Frame, Renderer},
         storage::Handle,
     },
-    game::scenes::world::{
-        render::{
+    game::{
+        model::Model,
+        scenes::world::render::{
             GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld,
         },
-        sim_world::{ComputedCamera, Object, Objects, SimWorld, ecs::ActiveCamera},
     },
     wgsl_shader,
 };
 
-#[derive(Clone, Copy, PartialEq)]
-struct RenderKey {
-    render_model: Handle<RenderModel>,
-}
-
-impl Eq for RenderKey {}
-
-impl PartialOrd for RenderKey {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for RenderKey {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.render_model.cmp(&other.render_model)
-    }
-}
-
-enum RenderNodeIndex {
-    Base(u32),
-}
-
 bitflags::bitflags! {
+    #[derive(Clone, Copy)]
     pub struct ModelRenderFlags : u32 {
         const HIGHLIGHTED = 1 << 0;
     }
 }
 
-struct ModelToRender {
-    key: RenderKey,
-    transform: Mat4,
-    first_node_index: RenderNodeIndex,
-    flags: ModelRenderFlags,
+pub struct ModelToRender {
+    pub model: Handle<Model>,
+    pub transform: Mat4,
+    pub flags: ModelRenderFlags,
+}
+
+pub struct RenderModelToRender {
+    pub render_model: Handle<RenderModel>,
+    pub transform: Mat4,
+    pub first_node_index: u32,
+    pub flags: ModelRenderFlags,
 }
 
 struct Batch {
-    key: RenderKey,
+    render_model: Handle<RenderModel>,
     range: std::ops::Range<u32>,
+}
+
+#[derive(Default)]
+pub struct ModelRenderSnapshot {
+    pub models: Vec<ModelToRender>,
 }
 
 pub struct ModelPipeline {
     opaque_pipeline: wgpu::RenderPipeline,
     alpha_pipeline: wgpu::RenderPipeline,
-    pub visible_objects_cache: Vec<Handle<Object>>,
-    models_to_render: Vec<ModelToRender>,
+
+    /// Local cache for render models to render.
+    render_models_cache: Vec<RenderModelToRender>,
+
+    /// Local cache where model instance data is built from the snapshot.
+    model_instances_cache: Vec<ModelInstanceData>,
+
     batches: Vec<Batch>,
 }
 
@@ -170,106 +163,79 @@ impl ModelPipeline {
             cache: None,
         });
 
-        let models_to_render = Vec::default();
-        let batches = Vec::default();
-
         Self {
             opaque_pipeline,
             alpha_pipeline,
 
-            visible_objects_cache: Vec::default(),
+            render_models_cache: Vec::default(),
+            model_instances_cache: Vec::default(),
 
-            models_to_render,
-            batches,
+            batches: Vec::default(),
         }
     }
 
-    pub fn extract(&mut self, sim_world: &mut SimWorld, render_store: &mut RenderStore) {
-        self.models_to_render.clear();
+    pub fn prepare(
+        &mut self,
+        renderer: &Renderer,
+        render_store: &mut RenderStore,
+        render_world: &mut RenderWorld,
+        snapshot: &mut ModelRenderSnapshot,
+    ) {
+        snapshot
+            .models
+            .sort_unstable_by(|a, b| a.model.cmp(&b.model));
 
-        let computed_camera = {
-            sim_world
-                .ecs
-                .query_filtered::<&ComputedCamera, With<ActiveCamera>>()
-                .single(&sim_world.ecs)
-                .unwrap()
-        };
+        self.render_models_cache.clear();
 
-        let objects = sim_world.ecs.resource::<Objects>();
-        objects
-            .static_bvh
-            .objects_in_frustum(&computed_camera.frustum, &mut self.visible_objects_cache);
+        // Build an intermediate list of render models to render with some of the details resolved.
+        for model_to_render in snapshot.models.iter() {
+            let Some(render_model_handle) =
+                render_store.render_model_for_model(model_to_render.model)
+            else {
+                continue;
+            };
 
-        let state = sim_world.state();
-        let selected_objects = &state.selected_objects;
+            let Some(render_model) = render_store.models.get(render_model_handle) else {
+                continue;
+            };
 
-        self.visible_objects_cache
-            .iter()
-            .filter_map(|object_handle| objects.get(*object_handle).map(|o| (o, *object_handle)))
-            .for_each(|(object, handle)| {
-                let mut flags = ModelRenderFlags::empty();
-                flags.set(
-                    ModelRenderFlags::HIGHLIGHTED,
-                    selected_objects.contains(&handle),
-                );
+            let first_node_index = render_model.nodes_range.start;
 
-                use crate::game::scenes::world::sim_world::ObjectData;
-
-                let model = match &object.data {
-                    ObjectData::Scenery { model }
-                    | ObjectData::Biped { model, .. }
-                    | ObjectData::SingleModel { model } => *model,
-                };
-
-                let Some(render_model_handle) = render_store.render_model_for_model(model) else {
-                    tracing::warn!("Missing render model for model!");
-                    return;
-                };
-
-                let Some(render_model) = render_store.models.get(render_model_handle) else {
-                    tracing::warn!("Missing render model for render model handle!");
-                    return;
-                };
-
-                self.models_to_render.push(ModelToRender {
-                    key: RenderKey {
-                        render_model: render_model_handle,
-                    },
-                    transform: object.transform.to_mat4(),
-                    first_node_index: RenderNodeIndex::Base(render_model.nodes_range.start),
-                    flags,
-                });
+            self.render_models_cache.push(RenderModelToRender {
+                render_model: render_model_handle,
+                transform: model_to_render.transform,
+                first_node_index,
+                flags: model_to_render.flags,
             });
-    }
+        }
 
-    pub fn prepare(&mut self, renderer: &Renderer, render_world: &mut RenderWorld) {
-        self.models_to_render
-            .sort_unstable_by(|a, b| a.key.cmp(&b.key));
+        self.model_instances_cache.clear();
 
-        let model_instances: Vec<ModelInstanceData> = self
-            .models_to_render
-            .iter()
-            .map(|instance| ModelInstanceData {
-                transform: instance.transform.to_cols_array_2d(),
-                first_node_index: match instance.first_node_index {
-                    RenderNodeIndex::Base(i) => i,
-                },
-                flags: instance.flags.bits(),
+        for model_to_render in self.render_models_cache.iter() {
+            self.model_instances_cache.push(ModelInstanceData {
+                transform: model_to_render.transform.to_cols_array_2d(),
+                first_node_index: model_to_render.first_node_index,
+                flags: model_to_render.flags.bits(),
                 _pad: Default::default(),
             })
-            .collect();
+        }
 
         let mut batches: Vec<Batch> = Vec::new();
         let mut start_index: usize = 0;
 
-        while start_index < model_instances.len() {
-            let key = self.models_to_render[start_index].key;
+        let instances_count = self.render_models_cache.len();
+        while start_index < instances_count {
+            let render_model = self.render_models_cache[start_index].render_model;
+
             let mut end_index = start_index + 1;
-            while end_index < model_instances.len() && self.models_to_render[end_index].key == key {
+            while end_index < instances_count
+                && self.render_models_cache[end_index].render_model == render_model
+            {
                 end_index += 1;
             }
+
             batches.push(Batch {
-                key,
+                render_model,
                 range: start_index as u32..end_index as u32,
             });
             start_index = end_index;
@@ -278,7 +244,7 @@ impl ModelPipeline {
         // Upload the instances to the GPU.
         render_world
             .model_instances
-            .write(renderer, &model_instances);
+            .write(renderer, &self.model_instances_cache);
 
         self.batches = batches;
     }
@@ -344,7 +310,7 @@ impl ModelPipeline {
         for (render_model, range) in self.batches.iter().filter_map(|batch| {
             render_store
                 .models
-                .get(batch.key.render_model)
+                .get(batch.render_model)
                 .and_then(|render_model| {
                     (!render_model.opaque_range.is_empty())
                         .then(|| (render_model, batch.range.clone()))
@@ -376,7 +342,7 @@ impl ModelPipeline {
         for (render_model, range) in self.batches.iter().filter_map(|batch| {
             render_store
                 .models
-                .get(batch.key.render_model)
+                .get(batch.render_model)
                 .and_then(|render_model| {
                     (!render_model.alpha_range.is_empty())
                         .then(|| (render_model, batch.range.clone()))

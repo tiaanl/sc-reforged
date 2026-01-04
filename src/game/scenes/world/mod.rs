@@ -377,8 +377,8 @@ impl Scene for WorldScene {
                     "{}",
                     self.systems
                         .world_renderer
-                        .model_pipeline
-                        .visible_objects_cache
+                        .model_render_snapshot
+                        .models
                         .len()
                 ));
             });

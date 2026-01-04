@@ -6,7 +6,7 @@ use crate::{
     game::scenes::world::{
         render::{RenderStore, RenderWorld, WorldRenderer},
         sim_world::{Objects, SimWorld},
-        systems::extract::TerrainExtract,
+        systems::extract::{ModelExtract, TerrainExtract},
     },
 };
 
@@ -34,6 +34,7 @@ pub struct Systems {
     sim_time: f32,
 
     terrain_extract: TerrainExtract,
+    model_extract: ModelExtract,
 
     // pub camera_system: camera_system::CameraSystem,
     pub world_renderer: WorldRenderer,
@@ -52,6 +53,7 @@ impl Systems {
             sim_time: 0.0,
 
             terrain_extract: TerrainExtract::default(),
+            model_extract: ModelExtract::default(),
 
             world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),
             gizmo_system: gizmo_system::GizmoSystem::new(renderer, surface_format, render_store),
@@ -74,6 +76,9 @@ impl Systems {
     ) {
         self.terrain_extract
             .extract(sim_world, &mut self.world_renderer.terrain_render_snapshot);
+
+        self.model_extract
+            .extract(sim_world, &mut self.world_renderer.model_render_snapshot);
 
         render_world.camera_env.sim_time = self.sim_time;
 
@@ -104,7 +109,8 @@ impl Systems {
         }
 
         camera_system::prepare(render_world, renderer);
-        self.world_renderer.prepare(renderer, render_world);
+        self.world_renderer
+            .prepare(renderer, render_store, render_world);
         self.gizmo_system.prepare(render_world, renderer);
     }
 

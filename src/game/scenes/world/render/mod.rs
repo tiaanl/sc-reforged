@@ -12,6 +12,7 @@ mod world_renderer;
 
 pub use compositor::Compositor;
 pub use geometry_buffers::GeometryBuffer;
+pub use model_pipeline::{ModelRenderFlags, ModelRenderSnapshot, ModelToRender};
 pub use render_models::{RenderModel, RenderVertex};
 pub use render_store::RenderStore;
 pub use render_world::{ModelInstanceData, RenderUiRect, RenderWorld};
