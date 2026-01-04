@@ -44,7 +44,7 @@ use crate::engine::{egui_integration::UiExt, transform::Transform};
 pub enum Order {
     #[default]
     Idle,
-    Move(OrderMove),
+    _Move(OrderMove),
     // MoveToUseVehicle,
     // MoveToAttack,
     // MoveToCutFence,
@@ -76,7 +76,7 @@ pub enum Order {
 }
 
 impl Order {
-    pub fn ui(&self, ui: &mut egui::Ui) {
+    pub fn _ui(&self, ui: &mut egui::Ui) {
         match self {
             Order::Idle => {
                 ui.vertical(|ui| {
@@ -84,7 +84,7 @@ impl Order {
                 });
             }
 
-            Order::Move(OrderMove {
+            Order::_Move(OrderMove {
                 target_location: world_position,
                 move_speed,
                 rotation_speed,

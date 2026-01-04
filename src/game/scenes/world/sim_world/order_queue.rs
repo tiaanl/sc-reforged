@@ -6,14 +6,14 @@ use super::orders::Order;
 
 /// A queue of orders that will be completed in FIFO order.
 #[derive(Default)]
-pub struct OrderQueue {
+pub struct _OrderQueue {
     /// List FIFO queue of pending orders that still need to be performed.
     pending: VecDeque<Order>,
     /// The current order being performed.
     current: Option<Order>,
 }
 
-impl OrderQueue {
+impl _OrderQueue {
     pub fn _update(&mut self, _time: &Time) {
         // If there is no current order, but there are pending orders, grab
         // the next order from the queue.
@@ -22,7 +22,7 @@ impl OrderQueue {
         }
     }
 
-    pub fn enqueue(&mut self, order: Order) {
+    pub fn _enqueue(&mut self, order: Order) {
         self.pending.push_back(order);
     }
 
@@ -30,7 +30,7 @@ impl OrderQueue {
         self.current.as_ref()
     }
 
-    pub fn ui(&self, ui: &mut egui::Ui) {
+    pub fn _ui(&self, ui: &mut egui::Ui) {
         egui::Frame::default()
             .inner_margin(4)
             .corner_radius(ui.visuals().window_corner_radius)
@@ -42,13 +42,13 @@ impl OrderQueue {
             .show(ui, |ui| {
                 if let Some(current) = &self.current {
                     ui.h2("Current");
-                    current.ui(ui);
+                    current._ui(ui);
                 }
 
                 if !self.pending.is_empty() {
                     ui.h2("Pending");
                     for order in self.pending.iter() {
-                        order.ui(ui);
+                        order._ui(ui);
                     }
                 }
             });

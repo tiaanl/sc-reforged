@@ -3,29 +3,24 @@ use std::path::PathBuf;
 use bevy_ecs::prelude::*;
 
 use crate::{
-    engine::{
-        assets::AssetError,
-        renderer::Renderer,
-        storage::{Handle, Storage},
-        transform::Transform,
-    },
+    engine::{assets::AssetError, renderer::Renderer, storage::Handle, transform::Transform},
     game::{
         config::{BodyDefinition, CharacterProfiles, ObjectType},
         data_dir::data_dir,
         image::images,
-        math::{BoundingBox, RaySegment},
-        model::{Mesh, Model, ModelRayHit},
+        math::BoundingBox,
+        model::{Mesh, Model},
         models::{ModelName, models},
         scenes::world::{
             render::RenderStore,
-            sim_world::{ecs::BoundingBoxComponent, orders::*, sequences::Sequencer},
-            systems::InteractionHit,
+            sim_world::{ecs::BoundingBoxComponent, orders::*},
         },
     },
 };
 
-use super::{order_queue::OrderQueue, static_bvh::StaticBvh};
+use super::static_bvh::StaticBvh;
 
+/*
 pub enum ObjectData {
     Scenery {
         model: Handle<Model>,
@@ -42,11 +37,11 @@ pub enum ObjectData {
 }
 
 impl ObjectData {
-    fn interact(&mut self, hit: &InteractionHit) {
+    fn interact(&mut self, hit: &_InteractionHit) {
         match self {
             ObjectData::Scenery { .. } => {}
             ObjectData::Biped { order_queue, .. } => match hit {
-                InteractionHit::Terrain { world_position, .. } => {
+                _InteractionHit::Terrain { world_position, .. } => {
                     // User clicked on the terrain, order a move.
                     order_queue.enqueue(Order::Move(OrderMove {
                         target_location: *world_position,
@@ -54,7 +49,7 @@ impl ObjectData {
                         rotation_speed: 0.1,
                     }));
                 }
-                InteractionHit::Object { .. } => {}
+                _InteractionHit::Object { .. } => {}
             },
             ObjectData::SingleModel { .. } => {}
         }
@@ -105,34 +100,34 @@ impl Object {
     }
 
     /// The user is interacting with the object.
-    pub fn interact(&mut self, hit: &InteractionHit) {
+    pub fn interact(&mut self, hit: &_InteractionHit) {
         self.data.interact(hit);
     }
 }
+*/
 
 #[derive(Resource)]
 pub struct Objects {
     character_profiles: CharacterProfiles,
 
-    /// A list for all objects iun the world.
-    pub objects: Storage<Object>,
+    pub static_bvh: StaticBvh<Entity>,
 
-    pub static_bvh: StaticBvh,
+    bounding_boxes_query: QueryState<(Entity, &'static Transform, &'static BoundingBoxComponent)>,
 
     /// Keep a list of handles to try and load.
     models_to_prepare: Vec<Handle<Model>>,
 }
 
 impl Objects {
-    pub fn new() -> Result<Self, AssetError> {
+    pub fn new(world: &mut World) -> Result<Self, AssetError> {
         let character_profiles = data_dir().load_character_profiles()?;
 
         let static_bvh = StaticBvh::new(8);
 
         Ok(Self {
             character_profiles,
-            objects: Storage::default(),
             static_bvh,
+            bounding_boxes_query: world.query(),
             models_to_prepare: Vec::default(),
         })
     }
@@ -144,65 +139,8 @@ impl Objects {
         object_type: ObjectType,
         name: &str,
         title: &str,
-    ) -> Result<(Handle<Object>, &Object), AssetError> {
-        let mut bounding_box = BoundingBox::default();
-
-        let object_data = match object_type {
-            ObjectType::Scenery
-            | ObjectType::SceneryAlarm
-            | ObjectType::SceneryBush
-            | ObjectType::SceneryFragile
-            | ObjectType::SceneryLit
-            | ObjectType::SceneryShadowed
-            | ObjectType::SceneryStripLight
-            | ObjectType::SceneryTree
-            | ObjectType::Structure
-            | ObjectType::StructureArmGate
-            | ObjectType::StructureBridge
-            | ObjectType::StructureBuggable
-            | ObjectType::StructureBuilding
-            | ObjectType::StructureBuildingGateController
-            | ObjectType::StructureDoubleGate
-            | ObjectType::StructureFence
-            | ObjectType::StructureGuardTower
-            | ObjectType::StructureLadderSlant0_11
-            | ObjectType::StructureLadderSlant0_14
-            | ObjectType::StructureLadderSlant0_16
-            | ObjectType::StructureLadderSlant0_2
-            | ObjectType::StructureLadderSlant0_3
-            | ObjectType::StructureLadderSlant0_5
-            | ObjectType::StructureLadderSlant0_6
-            | ObjectType::StructureLadderSlant0_9
-            | ObjectType::StructureLadderSlant2_2
-            | ObjectType::StructureLadderSlant2_4
-            | ObjectType::StructureLadderSlant2_5
-            | ObjectType::StructureLocker
-            | ObjectType::StructureSAM
-            | ObjectType::StructureSingleGate
-            | ObjectType::StructureSlideBridge
-            | ObjectType::StructureSlideBridgeController
-            | ObjectType::StructureSlideDoor
-            | ObjectType::StructureStripLightController
-            | ObjectType::StructureSwingDoor
-            | ObjectType::StructureTent
-            | ObjectType::StructureWall => {
-                let (model_handle, model) = models().load_model(ModelName::Object(name.into()))?;
-
-                bounding_box.expand_to_include(&model.bounding_box);
-
-                self.models_to_prepare.push(model_handle);
-
-                commands.spawn((
-                    transform.clone(),
-                    model_handle,
-                    BoundingBoxComponent(bounding_box),
-                ));
-
-                ObjectData::Scenery {
-                    model: model_handle,
-                }
-            }
-
+    ) -> Result<Entity, AssetError> {
+        Ok(match object_type {
             ObjectType::Bipedal => {
                 let Some(character_profile) = self.character_profiles.get(title) else {
                     tracing::warn!("Character profile not found! ({title})");
@@ -223,7 +161,7 @@ impl Objects {
 
                 let model = Self::build_body_definition_model(body_definition)?;
 
-                bounding_box.expand_to_include(&model.bounding_box);
+                let bounding_box = model.bounding_box;
 
                 let model_handle = models().add(
                     ModelName::BodyDefinition(
@@ -235,71 +173,40 @@ impl Objects {
 
                 self.models_to_prepare.push(model_handle);
 
-                commands.spawn((
-                    transform.clone(),
-                    model_handle,
-                    BoundingBoxComponent(bounding_box),
-                    Order::default(),
-                ));
-
-                ObjectData::Biped {
-                    model: model_handle,
-                    order_queue: OrderQueue::default(),
-                    _sequencer: Sequencer::default(),
-                }
+                commands
+                    .spawn((
+                        transform.clone(),
+                        model_handle,
+                        BoundingBoxComponent(bounding_box),
+                        Order::default(),
+                    ))
+                    .id()
             }
 
             _ => {
                 let (model_handle, model) = models().load_model(ModelName::Object(name.into()))?;
 
-                bounding_box.expand_to_include(&model.bounding_box);
-
                 self.models_to_prepare.push(model_handle);
 
-                commands.spawn((
-                    transform.clone(),
-                    model_handle,
-                    BoundingBoxComponent(bounding_box),
-                ));
-
-                ObjectData::SingleModel {
-                    model: model_handle,
-                }
+                commands
+                    .spawn((
+                        transform.clone(),
+                        model_handle,
+                        BoundingBoxComponent(model.bounding_box),
+                    ))
+                    .id()
             }
-        };
-
-        debug_assert!(bounding_box.is_valid(), "invalid bounding box for {name:?}");
-
-        let handle = self.objects.insert(Object {
-            name: name.to_string(),
-            title: title.to_string(),
-            transform,
-            bounding_box,
-            data: object_data,
-        });
-
-        Ok((handle, self.objects.get(handle).unwrap()))
+        })
     }
 
-    #[inline]
-    pub fn get(&self, handle: Handle<Object>) -> Option<&Object> {
-        self.objects.get(handle)
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self, handle: Handle<Object>) -> Option<&mut Object> {
-        self.objects.get_mut(handle)
-    }
-
-    pub fn finalize(&mut self) {
+    pub fn finalize(&mut self, world: &World) {
         let bounding_boxes = self
-            .objects
+            .bounding_boxes_query
+            .query(world)
             .iter()
-            .map(|(handle, object)| {
-                (
-                    handle,
-                    object.bounding_box.transformed(object.transform.to_mat4()),
-                )
+            .map(|(entity, transform, bounding_box)| {
+                let bounding_box = bounding_box.0.transformed(transform.to_mat4());
+                (entity, bounding_box)
             })
             .collect::<Vec<_>>();
 

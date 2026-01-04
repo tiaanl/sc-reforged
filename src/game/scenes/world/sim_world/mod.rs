@@ -6,7 +6,7 @@ use bevy_ecs::resource::Resource;
 use glam::{IVec2, Quat, Vec2, Vec3};
 
 use crate::{
-    engine::{assets::AssetError, input::InputState, storage::Handle, transform::Transform},
+    engine::{assets::AssetError, input::InputState, transform::Transform},
     game::{
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
@@ -41,7 +41,7 @@ mod ui;
 pub use camera::Camera;
 pub use camera::ComputedCamera;
 pub use height_map::HeightMap;
-pub use objects::{Object, ObjectData, Objects, RayIntersectionMode};
+pub use objects::Objects;
 pub use orders::Order;
 pub use terrain::Terrain;
 pub use ui::UiRect;
@@ -67,7 +67,7 @@ pub struct SimWorldState {
     /// A list of chunks that should be highlighted during rendering.
     pub highlighted_chunks: HashSet<IVec2>,
 
-    pub selected_objects: HashSet<Handle<Object>>,
+    pub selected_objects: HashSet<Entity>,
 
     // pub gizmo_vertices: Vec<GizmoVertex>,
     pub _sequences: Sequences,
@@ -175,7 +175,7 @@ impl SimWorld {
 
         ecs.insert_resource(terrain);
 
-        let mut objects = Objects::new()?;
+        let mut objects = Objects::new(&mut ecs)?;
 
         let mut command_queue = bevy_ecs::world::CommandQueue::default();
         if let Some(ref mtf_name) = campaign.mtf_name {
@@ -205,7 +205,7 @@ impl SimWorld {
         command_queue.apply(&mut ecs);
 
         // TODO: Can also do the [RenderModel] creation here?
-        objects.finalize();
+        objects.finalize(&ecs);
 
         ecs.insert_resource(objects);
 

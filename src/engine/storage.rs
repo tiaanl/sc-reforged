@@ -71,12 +71,12 @@ impl<T> Storage<T> {
     }
 
     #[inline]
-    pub fn get_mut(&mut self, id: Handle<T>) -> Option<&mut T> {
+    pub fn _get_mut(&mut self, id: Handle<T>) -> Option<&mut T> {
         self.0.get_mut(id.0)
     }
 
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
+    pub fn _iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
         self.0
             .iter()
             .map(|(index, value)| (Handle(index, std::marker::PhantomData), value))

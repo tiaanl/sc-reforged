@@ -201,8 +201,6 @@ impl Scene for WorldScene {
     fn debug_panel(&mut self, ctx: &egui::Context, frame_index: u64) {
         use egui::widgets::Slider;
 
-        use crate::game::scenes::world::sim_world::Objects;
-
         if !self.in_editor() {
             return;
         }
@@ -403,6 +401,7 @@ impl Scene for WorldScene {
         });
 
         // TODO: Should probably move somewhere.
+        /*
         if !self.sim_world.state().selected_objects.is_empty() {
             egui::Window::new("Selected")
                 .resizable(false)
@@ -441,6 +440,7 @@ impl Scene for WorldScene {
                     }
                 });
         }
+        */
     }
 }
 

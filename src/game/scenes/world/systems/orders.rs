@@ -13,7 +13,7 @@ pub fn process_biped_orders(mut orders: Query<(&mut Transform, &mut Order)>, tim
         // each order's update can have a different signature.
         match *order {
             Order::Idle => {}
-            Order::Move(ref mut order_move) => {
+            Order::_Move(ref mut order_move) => {
                 order_move.update(&mut transform, delta_time);
             }
         }

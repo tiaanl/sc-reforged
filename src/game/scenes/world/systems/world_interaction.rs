@@ -2,18 +2,18 @@ use bevy_ecs::prelude::*;
 use glam::{IVec2, Mat4, UVec2, Vec2, Vec3, Vec4};
 
 use crate::{
-    engine::{input::InputState, storage::Handle},
+    engine::input::InputState,
     game::{
         math::{Frustum, RaySegment},
         scenes::world::sim_world::{
-            ComputedCamera, Object, Objects, RayIntersectionMode, SimWorldState, Terrain, UiRect,
+            ComputedCamera, Objects, SimWorldState, Terrain, UiRect,
             ecs::{ActiveCamera, Viewport},
         },
     },
 };
 
 #[derive(Debug)]
-pub enum InteractionHit {
+pub enum _InteractionHit {
     Terrain {
         world_position: Vec3,
         _distance: f32,
@@ -22,15 +22,15 @@ pub enum InteractionHit {
     Object {
         _world_position: Vec3,
         _distance: f32,
-        object: Handle<Object>,
+        object: Entity,
     },
 }
 
-impl InteractionHit {
+impl _InteractionHit {
     pub fn _distance(&self) -> f32 {
         match self {
-            InteractionHit::Terrain { _distance, .. }
-            | InteractionHit::Object { _distance, .. } => *_distance,
+            _InteractionHit::Terrain { _distance, .. }
+            | _InteractionHit::Object { _distance, .. } => *_distance,
         }
     }
 }
@@ -217,13 +217,14 @@ fn set_selection_by_rect(
 
 /// The user clicked somewhere and wants to interact with an object.
 fn interact_with(
-    state: &mut SimWorldState,
-    computed_camera: &ComputedCamera,
-    objects: &mut Objects,
-    terrain: &Terrain,
-    pos: UVec2,
-    viewport_size: UVec2,
+    _state: &mut SimWorldState,
+    _computed_camera: &ComputedCamera,
+    _objects: &mut Objects,
+    _terrain: &Terrain,
+    _pos: UVec2,
+    _viewport_size: UVec2,
 ) {
+    /*
     // Shoot a ray into the scene from the camera to see what we can hit.
     let camera_ray_segment = computed_camera.create_ray_segment(pos, viewport_size);
 
@@ -247,6 +248,7 @@ fn interact_with(
             }
         }
     }
+    */
 }
 
 #[inline]
@@ -265,11 +267,14 @@ fn unproject(ndc: Vec3, inv: &Mat4) -> Vec3 {
     world.truncate() / world.w
 }
 
-fn get_interaction_hit(
-    objects: &Objects,
-    terrain: &Terrain,
-    camera_ray_segment: &RaySegment,
-) -> Option<InteractionHit> {
+fn _get_interaction_hit(
+    _objects: &Objects,
+    _terrain: &Terrain,
+    _camera_ray_segment: &RaySegment,
+) -> Option<_InteractionHit> {
+    None
+
+    /*
     if camera_ray_segment.is_degenerate() {
         return None;
     }
@@ -340,4 +345,5 @@ fn get_interaction_hit(
         }),
         (None, None) => None,
     }
+    */
 }

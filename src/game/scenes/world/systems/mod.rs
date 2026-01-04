@@ -19,8 +19,6 @@ pub mod day_night_cycle_system;
 mod orders;
 pub mod world_interaction;
 
-pub use world_interaction::InteractionHit;
-
 #[derive(Default, Resource)]
 pub struct Time {
     /// Time elapsed since the last frame was rendered.

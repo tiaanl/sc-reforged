@@ -2,17 +2,14 @@ use glam::UVec2;
 
 use crate::{
     engine::renderer::{Frame, Renderer},
-    game::{
-        models::models,
-        scenes::world::{
-            render::{
-                GeometryBuffer, ModelRenderSnapshot,
-                box_pipeline::{self, BoxPipeline},
-                terrain_pipeline::TerrainRenderSnapshot,
-                ui_pipeline::UiPipeline,
-            },
-            sim_world::{ObjectData, Objects, SimWorld},
+    game::scenes::world::{
+        render::{
+            GeometryBuffer, ModelRenderSnapshot,
+            box_pipeline::{self, BoxPipeline},
+            terrain_pipeline::TerrainRenderSnapshot,
+            ui_pipeline::UiPipeline,
         },
+        sim_world::SimWorld,
     },
 };
 
@@ -76,9 +73,11 @@ impl WorldRenderer {
         self.ui_pipeline
             .extract(sim_world, render_store, render_world, viewport_size);
 
+        self.bounding_boxes.clear();
+
+        /*
         let objects = sim_world.ecs.resource::<Objects>();
 
-        self.bounding_boxes.clear();
         if self.render_bounding_boxes {
             for (_, object) in objects.objects.iter() {
                 let model_handle = match object.data {
@@ -101,6 +100,7 @@ impl WorldRenderer {
                 });
             }
         }
+        */
     }
 
     pub fn prepare(

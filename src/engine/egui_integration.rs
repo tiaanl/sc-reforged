@@ -129,6 +129,7 @@ impl EguiIntegration {
     }
 }
 
+#[allow(unused)]
 pub trait UiExt {
     fn h1(&mut self, text: impl Into<String>) -> egui::Response;
     fn h2(&mut self, text: impl Into<String>) -> egui::Response;
