@@ -12,8 +12,8 @@ use crate::{
 pub struct CameraEnvironment {
     pub proj_view: [[f32; 4]; 4],
     pub frustum: [[f32; 4]; 6],
-    pub position: [f32; 4], // x, y, z, 1
-    pub forward: [f32; 4],  // x, y, z, 0
+    pub position: [f32; 4], // x, y, z, near
+    pub forward: [f32; 4],  // x, y, z, far
 
     pub sun_dir: [f32; 4],       // x, y, z, 0
     pub sun_color: [f32; 4],     // r, g, b, 1

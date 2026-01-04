@@ -4,7 +4,7 @@ use glam::IVec2;
 
 use crate::game::scenes::world::{
     render::{TerrainRenderSnapshot, gpu},
-    sim_world::{Camera, ComputedCamera, SimWorld, Terrain, ecs::ActiveCamera},
+    sim_world::{ComputedCamera, SimWorld, Terrain, ecs::ActiveCamera},
 };
 
 pub struct TerrainExtract {
@@ -15,7 +15,7 @@ pub struct TerrainExtract {
     pub visible_chunks_cache: Vec<IVec2>,
 
     /// ECS query for the active camera.
-    active_camera_query: QueryState<(&'static Camera, &'static ComputedCamera), With<ActiveCamera>>,
+    active_camera_query: QueryState<&'static ComputedCamera, With<ActiveCamera>>,
 }
 
 impl TerrainExtract {
@@ -32,11 +32,11 @@ impl TerrainExtract {
     pub fn extract(&mut self, sim_world: &SimWorld, snapshot: &mut TerrainRenderSnapshot) {
         self.chunk_lod_cache.clear();
 
-        let (camera, computed_camera) = self.active_camera_query.single(&sim_world.ecs).unwrap();
+        let computed_camera = self.active_camera_query.single(&sim_world.ecs).unwrap();
 
         let camera_position = computed_camera.position;
         let camera_forward = computed_camera.forward;
-        let camera_far = camera.far;
+        let camera_far = computed_camera.far;
 
         let chunk_instances = &mut snapshot.chunk_instances;
         let strata_instances = &mut snapshot.strata_instances;

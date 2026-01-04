@@ -105,14 +105,15 @@ impl Camera {
     pub fn compute(&self) -> ComputedCamera {
         let view_proj = self.calculate_view_projection();
         let frustum = view_proj.frustum();
-        let position = self.position;
         let forward = (self.rotation * Camera::FORWARD).normalize();
 
         ComputedCamera {
             view_proj,
             frustum,
-            position,
+            position: self.position,
             forward,
+            near: self.near,
+            far: self.far,
         }
     }
 }
@@ -123,6 +124,8 @@ pub struct ComputedCamera {
     pub frustum: Frustum,
     pub position: Vec3,
     pub forward: Vec3,
+    pub near: f32,
+    pub far: f32,
 }
 
 impl ComputedCamera {

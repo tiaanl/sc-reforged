@@ -17,8 +17,8 @@ fn extract_camera(camera: &ComputedCamera, render_world: &mut RenderWorld) {
         .frustum
         .planes
         .map(|plane| plane.normal.extend(plane.distance).to_array());
-    target.position = camera.position.extend(1.0).to_array();
-    target.forward = camera.forward.extend(0.0).to_array();
+    target.position = camera.position.extend(camera.near).to_array();
+    target.forward = camera.forward.extend(camera.far).to_array();
 }
 
 fn extract_environment(sim_world: &SimWorld, render_world: &mut RenderWorld) {
