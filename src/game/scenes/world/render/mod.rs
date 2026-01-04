@@ -1,6 +1,7 @@
 mod box_pipeline;
 mod compositor;
 mod geometry_buffers;
+mod gizmo_pipeline;
 mod model_pipeline;
 mod render_models;
 mod render_store;
@@ -12,6 +13,7 @@ mod world_renderer;
 
 pub use compositor::Compositor;
 pub use geometry_buffers::GeometryBuffer;
+pub use gizmo_pipeline::GizmoRenderPipeline;
 pub use model_pipeline::{ModelRenderFlags, ModelRenderSnapshot, ModelToRender};
 pub use render_models::{RenderModel, RenderVertex};
 pub use render_store::RenderStore;

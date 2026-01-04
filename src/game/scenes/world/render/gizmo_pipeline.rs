@@ -10,11 +10,11 @@ use crate::{
     wgsl_shader,
 };
 
-pub struct GizmoSystem {
+pub struct GizmoRenderPipeline {
     pipeline: wgpu::RenderPipeline,
 }
 
-impl GizmoSystem {
+impl GizmoRenderPipeline {
     pub fn new(
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
@@ -70,7 +70,7 @@ impl GizmoSystem {
     }
 }
 
-impl GizmoSystem {
+impl GizmoRenderPipeline {
     pub fn extract(&mut self, sim_world: &mut SimWorld, render_world: &mut RenderWorld) {
         // Move all the sim world vertices to the render world vertices.
         render_world.gizmo_vertices.clear();

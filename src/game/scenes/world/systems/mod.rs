@@ -4,7 +4,7 @@ use glam::UVec2;
 use crate::{
     engine::renderer::{Frame, Renderer},
     game::scenes::world::{
-        render::{RenderStore, RenderWorld, WorldRenderer},
+        render::{GizmoRenderPipeline, RenderStore, RenderWorld, WorldRenderer},
         sim_world::{Objects, SimWorld},
         systems::extract::{ModelExtract, TerrainExtract},
     },
@@ -14,7 +14,6 @@ pub mod camera_system;
 mod clear_render_targets;
 pub mod day_night_cycle_system;
 mod extract;
-mod gizmo_system;
 pub mod object_system;
 pub mod world_interaction;
 
@@ -39,7 +38,7 @@ pub struct Systems {
     // pub camera_system: camera_system::CameraSystem,
     pub world_renderer: WorldRenderer,
 
-    gizmo_system: gizmo_system::GizmoSystem,
+    gizmo_render_pipeline: GizmoRenderPipeline,
 }
 
 impl Systems {
@@ -56,7 +55,7 @@ impl Systems {
             model_extract: ModelExtract::default(),
 
             world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),
-            gizmo_system: gizmo_system::GizmoSystem::new(renderer, surface_format, render_store),
+            gizmo_render_pipeline: GizmoRenderPipeline::new(renderer, surface_format, render_store),
         }
     }
 
@@ -91,7 +90,7 @@ impl Systems {
         self.world_renderer
             .extract(sim_world, render_store, render_world, viewport_size);
 
-        self.gizmo_system.extract(sim_world, render_world);
+        self.gizmo_render_pipeline.extract(sim_world, render_world);
     }
 
     pub fn prepare(
@@ -111,7 +110,7 @@ impl Systems {
         camera_system::prepare(render_world, renderer);
         self.world_renderer
             .prepare(renderer, render_store, render_world);
-        self.gizmo_system.prepare(render_world, renderer);
+        self.gizmo_render_pipeline.prepare(render_world, renderer);
     }
 
     pub fn queue(
@@ -136,6 +135,6 @@ impl Systems {
             .compositor
             .render(frame, &render_store.geometry_buffer);
 
-        self.gizmo_system.queue(render_world, frame);
+        self.gizmo_render_pipeline.queue(render_world, frame);
     }
 }
