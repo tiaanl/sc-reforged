@@ -174,7 +174,6 @@ impl Scene for WorldScene {
             // Extract
             let start = std::time::Instant::now();
             self.systems.extract(
-                renderer,
                 &mut self.sim_world,
                 &mut self.render_store,
                 render_world,
@@ -192,6 +191,9 @@ impl Scene for WorldScene {
             let start = std::time::Instant::now();
             self.systems.queue(&self.render_store, render_world, frame);
             frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
+
+            self.sim_world.ecs.clear_trackers();
+            self.sim_world.ecs.increment_change_tick();
         }
 
         self.fps_history_cursor = (self.fps_history_cursor + 1) % self.fps_history.len();

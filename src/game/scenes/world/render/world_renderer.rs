@@ -5,7 +5,7 @@ use crate::{
     game::scenes::world::{
         render::{
             GeometryBuffer, ModelRenderSnapshot,
-            box_pipeline::{self, BoxPipeline},
+            box_pipeline::{self, BoxPipeline, BoxRenderSnapshot},
             terrain_pipeline::TerrainRenderSnapshot,
             ui_pipeline::UiPipeline,
         },
@@ -34,6 +34,7 @@ pub struct WorldRenderer {
 
     pub terrain_render_snapshot: TerrainRenderSnapshot,
     pub model_render_snapshot: ModelRenderSnapshot,
+    pub box_render_snapshot: BoxRenderSnapshot,
 }
 
 impl WorldRenderer {
@@ -59,6 +60,7 @@ impl WorldRenderer {
 
             terrain_render_snapshot: TerrainRenderSnapshot::default(),
             model_render_snapshot: ModelRenderSnapshot::default(),
+            box_render_snapshot: BoxRenderSnapshot::default(),
         }
     }
 
@@ -118,9 +120,8 @@ impl WorldRenderer {
             &mut self.model_render_snapshot,
         );
         self.ui_pipeline.prepare(renderer, render_world);
-        if !self.bounding_boxes.is_empty() {
-            self.box_pipeline.prepare(renderer, &self.bounding_boxes);
-        }
+        self.box_pipeline
+            .prepare(renderer, &self.box_render_snapshot);
     }
 
     pub fn queue(

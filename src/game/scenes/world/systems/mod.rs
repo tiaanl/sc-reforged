@@ -2,12 +2,20 @@ use bevy_ecs::prelude::*;
 use glam::UVec2;
 
 use crate::{
-    engine::renderer::{Frame, Renderer},
+    engine::{
+        renderer::{Frame, Renderer},
+        transform::Transform,
+    },
     game::scenes::world::{
         render::{
-            GizmoRenderPipeline, GizmoRenderSnapshot, RenderStore, RenderWorld, WorldRenderer,
+            GizmoRenderPipeline, GizmoRenderSnapshot, RenderBox, RenderStore, RenderWorld,
+            WorldRenderer,
         },
-        sim_world::{Objects, SimWorld, ecs, free_camera_controller, top_down_camera_controller},
+        sim_world::{
+            SimWorld,
+            ecs::{self, BoundingBoxComponent},
+            free_camera_controller, top_down_camera_controller,
+        },
     },
 };
 
@@ -33,6 +41,7 @@ pub struct Systems {
     sim_time: f32,
 
     pub update_schedule: Schedule,
+    pub extract_schedule: Schedule,
 
     terrain_extract: TerrainExtract,
     model_extract: ModelsExtract,
@@ -86,10 +95,38 @@ impl Systems {
             schedule
         };
 
+        let extract_schedule = {
+            let mut schedule = Schedule::default();
+
+            fn clear_snapshots(mut snapshots: ResMut<ecs::Snapshots>) {
+                snapshots.clear();
+            }
+
+            schedule.add_systems(
+                (
+                    clear_snapshots,
+                    |bounding_boxes: Query<(&Transform, &BoundingBoxComponent)>,
+                     mut snapshots: ResMut<ecs::Snapshots>| {
+                        for (transform, bounding_box_component) in bounding_boxes.iter() {
+                            snapshots.box_render_snapshot.boxes.push(RenderBox {
+                                transform: transform.clone(),
+                                min: bounding_box_component.0.min,
+                                max: bounding_box_component.0.max,
+                            });
+                        }
+                    },
+                )
+                    .chain(),
+            );
+
+            schedule
+        };
+
         Self {
             sim_time: 0.0,
 
             update_schedule,
+            extract_schedule,
 
             terrain_extract: TerrainExtract::new(sim_world),
             model_extract: ModelsExtract::new(sim_world),
@@ -110,12 +147,13 @@ impl Systems {
 
     pub fn extract(
         &mut self,
-        renderer: &Renderer,
         sim_world: &mut SimWorld,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         viewport_size: UVec2,
     ) {
+        self.extract_schedule.run(&mut sim_world.ecs);
+
         self.terrain_extract
             .extract(sim_world, &mut self.world_renderer.terrain_render_snapshot);
 
@@ -128,10 +166,6 @@ impl Systems {
         render_world.camera_env.sim_time = self.sim_time;
 
         camera_system::extract(sim_world, render_world);
-
-        // Make sure all models are prepared to be rendered.
-        let mut objects = sim_world.ecs.resource_mut::<Objects>();
-        objects.prepare_models(renderer, render_store);
 
         self.world_renderer
             .extract(sim_world, render_store, render_world, viewport_size);

@@ -14,6 +14,9 @@ use crate::{
 pub struct ModelsExtract {
     visible_objects_cache: Vec<Entity>,
 
+    /// Query all model handles that were added since the last frame.
+    new_models_query: QueryState<&'static Handle<Model>, Added<Handle<Model>>>,
+
     /// ECS query for the active camera.
     active_camera_query: QueryState<&'static ComputedCamera, With<ActiveCamera>>,
 
@@ -25,12 +28,21 @@ impl ModelsExtract {
     pub fn new(sim_world: &mut SimWorld) -> Self {
         Self {
             visible_objects_cache: Vec::default(),
+            new_models_query: sim_world.ecs.query_filtered(),
             active_camera_query: sim_world.ecs.query_filtered(),
             models_query: sim_world.ecs.query(),
         }
     }
 
     pub fn extract(&mut self, sim_world: &SimWorld, snapshot: &mut ModelRenderSnapshot) {
+        // Gather any new models to prepare into the snapshot.
+        snapshot.models_to_prepare = self
+            .new_models_query
+            .query(&sim_world.ecs)
+            .iter()
+            .cloned()
+            .collect();
+
         snapshot.models.clear();
 
         let computed_camera = self.active_camera_query.single(&sim_world.ecs).unwrap();

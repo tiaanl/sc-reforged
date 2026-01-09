@@ -11,6 +11,7 @@ mod terrain_pipeline;
 mod ui_pipeline;
 mod world_renderer;
 
+pub use box_pipeline::{BoxRenderSnapshot, RenderBox};
 pub use compositor::Compositor;
 pub use geometry_buffers::GeometryBuffer;
 pub use gizmo_pipeline::{GizmoRenderPipeline, GizmoRenderSnapshot};

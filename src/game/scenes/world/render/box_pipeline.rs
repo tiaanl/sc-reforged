@@ -1,13 +1,32 @@
+use glam::Vec3;
 use wgpu::util::DeviceExt;
 
 use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
         renderer::{Frame, Renderer},
+        transform::Transform,
     },
     game::scenes::world::render::{GeometryBuffer, RenderStore, RenderWorld},
     wgsl_shader,
 };
+
+pub struct RenderBox {
+    pub transform: Transform,
+    pub min: Vec3,
+    pub max: Vec3,
+}
+
+#[derive(Default)]
+pub struct BoxRenderSnapshot {
+    pub boxes: Vec<RenderBox>,
+}
+
+impl BoxRenderSnapshot {
+    pub fn clear(&mut self) {
+        self.boxes.clear();
+    }
+}
 
 pub struct BoxPipeline {
     vertex_buffer: wgpu::Buffer,
@@ -15,6 +34,9 @@ pub struct BoxPipeline {
     index_count: u32,
     instance_buffer: GrowingBuffer<gpu::Instance>,
     pipeline: wgpu::RenderPipeline,
+
+    /// Cache for converting snapshot [Box] to [gpu::Instance]s
+    instances_cache: Vec<gpu::Instance>,
 }
 
 impl BoxPipeline {
@@ -97,11 +119,21 @@ impl BoxPipeline {
             index_count,
             instance_buffer,
             pipeline,
+
+            instances_cache: Vec::default(),
         }
     }
 
-    pub fn prepare(&mut self, renderer: &Renderer, instances: &[gpu::Instance]) {
-        self.instance_buffer.write(renderer, instances);
+    pub fn prepare(&mut self, renderer: &Renderer, snapshot: &BoxRenderSnapshot) {
+        self.instances_cache.clear();
+        self.instances_cache
+            .extend(snapshot.boxes.iter().map(|b| gpu::Instance {
+                transform: b.transform.to_mat4().to_cols_array_2d(),
+                min: b.min.extend(1.0).to_array(),
+                max: b.max.extend(1.0).to_array(),
+            }));
+
+        self.instance_buffer.write(renderer, &self.instances_cache);
     }
 
     pub fn queue(

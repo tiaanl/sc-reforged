@@ -12,7 +12,7 @@ use crate::{
         data_dir::data_dir,
         scenes::world::{
             sim_world::{
-                ecs::{ActiveCamera, GizmoVertices, Viewport},
+                ecs::{ActiveCamera, GizmoVertices, Snapshots, Viewport},
                 free_camera_controller::FreeCameraController,
                 sequences::Sequences,
                 top_down_camera_controller::TopDownCameraController,
@@ -33,6 +33,7 @@ mod order_queue;
 mod orders;
 mod quad_tree;
 mod sequences;
+mod spawner;
 mod static_bvh;
 mod terrain;
 pub mod top_down_camera_controller;
@@ -90,6 +91,8 @@ impl SimWorld {
         ecs.init_resource::<InputState>();
 
         ecs.init_resource::<WorldInteraction>();
+
+        ecs.init_resource::<Snapshots>();
 
         ecs.insert_resource(GizmoVertices::with_capacity(1024));
 
@@ -154,19 +157,19 @@ impl SimWorld {
             FreeCameraController::new(1000.0, 0.2),
         ));
 
-        let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
-
-        let height_map = {
-            let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
-            tracing::info!("Loading terrain height map: {}", path.display());
-            data_dir().load_new_height_map(
-                path,
-                terrain_mapping.altitude_map_height_base,
-                terrain_mapping.nominal_edge_size,
-            )?
-        };
-
         let terrain = {
+            let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
+
+            let height_map = {
+                let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
+                tracing::info!("Loading terrain height map: {}", path.display());
+                data_dir().load_new_height_map(
+                    path,
+                    terrain_mapping.altitude_map_height_base,
+                    terrain_mapping.nominal_edge_size,
+                )?
+            };
+
             let terrain_texture =
                 data_dir().load_terrain_texture(&terrain_mapping.texture_map_base_name)?;
 
@@ -177,7 +180,8 @@ impl SimWorld {
 
         let mut objects = Objects::new(&mut ecs)?;
 
-        let mut command_queue = bevy_ecs::world::CommandQueue::default();
+        let mut object_spawner = spawner::Spawner::new(data_dir().load_character_profiles()?);
+
         if let Some(ref mtf_name) = campaign.mtf_name {
             let mtf = data_dir().load_mtf(mtf_name)?;
 
@@ -185,14 +189,15 @@ impl SimWorld {
                 let object_type = ObjectType::from_string(&object.typ)
                     .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
 
-                let commands = Commands::new(&mut command_queue, &ecs);
-                let _ = match objects.spawn(
-                    commands,
-                    Transform::from_translation(object.position)
-                        .with_euler_rotation(object.rotation * Vec3::new(1.0, 1.0, -1.0)),
-                    object_type,
-                    &object.name,
+                let transform = Transform::from_translation(object.position)
+                    .with_euler_rotation(object.rotation * Vec3::new(1.0, 1.0, -1.0));
+
+                let _ = match object_spawner.spawn(
+                    &mut ecs,
                     &object.title,
+                    &object.name,
+                    object_type,
+                    transform.clone(),
                 ) {
                     Ok(handle) => handle,
                     Err(err) => {
@@ -202,7 +207,6 @@ impl SimWorld {
                 };
             }
         }
-        command_queue.apply(&mut ecs);
 
         // TODO: Can also do the [RenderModel] creation here?
         objects.finalize(&ecs);

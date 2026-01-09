@@ -41,6 +41,9 @@ struct Batch {
 
 #[derive(Default)]
 pub struct ModelRenderSnapshot {
+    /// A list of any new models that needs to be prepared before rendering.
+    pub models_to_prepare: Vec<Handle<Model>>,
+    /// A list of models to render.
     pub models: Vec<ModelToRender>,
 }
 
@@ -181,6 +184,19 @@ impl ModelPipeline {
         render_world: &mut RenderWorld,
         snapshot: &mut ModelRenderSnapshot,
     ) {
+        if !snapshot.models_to_prepare.is_empty() {
+            let mut models_to_prepare = Vec::default();
+            std::mem::swap(&mut snapshot.models_to_prepare, &mut models_to_prepare);
+
+            tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
+
+            for model_handle in models_to_prepare {
+                if let Err(err) = render_store.get_or_create_render_model(renderer, model_handle) {
+                    tracing::warn!("Could not prepare model! ({err})");
+                }
+            }
+        }
+
         snapshot
             .models
             .sort_unstable_by(|a, b| a.model.cmp(&b.model));

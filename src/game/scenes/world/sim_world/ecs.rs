@@ -3,7 +3,10 @@
 use bevy_ecs::prelude::*;
 use glam::UVec2;
 
-use crate::{engine::gizmos::GizmoVertex, game::math::BoundingBox};
+use crate::{
+    engine::gizmos::GizmoVertex,
+    game::{math::BoundingBox, scenes::world::render::BoxRenderSnapshot},
+};
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UpdateSet {
@@ -50,5 +53,16 @@ impl Viewport {
     #[inline]
     pub fn resize(&mut self, size: UVec2) {
         self.size = size;
+    }
+}
+
+#[derive(Default, Resource)]
+pub struct Snapshots {
+    pub box_render_snapshot: BoxRenderSnapshot,
+}
+
+impl Snapshots {
+    pub fn clear(&mut self) {
+        self.box_render_snapshot.clear();
     }
 }
