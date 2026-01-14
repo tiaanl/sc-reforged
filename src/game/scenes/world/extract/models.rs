@@ -6,7 +6,7 @@ use crate::{
         model::Model,
         scenes::world::{
             render::{ModelRenderFlags, ModelRenderSnapshot, ModelToRender},
-            sim_world::{ComputedCamera, Objects, SimWorld, ecs::ActiveCamera},
+            sim_world::{ComputedCamera, SimWorld, StaticBvh, ecs::ActiveCamera},
         },
     },
 };
@@ -46,7 +46,7 @@ impl ModelsExtract {
         snapshot.models.clear();
 
         let computed_camera = self.active_camera_query.single(&sim_world.ecs).unwrap();
-        let static_bvh = &sim_world.ecs.resource::<Objects>().static_bvh;
+        let static_bvh = &sim_world.ecs.resource::<StaticBvh>();
         let selected_objects = &sim_world.state().selected_objects;
 
         static_bvh.objects_in_frustum(&computed_camera.frustum, &mut self.visible_objects_cache);

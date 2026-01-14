@@ -1,3 +1,4 @@
+use bevy_ecs::prelude::*;
 use glam::Vec3;
 
 use crate::game::math::{BoundingBox, Containment, Frustum, RaySegment};
@@ -12,18 +13,23 @@ struct Node {
     kind: NodeKind,
 }
 
+/// This is just a marker to allow the objects to be added to the static bvh.
+#[derive(Component)]
+pub struct StaticBvhHandle;
+
 /// Static binary BVH over object bounding boxes.
-pub struct StaticBvh<T: Copy> {
+#[derive(Resource)]
+pub struct StaticBvh {
     nodes: Vec<Node>,
     indices: Vec<usize>,
 
-    objects: Vec<T>,
+    objects: Vec<Entity>,
     bounding_boxes: Vec<BoundingBox>,
 
     leaf_size: usize,
 }
 
-impl<T: Copy> StaticBvh<T> {
+impl StaticBvh {
     pub fn new(leaf_size: usize) -> Self {
         Self {
             nodes: Vec::new(),
@@ -35,7 +41,7 @@ impl<T: Copy> StaticBvh<T> {
     }
 
     /// Rebuild the nodes with the given items.
-    pub fn rebuild(&mut self, items: &[(T, BoundingBox)]) {
+    pub fn rebuild(&mut self, items: &[(Entity, BoundingBox)]) {
         debug_assert!(!items.is_empty());
 
         let len = items.len();
@@ -58,7 +64,7 @@ impl<T: Copy> StaticBvh<T> {
     }
 
     /// Frustum culling query. Writes visible object IDs into `out`.
-    pub fn objects_in_frustum(&self, frustum: &Frustum, out: &mut Vec<T>) {
+    pub fn objects_in_frustum(&self, frustum: &Frustum, out: &mut Vec<Entity>) {
         out.clear();
 
         if self.nodes.is_empty() {
@@ -118,7 +124,7 @@ impl<T: Copy> StaticBvh<T> {
     }
 
     /// Ray query. Writes object IDs whose bounding boxes intersect the ray segment into `out`.
-    pub fn _objects_intersect_ray_segment(&self, ray_segment: &RaySegment, out: &mut Vec<T>) {
+    pub fn _objects_intersect_ray_segment(&self, ray_segment: &RaySegment, out: &mut Vec<Entity>) {
         out.clear();
 
         if self.nodes.is_empty() || ray_segment.is_degenerate() {

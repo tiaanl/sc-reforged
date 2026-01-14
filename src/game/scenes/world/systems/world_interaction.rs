@@ -6,7 +6,7 @@ use crate::{
     game::{
         math::{Frustum, RaySegment},
         scenes::world::sim_world::{
-            ComputedCamera, Objects, SimWorldState, Terrain, UiRect,
+            ComputedCamera, SimWorldState, Terrain, UiRect,
             ecs::{ActiveCamera, Viewport},
         },
     },
@@ -85,7 +85,6 @@ const DRAG_THRESHOLD: u32 = 2;
 pub fn input(
     mut world_interaction: ResMut<WorldInteraction>,
     mut state: ResMut<SimWorldState>,
-    mut objects: ResMut<Objects>,
     computed_camera: Single<&ComputedCamera, With<ActiveCamera>>,
     terrain: Res<Terrain>,
     input_state: Res<InputState>,
@@ -108,7 +107,6 @@ pub fn input(
                 interact_with(
                     &mut state,
                     &computed_camera,
-                    &mut objects,
                     &terrain,
                     rect.pos,
                     viewport.size,
@@ -219,7 +217,6 @@ fn set_selection_by_rect(
 fn interact_with(
     _state: &mut SimWorldState,
     _computed_camera: &ComputedCamera,
-    _objects: &mut Objects,
     _terrain: &Terrain,
     _pos: UVec2,
     _viewport_size: UVec2,
@@ -268,7 +265,6 @@ fn unproject(ndc: Vec3, inv: &Mat4) -> Vec3 {
 }
 
 fn _get_interaction_hit(
-    _objects: &Objects,
     _terrain: &Terrain,
     _camera_ray_segment: &RaySegment,
 ) -> Option<_InteractionHit> {

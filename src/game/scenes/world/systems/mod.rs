@@ -6,15 +6,18 @@ use crate::{
         renderer::{Frame, Renderer},
         transform::Transform,
     },
-    game::scenes::world::{
-        render::{
-            GizmoRenderPipeline, GizmoRenderSnapshot, RenderBox, RenderStore, RenderWorld,
-            WorldRenderer,
-        },
-        sim_world::{
-            DynamicBvh, DynamicBvhHandle, SimWorld,
-            ecs::{self, BoundingBoxComponent},
-            free_camera_controller, top_down_camera_controller,
+    game::{
+        math::BoundingBox,
+        scenes::world::{
+            render::{
+                GizmoRenderPipeline, GizmoRenderSnapshot, RenderBox, RenderStore, RenderWorld,
+                WorldRenderer,
+            },
+            sim_world::{
+                DynamicBvh, DynamicBvhHandle, SimWorld, StaticBvh, StaticBvhHandle,
+                ecs::{self, BoundingBoxComponent},
+                free_camera_controller, top_down_camera_controller,
+            },
         },
     },
 };
@@ -87,6 +90,8 @@ impl Systems {
                     day_night_cycle_system::increment_time_of_day,
                     orders::process_biped_orders,
                     world_interaction::update,
+                    rebuild_static_bvh
+                        .run_if(|q: Query<(), Added<BoundingBoxComponent>>| q.iter().count() > 0),
                     update_dynamic_bvh,
                 )
                     .in_set(Update)
@@ -217,6 +222,31 @@ impl Systems {
 
         self.gizmo_render_pipeline
             .queue(render_world, &self.gizmo_render_snapshot, frame);
+    }
+}
+
+fn rebuild_static_bvh(
+    objects: Query<(Entity, &Transform, &BoundingBoxComponent), With<StaticBvhHandle>>,
+    mut static_bvh: ResMut<StaticBvh>,
+    mut bounding_box_scratch: Local<Vec<(Entity, BoundingBox)>>,
+) {
+    bounding_box_scratch.clear();
+
+    objects
+        .iter()
+        .for_each(|(entity, transform, bounding_box)| {
+            let bounding_box = bounding_box.0.transformed(transform.to_mat4());
+            bounding_box_scratch.push((entity, bounding_box))
+        });
+
+    if bounding_box_scratch.is_empty() {
+        tracing::warn!("Empty static bvh bounding boxes!");
+    } else {
+        tracing::info!(
+            "Rebuilding static BVH with {} objects",
+            bounding_box_scratch.len()
+        );
+        static_bvh.rebuild(&bounding_box_scratch)
     }
 }
 

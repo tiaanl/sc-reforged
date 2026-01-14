@@ -10,7 +10,7 @@ use crate::{
         math::BoundingBox,
         model::{Mesh, Model},
         models::{ModelName, models},
-        scenes::world::sim_world::{DynamicBvh, Order, ecs::BoundingBoxComponent},
+        scenes::world::sim_world::{DynamicBvh, Order, StaticBvhHandle, ecs::BoundingBoxComponent},
     },
 };
 
@@ -192,6 +192,7 @@ impl Spawner {
                     _title: title.to_string(),
                     _object_type: object_type,
                 },
+                StaticBvhHandle,
             ))
             .id())
     }
@@ -216,6 +217,7 @@ impl Spawner {
                     _title: title.to_string(),
                     _object_type: object_type,
                 },
+                StaticBvhHandle,
             ))
             .id())
     }

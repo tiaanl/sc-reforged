@@ -29,7 +29,6 @@ mod dynamic_bvh;
 pub mod ecs;
 pub mod free_camera_controller;
 mod height_map;
-mod objects;
 mod order_queue;
 mod orders;
 mod quad_tree;
@@ -45,8 +44,8 @@ pub use camera::ComputedCamera;
 pub use day_night_cycle::DayNightCycle;
 pub use dynamic_bvh::{DynamicBvh, DynamicBvhHandle};
 pub use height_map::HeightMap;
-pub use objects::Objects;
 pub use orders::Order;
+pub use static_bvh::{StaticBvh, StaticBvhHandle};
 pub use terrain::Terrain;
 pub use ui::UiRect;
 
@@ -197,9 +196,9 @@ fn init_objects(
     ecs: &mut World,
     campaign: crate::game::config::Campaign,
 ) -> Result<(), AssetError> {
+    ecs.insert_resource(StaticBvh::new(8));
     ecs.insert_resource(DynamicBvh::<Entity>::new(100.0));
 
-    let mut objects = Objects::new(ecs)?;
     let mut object_spawner = spawner::Spawner::new(data_dir().load_character_profiles()?);
     if let Some(ref mtf_name) = campaign.mtf_name {
         let mtf = data_dir().load_mtf(mtf_name)?;
@@ -226,7 +225,6 @@ fn init_objects(
             };
         }
     }
-    objects.finalize(&*ecs);
-    ecs.insert_resource(objects);
+
     Ok(())
 }
