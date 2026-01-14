@@ -7,17 +7,19 @@ use crate::{
         scenes::world::{
             render::{ModelRenderFlags, ModelToRender},
             sim_world::{
-                ComputedCamera, DynamicBvh, StaticBvh,
+                ComputedCamera, DynamicBvh, SimWorldState, StaticBvh,
                 ecs::{ActiveCamera, Snapshots},
             },
         },
     },
 };
 
+#[allow(clippy::too_many_arguments)]
 pub fn extract_model_snapshot(
     mut snapshots: ResMut<Snapshots>,
     models: Query<(Entity, &Transform, &Handle<Model>)>,
     models_to_prepare: Query<&Handle<Model>, Added<Handle<Model>>>,
+    state: Res<SimWorldState>,
     static_bvh: Res<StaticBvh>,
     dynamic_bvh: Res<DynamicBvh<Entity>>,
     computed_camera: Single<&ComputedCamera, With<ActiveCamera>>,
@@ -42,16 +44,13 @@ pub fn extract_model_snapshot(
         static_bvh.objects_in_frustum(&computed_camera.frustum, &mut visible_objects_cache);
         dynamic_bvh.query_frustum(&computed_camera.frustum, &mut visible_objects_cache);
 
-        for (_entity, transform, model_handle) in models.iter_many(&visible_objects_cache) {
-            let flags = ModelRenderFlags::empty();
+        for (entity, transform, model_handle) in models.iter_many(&visible_objects_cache) {
+            let mut flags = ModelRenderFlags::empty();
 
-            // TODO: Mark selected objects.
-            /*
             flags.set(
                 ModelRenderFlags::HIGHLIGHTED,
-                selected_objects.contains(&entity),
+                state.selected_objects.contains(&entity),
             );
-            */
 
             snapshots.model_render_snapshot.models.push(ModelToRender {
                 model: *model_handle,
