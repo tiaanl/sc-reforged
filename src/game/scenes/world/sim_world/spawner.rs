@@ -157,7 +157,7 @@ impl Spawner {
         let entity = world.spawn_empty().id();
 
         let dynamic_bvh_handle = {
-            let mut dynamic_bvh = world.resource_mut::<DynamicBvh<Entity>>();
+            let mut dynamic_bvh = world.resource_mut::<DynamicBvh>();
             dynamic_bvh.insert(entity, bounding_box.transformed(transform.to_mat4()))
         };
 

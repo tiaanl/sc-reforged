@@ -1,5 +1,5 @@
 use bevy_ecs::prelude::*;
-use glam::UVec2;
+use glam::{UVec2, Vec3};
 
 use crate::{
     engine::{
@@ -30,12 +30,36 @@ pub mod day_night_cycle_system;
 mod orders;
 pub mod world_interaction;
 
-#[derive(Default, Resource)]
+#[derive(Resource)]
 pub struct Time {
+    /// The instant the scene started running.
+    pub scene_start: std::time::Instant,
     /// Time elapsed since the last frame was rendered.
     pub delta_time: f32,
     /// Time in seconds since the simulation started.
     pub sim_time: f32,
+    /// The number of the current frame. This will loop round to 0 when it runs
+    /// out of numbers.
+    pub frame_index: u64,
+}
+
+impl Default for Time {
+    fn default() -> Self {
+        Self {
+            scene_start: std::time::Instant::now(),
+            delta_time: 0.0,
+            sim_time: 0.0,
+            frame_index: 0,
+        }
+    }
+}
+
+impl Time {
+    pub fn next_frame(&mut self, delta_time: f32, sim_time: f32) {
+        self.delta_time = delta_time;
+        self.sim_time = sim_time;
+        self.frame_index = self.frame_index.wrapping_add(1);
+    }
 }
 
 /// Shared resources between rendering in the systems and the [RenderWorld].
@@ -143,8 +167,14 @@ impl Systems {
         }
     }
 
-    pub fn update(&mut self, sim_world: &mut SimWorld, time: &Time) {
-        self.sim_time = time.sim_time;
+    pub fn update(&mut self, sim_world: &mut SimWorld) {
+        // TODO: What does self.sim_time actually do?
+        self.sim_time = sim_world
+            .ecs
+            .resource::<Time>()
+            .scene_start
+            .elapsed()
+            .as_secs_f32();
 
         self.update_schedule.run(&mut sim_world.ecs);
     }
@@ -247,14 +277,12 @@ fn rebuild_static_bvh(
 
 fn update_dynamic_bvh(
     objects: Query<(&DynamicBvhHandle, &Transform, &BoundingBoxComponent), Changed<Transform>>,
-    mut bvh: ResMut<DynamicBvh<Entity>>,
+    mut dynamic_bvh: ResMut<DynamicBvh>,
 ) {
-    let bvh = bvh.as_mut();
+    let bvh = dynamic_bvh.as_mut();
 
     for (&handle, transform, bounding_box) in objects.iter() {
-        if let Some(data) = bvh.remove(handle) {
-            let new_bounding_box = bounding_box.0.transformed(transform.to_mat4());
-            bvh.insert(data, new_bounding_box);
-        }
+        let new_bounding_box = bounding_box.0.transformed(transform.to_mat4());
+        bvh.update(handle, new_bounding_box, Vec3::ZERO);
     }
 }

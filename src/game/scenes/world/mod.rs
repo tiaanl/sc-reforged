@@ -131,16 +131,13 @@ impl Scene for WorldScene {
         {
             let sim_start = self.sim_world.state().sim_start;
 
+            // Update Time.
             {
                 let mut time = self.sim_world.ecs.resource_mut::<Time>();
-                time.delta_time = delta_time;
-                time.sim_time = (std::time::Instant::now() - sim_start).as_secs_f32();
-            }
 
-            let time = systems::Time {
-                delta_time,
-                sim_time: (std::time::Instant::now() - sim_start).as_secs_f32(),
-            };
+                let sim_time = (std::time::Instant::now() - sim_start).as_secs_f32();
+                time.next_frame(delta_time, sim_time);
+            }
 
             {
                 let mut res = self.sim_world.ecs.resource_mut::<InputState>();
@@ -148,7 +145,7 @@ impl Scene for WorldScene {
             }
 
             let start = std::time::Instant::now();
-            self.systems.update(&mut self.sim_world, &time);
+            self.systems.update(&mut self.sim_world);
             frame_time.update = (std::time::Instant::now() - start).as_secs_f64();
         }
 

@@ -21,7 +21,7 @@ pub fn extract_model_snapshot(
     models_to_prepare: Query<&Handle<Model>, Added<Handle<Model>>>,
     state: Res<SimWorldState>,
     static_bvh: Res<StaticBvh>,
-    dynamic_bvh: Res<DynamicBvh<Entity>>,
+    dynamic_bvh: Res<DynamicBvh>,
     computed_camera: Single<&ComputedCamera, With<ActiveCamera>>,
     mut visible_objects_cache: Local<Vec<Entity>>,
 ) {

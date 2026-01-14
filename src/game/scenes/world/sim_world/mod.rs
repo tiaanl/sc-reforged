@@ -11,7 +11,6 @@ use crate::{
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         scenes::world::{
-            render::ModelRenderSnapshot,
             sim_world::{
                 ecs::{ActiveCamera, GizmoVertices, Snapshots, Viewport},
                 free_camera_controller::FreeCameraController,
@@ -198,9 +197,7 @@ fn init_objects(
     campaign: crate::game::config::Campaign,
 ) -> Result<(), AssetError> {
     ecs.insert_resource(StaticBvh::new(8));
-    ecs.insert_resource(DynamicBvh::<Entity>::new(100.0));
-
-    ecs.init_resource::<ModelRenderSnapshot>();
+    ecs.insert_resource(DynamicBvh::default());
 
     let mut object_spawner = spawner::Spawner::new(data_dir().load_character_profiles()?);
     if let Some(ref mtf_name) = campaign.mtf_name {

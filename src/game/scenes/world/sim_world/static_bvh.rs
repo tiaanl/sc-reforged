@@ -123,8 +123,6 @@ impl StaticBvh {
 
     /// Ray query. Writes object IDs whose bounding boxes intersect the ray segment into `out`.
     pub fn _objects_intersect_ray_segment(&self, ray_segment: &RaySegment, out: &mut Vec<Entity>) {
-        out.clear();
-
         if self.nodes.is_empty() || ray_segment.is_degenerate() {
             return;
         }
