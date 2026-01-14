@@ -124,7 +124,6 @@ impl<T: Copy> DynamicBvh<T> {
     // --------------------
 
     pub fn query_frustum(&self, frustum: &Frustum, out: &mut Vec<T>) {
-        out.clear();
         let Some(root) = self.root else {
             return;
         };

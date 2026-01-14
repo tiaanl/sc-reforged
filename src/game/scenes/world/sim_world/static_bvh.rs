@@ -65,8 +65,6 @@ impl StaticBvh {
 
     /// Frustum culling query. Writes visible object IDs into `out`.
     pub fn objects_in_frustum(&self, frustum: &Frustum, out: &mut Vec<Entity>) {
-        out.clear();
-
         if self.nodes.is_empty() {
             return;
         }
