@@ -438,6 +438,25 @@ impl BoundingBox {
 
         Some((t_enter, t_exit, enter_normal))
     }
+
+    #[inline]
+    pub fn contains_aabb(&self, other: &BoundingBox) -> bool {
+        self.min.x <= other.min.x
+            && self.min.y <= other.min.y
+            && self.min.z <= other.min.z
+            && self.max.x >= other.max.x
+            && self.max.y >= other.max.y
+            && self.max.z >= other.max.z
+    }
+
+    /// Expand this bounding box by `size` in both directions.
+    #[inline]
+    pub fn expend(&mut self, size: Vec3) {
+        debug_assert!(size.x >= 0.0 && size.y >= 0.0 && size.z >= 0.0);
+
+        self.min -= size;
+        self.max += size;
+    }
 }
 
 impl Default for BoundingBox {

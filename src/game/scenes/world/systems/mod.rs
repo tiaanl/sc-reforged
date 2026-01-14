@@ -12,7 +12,7 @@ use crate::{
             WorldRenderer,
         },
         sim_world::{
-            SimWorld,
+            DynamicBvh, DynamicBvhHandle, SimWorld,
             ecs::{self, BoundingBoxComponent},
             free_camera_controller, top_down_camera_controller,
         },
@@ -87,6 +87,7 @@ impl Systems {
                     day_night_cycle_system::increment_time_of_day,
                     orders::process_biped_orders,
                     world_interaction::update,
+                    update_dynamic_bvh,
                 )
                     .in_set(Update)
                     .chain(),
@@ -216,5 +217,19 @@ impl Systems {
 
         self.gizmo_render_pipeline
             .queue(render_world, &self.gizmo_render_snapshot, frame);
+    }
+}
+
+fn update_dynamic_bvh(
+    objects: Query<(&DynamicBvhHandle, &Transform, &BoundingBoxComponent), Changed<Transform>>,
+    mut bvh: ResMut<DynamicBvh<Entity>>,
+) {
+    let bvh = bvh.as_mut();
+
+    for (&handle, transform, bounding_box) in objects.iter() {
+        if let Some(data) = bvh.remove(handle) {
+            let new_bounding_box = bounding_box.0.transformed(transform.to_mat4());
+            bvh.insert(data, new_bounding_box);
+        }
     }
 }

@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 
 use crate::{
     engine::{assets::AssetError, transform::Transform},
-    game::scenes::world::sim_world::ecs::BoundingBoxComponent,
+    game::scenes::world::sim_world::{dynamic_bvh::DynamicBvh, ecs::BoundingBoxComponent},
 };
 
 use super::static_bvh::StaticBvh;
@@ -111,6 +111,8 @@ impl Objects {
     }
 
     pub fn finalize(&mut self, world: &World) {
+        // TODO: Filter out static/dynamic objects.
+
         let bounding_boxes = self
             .bounding_boxes_query
             .query(world)

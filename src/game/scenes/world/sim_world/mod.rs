@@ -25,6 +25,7 @@ use crate::{
 
 mod camera;
 mod day_night_cycle;
+mod dynamic_bvh;
 pub mod ecs;
 pub mod free_camera_controller;
 mod height_map;
@@ -42,6 +43,7 @@ mod ui;
 pub use camera::Camera;
 pub use camera::ComputedCamera;
 pub use day_night_cycle::DayNightCycle;
+pub use dynamic_bvh::{DynamicBvh, DynamicBvhHandle};
 pub use height_map::HeightMap;
 pub use objects::Objects;
 pub use orders::Order;
@@ -195,6 +197,8 @@ fn init_objects(
     ecs: &mut World,
     campaign: crate::game::config::Campaign,
 ) -> Result<(), AssetError> {
+    ecs.insert_resource(DynamicBvh::<Entity>::new(100.0));
+
     let mut objects = Objects::new(ecs)?;
     let mut object_spawner = spawner::Spawner::new(data_dir().load_character_profiles()?);
     if let Some(ref mtf_name) = campaign.mtf_name {

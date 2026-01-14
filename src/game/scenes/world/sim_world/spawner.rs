@@ -10,7 +10,7 @@ use crate::{
         math::BoundingBox,
         model::{Mesh, Model},
         models::{ModelName, models},
-        scenes::world::sim_world::{Order, ecs::BoundingBoxComponent},
+        scenes::world::sim_world::{DynamicBvh, Order, ecs::BoundingBoxComponent},
     },
 };
 
@@ -154,14 +154,22 @@ impl Spawner {
 
         self.models_to_prepare.push(model_handle);
 
-        Ok(world
-            .spawn((
-                transform.clone(),
-                model_handle,
-                BoundingBoxComponent(bounding_box),
-                Order::default(),
-            ))
-            .id())
+        let entity = world.spawn_empty().id();
+
+        let dynamic_bvh_handle = {
+            let mut dynamic_bvh = world.resource_mut::<DynamicBvh<Entity>>();
+            dynamic_bvh.insert(entity, bounding_box.transformed(transform.to_mat4()))
+        };
+
+        world.entity_mut(entity).insert((
+            transform.clone(),
+            model_handle,
+            BoundingBoxComponent(bounding_box),
+            Order::default(),
+            dynamic_bvh_handle,
+        ));
+
+        Ok(entity)
     }
 
     fn spawn_scenery(
