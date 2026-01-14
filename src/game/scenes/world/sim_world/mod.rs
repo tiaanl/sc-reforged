@@ -60,7 +60,6 @@ pub struct SimWorldState {
 
     pub selected_objects: HashSet<Entity>,
 
-    // pub gizmo_vertices: Vec<GizmoVertex>,
     pub _sequences: Sequences,
 
     pub ui: Ui,
@@ -128,61 +127,9 @@ impl SimWorld {
             FreeCameraController::new(1000.0, 0.2),
         ));
 
-        let terrain = {
-            let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
+        init_terrain(&mut ecs, campaign_def)?;
 
-            let height_map = {
-                let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
-                tracing::info!("Loading terrain height map: {}", path.display());
-                data_dir().load_new_height_map(
-                    path,
-                    terrain_mapping.altitude_map_height_base,
-                    terrain_mapping.nominal_edge_size,
-                )?
-            };
-
-            let terrain_texture =
-                data_dir().load_terrain_texture(&terrain_mapping.texture_map_base_name)?;
-
-            Terrain::new(height_map, terrain_texture)
-        };
-
-        ecs.insert_resource(terrain);
-
-        let mut objects = Objects::new(&mut ecs)?;
-
-        let mut object_spawner = spawner::Spawner::new(data_dir().load_character_profiles()?);
-
-        if let Some(ref mtf_name) = campaign.mtf_name {
-            let mtf = data_dir().load_mtf(mtf_name)?;
-
-            for object in mtf.objects.iter() {
-                let object_type = ObjectType::from_string(&object.typ)
-                    .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
-
-                let transform = Transform::from_translation(object.position)
-                    .with_euler_rotation(object.rotation * Vec3::new(1.0, 1.0, -1.0));
-
-                let _ = match object_spawner.spawn(
-                    &mut ecs,
-                    &object.title,
-                    &object.name,
-                    object_type,
-                    transform.clone(),
-                ) {
-                    Ok(handle) => handle,
-                    Err(err) => {
-                        tracing::warn!("Could not spawn object! ({})", err);
-                        continue;
-                    }
-                };
-            }
-        }
-
-        // TODO: Can also do the [RenderModel] creation here?
-        objects.finalize(&ecs);
-
-        ecs.insert_resource(objects);
+        init_objects(&mut ecs, campaign)?;
 
         let sequences = Sequences::new()?;
 
@@ -219,4 +166,63 @@ impl SimWorld {
     pub fn state_mut(&mut self) -> Mut<'_, SimWorldState> {
         self.ecs.resource_mut::<SimWorldState>()
     }
+}
+
+fn init_terrain(ecs: &mut World, campaign_def: &CampaignDef) -> Result<(), AssetError> {
+    let terrain = {
+        let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
+
+        let height_map = {
+            let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
+            tracing::info!("Loading terrain height map: {}", path.display());
+            data_dir().load_new_height_map(
+                path,
+                terrain_mapping.altitude_map_height_base,
+                terrain_mapping.nominal_edge_size,
+            )?
+        };
+
+        let terrain_texture =
+            data_dir().load_terrain_texture(&terrain_mapping.texture_map_base_name)?;
+
+        Terrain::new(height_map, terrain_texture)
+    };
+    ecs.insert_resource(terrain);
+    Ok(())
+}
+
+fn init_objects(
+    ecs: &mut World,
+    campaign: crate::game::config::Campaign,
+) -> Result<(), AssetError> {
+    let mut objects = Objects::new(ecs)?;
+    let mut object_spawner = spawner::Spawner::new(data_dir().load_character_profiles()?);
+    if let Some(ref mtf_name) = campaign.mtf_name {
+        let mtf = data_dir().load_mtf(mtf_name)?;
+
+        for object in mtf.objects.iter() {
+            let object_type = ObjectType::from_string(&object.typ)
+                .unwrap_or_else(|| panic!("missing object type: {}", object.typ));
+
+            let transform = Transform::from_translation(object.position)
+                .with_euler_rotation(object.rotation * Vec3::new(1.0, 1.0, -1.0));
+
+            let _ = match object_spawner.spawn(
+                ecs,
+                &object.title,
+                &object.name,
+                object_type,
+                transform.clone(),
+            ) {
+                Ok(handle) => handle,
+                Err(err) => {
+                    tracing::warn!("Could not spawn object! ({})", err);
+                    continue;
+                }
+            };
+        }
+    }
+    objects.finalize(&*ecs);
+    ecs.insert_resource(objects);
+    Ok(())
 }
