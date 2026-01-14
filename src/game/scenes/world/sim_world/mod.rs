@@ -20,11 +20,11 @@ use crate::{
             },
             systems::{Time, world_interaction::WorldInteraction},
         },
-        track::Track,
     },
 };
 
 mod camera;
+mod day_night_cycle;
 pub mod ecs;
 pub mod free_camera_controller;
 mod height_map;
@@ -41,22 +41,12 @@ mod ui;
 
 pub use camera::Camera;
 pub use camera::ComputedCamera;
+pub use day_night_cycle::DayNightCycle;
 pub use height_map::HeightMap;
 pub use objects::Objects;
 pub use orders::Order;
 pub use terrain::Terrain;
 pub use ui::UiRect;
-
-/// Holds data for the sun and fog values throughout the day and night.
-#[derive(Default, Resource)]
-pub struct DayNightCycle {
-    pub sun_dir: Track<Vec3>,
-    pub sun_color: Track<Vec3>,
-
-    pub fog_distance: Track<f32>,
-    pub fog_near_fraction: Track<f32>,
-    pub fog_color: Track<Vec3>,
-}
 
 #[derive(Resource)]
 pub struct SimWorldState {
@@ -98,26 +88,7 @@ impl SimWorld {
 
         let time_of_day = 12.0;
 
-        {
-            let day_night_cycle = {
-                let mut result = DayNightCycle::default();
-
-                campaign.time_of_day.iter().enumerate().for_each(|(i, t)| {
-                    let index = i as u32;
-
-                    result.sun_dir.insert(index, t.sun_dir);
-                    result.sun_color.insert(index, t.sun_color);
-
-                    result.fog_distance.insert(index, t.fog_distance);
-                    result.fog_near_fraction.insert(index, t.fog_near_fraction);
-                    result.fog_color.insert(index, t.fog_color);
-                });
-
-                result
-            };
-
-            ecs.insert_resource(day_night_cycle);
-        }
+        ecs.insert_resource(day_night_cycle::DayNightCycle::from_campaign(&campaign));
 
         // Cameras
 
