@@ -15,7 +15,10 @@ use crate::{
         scenes::world::{
             game_mode::GameMode,
             render::{RenderStore, RenderWorld},
-            sim_world::{Camera, SimWorld, ecs::Viewport},
+            sim_world::{
+                Camera, SimWorld,
+                ecs::{Snapshots, Viewport},
+            },
             systems::Time,
         },
     },
@@ -183,13 +186,25 @@ impl Scene for WorldScene {
 
             // Prepare
             let start = std::time::Instant::now();
-            self.systems
-                .prepare(&mut self.render_store, render_world, renderer, frame.size);
+            {
+                let mut snapshots = self.sim_world.ecs.resource_mut::<Snapshots>();
+                self.systems.prepare(
+                    &mut self.render_store,
+                    render_world,
+                    renderer,
+                    &mut snapshots,
+                    frame.size,
+                );
+            }
             frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
 
             // Queue
             let start = std::time::Instant::now();
-            self.systems.queue(&self.render_store, render_world, frame);
+            {
+                let snapshots = self.sim_world.ecs.resource::<Snapshots>();
+                self.systems
+                    .queue(&self.render_store, render_world, snapshots, frame);
+            }
             frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
 
             self.sim_world.ecs.clear_trackers();
@@ -356,6 +371,8 @@ impl Scene for WorldScene {
             });
 
         egui::Window::new("Stats").show(ctx, |ui| {
+            let snapshots = self.sim_world.ecs.resource::<Snapshots>();
+
             ui.horizontal(|ui| {
                 ui.label("Frame index");
                 ui.label(format!("{frame_index}"));
@@ -363,8 +380,7 @@ impl Scene for WorldScene {
             ui.horizontal(|ui| {
                 ui.label("Visible chunks");
                 ui.label(
-                    self.systems
-                        .world_renderer
+                    snapshots
                         .terrain_render_snapshot
                         .chunk_instances
                         .len()
@@ -373,24 +389,13 @@ impl Scene for WorldScene {
             });
             ui.horizontal(|ui| {
                 ui.label("Visible objects");
-                ui.label(format!(
-                    "{}",
-                    self.systems
-                        .world_renderer
-                        .model_render_snapshot
-                        .models
-                        .len()
-                ));
+                ui.label(format!("{}", snapshots.model_render_snapshot.models.len()));
             });
             ui.horizontal(|ui| {
                 ui.label("Visible strata");
                 ui.label(format!(
                     "{}",
-                    self.systems
-                        .world_renderer
-                        .terrain_render_snapshot
-                        .chunk_instances
-                        .len()
+                    snapshots.terrain_render_snapshot.chunk_instances.len()
                 ));
             });
             ui.horizontal(|ui| {

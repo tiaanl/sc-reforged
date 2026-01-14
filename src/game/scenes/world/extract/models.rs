@@ -5,68 +5,55 @@ use crate::{
     game::{
         model::Model,
         scenes::world::{
-            render::{ModelRenderFlags, ModelRenderSnapshot, ModelToRender},
-            sim_world::{ComputedCamera, DynamicBvh, SimWorld, StaticBvh, ecs::ActiveCamera},
+            render::{ModelRenderFlags, ModelToRender},
+            sim_world::{
+                ComputedCamera, DynamicBvh, StaticBvh,
+                ecs::{ActiveCamera, Snapshots},
+            },
         },
     },
 };
 
-pub struct ModelsExtract {
-    visible_objects_cache: Vec<Entity>,
+pub fn extract_model_snapshot(
+    mut snapshots: ResMut<Snapshots>,
+    models: Query<(Entity, &Transform, &Handle<Model>)>,
+    models_to_prepare: Query<&Handle<Model>, Added<Handle<Model>>>,
+    static_bvh: Res<StaticBvh>,
+    dynamic_bvh: Res<DynamicBvh<Entity>>,
+    computed_camera: Single<&ComputedCamera, With<ActiveCamera>>,
+    mut visible_objects_cache: Local<Vec<Entity>>,
+) {
+    snapshots.model_render_snapshot.models_to_prepare.clear();
 
-    /// Query all model handles that were added since the last frame.
-    new_models_query: QueryState<&'static Handle<Model>, Added<Handle<Model>>>,
-
-    /// ECS query for the active camera.
-    active_camera_query: QueryState<&'static ComputedCamera, With<ActiveCamera>>,
-
-    /// ECS query for all renderable models.
-    models_query: QueryState<(Entity, &'static Transform, &'static Handle<Model>)>,
-}
-
-impl ModelsExtract {
-    pub fn new(sim_world: &mut SimWorld) -> Self {
-        Self {
-            visible_objects_cache: Vec::default(),
-            new_models_query: sim_world.ecs.query_filtered(),
-            active_camera_query: sim_world.ecs.query_filtered(),
-            models_query: sim_world.ecs.query(),
-        }
+    {
+        models_to_prepare.iter().for_each(|&model_handle| {
+            snapshots
+                .model_render_snapshot
+                .models_to_prepare
+                .push(model_handle);
+        });
     }
 
-    pub fn extract(&mut self, sim_world: &SimWorld, snapshot: &mut ModelRenderSnapshot) {
-        // Gather any new models to prepare into the snapshot.
-        snapshot.models_to_prepare = self
-            .new_models_query
-            .query(&sim_world.ecs)
-            .iter()
-            .cloned()
-            .collect();
+    snapshots.model_render_snapshot.models.clear();
 
-        snapshot.models.clear();
+    {
+        visible_objects_cache.clear();
 
-        let computed_camera = self.active_camera_query.single(&sim_world.ecs).unwrap();
-        let static_bvh = &sim_world.ecs.resource::<StaticBvh>();
-        let dynamic_bvh = &sim_world.ecs.resource::<DynamicBvh<Entity>>();
-        let selected_objects = &sim_world.state().selected_objects;
+        static_bvh.objects_in_frustum(&computed_camera.frustum, &mut visible_objects_cache);
+        dynamic_bvh.query_frustum(&computed_camera.frustum, &mut visible_objects_cache);
 
-        self.visible_objects_cache.clear();
+        for (_entity, transform, model_handle) in models.iter_many(&visible_objects_cache) {
+            let flags = ModelRenderFlags::empty();
 
-        static_bvh.objects_in_frustum(&computed_camera.frustum, &mut self.visible_objects_cache);
-        dynamic_bvh.query_frustum(&computed_camera.frustum, &mut self.visible_objects_cache);
-
-        for (entity, transform, model_handle) in self
-            .models_query
-            .iter_many(&sim_world.ecs, &self.visible_objects_cache)
-        {
-            let mut flags = ModelRenderFlags::empty();
-
+            // TODO: Mark selected objects.
+            /*
             flags.set(
                 ModelRenderFlags::HIGHLIGHTED,
                 selected_objects.contains(&entity),
             );
+            */
 
-            snapshot.models.push(ModelToRender {
+            snapshots.model_render_snapshot.models.push(ModelToRender {
                 model: *model_handle,
                 transform: transform.to_mat4(),
                 flags,

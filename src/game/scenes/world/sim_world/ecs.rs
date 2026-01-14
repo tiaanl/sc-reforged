@@ -5,7 +5,10 @@ use glam::UVec2;
 
 use crate::{
     engine::gizmos::GizmoVertex,
-    game::{math::BoundingBox, scenes::world::render::BoxRenderSnapshot},
+    game::{
+        math::BoundingBox,
+        scenes::world::render::{BoxRenderSnapshot, ModelRenderSnapshot, TerrainRenderSnapshot},
+    },
 };
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
@@ -59,6 +62,8 @@ impl Viewport {
 #[derive(Default, Resource)]
 pub struct Snapshots {
     pub box_render_snapshot: BoxRenderSnapshot,
+    pub terrain_render_snapshot: TerrainRenderSnapshot,
+    pub model_render_snapshot: ModelRenderSnapshot,
 }
 
 impl Snapshots {

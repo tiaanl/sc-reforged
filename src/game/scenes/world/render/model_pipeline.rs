@@ -1,3 +1,4 @@
+use bevy_ecs::prelude::*;
 use glam::Mat4;
 
 use crate::{
@@ -39,7 +40,7 @@ struct Batch {
     range: std::ops::Range<u32>,
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct ModelRenderSnapshot {
     /// A list of any new models that needs to be prepared before rendering.
     pub models_to_prepare: Vec<Handle<Model>>,

@@ -4,12 +4,11 @@ use crate::{
     engine::renderer::{Frame, Renderer},
     game::scenes::world::{
         render::{
-            GeometryBuffer, ModelRenderSnapshot,
-            box_pipeline::{self, BoxPipeline, BoxRenderSnapshot},
-            terrain_pipeline::TerrainRenderSnapshot,
+            GeometryBuffer,
+            box_pipeline::{self, BoxPipeline},
             ui_pipeline::UiPipeline,
         },
-        sim_world::SimWorld,
+        sim_world::{SimWorld, ecs::Snapshots},
     },
 };
 
@@ -31,10 +30,6 @@ pub struct WorldRenderer {
 
     /// Bounding boxes extracted from the sim world.
     bounding_boxes: Vec<box_pipeline::gpu::Instance>,
-
-    pub terrain_render_snapshot: TerrainRenderSnapshot,
-    pub model_render_snapshot: ModelRenderSnapshot,
-    pub box_render_snapshot: BoxRenderSnapshot,
 }
 
 impl WorldRenderer {
@@ -57,10 +52,6 @@ impl WorldRenderer {
 
             render_bounding_boxes: false,
             bounding_boxes: Vec::default(),
-
-            terrain_render_snapshot: TerrainRenderSnapshot::default(),
-            model_render_snapshot: ModelRenderSnapshot::default(),
-            box_render_snapshot: BoxRenderSnapshot::default(),
         }
     }
 
@@ -76,33 +67,6 @@ impl WorldRenderer {
             .extract(sim_world, render_store, render_world, viewport_size);
 
         self.bounding_boxes.clear();
-
-        /*
-        let objects = sim_world.ecs.resource::<Objects>();
-
-        if self.render_bounding_boxes {
-            for (_, object) in objects.objects.iter() {
-                let model_handle = match object.data {
-                    ObjectData::Scenery { model } => model,
-                    ObjectData::Biped { model, .. } => model,
-                    ObjectData::SingleModel { model } => model,
-                };
-                let Some(model) = models().get(model_handle) else {
-                    continue;
-                };
-
-                model.collision_boxes.iter().for_each(|collision_box| {
-                    let transform = object.transform.to_mat4()
-                        * model.skeleton.local_transform(collision_box.node_index);
-                    self.bounding_boxes.push(box_pipeline::gpu::Instance {
-                        transform: transform.to_cols_array_2d(),
-                        min: collision_box.min.extend(0.0).to_array(),
-                        max: collision_box.max.extend(0.0).to_array(),
-                    });
-                });
-            }
-        }
-        */
     }
 
     pub fn prepare(
@@ -110,24 +74,26 @@ impl WorldRenderer {
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
+        snapshots: &mut Snapshots,
     ) {
         self.terrain_pipeline
-            .prepare(renderer, render_world, &self.terrain_render_snapshot);
+            .prepare(renderer, render_world, &snapshots.terrain_render_snapshot);
         self.model_pipeline.prepare(
             renderer,
             render_store,
             render_world,
-            &mut self.model_render_snapshot,
+            &mut snapshots.model_render_snapshot,
         );
         self.ui_pipeline.prepare(renderer, render_world);
         self.box_pipeline
-            .prepare(renderer, &self.box_render_snapshot);
+            .prepare(renderer, &snapshots.box_render_snapshot);
     }
 
     pub fn queue(
         &mut self,
         render_store: &RenderStore,
         render_world: &RenderWorld,
+        snapshots: &Snapshots,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
     ) {
@@ -135,7 +101,7 @@ impl WorldRenderer {
             render_world,
             frame,
             geometry_buffer,
-            &self.terrain_render_snapshot,
+            &snapshots.terrain_render_snapshot,
         );
         self.model_pipeline
             .queue(render_store, render_world, frame, geometry_buffer);

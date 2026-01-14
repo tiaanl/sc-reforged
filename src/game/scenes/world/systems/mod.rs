@@ -15,7 +15,7 @@ use crate::{
             },
             sim_world::{
                 DynamicBvh, DynamicBvhHandle, SimWorld, StaticBvh, StaticBvhHandle,
-                ecs::{self, BoundingBoxComponent},
+                ecs::{self, BoundingBoxComponent, Snapshots},
                 free_camera_controller, top_down_camera_controller,
             },
         },
@@ -46,8 +46,6 @@ pub struct Systems {
     pub update_schedule: Schedule,
     pub extract_schedule: Schedule,
 
-    terrain_extract: TerrainExtract,
-    model_extract: ModelsExtract,
     gizmo_extract: GizmoExtract,
 
     // pub camera_system: camera_system::CameraSystem,
@@ -111,6 +109,8 @@ impl Systems {
             schedule.add_systems(
                 (
                     clear_snapshots,
+                    extract_terrain_snapshot,
+                    extract_model_snapshot,
                     |bounding_boxes: Query<(&Transform, &BoundingBoxComponent)>,
                      mut snapshots: ResMut<ecs::Snapshots>| {
                         for (transform, bounding_box_component) in bounding_boxes.iter() {
@@ -134,8 +134,6 @@ impl Systems {
             update_schedule,
             extract_schedule,
 
-            terrain_extract: TerrainExtract::new(sim_world),
-            model_extract: ModelsExtract::new(sim_world),
             gizmo_extract: GizmoExtract::new(sim_world),
 
             world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),
@@ -160,12 +158,6 @@ impl Systems {
     ) {
         self.extract_schedule.run(&mut sim_world.ecs);
 
-        self.terrain_extract
-            .extract(sim_world, &mut self.world_renderer.terrain_render_snapshot);
-
-        self.model_extract
-            .extract(sim_world, &mut self.world_renderer.model_render_snapshot);
-
         self.gizmo_extract
             .extract(sim_world, &mut self.gizmo_render_snapshot);
 
@@ -182,6 +174,7 @@ impl Systems {
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         renderer: &Renderer,
+        snapshots: &mut Snapshots,
         surface_size: UVec2,
     ) {
         // Make sure the geometry buffer is the correct size.
@@ -193,7 +186,7 @@ impl Systems {
 
         camera_system::prepare(render_world, renderer);
         self.world_renderer
-            .prepare(renderer, render_store, render_world);
+            .prepare(renderer, render_store, render_world, snapshots);
         self.gizmo_render_pipeline
             .prepare(render_world, renderer, &self.gizmo_render_snapshot);
     }
@@ -202,6 +195,7 @@ impl Systems {
         &mut self,
         render_store: &RenderStore,
         render_world: &RenderWorld,
+        snapshots: &Snapshots,
         frame: &mut Frame,
     ) {
         clear_render_targets::clear_render_targets(
@@ -212,6 +206,7 @@ impl Systems {
         self.world_renderer.queue(
             render_store,
             render_world,
+            snapshots,
             frame,
             &render_store.geometry_buffer,
         );
