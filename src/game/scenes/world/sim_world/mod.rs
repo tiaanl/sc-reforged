@@ -152,16 +152,6 @@ impl SimWorld {
 
         Ok(SimWorld { ecs })
     }
-
-    #[inline]
-    pub fn state(&self) -> &SimWorldState {
-        self.ecs.resource::<SimWorldState>()
-    }
-
-    #[inline]
-    pub fn state_mut(&mut self) -> Mut<'_, SimWorldState> {
-        self.ecs.resource_mut::<SimWorldState>()
-    }
 }
 
 fn init_terrain(ecs: &mut World, campaign_def: &CampaignDef) -> Result<(), AssetError> {

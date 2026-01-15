@@ -50,7 +50,6 @@ pub struct RenderWorld {
     pub ui_state_buffer: wgpu::Buffer,
     pub ui_state_bind_group: wgpu::BindGroup,
 
-    pub ui_rects: Vec<RenderUiRect>,
     pub ui_rects_buffer: GrowingBuffer<RenderUiRect>,
 }
 
@@ -145,7 +144,6 @@ impl RenderWorld {
             ui_state: UiState::default(),
             ui_state_buffer,
             ui_state_bind_group,
-            ui_rects: Vec::default(),
             ui_rects_buffer,
         }
     }

@@ -83,7 +83,7 @@ impl Systems {
     pub fn new(
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
-        render_store: &RenderStore,
+        render_store: &mut RenderStore,
         sim_world: &mut SimWorld,
     ) -> Self {
         // Update schedule.
@@ -135,8 +135,10 @@ impl Systems {
                     camera_system::extract_camera_env_snapshot,
                     extract_terrain_snapshot,
                     extract_model_snapshot,
+                    extract_ui_snapshot,
                     |bounding_boxes: Query<(&Transform, &BoundingBoxComponent)>,
                      mut snapshots: ResMut<ecs::Snapshots>| {
+                        snapshots.box_render_snapshot.boxes.clear();
                         for (transform, bounding_box_component) in bounding_boxes.iter() {
                             snapshots.box_render_snapshot.boxes.push(RenderBox {
                                 transform: transform.clone(),
@@ -179,20 +181,11 @@ impl Systems {
         self.update_schedule.run(&mut sim_world.ecs);
     }
 
-    pub fn extract(
-        &mut self,
-        sim_world: &mut SimWorld,
-        render_store: &mut RenderStore,
-        render_world: &mut RenderWorld,
-        viewport_size: UVec2,
-    ) {
+    pub fn extract(&mut self, sim_world: &mut SimWorld) {
         self.extract_schedule.run(&mut sim_world.ecs);
 
         self.gizmo_extract
             .extract(sim_world, &mut self.gizmo_render_snapshot);
-
-        self.world_renderer
-            .extract(sim_world, render_store, render_world, viewport_size);
     }
 
     pub fn prepare(

@@ -3,6 +3,7 @@ mod compositor;
 mod geometry_buffers;
 mod gizmo_pipeline;
 mod model_pipeline;
+mod pipeline;
 mod render_models;
 mod render_store;
 mod render_textures;
@@ -20,6 +21,7 @@ pub use render_models::{RenderModel, RenderVertex};
 pub use render_store::RenderStore;
 pub use render_world::{ModelInstanceData, RenderUiRect, RenderWorld};
 pub use terrain_pipeline::TerrainRenderSnapshot;
+pub use ui_pipeline::UiRenderSnapshot;
 pub use world_renderer::WorldRenderer;
 
 pub mod gpu {

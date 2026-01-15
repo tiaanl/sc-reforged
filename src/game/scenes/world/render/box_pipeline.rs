@@ -7,7 +7,7 @@ use crate::{
         renderer::{Frame, Renderer},
         transform::Transform,
     },
-    game::scenes::world::render::{GeometryBuffer, RenderStore, RenderWorld},
+    game::scenes::world::render::{GeometryBuffer, RenderStore, RenderWorld, pipeline::Pipeline},
     wgsl_shader,
 };
 
@@ -40,7 +40,7 @@ pub struct BoxPipeline {
 }
 
 impl BoxPipeline {
-    pub fn new(renderer: &Renderer, render_store: &RenderStore) -> Self {
+    pub fn new(renderer: &Renderer, render_store: &mut RenderStore) -> Self {
         let (vertex_buffer, index_buffer, index_count) = Self::create_box_mesh(renderer);
 
         let instance_buffer =
@@ -123,8 +123,18 @@ impl BoxPipeline {
             instances_cache: Vec::default(),
         }
     }
+}
 
-    pub fn prepare(&mut self, renderer: &Renderer, snapshot: &BoxRenderSnapshot) {
+impl Pipeline for BoxPipeline {
+    type Snapshot = BoxRenderSnapshot;
+
+    fn prepare(
+        &mut self,
+        renderer: &Renderer,
+        _render_store: &mut RenderStore,
+        _render_world: &mut RenderWorld,
+        snapshot: &Self::Snapshot,
+    ) {
         self.instances_cache.clear();
         self.instances_cache
             .extend(snapshot.boxes.iter().map(|b| gpu::Instance {
@@ -136,11 +146,13 @@ impl BoxPipeline {
         self.instance_buffer.write(renderer, &self.instances_cache);
     }
 
-    pub fn queue(
+    fn queue(
         &self,
+        _render_store: &RenderStore,
+        render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
-        render_world: &RenderWorld,
+        _snapshot: &Self::Snapshot,
     ) {
         let mut render_pass =
             geometry_buffer.begin_alpha_render_pass(&mut frame.encoder, "box_render_pass");
@@ -152,7 +164,9 @@ impl BoxPipeline {
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.draw_indexed(0..self.index_count, 0, 0..self.instance_buffer.count);
     }
+}
 
+impl BoxPipeline {
     fn create_box_mesh(renderer: &Renderer) -> (wgpu::Buffer, wgpu::Buffer, u32) {
         const VERTICES: &[[f32; 5]] = &[
             [1.0, 1.0, 1.0, 1.0, 1.0],

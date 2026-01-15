@@ -10,6 +10,7 @@ use crate::{
         model::Model,
         scenes::world::render::{
             GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld,
+            pipeline::Pipeline,
         },
     },
     wgsl_shader,
@@ -63,7 +64,7 @@ pub struct ModelPipeline {
 }
 
 impl ModelPipeline {
-    pub fn new(renderer: &Renderer, render_store: &RenderStore) -> Self {
+    pub fn new(renderer: &Renderer, render_store: &mut RenderStore) -> Self {
         let device = &renderer.device;
 
         let module = device.create_shader_module(wgsl_shader!("models"));
@@ -178,13 +179,17 @@ impl ModelPipeline {
             batches: Vec::default(),
         }
     }
+}
 
-    pub fn prepare(
+impl Pipeline for ModelPipeline {
+    type Snapshot = ModelRenderSnapshot;
+
+    fn prepare(
         &mut self,
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
-        snapshot: &ModelRenderSnapshot,
+        snapshot: &Self::Snapshot,
     ) {
         if !snapshot.models_to_prepare.is_empty() {
             let models_to_prepare = &snapshot.models_to_prepare;
@@ -266,12 +271,13 @@ impl ModelPipeline {
         self.batches = batches;
     }
 
-    pub fn queue(
+    fn queue(
         &self,
         render_store: &RenderStore,
         render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
+        _snapshot: &Self::Snapshot,
     ) {
         self.opaque_render_pass(
             &mut frame.encoder,
@@ -287,7 +293,9 @@ impl ModelPipeline {
             render_world,
         );
     }
+}
 
+impl ModelPipeline {
     fn setup_render_pass(
         render_pass: &mut wgpu::RenderPass,
         pipeline: &wgpu::RenderPipeline,

@@ -8,7 +8,9 @@ use crate::{
     game::{
         math::BoundingBox,
         scenes::world::{
-            render::{BoxRenderSnapshot, ModelRenderSnapshot, TerrainRenderSnapshot},
+            render::{
+                BoxRenderSnapshot, ModelRenderSnapshot, TerrainRenderSnapshot, UiRenderSnapshot,
+            },
             systems::camera_system::CameraEnvSnapshot,
         },
     },
@@ -69,6 +71,7 @@ pub struct Snapshots {
     pub box_render_snapshot: BoxRenderSnapshot,
     pub terrain_render_snapshot: TerrainRenderSnapshot,
     pub model_render_snapshot: ModelRenderSnapshot,
+    pub ui_render_snapshot: UiRenderSnapshot,
 }
 
 impl Snapshots {

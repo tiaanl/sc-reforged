@@ -1,16 +1,74 @@
-use glam::{Mat4, UVec2};
+use glam::Mat4;
 
 use crate::{
     engine::renderer::{Frame, Renderer},
-    game::scenes::world::{
-        render::{RenderStore, RenderUiRect, RenderWorld},
-        sim_world::SimWorld,
-    },
+    game::scenes::world::render::{RenderStore, RenderUiRect, RenderWorld, pipeline::Pipeline},
     wgsl_shader,
 };
 
+#[derive(Default)]
+pub struct UiRenderSnapshot {
+    pub view_proj: Mat4,
+    pub ui_rects: Vec<RenderUiRect>,
+}
+
 pub struct UiPipeline {
     rect_render_pipeline: wgpu::RenderPipeline,
+}
+
+impl Pipeline for UiPipeline {
+    type Snapshot = UiRenderSnapshot;
+
+    fn prepare(
+        &mut self,
+        renderer: &Renderer,
+        _render_store: &mut RenderStore,
+        render_world: &mut RenderWorld,
+        snapshot: &Self::Snapshot,
+    ) {
+        renderer.queue.write_buffer(
+            &render_world.ui_state_buffer,
+            0,
+            bytemuck::bytes_of(&render_world.ui_state),
+        );
+
+        render_world
+            .ui_rects_buffer
+            .write(renderer, &snapshot.ui_rects);
+    }
+
+    fn queue(
+        &self,
+        _render_store: &RenderStore,
+        render_world: &RenderWorld,
+        frame: &mut Frame,
+        _geometry_buffer: &super::GeometryBuffer,
+        snapshot: &Self::Snapshot,
+    ) {
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("ui_render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+        render_pass.set_pipeline(&self.rect_render_pipeline);
+
+        render_pass.set_vertex_buffer(0, render_world.ui_rects_buffer.slice(..));
+        render_pass.set_bind_group(0, &render_world.ui_state_bind_group, &[]);
+
+        render_pass.draw(0..4, 0..(snapshot.ui_rects.len() as u32));
+    }
 }
 
 impl UiPipeline {
@@ -69,78 +127,5 @@ impl UiPipeline {
         Self {
             rect_render_pipeline,
         }
-    }
-
-    pub fn extract(
-        &self,
-        sim_world: &mut SimWorld,
-        _render_store: &mut RenderStore,
-        render_world: &mut RenderWorld,
-        viewport_size: UVec2,
-    ) {
-        let state = sim_world.state();
-
-        let proj = Mat4::orthographic_rh(
-            0.0,
-            viewport_size.x as f32,
-            viewport_size.y as f32,
-            0.0,
-            -1.0,
-            1.0,
-        );
-
-        render_world.ui_state.view_proj = proj.to_cols_array_2d();
-
-        // Copy the requested [UiRect]s to the temp buffer. Trying to avoid allocations.
-        render_world.ui_rects.clear();
-        render_world
-            .ui_rects
-            .extend(state.ui.ui_rects.iter().map(|rect| {
-                let min = rect.pos.as_vec2();
-                let max = min + rect.size.as_vec2();
-                RenderUiRect {
-                    min: [min.x.min(max.x), min.y.min(max.y)],
-                    max: [min.x.max(max.x), min.y.max(max.y)],
-                    color: rect.color.to_array(),
-                }
-            }));
-    }
-
-    pub fn prepare(&mut self, renderer: &Renderer, render_world: &mut RenderWorld) {
-        renderer.queue.write_buffer(
-            &render_world.ui_state_buffer,
-            0,
-            bytemuck::bytes_of(&render_world.ui_state),
-        );
-
-        render_world
-            .ui_rects_buffer
-            .write(renderer, &render_world.ui_rects);
-    }
-
-    pub fn queue(&mut self, render_world: &RenderWorld, frame: &mut Frame) {
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("ui_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-        render_pass.set_pipeline(&self.rect_render_pipeline);
-
-        render_pass.set_vertex_buffer(0, render_world.ui_rects_buffer.slice(..));
-        render_pass.set_bind_group(0, &render_world.ui_state_bind_group, &[]);
-
-        render_pass.draw(0..4, 0..(render_world.ui_rects.len() as u32));
     }
 }

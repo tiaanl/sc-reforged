@@ -1,12 +1,8 @@
-use glam::UVec2;
-
 use crate::{
     engine::renderer::{Frame, Renderer},
     game::scenes::world::{
         render::{
-            GeometryBuffer,
-            box_pipeline::{self, BoxPipeline},
-            ui_pipeline::UiPipeline,
+            GeometryBuffer, box_pipeline::BoxPipeline, pipeline::Pipeline, ui_pipeline::UiPipeline,
         },
         sim_world::{SimWorld, ecs::Snapshots},
     },
@@ -27,16 +23,13 @@ pub struct WorldRenderer {
 
     /// Render bounding boxes?
     pub render_bounding_boxes: bool,
-
-    /// Bounding boxes extracted from the sim world.
-    bounding_boxes: Vec<box_pipeline::gpu::Instance>,
 }
 
 impl WorldRenderer {
     pub fn new(
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
-        render_store: &RenderStore,
+        render_store: &mut RenderStore,
         sim_world: &SimWorld,
     ) -> Self {
         let terrain_pipeline = TerrainPipeline::new(renderer, render_store, sim_world);
@@ -51,22 +44,7 @@ impl WorldRenderer {
             box_pipeline,
 
             render_bounding_boxes: false,
-            bounding_boxes: Vec::default(),
         }
-    }
-
-    // TODO: should not pass render_world or render_store here.
-    pub fn extract(
-        &mut self,
-        sim_world: &mut SimWorld,
-        render_store: &mut RenderStore,
-        render_world: &mut RenderWorld,
-        viewport_size: UVec2,
-    ) {
-        self.ui_pipeline
-            .extract(sim_world, render_store, render_world, viewport_size);
-
-        self.bounding_boxes.clear();
     }
 
     pub fn prepare(
@@ -76,17 +54,30 @@ impl WorldRenderer {
         render_world: &mut RenderWorld,
         snapshots: &Snapshots,
     ) {
-        self.terrain_pipeline
-            .prepare(renderer, render_world, &snapshots.terrain_render_snapshot);
+        self.terrain_pipeline.prepare(
+            renderer,
+            render_store,
+            render_world,
+            &snapshots.terrain_render_snapshot,
+        );
         self.model_pipeline.prepare(
             renderer,
             render_store,
             render_world,
             &snapshots.model_render_snapshot,
         );
-        self.ui_pipeline.prepare(renderer, render_world);
-        self.box_pipeline
-            .prepare(renderer, &snapshots.box_render_snapshot);
+        self.ui_pipeline.prepare(
+            renderer,
+            render_store,
+            render_world,
+            &snapshots.ui_render_snapshot,
+        );
+        self.box_pipeline.prepare(
+            renderer,
+            render_store,
+            render_world,
+            &snapshots.box_render_snapshot,
+        );
     }
 
     pub fn queue(
@@ -98,18 +89,35 @@ impl WorldRenderer {
         geometry_buffer: &GeometryBuffer,
     ) {
         self.terrain_pipeline.queue(
+            render_store,
             render_world,
             frame,
             geometry_buffer,
             &snapshots.terrain_render_snapshot,
         );
-        self.model_pipeline
-            .queue(render_store, render_world, frame, geometry_buffer);
-        self.ui_pipeline.queue(render_world, frame);
+        self.model_pipeline.queue(
+            render_store,
+            render_world,
+            frame,
+            geometry_buffer,
+            &snapshots.model_render_snapshot,
+        );
+        self.ui_pipeline.queue(
+            render_store,
+            render_world,
+            frame,
+            geometry_buffer,
+            &snapshots.ui_render_snapshot,
+        );
 
-        if !self.bounding_boxes.is_empty() {
-            self.box_pipeline
-                .queue(frame, geometry_buffer, render_world);
+        if self.render_bounding_boxes {
+            self.box_pipeline.queue(
+                render_store,
+                render_world,
+                frame,
+                geometry_buffer,
+                &snapshots.box_render_snapshot,
+            );
         }
     }
 }

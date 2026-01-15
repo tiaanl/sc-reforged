@@ -73,7 +73,7 @@ impl WorldScene {
 
         let mut sim_world = SimWorld::new(&campaign_def)?;
 
-        let render_store = RenderStore::new(renderer, surface_format);
+        let mut render_store = RenderStore::new(renderer, surface_format);
 
         let render_worlds = [
             RenderWorld::new(0, renderer, &render_store),
@@ -82,7 +82,7 @@ impl WorldScene {
         ];
 
         let systems =
-            systems::Systems::new(renderer, surface_format, &render_store, &mut sim_world);
+            systems::Systems::new(renderer, surface_format, &mut render_store, &mut sim_world);
 
         Ok(Self {
             sim_world,
@@ -169,12 +169,7 @@ impl Scene for WorldScene {
         {
             // Extract
             let start = std::time::Instant::now();
-            self.systems.extract(
-                &mut self.sim_world,
-                &mut self.render_store,
-                render_world,
-                frame.size,
-            );
+            self.systems.extract(&mut self.sim_world);
             frame_time.extract = (std::time::Instant::now() - start).as_secs_f64();
 
             // Prepare
@@ -267,7 +262,9 @@ impl Scene for WorldScene {
                 */
 
                 {
-                    let mut state = self.sim_world.state_mut();
+                    use crate::game::scenes::world::sim_world::SimWorldState;
+
+                    let mut state = self.sim_world.ecs.resource_mut::<SimWorldState>();
 
                     ui.heading("Environment");
                     ui.horizontal(|ui| {

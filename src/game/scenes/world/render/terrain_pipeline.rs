@@ -7,7 +7,7 @@ use crate::{
     game::{
         image::images,
         scenes::world::{
-            render::{GeometryBuffer, RenderStore, RenderWorld},
+            render::{GeometryBuffer, RenderStore, RenderWorld, pipeline::Pipeline},
             sim_world::{SimWorld, Terrain},
         },
     },
@@ -54,13 +54,7 @@ pub struct TerrainPipeline {
 }
 
 impl TerrainPipeline {
-    const STRATA_DESCENT: f32 = -20_000.0;
-
-    const INDEX_RANGES: [std::ops::Range<u32>; 4] = [0..384, 384..480, 480..504, 504..510];
-    const WIREFRAME_INDEX_RANGES: [std::ops::Range<u32>; 4] =
-        [0..512, 512..640, 640..672, 672..680];
-
-    pub fn new(renderer: &Renderer, render_store: &RenderStore, sim_world: &SimWorld) -> Self {
+    pub fn new(renderer: &Renderer, render_store: &mut RenderStore, sim_world: &SimWorld) -> Self {
         let terrain = sim_world.ecs.resource::<Terrain>();
         let height_map = &terrain.height_map;
 
@@ -430,12 +424,17 @@ impl TerrainPipeline {
             debug_render_terrain_wireframe: false,
         }
     }
+}
 
-    pub fn prepare(
+impl Pipeline for TerrainPipeline {
+    type Snapshot = TerrainRenderSnapshot;
+
+    fn prepare(
         &mut self,
         renderer: &Renderer,
+        _render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
-        snapshot: &TerrainRenderSnapshot,
+        snapshot: &Self::Snapshot,
     ) {
         render_world
             .terrain_chunk_instances_buffer
@@ -446,12 +445,13 @@ impl TerrainPipeline {
             .write(renderer, &snapshot.strata_instances);
     }
 
-    pub fn queue(
-        &mut self,
+    fn queue(
+        &self,
+        _render_store: &RenderStore,
         render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
-        snapshot: &TerrainRenderSnapshot,
+        snapshot: &Self::Snapshot,
     ) {
         let mut render_pass =
             geometry_buffer.begin_opaque_render_pass(&mut frame.encoder, "terrain_render_pass");
@@ -530,6 +530,14 @@ impl TerrainPipeline {
             }
         }
     }
+}
+
+impl TerrainPipeline {
+    const STRATA_DESCENT: f32 = -20_000.0;
+
+    const INDEX_RANGES: [std::ops::Range<u32>; 4] = [0..384, 384..480, 480..504, 504..510];
+    const WIREFRAME_INDEX_RANGES: [std::ops::Range<u32>; 4] =
+        [0..512, 512..640, 640..672, 672..680];
 }
 
 impl TerrainPipeline {
