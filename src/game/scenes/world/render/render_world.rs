@@ -3,7 +3,7 @@ use bytemuck::NoUninit;
 use crate::{
     engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, renderer::Renderer},
     game::scenes::world::{
-        render::{render_store::RenderStore, terrain_pipeline::gpu::ChunkInstanceData},
+        render::{render_store::RenderStore, terrain_render_pass::gpu::ChunkInstanceData},
         systems::camera_system,
     },
 };

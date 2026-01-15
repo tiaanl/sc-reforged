@@ -2,24 +2,25 @@ use crate::{
     engine::renderer::{Frame, Renderer},
     game::scenes::world::{
         render::{
-            GeometryBuffer, box_pipeline::BoxPipeline, pipeline::Pipeline, ui_pipeline::UiPipeline,
+            GeometryBuffer, box_render_pass::BoxRenderPass, render_pass::RenderPass,
+            ui_render_pass::UiRenderPass,
         },
         sim_world::{SimWorld, ecs::Snapshots},
     },
 };
 
 use super::{
-    model_pipeline::ModelPipeline, render_store::RenderStore, render_world::RenderWorld,
-    terrain_pipeline::TerrainPipeline,
+    model_render_pass::ModelRenderPass, render_store::RenderStore, render_world::RenderWorld,
+    terrain_render_pass::TerrainRenderPass,
 };
 
 pub struct WorldRenderer {
     // TODO: should not be pub.
-    pub terrain_pipeline: TerrainPipeline,
+    pub terrain_pipeline: TerrainRenderPass,
     // TODO: should not be pub.
-    pub model_pipeline: ModelPipeline,
-    ui_pipeline: UiPipeline,
-    box_pipeline: BoxPipeline,
+    pub model_pipeline: ModelRenderPass,
+    ui_pipeline: UiRenderPass,
+    box_pipeline: BoxRenderPass,
 
     /// Render bounding boxes?
     pub render_bounding_boxes: bool,
@@ -32,10 +33,10 @@ impl WorldRenderer {
         render_store: &mut RenderStore,
         sim_world: &SimWorld,
     ) -> Self {
-        let terrain_pipeline = TerrainPipeline::new(renderer, render_store, sim_world);
-        let model_pipeline = ModelPipeline::new(renderer, render_store);
-        let ui_pipeline = UiPipeline::new(renderer, surface_format, render_store);
-        let box_pipeline = BoxPipeline::new(renderer, render_store);
+        let terrain_pipeline = TerrainRenderPass::new(renderer, render_store, sim_world);
+        let model_pipeline = ModelRenderPass::new(renderer, render_store);
+        let ui_pipeline = UiRenderPass::new(renderer, surface_format, render_store);
+        let box_pipeline = BoxRenderPass::new(renderer, render_store);
 
         Self {
             terrain_pipeline,

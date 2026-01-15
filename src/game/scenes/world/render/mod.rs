@@ -1,31 +1,31 @@
-mod box_pipeline;
+mod box_render_pass;
 mod compositor;
 mod geometry_buffers;
-mod gizmo_pipeline;
-mod model_pipeline;
-mod pipeline;
+mod gizmo_render_pass;
+mod model_render_pass;
 mod render_models;
+mod render_pass;
 mod render_store;
 mod render_textures;
 mod render_world;
-mod terrain_pipeline;
-mod ui_pipeline;
+mod terrain_render_pass;
+mod ui_render_pass;
 mod world_renderer;
 
-pub use box_pipeline::{BoxRenderSnapshot, RenderBox};
+pub use box_render_pass::{BoxRenderSnapshot, RenderBox};
 pub use compositor::Compositor;
 pub use geometry_buffers::GeometryBuffer;
-pub use gizmo_pipeline::{GizmoRenderPipeline, GizmoRenderSnapshot};
-pub use model_pipeline::{ModelRenderFlags, ModelRenderSnapshot, ModelToRender};
+pub use gizmo_render_pass::{GizmoRenderPass, GizmoRenderSnapshot};
+pub use model_render_pass::{ModelRenderFlags, ModelRenderSnapshot, ModelToRender};
 pub use render_models::{RenderModel, RenderVertex};
 pub use render_store::RenderStore;
 pub use render_world::{ModelInstanceData, RenderUiRect, RenderWorld};
-pub use terrain_pipeline::TerrainRenderSnapshot;
-pub use ui_pipeline::UiRenderSnapshot;
+pub use terrain_render_pass::TerrainRenderSnapshot;
+pub use ui_render_pass::UiRenderSnapshot;
 pub use world_renderer::WorldRenderer;
 
 pub mod gpu {
     use super::*;
 
-    pub use terrain_pipeline::gpu::ChunkInstanceData;
+    pub use terrain_render_pass::gpu::ChunkInstanceData;
 }

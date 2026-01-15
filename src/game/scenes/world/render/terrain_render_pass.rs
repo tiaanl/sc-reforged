@@ -7,7 +7,7 @@ use crate::{
     game::{
         image::images,
         scenes::world::{
-            render::{GeometryBuffer, RenderStore, RenderWorld, pipeline::Pipeline},
+            render::{GeometryBuffer, RenderStore, RenderWorld, render_pass::RenderPass},
             sim_world::{SimWorld, Terrain},
         },
     },
@@ -25,7 +25,7 @@ pub struct TerrainRenderSnapshot {
     pub strata_instances_side_count: [u32; 4],
 }
 
-pub struct TerrainPipeline {
+pub struct TerrainRenderPass {
     /// Buffer holding indices to render a single chunk at various LOD's.
     chunk_indices_buffer: wgpu::Buffer,
     /// Buffer holding indices to render a wireframe over a single chunk of various LOD's.
@@ -53,7 +53,7 @@ pub struct TerrainPipeline {
     pub debug_render_terrain_wireframe: bool,
 }
 
-impl TerrainPipeline {
+impl TerrainRenderPass {
     pub fn new(renderer: &Renderer, render_store: &mut RenderStore, sim_world: &SimWorld) -> Self {
         let terrain = sim_world.ecs.resource::<Terrain>();
         let height_map = &terrain.height_map;
@@ -426,7 +426,7 @@ impl TerrainPipeline {
     }
 }
 
-impl Pipeline for TerrainPipeline {
+impl RenderPass for TerrainRenderPass {
     type Snapshot = TerrainRenderSnapshot;
 
     fn prepare(
@@ -532,7 +532,7 @@ impl Pipeline for TerrainPipeline {
     }
 }
 
-impl TerrainPipeline {
+impl TerrainRenderPass {
     const STRATA_DESCENT: f32 = -20_000.0;
 
     const INDEX_RANGES: [std::ops::Range<u32>; 4] = [0..384, 384..480, 480..504, 504..510];
@@ -540,7 +540,7 @@ impl TerrainPipeline {
         [0..512, 512..640, 640..672, 672..680];
 }
 
-impl TerrainPipeline {
+impl TerrainRenderPass {
     /// Build a list of instances per LOD.
     /// `chunk_instances` *must* be sorted by LOD.
     fn build_draw_commands(

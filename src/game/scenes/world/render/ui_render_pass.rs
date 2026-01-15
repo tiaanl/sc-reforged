@@ -2,7 +2,9 @@ use glam::Mat4;
 
 use crate::{
     engine::renderer::{Frame, Renderer},
-    game::scenes::world::render::{RenderStore, RenderUiRect, RenderWorld, pipeline::Pipeline},
+    game::scenes::world::render::{
+        RenderStore, RenderUiRect, RenderWorld, render_pass::RenderPass,
+    },
     wgsl_shader,
 };
 
@@ -12,11 +14,11 @@ pub struct UiRenderSnapshot {
     pub ui_rects: Vec<RenderUiRect>,
 }
 
-pub struct UiPipeline {
+pub struct UiRenderPass {
     rect_render_pipeline: wgpu::RenderPipeline,
 }
 
-impl Pipeline for UiPipeline {
+impl RenderPass for UiRenderPass {
     type Snapshot = UiRenderSnapshot;
 
     fn prepare(
@@ -71,7 +73,7 @@ impl Pipeline for UiPipeline {
     }
 }
 
-impl UiPipeline {
+impl UiRenderPass {
     pub fn new(
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,

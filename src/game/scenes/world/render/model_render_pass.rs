@@ -10,7 +10,7 @@ use crate::{
         model::Model,
         scenes::world::render::{
             GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld,
-            pipeline::Pipeline,
+            render_pass::RenderPass,
         },
     },
     wgsl_shader,
@@ -50,7 +50,7 @@ pub struct ModelRenderSnapshot {
     pub models: Vec<ModelToRender>,
 }
 
-pub struct ModelPipeline {
+pub struct ModelRenderPass {
     opaque_pipeline: wgpu::RenderPipeline,
     alpha_pipeline: wgpu::RenderPipeline,
 
@@ -63,7 +63,7 @@ pub struct ModelPipeline {
     batches: Vec<Batch>,
 }
 
-impl ModelPipeline {
+impl ModelRenderPass {
     pub fn new(renderer: &Renderer, render_store: &mut RenderStore) -> Self {
         let device = &renderer.device;
 
@@ -181,7 +181,7 @@ impl ModelPipeline {
     }
 }
 
-impl Pipeline for ModelPipeline {
+impl RenderPass for ModelRenderPass {
     type Snapshot = ModelRenderSnapshot;
 
     fn prepare(
@@ -295,7 +295,7 @@ impl Pipeline for ModelPipeline {
     }
 }
 
-impl ModelPipeline {
+impl ModelRenderPass {
     fn setup_render_pass(
         render_pass: &mut wgpu::RenderPass,
         pipeline: &wgpu::RenderPipeline,

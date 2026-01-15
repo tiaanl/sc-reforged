@@ -3,9 +3,11 @@ use crate::{
     game::scenes::world::render::{GeometryBuffer, RenderStore, RenderWorld},
 };
 
-pub trait Pipeline {
+pub trait RenderPass {
+    /// The data passed to the [RenderPass] to use for rendering.
     type Snapshot;
 
+    /// Prepare GPU resources that will be used when queueing commands to the GPU.
     fn prepare(
         &mut self,
         renderer: &Renderer,
@@ -14,6 +16,7 @@ pub trait Pipeline {
         snapshot: &Self::Snapshot,
     );
 
+    /// Queue draw commands to the GPU.
     fn queue(
         &self,
         render_store: &RenderStore,
