@@ -26,13 +26,13 @@ use super::extract::*;
 
 pub mod camera_system;
 mod clear_render_targets;
-pub mod day_night_cycle_system;
 mod orders;
 pub mod world_interaction;
 
 #[derive(Resource)]
 pub struct Time {
-    /// The instant the scene started running.
+    /// The instant the scene started running. Constant the entire time the
+    /// scene is running.
     pub scene_start: std::time::Instant,
     /// Time elapsed since the last frame was rendered.
     pub delta_time: f32,
@@ -55,9 +55,9 @@ impl Default for Time {
 }
 
 impl Time {
-    pub fn next_frame(&mut self, delta_time: f32, sim_time: f32) {
+    pub fn next_frame(&mut self, delta_time: f32) {
         self.delta_time = delta_time;
-        self.sim_time = sim_time;
+        self.sim_time = (std::time::Instant::now() - self.scene_start).as_secs_f32();
         self.frame_index = self.frame_index.wrapping_add(1);
     }
 }
@@ -109,7 +109,6 @@ impl Systems {
 
             schedule.add_systems(
                 (
-                    day_night_cycle_system::increment_time_of_day,
                     orders::process_biped_orders,
                     world_interaction::update,
                     rebuild_static_bvh
@@ -133,6 +132,7 @@ impl Systems {
             schedule.add_systems(
                 (
                     clear_snapshots,
+                    camera_system::extract_camera_env_snapshot,
                     extract_terrain_snapshot,
                     extract_model_snapshot,
                     |bounding_boxes: Query<(&Transform, &BoundingBoxComponent)>,
@@ -191,10 +191,6 @@ impl Systems {
         self.gizmo_extract
             .extract(sim_world, &mut self.gizmo_render_snapshot);
 
-        render_world.camera_env.sim_time = self.sim_time;
-
-        camera_system::extract(sim_world, render_world);
-
         self.world_renderer
             .extract(sim_world, render_store, render_world, viewport_size);
     }
@@ -204,7 +200,7 @@ impl Systems {
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         renderer: &Renderer,
-        snapshots: &mut Snapshots,
+        snapshots: &Snapshots,
         surface_size: UVec2,
     ) {
         // Make sure the geometry buffer is the correct size.
@@ -214,7 +210,7 @@ impl Systems {
                 .resize(&renderer.device, surface_size);
         }
 
-        camera_system::prepare(render_world, renderer);
+        camera_system::prepare(renderer, render_world, snapshots);
         self.world_renderer
             .prepare(renderer, render_store, render_world, snapshots);
         self.gizmo_render_pipeline
@@ -229,9 +225,9 @@ impl Systems {
         frame: &mut Frame,
     ) {
         clear_render_targets::clear_render_targets(
-            render_world,
             frame,
             &render_store.geometry_buffer,
+            snapshots.camera_env_snapshot.fog_color,
         );
         self.world_renderer.queue(
             render_store,

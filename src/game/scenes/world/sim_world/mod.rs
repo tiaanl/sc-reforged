@@ -51,9 +51,6 @@ pub use ui::UiRect;
 
 #[derive(Resource)]
 pub struct SimWorldState {
-    /// Instant that the simulation started.
-    pub sim_start: std::time::Instant,
-
     pub time_of_day: f32,
 
     /// A list of chunks that should be highlighted during rendering.
@@ -137,8 +134,6 @@ impl SimWorld {
         let ui = Ui::new();
 
         let sim_world_state = SimWorldState {
-            sim_start: std::time::Instant::now(),
-
             time_of_day,
 
             highlighted_chunks: HashSet::default(),

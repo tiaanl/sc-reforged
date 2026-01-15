@@ -129,14 +129,10 @@ impl Scene for WorldScene {
 
         // Run systems
         {
-            let sim_start = self.sim_world.state().sim_start;
-
             // Update Time.
             {
                 let mut time = self.sim_world.ecs.resource_mut::<Time>();
-
-                let sim_time = (std::time::Instant::now() - sim_start).as_secs_f32();
-                time.next_frame(delta_time, sim_time);
+                time.next_frame(delta_time);
             }
 
             {
@@ -184,12 +180,12 @@ impl Scene for WorldScene {
             // Prepare
             let start = std::time::Instant::now();
             {
-                let mut snapshots = self.sim_world.ecs.resource_mut::<Snapshots>();
+                let snapshots = self.sim_world.ecs.resource::<Snapshots>();
                 self.systems.prepare(
                     &mut self.render_store,
                     render_world,
                     renderer,
-                    &mut snapshots,
+                    snapshots,
                     frame.size,
                 );
             }

@@ -22,6 +22,7 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone)]
 pub struct ModelToRender {
     pub model: Handle<Model>,
     pub transform: Mat4,
@@ -183,24 +184,23 @@ impl ModelPipeline {
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
-        snapshot: &mut ModelRenderSnapshot,
+        snapshot: &ModelRenderSnapshot,
     ) {
         if !snapshot.models_to_prepare.is_empty() {
-            let mut models_to_prepare = Vec::default();
-            std::mem::swap(&mut snapshot.models_to_prepare, &mut models_to_prepare);
-
+            let models_to_prepare = &snapshot.models_to_prepare;
             tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
 
-            for model_handle in models_to_prepare {
+            for &model_handle in models_to_prepare {
                 if let Err(err) = render_store.get_or_create_render_model(renderer, model_handle) {
                     tracing::warn!("Could not prepare model! ({err})");
                 }
             }
         }
 
-        snapshot
-            .models
-            .sort_unstable_by(|a, b| a.model.cmp(&b.model));
+        // TODO: Don't copy all the models to render data here.
+        let mut models = snapshot.models.clone();
+
+        models.sort_unstable_by(|a, b| a.model.cmp(&b.model));
 
         self.render_models_cache.clear();
 

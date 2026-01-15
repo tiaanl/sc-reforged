@@ -2,15 +2,8 @@ use glam::Vec3;
 
 use crate::engine::renderer::Frame;
 
-use super::super::render::{GeometryBuffer, RenderWorld};
+use super::super::render::GeometryBuffer;
 
-pub fn clear_render_targets(
-    render_world: &RenderWorld,
-    frame: &mut Frame,
-    geometry_buffer: &GeometryBuffer,
-) {
-    geometry_buffer.clear(
-        &mut frame.encoder,
-        Vec3::from_slice(&render_world.camera_env.fog_color),
-    );
+pub fn clear_render_targets(frame: &mut Frame, geometry_buffer: &GeometryBuffer, fog_color: Vec3) {
+    geometry_buffer.clear(&mut frame.encoder, fog_color);
 }

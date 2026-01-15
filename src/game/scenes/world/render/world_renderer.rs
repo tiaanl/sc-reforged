@@ -74,7 +74,7 @@ impl WorldRenderer {
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
-        snapshots: &mut Snapshots,
+        snapshots: &Snapshots,
     ) {
         self.terrain_pipeline
             .prepare(renderer, render_world, &snapshots.terrain_render_snapshot);
@@ -82,7 +82,7 @@ impl WorldRenderer {
             renderer,
             render_store,
             render_world,
-            &mut snapshots.model_render_snapshot,
+            &snapshots.model_render_snapshot,
         );
         self.ui_pipeline.prepare(renderer, render_world);
         self.box_pipeline

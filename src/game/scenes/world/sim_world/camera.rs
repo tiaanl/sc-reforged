@@ -112,7 +112,7 @@ impl Camera {
             frustum,
             position: self.position,
             forward,
-            near: self.near,
+            _near: self.near,
             far: self.far,
         }
     }
@@ -124,7 +124,7 @@ pub struct ComputedCamera {
     pub frustum: Frustum,
     pub position: Vec3,
     pub forward: Vec3,
-    pub near: f32,
+    pub _near: f32,
     pub far: f32,
 }
 

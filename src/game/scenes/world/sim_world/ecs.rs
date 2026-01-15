@@ -7,7 +7,10 @@ use crate::{
     engine::gizmos::GizmoVertex,
     game::{
         math::BoundingBox,
-        scenes::world::render::{BoxRenderSnapshot, ModelRenderSnapshot, TerrainRenderSnapshot},
+        scenes::world::{
+            render::{BoxRenderSnapshot, ModelRenderSnapshot, TerrainRenderSnapshot},
+            systems::camera_system::CameraEnvSnapshot,
+        },
     },
 };
 
@@ -61,6 +64,8 @@ impl Viewport {
 
 #[derive(Default, Resource)]
 pub struct Snapshots {
+    pub camera_env_snapshot: CameraEnvSnapshot,
+
     pub box_render_snapshot: BoxRenderSnapshot,
     pub terrain_render_snapshot: TerrainRenderSnapshot,
     pub model_render_snapshot: ModelRenderSnapshot,
