@@ -7,6 +7,7 @@ use crate::{
         transform::Transform,
     },
     game::{
+        assets::Assets,
         math::BoundingBox,
         scenes::world::{
             render::{
@@ -81,6 +82,7 @@ pub struct Systems {
 
 impl Systems {
     pub fn new(
+        assets: &mut Assets,
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
         render_store: &mut RenderStore,
@@ -162,7 +164,13 @@ impl Systems {
 
             gizmo_extract: GizmoExtract::new(sim_world),
 
-            world_renderer: WorldRenderer::new(renderer, surface_format, render_store, sim_world),
+            world_renderer: WorldRenderer::new(
+                assets,
+                renderer,
+                surface_format,
+                render_store,
+                sim_world,
+            ),
 
             gizmo_render_snapshot: GizmoRenderSnapshot::default(),
             gizmo_render_pipeline: GizmoRenderPass::new(renderer, surface_format, render_store),
@@ -190,6 +198,7 @@ impl Systems {
 
     pub fn prepare(
         &mut self,
+        assets: &Assets,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         renderer: &Renderer,
@@ -205,7 +214,7 @@ impl Systems {
 
         camera_system::prepare(renderer, render_world, snapshots);
         self.world_renderer
-            .prepare(renderer, render_store, render_world, snapshots);
+            .prepare(assets, renderer, render_store, render_world, snapshots);
         self.gizmo_render_pipeline
             .prepare(render_world, renderer, &self.gizmo_render_snapshot);
     }

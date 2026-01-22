@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     engine::renderer::{Frame, Renderer},
     game::{
-        image::images,
+        assets::Assets,
         scenes::world::{
             render::{GeometryBuffer, RenderStore, RenderWorld, render_pass::RenderPass},
             sim_world::{SimWorld, Terrain},
@@ -54,7 +54,12 @@ pub struct TerrainRenderPass {
 }
 
 impl TerrainRenderPass {
-    pub fn new(renderer: &Renderer, render_store: &mut RenderStore, sim_world: &SimWorld) -> Self {
+    pub fn new(
+        assets: &mut Assets,
+        renderer: &Renderer,
+        render_store: &mut RenderStore,
+        sim_world: &SimWorld,
+    ) -> Self {
         let terrain = sim_world.ecs.resource::<Terrain>();
         let height_map = &terrain.height_map;
 
@@ -106,15 +111,15 @@ impl TerrainRenderPass {
         };
 
         let terrain_texture = {
-            let image = images().get(terrain.terrain_texture).unwrap();
+            let image = assets.get_image(terrain.terrain_texture).unwrap();
             renderer.create_texture("terrain_texture", &image.data)
         };
 
         let strata_texture = {
             let path = PathBuf::from("textures").join("shared").join("strata.bmp");
-            let image = images()
-                .load_image_direct(path)
-                .expect("Could not load strata texture.");
+            let (_, image) = assets
+                .get_or_load_image(path)
+                .expect("Could not load strate texture.");
             renderer.create_texture("strata", &image.data)
         };
 
@@ -431,6 +436,7 @@ impl RenderPass for TerrainRenderPass {
 
     fn prepare(
         &mut self,
+        _assets: &Assets,
         renderer: &Renderer,
         _render_store: &mut RenderStore,
         render_world: &mut RenderWorld,

@@ -9,7 +9,7 @@ use crate::{
         renderer::Renderer,
         storage::{Handle, Storage},
     },
-    game::{image::BlendMode, model::Model, models::models},
+    game::{assets::Assets, image::BlendMode, model::Model, models::models},
 };
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -128,6 +128,7 @@ impl RenderModels {
 
     pub fn add(
         &mut self,
+        assets: &Assets,
         renderer: &Renderer,
         render_textures: &mut RenderTextures,
         model_handle: Handle<Model>,
@@ -152,7 +153,7 @@ impl RenderModels {
             .collect();
 
         for mesh in model.meshes.iter() {
-            let texture_handle = render_textures.get_or_create(renderer, mesh.image);
+            let texture_handle = render_textures.get_or_create(assets, renderer, mesh.image);
             let texture = render_textures.get(texture_handle).unwrap();
 
             let indexed_mesh = match texture.blend_mode {

@@ -8,6 +8,7 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
+        assets::Assets,
         config::{LodModelProfileDefinition, SubModelDefinition},
         data_dir::data_dir,
         file_system::file_system,
@@ -66,7 +67,11 @@ impl Models {
         handle
     }
 
-    pub fn load_model(&mut self, name: ModelName) -> Result<(Handle<Model>, &Model), AssetError> {
+    pub fn load_model(
+        &mut self,
+        name: ModelName,
+        assets: &mut Assets,
+    ) -> Result<(Handle<Model>, &Model), AssetError> {
         let path = match &name {
             ModelName::Object(name) => {
                 let lod_name = self
@@ -94,7 +99,7 @@ impl Models {
         let smf = shadow_company_tools::smf::Model::read(&mut std::io::Cursor::new(data))
             .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
 
-        let model = Model::try_from(smf)?;
+        let model = Model::from_smf(smf, assets)?;
 
         if model.meshes.is_empty() {
             return Err(AssetError::custom(path, "Model does not contain meshes!"));

@@ -1,6 +1,9 @@
 use crate::{
     engine::renderer::{Frame, Renderer},
-    game::scenes::world::render::{GeometryBuffer, RenderStore, RenderWorld},
+    game::{
+        assets::Assets,
+        scenes::world::render::{GeometryBuffer, RenderStore, RenderWorld},
+    },
 };
 
 pub trait RenderPass {
@@ -10,6 +13,7 @@ pub trait RenderPass {
     /// Prepare GPU resources that will be used when queueing commands to the GPU.
     fn prepare(
         &mut self,
+        assets: &Assets,
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,

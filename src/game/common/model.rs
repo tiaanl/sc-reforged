@@ -8,11 +8,12 @@ use shadow_company_tools::smf;
 use crate::engine::assets::AssetError;
 use crate::engine::mesh::IndexedMesh;
 use crate::engine::transform::Transform;
+use crate::game::assets::Assets;
 use crate::game::math::{BoundingBox, Ray, RaySegment, triangle_intersect_ray_segment};
 use crate::{
     engine::storage::Handle,
     game::{
-        image::{Image, images},
+        image::Image,
         skeleton::{Bone, Skeleton},
     },
 };
@@ -81,8 +82,13 @@ impl Model {
 /// Result of a model ray-segment intersection.
 #[derive(Clone, Copy, Debug)]
 pub enum ModelRayHitKind {
-    CollisionBox { collision_box_index: usize },
-    MeshTriangle { mesh_index: usize, triangle_index: usize },
+    CollisionBox {
+        collision_box_index: usize,
+    },
+    MeshTriangle {
+        mesh_index: usize,
+        triangle_index: usize,
+    },
 }
 
 /// Result of a model ray-segment intersection.
@@ -306,10 +312,8 @@ pub struct CollisionBox {
     pub max: Vec3,
 }
 
-impl TryFrom<smf::Model> for Model {
-    type Error = AssetError;
-
-    fn try_from(value: smf::Model) -> Result<Self, Self::Error> {
+impl Model {
+    pub fn from_smf(smf: smf::Model, assets: &mut Assets) -> Result<Self, AssetError> {
         fn smf_mesh_to_mesh(smf_mesh: &smf::Mesh, node_index: u32) -> IndexedMesh<Vertex> {
             let vertices = smf_mesh
                 .vertices
@@ -327,12 +331,12 @@ impl TryFrom<smf::Model> for Model {
             IndexedMesh { vertices, indices }
         }
 
-        let mut nodes = Vec::with_capacity(value.nodes.len());
+        let mut nodes = Vec::with_capacity(smf.nodes.len());
         let mut meshes = Vec::default();
         let mut collision_boxes = Vec::new();
         let mut names = NameLookup::default();
 
-        for (node_index, smf_node) in value.nodes.into_iter().enumerate() {
+        for (node_index, smf_node) in smf.nodes.into_iter().enumerate() {
             names.insert(smf_node.name.clone(), node_index as u32);
 
             let parent_node_index = if smf_node.parent_name == "<root>" {
@@ -345,7 +349,7 @@ impl TryFrom<smf::Model> for Model {
                     None => {
                         let n = names.keys().cloned().collect::<Vec<_>>().join(", ");
                         return Err(AssetError::custom(
-                            &value.name,
+                            &smf.name,
                             format!(
                                 "Parent name [{}] not found, existing names: {}",
                                 smf_node.parent_name, n
@@ -376,12 +380,12 @@ impl TryFrom<smf::Model> for Model {
                             .join("shared")
                             .join(&smf_mesh.texture_name);
 
-                        let image = images().load_image(path)?;
+                        let (image_handle, _) = assets.get_or_load_image(path)?;
 
                         Ok(Mesh {
                             node_index: node_index as u32,
                             image_name: smf_mesh.texture_name.clone(),
-                            image,
+                            image: image_handle,
                             mesh,
                         })
                     })

@@ -1,11 +1,14 @@
 use crate::{
     engine::renderer::{Frame, Renderer},
-    game::scenes::world::{
-        render::{
-            GeometryBuffer, box_render_pass::BoxRenderPass, render_pass::RenderPass,
-            ui_render_pass::UiRenderPass,
+    game::{
+        assets::Assets,
+        scenes::world::{
+            render::{
+                GeometryBuffer, box_render_pass::BoxRenderPass, render_pass::RenderPass,
+                ui_render_pass::UiRenderPass,
+            },
+            sim_world::{SimWorld, ecs::Snapshots},
         },
-        sim_world::{SimWorld, ecs::Snapshots},
     },
 };
 
@@ -28,12 +31,13 @@ pub struct WorldRenderer {
 
 impl WorldRenderer {
     pub fn new(
+        assets: &mut Assets,
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
         render_store: &mut RenderStore,
         sim_world: &SimWorld,
     ) -> Self {
-        let terrain_pipeline = TerrainRenderPass::new(renderer, render_store, sim_world);
+        let terrain_pipeline = TerrainRenderPass::new(assets, renderer, render_store, sim_world);
         let model_pipeline = ModelRenderPass::new(renderer, render_store);
         let ui_pipeline = UiRenderPass::new(renderer, surface_format, render_store);
         let box_pipeline = BoxRenderPass::new(renderer, render_store);
@@ -50,30 +54,35 @@ impl WorldRenderer {
 
     pub fn prepare(
         &mut self,
+        assets: &Assets,
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         snapshots: &Snapshots,
     ) {
         self.terrain_pipeline.prepare(
+            assets,
             renderer,
             render_store,
             render_world,
             &snapshots.terrain_render_snapshot,
         );
         self.model_pipeline.prepare(
+            assets,
             renderer,
             render_store,
             render_world,
             &snapshots.model_render_snapshot,
         );
         self.ui_pipeline.prepare(
+            assets,
             renderer,
             render_store,
             render_world,
             &snapshots.ui_render_snapshot,
         );
         self.box_pipeline.prepare(
+            assets,
             renderer,
             render_store,
             render_world,

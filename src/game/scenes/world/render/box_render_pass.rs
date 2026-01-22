@@ -7,8 +7,11 @@ use crate::{
         renderer::{Frame, Renderer},
         transform::Transform,
     },
-    game::scenes::world::render::{
-        GeometryBuffer, RenderStore, RenderWorld, render_pass::RenderPass,
+    game::{
+        assets::Assets,
+        scenes::world::render::{
+            GeometryBuffer, RenderStore, RenderWorld, render_pass::RenderPass,
+        },
     },
     wgsl_shader,
 };
@@ -132,6 +135,7 @@ impl RenderPass for BoxRenderPass {
 
     fn prepare(
         &mut self,
+        _assets: &Assets,
         renderer: &Renderer,
         _render_store: &mut RenderStore,
         _render_world: &mut RenderWorld,

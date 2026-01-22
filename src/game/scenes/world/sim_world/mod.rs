@@ -8,6 +8,7 @@ use glam::{IVec2, Quat, Vec2, Vec3};
 use crate::{
     engine::{assets::AssetError, input::InputState, transform::Transform},
     game::{
+        assets::Assets,
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         scenes::world::{
@@ -69,7 +70,7 @@ pub struct SimWorld {
 }
 
 impl SimWorld {
-    pub fn new(campaign_def: &CampaignDef) -> Result<Self, AssetError> {
+    pub fn new(assets: &mut Assets, campaign_def: &CampaignDef) -> Result<Self, AssetError> {
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
 
         let mut ecs = World::default();
@@ -125,9 +126,9 @@ impl SimWorld {
             FreeCameraController::new(1000.0, 0.2),
         ));
 
-        init_terrain(&mut ecs, campaign_def)?;
+        init_terrain(assets, &mut ecs, campaign_def)?;
 
-        init_objects(&mut ecs, campaign)?;
+        init_objects(assets, &mut ecs, campaign)?;
 
         let sequences = Sequences::new()?;
 
@@ -154,7 +155,11 @@ impl SimWorld {
     }
 }
 
-fn init_terrain(ecs: &mut World, campaign_def: &CampaignDef) -> Result<(), AssetError> {
+fn init_terrain(
+    assets: &mut Assets,
+    ecs: &mut World,
+    campaign_def: &CampaignDef,
+) -> Result<(), AssetError> {
     let terrain = {
         let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
 
@@ -168,8 +173,13 @@ fn init_terrain(ecs: &mut World, campaign_def: &CampaignDef) -> Result<(), Asset
             )?
         };
 
-        let terrain_texture =
-            data_dir().load_terrain_texture(&terrain_mapping.texture_map_base_name)?;
+        let terrain_texture = {
+            let path = PathBuf::from("trnhigh")
+                .join(&terrain_mapping.texture_map_base_name)
+                .with_extension("jpg");
+            let (handle, _) = assets.get_or_load_image(path)?;
+            handle
+        };
 
         Terrain::new(height_map, terrain_texture)
     };
@@ -178,6 +188,7 @@ fn init_terrain(ecs: &mut World, campaign_def: &CampaignDef) -> Result<(), Asset
 }
 
 fn init_objects(
+    assets: &mut Assets,
     ecs: &mut World,
     campaign: crate::game::config::Campaign,
 ) -> Result<(), AssetError> {
@@ -197,6 +208,7 @@ fn init_objects(
 
             let _ = match object_spawner.spawn(
                 ecs,
+                assets,
                 &object.title,
                 &object.name,
                 object_type,

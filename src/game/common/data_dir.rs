@@ -4,12 +4,10 @@ use ahash::{HashMap, HashMapExt};
 use shadow_company_tools::bmf;
 
 use crate::{
-    engine::{assets::AssetError, storage::Handle},
+    engine::assets::AssetError,
     game::{
-        common::image::Image,
         config::{self, CharacterProfiles, TerrainMapping, parser::ConfigLines},
         file_system::file_system,
-        image::images,
         scenes::world::{animation::motion::Motion, sim_world::HeightMap},
     },
     global,
@@ -40,11 +38,6 @@ impl DataDir {
         tracing::info!("Loading terrain mapping: {}", path.display());
 
         self.load_config(path)
-    }
-
-    #[inline]
-    pub fn load_terrain_texture(&self, name: &str) -> Result<Handle<Image>, AssetError> {
-        images().load_image(PathBuf::from("trnhigh").join(name).with_extension("jpg"))
     }
 
     pub fn load_new_height_map(

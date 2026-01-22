@@ -8,7 +8,10 @@ use crate::{
         renderer::Renderer,
         storage::{Handle, Storage},
     },
-    game::image::{BlendMode, Image, images},
+    game::{
+        assets::Assets,
+        image::{BlendMode, Image},
+    },
 };
 
 /// A texture that can be use for rendering.
@@ -147,6 +150,7 @@ impl RenderTextures {
 
     pub fn get_or_create(
         &mut self,
+        assets: &Assets,
         renderer: &Renderer,
         image_handle: Handle<Image>,
     ) -> Handle<RenderTexture> {
@@ -154,8 +158,8 @@ impl RenderTextures {
             return *render_texture;
         };
 
-        let image = images()
-            .get(image_handle)
+        let image = assets
+            .get_image(image_handle)
             .expect("Adding image that doesn't exist!");
 
         let bucket_index = Self::calculate_bucket_index(image.size);

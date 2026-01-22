@@ -10,6 +10,7 @@ use crate::{
         scene::{Scene, SceneLoader},
     },
     game::{
+        assets::Assets,
         config::CampaignDef,
         data_dir::data_dir,
         scenes::world::{
@@ -42,6 +43,8 @@ struct FrameTime {
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
+    assets: Assets,
+
     sim_world: SimWorld,
     render_worlds: [RenderWorld; Self::RENDER_FRAME_COUNT],
     render_store: RenderStore,
@@ -71,7 +74,9 @@ impl WorldScene {
         let fps_history = vec![FrameTime::default(); 100];
         let fps_history_cursor = 0;
 
-        let mut sim_world = SimWorld::new(&campaign_def)?;
+        let mut assets = Assets::new()?;
+
+        let mut sim_world = SimWorld::new(&mut assets, &campaign_def)?;
 
         let mut render_store = RenderStore::new(renderer, surface_format);
 
@@ -81,10 +86,17 @@ impl WorldScene {
             RenderWorld::new(2, renderer, &render_store),
         ];
 
-        let systems =
-            systems::Systems::new(renderer, surface_format, &mut render_store, &mut sim_world);
+        let systems = systems::Systems::new(
+            &mut assets,
+            renderer,
+            surface_format,
+            &mut render_store,
+            &mut sim_world,
+        );
 
         Ok(Self {
+            assets,
+
             sim_world,
             render_worlds,
             render_store,
@@ -177,6 +189,7 @@ impl Scene for WorldScene {
             {
                 let snapshots = self.sim_world.ecs.resource::<Snapshots>();
                 self.systems.prepare(
+                    &self.assets,
                     &mut self.render_store,
                     render_world,
                     renderer,

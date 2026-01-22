@@ -2,8 +2,9 @@ use glam::Mat4;
 
 use crate::{
     engine::renderer::{Frame, Renderer},
-    game::scenes::world::render::{
-        RenderStore, RenderUiRect, RenderWorld, render_pass::RenderPass,
+    game::{
+        assets::Assets,
+        scenes::world::render::{RenderStore, RenderUiRect, RenderWorld, render_pass::RenderPass},
     },
     wgsl_shader,
 };
@@ -23,6 +24,7 @@ impl RenderPass for UiRenderPass {
 
     fn prepare(
         &mut self,
+        _assets: &Assets,
         renderer: &Renderer,
         _render_store: &mut RenderStore,
         render_world: &mut RenderWorld,

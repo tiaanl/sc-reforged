@@ -5,8 +5,8 @@ use bevy_ecs::prelude::*;
 use crate::{
     engine::{assets::AssetError, storage::Handle, transform::Transform},
     game::{
+        assets::Assets,
         config::{BodyDefinition, CharacterProfiles, ObjectType},
-        image::images,
         math::BoundingBox,
         model::{Mesh, Model},
         models::{ModelName, models},
@@ -40,6 +40,7 @@ impl Spawner {
     pub fn spawn(
         &mut self,
         world: &mut World,
+        assets: &mut Assets,
         title: &str,
         name: &str,
         object_type: ObjectType,
@@ -47,7 +48,7 @@ impl Spawner {
     ) -> Result<Entity, AssetError> {
         match object_type {
             ObjectType::Ape | ObjectType::Bipedal => {
-                self.spawn_bipedal(world, title, name, object_type, transform)
+                self.spawn_bipedal(world, assets, title, name, object_type, transform)
             }
 
             ObjectType::Scenery
@@ -58,7 +59,7 @@ impl Spawner {
             | ObjectType::SceneryShadowed
             | ObjectType::SceneryStripLight
             | ObjectType::SceneryTree => {
-                self.spawn_scenery(world, title, name, object_type, transform)
+                self.spawn_scenery(world, assets, title, name, object_type, transform)
             }
 
             ObjectType::Structure
@@ -91,7 +92,7 @@ impl Spawner {
             | ObjectType::StructureSwingDoor
             | ObjectType::StructureTent
             | ObjectType::StructureWall => {
-                self.spawn_structure(world, title, name, object_type, transform)
+                self.spawn_structure(world, assets, title, name, object_type, transform)
             }
 
             ObjectType::SixBySix
@@ -101,7 +102,7 @@ impl Spawner {
             | ObjectType::TreadedChallenger
             | ObjectType::TreadedScorpion
             | ObjectType::TreadedT55 => {
-                self.spawn_vehicle(world, title, name, object_type, transform)
+                self.spawn_vehicle(world, assets, title, name, object_type, transform)
             }
 
             // These are unknown at this time.
@@ -111,7 +112,7 @@ impl Spawner {
             | ObjectType::Helicopter
             | ObjectType::Howitzer
             | ObjectType::SentryGun => {
-                self.spawn_structure(world, title, name, object_type, transform)
+                self.spawn_structure(world, assets, title, name, object_type, transform)
             }
         }
     }
@@ -119,6 +120,7 @@ impl Spawner {
     fn spawn_bipedal(
         &mut self,
         world: &mut World,
+        assets: &mut Assets,
         title: &str,
         _name: &str,
         _object_type: ObjectType,
@@ -140,7 +142,7 @@ impl Spawner {
             ));
         };
 
-        let model = build_body_definition_model(body_definition)?;
+        let model = build_body_definition_model(body_definition, assets)?;
 
         let bounding_box = model.bounding_box;
 
@@ -175,12 +177,14 @@ impl Spawner {
     fn spawn_scenery(
         &self,
         world: &mut World,
+        assets: &mut Assets,
         title: &str,
         name: &str,
         object_type: ObjectType,
         transform: Transform,
     ) -> Result<Entity, AssetError> {
-        let (model_handle, model) = models().load_model(ModelName::Object(name.to_string()))?;
+        let (model_handle, model) =
+            models().load_model(ModelName::Object(name.to_string()), assets)?;
 
         Ok(world
             .spawn((
@@ -200,12 +204,14 @@ impl Spawner {
     fn spawn_structure(
         &self,
         world: &mut World,
+        assets: &mut Assets,
         title: &str,
         name: &str,
         object_type: ObjectType,
         transform: Transform,
     ) -> Result<Entity, AssetError> {
-        let (model_handle, model) = models().load_model(ModelName::Object(name.to_string()))?;
+        let (model_handle, model) =
+            models().load_model(ModelName::Object(name.to_string()), assets)?;
 
         Ok(world
             .spawn((
@@ -225,20 +231,24 @@ impl Spawner {
     fn spawn_vehicle(
         &self,
         world: &mut World,
+        assets: &mut Assets,
         title: &str,
         name: &str,
         object_type: ObjectType,
         transform: Transform,
     ) -> Result<Entity, AssetError> {
-        self.spawn_structure(world, title, name, object_type, transform)
+        self.spawn_structure(world, assets, title, name, object_type, transform)
     }
 }
 
-fn build_body_definition_model(body_definition: &BodyDefinition) -> Result<Model, AssetError> {
+fn build_body_definition_model(
+    body_definition: &BodyDefinition,
+    assets: &mut Assets,
+) -> Result<Model, AssetError> {
     let (_, body_model) =
-        models().load_model(ModelName::Body(body_definition.body_model.clone()))?;
+        models().load_model(ModelName::Body(body_definition.body_model.clone()), assets)?;
     let (_, head_model) =
-        models().load_model(ModelName::Head(body_definition.head_model.clone()))?;
+        models().load_model(ModelName::Head(body_definition.head_model.clone()), assets)?;
 
     let mut new_model = Model {
         skeleton: body_model.skeleton.clone(),
@@ -253,8 +263,8 @@ fn build_body_definition_model(body_definition: &BodyDefinition) -> Result<Model
     // Merge the body.
     for mesh in body_model.meshes.iter() {
         let image_name = body_definition.body_map.clone();
-        let image =
-            images().load_image(PathBuf::from("textures").join("shared").join(&image_name))?;
+        let (image, _) =
+            assets.get_or_load_image(PathBuf::from("textures").join("shared").join(&image_name))?;
         new_model.meshes.push(Mesh {
             node_index: mesh.node_index,
             image_name,
@@ -272,8 +282,8 @@ fn build_body_definition_model(body_definition: &BodyDefinition) -> Result<Model
     // Merge the head model meshes.
     for mesh in head_model.meshes.iter() {
         let image_name = body_definition.head_map.clone();
-        let image =
-            images().load_image(PathBuf::from("textures").join("shared").join(&image_name))?;
+        let (image, _) =
+            assets.get_or_load_image(PathBuf::from("textures").join("shared").join(&image_name))?;
         new_model.meshes.push(Mesh {
             node_index: mesh.node_index,
             image_name,

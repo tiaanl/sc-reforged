@@ -7,6 +7,7 @@ use crate::{
         storage::Handle,
     },
     game::{
+        assets::Assets,
         model::Model,
         scenes::world::render::{
             GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld,
@@ -186,6 +187,7 @@ impl RenderPass for ModelRenderPass {
 
     fn prepare(
         &mut self,
+        assets: &Assets,
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
@@ -196,7 +198,9 @@ impl RenderPass for ModelRenderPass {
             tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
 
             for &model_handle in models_to_prepare {
-                if let Err(err) = render_store.get_or_create_render_model(renderer, model_handle) {
+                if let Err(err) =
+                    render_store.get_or_create_render_model(assets, renderer, model_handle)
+                {
                     tracing::warn!("Could not prepare model! ({err})");
                 }
             }

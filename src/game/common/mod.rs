@@ -1,3 +1,4 @@
+pub mod assets;
 pub mod data_dir;
 pub mod file_system;
 pub mod image;
