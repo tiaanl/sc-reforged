@@ -8,7 +8,7 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
-        assets::Assets,
+        AssetLoader,
         config::{LodModelProfileDefinition, SubModelDefinition},
         data_dir::data_dir,
         file_system::file_system,
@@ -70,7 +70,7 @@ impl Models {
     pub fn load_model(
         &mut self,
         name: ModelName,
-        assets: &mut Assets,
+        assets: &mut AssetLoader,
     ) -> Result<(Handle<Model>, &Model), AssetError> {
         let path = match &name {
             ModelName::Object(name) => {

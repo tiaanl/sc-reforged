@@ -9,7 +9,7 @@ use crate::{
         renderer::Renderer,
         storage::{Handle, Storage},
     },
-    game::{assets::Assets, image::BlendMode, model::Model, models::models},
+    game::{AssetReader, image::BlendMode, model::Model, models::models},
 };
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -128,7 +128,7 @@ impl RenderModels {
 
     pub fn add(
         &mut self,
-        assets: &Assets,
+        assets: &AssetReader,
         renderer: &Renderer,
         render_textures: &mut RenderTextures,
         model_handle: Handle<Model>,

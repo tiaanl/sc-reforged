@@ -3,21 +3,18 @@
 use std::path::PathBuf;
 
 use ahash::HashMap;
+use glam::{Mat4, Quat, Vec2, Vec3};
 use shadow_company_tools::smf;
 
-use crate::engine::assets::AssetError;
-use crate::engine::mesh::IndexedMesh;
-use crate::engine::transform::Transform;
-use crate::game::assets::Assets;
-use crate::game::math::{BoundingBox, Ray, RaySegment, triangle_intersect_ray_segment};
 use crate::{
-    engine::storage::Handle,
+    engine::{assets::AssetError, mesh::IndexedMesh, storage::Handle, transform::Transform},
     game::{
+        AssetLoader,
         image::Image,
+        math::{BoundingBox, Ray, RaySegment, triangle_intersect_ray_segment},
         skeleton::{Bone, Skeleton},
     },
 };
-use glam::{Mat4, Quat, Vec2, Vec3};
 
 pub type NodeIndex = u32;
 
@@ -313,7 +310,7 @@ pub struct CollisionBox {
 }
 
 impl Model {
-    pub fn from_smf(smf: smf::Model, assets: &mut Assets) -> Result<Self, AssetError> {
+    pub fn from_smf(smf: smf::Model, assets: &mut AssetLoader) -> Result<Self, AssetError> {
         fn smf_mesh_to_mesh(smf_mesh: &smf::Mesh, node_index: u32) -> IndexedMesh<Vertex> {
             let vertices = smf_mesh
                 .vertices

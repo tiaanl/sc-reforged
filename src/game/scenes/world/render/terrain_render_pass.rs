@@ -1,11 +1,9 @@
-use std::path::PathBuf;
-
 use wgpu::util::DeviceExt;
 
 use crate::{
     engine::renderer::{Frame, Renderer},
     game::{
-        assets::Assets,
+        AssetReader,
         scenes::world::{
             render::{GeometryBuffer, RenderStore, RenderWorld, render_pass::RenderPass},
             sim_world::{SimWorld, Terrain},
@@ -55,7 +53,7 @@ pub struct TerrainRenderPass {
 
 impl TerrainRenderPass {
     pub fn new(
-        assets: &mut Assets,
+        assets: &AssetReader,
         renderer: &Renderer,
         render_store: &mut RenderStore,
         sim_world: &SimWorld,
@@ -116,9 +114,8 @@ impl TerrainRenderPass {
         };
 
         let strata_texture = {
-            let path = PathBuf::from("textures").join("shared").join("strata.bmp");
-            let (_, image) = assets
-                .get_or_load_image(path)
+            let image = assets
+                .get_image(terrain.strata_texture)
                 .expect("Could not load strate texture.");
             renderer.create_texture("strata", &image.data)
         };
@@ -436,7 +433,7 @@ impl RenderPass for TerrainRenderPass {
 
     fn prepare(
         &mut self,
-        _assets: &Assets,
+        _assets: &AssetReader,
         renderer: &Renderer,
         _render_store: &mut RenderStore,
         render_world: &mut RenderWorld,

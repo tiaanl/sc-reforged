@@ -8,28 +8,23 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
+        AssetReader,
         config::{ImageDefs, parser::ConfigLines},
         file_system::file_system,
         image::Image,
     },
 };
 
-pub trait Asset: Sized + 'static {
-    fn from_memory(
-        context: &mut AssetLoadContext,
-        path: PathBuf,
-        data: &[u8],
-    ) -> Result<Self, AssetError>;
-}
+use super::Asset;
 
-/// Cache of loaded assets.
-pub struct Assets {
+/// Interface for loading assets from the file system.
+pub struct AssetLoader {
     _image_defs: ImageDefs,
 
-    images: AssetCache<Image>,
+    images: TypedAssetLoader<Image>,
 }
 
-impl Assets {
+impl AssetLoader {
     pub fn new() -> Result<Self, AssetError> {
         let _image_defs = load_config(PathBuf::from("config").join("image_defs.txt"))?;
 
@@ -37,6 +32,10 @@ impl Assets {
             _image_defs,
             images: Default::default(),
         })
+    }
+
+    pub fn into_reader(self) -> AssetReader {
+        AssetReader::new(self.images.assets)
     }
 
     #[inline]
@@ -65,23 +64,18 @@ impl Assets {
 
         Ok((handle, self.images.get(handle).unwrap()))
     }
-
-    #[inline]
-    pub fn get_image(&self, handle: Handle<Image>) -> Option<&Image> {
-        self.images.get(handle)
-    }
 }
 
 pub struct AssetLoadContext<'assets> {
-    pub _assets: &'assets mut Assets,
+    pub _assets: &'assets mut AssetLoader,
 }
 
-struct AssetCache<T: Asset> {
+struct TypedAssetLoader<T: Asset> {
     assets: Storage<T>,
     path_lookup: HashMap<PathBuf, Handle<T>>,
 }
 
-impl<T: Asset> Default for AssetCache<T> {
+impl<T: Asset> Default for TypedAssetLoader<T> {
     fn default() -> Self {
         Self {
             assets: Default::default(),
@@ -90,7 +84,7 @@ impl<T: Asset> Default for AssetCache<T> {
     }
 }
 
-impl<T: Asset> AssetCache<T> {
+impl<T: Asset> TypedAssetLoader<T> {
     #[inline]
     pub fn get(&self, handle: Handle<T>) -> Option<&T> {
         self.assets.get(handle)

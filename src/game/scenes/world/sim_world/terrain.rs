@@ -30,6 +30,7 @@ pub struct Terrain {
     pub height_map: HeightMap,
     pub chunk_dim: UVec2,
     pub terrain_texture: Handle<Image>,
+    pub strata_texture: Handle<Image>,
     // pub water_image: Option<Handle<Image>>,
     pub quad_tree: quad_tree::QuadTree,
 }
@@ -44,7 +45,11 @@ impl Terrain {
     /// Amount of nodes in a chunk.
     pub const NODES_PER_CHUNK: u32 = Self::CELLS_PER_CHUNK + 1;
 
-    pub fn new(height_map: HeightMap, terrain_texture: Handle<Image>) -> Self {
+    pub fn new(
+        height_map: HeightMap,
+        terrain_texture: Handle<Image>,
+        strata_texture: Handle<Image>,
+    ) -> Self {
         let chunk_dim = UVec2::new(
             height_map.size.x.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
             height_map.size.y.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
@@ -61,6 +66,7 @@ impl Terrain {
             height_map,
             chunk_dim,
             terrain_texture,
+            strata_texture,
             quad_tree,
         }
     }

@@ -5,7 +5,7 @@ use bevy_ecs::prelude::*;
 use crate::{
     engine::{assets::AssetError, storage::Handle, transform::Transform},
     game::{
-        assets::Assets,
+        AssetLoader,
         config::{BodyDefinition, CharacterProfiles, ObjectType},
         math::BoundingBox,
         model::{Mesh, Model},
@@ -40,7 +40,7 @@ impl Spawner {
     pub fn spawn(
         &mut self,
         world: &mut World,
-        assets: &mut Assets,
+        assets: &mut AssetLoader,
         title: &str,
         name: &str,
         object_type: ObjectType,
@@ -120,7 +120,7 @@ impl Spawner {
     fn spawn_bipedal(
         &mut self,
         world: &mut World,
-        assets: &mut Assets,
+        assets: &mut AssetLoader,
         title: &str,
         _name: &str,
         _object_type: ObjectType,
@@ -177,7 +177,7 @@ impl Spawner {
     fn spawn_scenery(
         &self,
         world: &mut World,
-        assets: &mut Assets,
+        assets: &mut AssetLoader,
         title: &str,
         name: &str,
         object_type: ObjectType,
@@ -204,7 +204,7 @@ impl Spawner {
     fn spawn_structure(
         &self,
         world: &mut World,
-        assets: &mut Assets,
+        assets: &mut AssetLoader,
         title: &str,
         name: &str,
         object_type: ObjectType,
@@ -231,7 +231,7 @@ impl Spawner {
     fn spawn_vehicle(
         &self,
         world: &mut World,
-        assets: &mut Assets,
+        assets: &mut AssetLoader,
         title: &str,
         name: &str,
         object_type: ObjectType,
@@ -243,7 +243,7 @@ impl Spawner {
 
 fn build_body_definition_model(
     body_definition: &BodyDefinition,
-    assets: &mut Assets,
+    assets: &mut AssetLoader,
 ) -> Result<Model, AssetError> {
     let (_, body_model) =
         models().load_model(ModelName::Body(body_definition.body_model.clone()), assets)?;

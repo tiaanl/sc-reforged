@@ -7,7 +7,7 @@ use crate::{
         transform::Transform,
     },
     game::{
-        assets::Assets,
+        AssetReader,
         math::BoundingBox,
         scenes::world::{
             render::{
@@ -82,7 +82,7 @@ pub struct Systems {
 
 impl Systems {
     pub fn new(
-        assets: &mut Assets,
+        assets: &AssetReader,
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
         render_store: &mut RenderStore,
@@ -198,7 +198,7 @@ impl Systems {
 
     pub fn prepare(
         &mut self,
-        assets: &Assets,
+        assets: &AssetReader,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         renderer: &Renderer,

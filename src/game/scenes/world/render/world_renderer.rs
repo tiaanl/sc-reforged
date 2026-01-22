@@ -1,7 +1,7 @@
 use crate::{
     engine::renderer::{Frame, Renderer},
     game::{
-        assets::Assets,
+        AssetReader,
         scenes::world::{
             render::{
                 GeometryBuffer, box_render_pass::BoxRenderPass, render_pass::RenderPass,
@@ -31,7 +31,7 @@ pub struct WorldRenderer {
 
 impl WorldRenderer {
     pub fn new(
-        assets: &mut Assets,
+        assets: &AssetReader,
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
         render_store: &mut RenderStore,
@@ -54,7 +54,7 @@ impl WorldRenderer {
 
     pub fn prepare(
         &mut self,
-        assets: &Assets,
+        assets: &AssetReader,
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,

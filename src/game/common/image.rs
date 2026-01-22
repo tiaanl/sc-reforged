@@ -3,10 +3,9 @@ use std::{ffi::OsString, path::PathBuf};
 use glam::UVec2;
 use image::ImageError;
 
-use crate::{
-    engine::assets::AssetError,
-    game::assets::{Asset, AssetLoadContext},
-};
+use crate::{engine::assets::AssetError, game::AssetLoadContext};
+
+use super::Asset;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]

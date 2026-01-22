@@ -9,7 +9,7 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
-        assets::Assets,
+        AssetReader,
         image::{BlendMode, Image},
     },
 };
@@ -150,7 +150,7 @@ impl RenderTextures {
 
     pub fn get_or_create(
         &mut self,
-        assets: &Assets,
+        assets: &AssetReader,
         renderer: &Renderer,
         image_handle: Handle<Image>,
     ) -> Handle<RenderTexture> {

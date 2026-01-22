@@ -3,7 +3,7 @@ use glam::UVec2;
 
 use crate::{
     engine::{assets::AssetError, renderer::Renderer, storage::Handle},
-    game::{assets::Assets, model::Model},
+    game::{AssetReader, model::Model},
 };
 
 use super::{
@@ -64,7 +64,7 @@ impl RenderStore {
 
     pub fn get_or_create_render_model(
         &mut self,
-        assets: &Assets,
+        assets: &AssetReader,
         renderer: &Renderer,
         model_handle: Handle<Model>,
     ) -> Result<Handle<RenderModel>, AssetError> {

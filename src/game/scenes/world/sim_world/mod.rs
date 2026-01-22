@@ -8,7 +8,7 @@ use glam::{IVec2, Quat, Vec2, Vec3};
 use crate::{
     engine::{assets::AssetError, input::InputState, transform::Transform},
     game::{
-        assets::Assets,
+        AssetLoader,
         config::{CampaignDef, ObjectType},
         data_dir::data_dir,
         scenes::world::{
@@ -70,7 +70,7 @@ pub struct SimWorld {
 }
 
 impl SimWorld {
-    pub fn new(assets: &mut Assets, campaign_def: &CampaignDef) -> Result<Self, AssetError> {
+    pub fn new(assets: &mut AssetLoader, campaign_def: &CampaignDef) -> Result<Self, AssetError> {
         let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
 
         let mut ecs = World::default();
@@ -156,7 +156,7 @@ impl SimWorld {
 }
 
 fn init_terrain(
-    assets: &mut Assets,
+    assets: &mut AssetLoader,
     ecs: &mut World,
     campaign_def: &CampaignDef,
 ) -> Result<(), AssetError> {
@@ -181,14 +181,20 @@ fn init_terrain(
             handle
         };
 
-        Terrain::new(height_map, terrain_texture)
+        let strata_texture = {
+            let path = PathBuf::from("textures").join("shared").join("strata.bmp");
+            let (handle, _) = assets.get_or_load_image(path)?;
+            handle
+        };
+
+        Terrain::new(height_map, terrain_texture, strata_texture)
     };
     ecs.insert_resource(terrain);
     Ok(())
 }
 
 fn init_objects(
-    assets: &mut Assets,
+    assets: &mut AssetLoader,
     ecs: &mut World,
     campaign: crate::game::config::Campaign,
 ) -> Result<(), AssetError> {

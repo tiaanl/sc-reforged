@@ -7,7 +7,7 @@ use crate::{
         storage::Handle,
     },
     game::{
-        assets::Assets,
+        AssetReader,
         model::Model,
         scenes::world::render::{
             GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld,
@@ -187,7 +187,7 @@ impl RenderPass for ModelRenderPass {
 
     fn prepare(
         &mut self,
-        assets: &Assets,
+        assets: &AssetReader,
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,

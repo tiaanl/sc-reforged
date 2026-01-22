@@ -8,7 +8,7 @@ use crate::{
         transform::Transform,
     },
     game::{
-        assets::Assets,
+        AssetReader,
         scenes::world::render::{
             GeometryBuffer, RenderStore, RenderWorld, render_pass::RenderPass,
         },
@@ -135,7 +135,7 @@ impl RenderPass for BoxRenderPass {
 
     fn prepare(
         &mut self,
-        _assets: &Assets,
+        _assets: &AssetReader,
         renderer: &Renderer,
         _render_store: &mut RenderStore,
         _render_world: &mut RenderWorld,
