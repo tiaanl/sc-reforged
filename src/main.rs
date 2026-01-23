@@ -7,15 +7,14 @@ use winit::dpi::PhysicalPosition;
 
 use crate::{
     engine::{
-        context::{EngineContext, EngineEvent},
         input::InputState,
         renderer::{Frame, Renderer, Surface},
-        scene::{Scene, SceneLoader},
+        scene::Scene,
     },
     game::{
-        data_dir::{DataDir, scoped_data_dir},
+        data_dir::{DataDir, data_dir, scoped_data_dir},
         file_system::scoped_file_system,
-        scenes::{select_campaign::SelectCampaignSceneLoader, world::WorldSceneLoader},
+        scenes::world::WorldScene,
     },
 };
 
@@ -33,10 +32,8 @@ struct Opts {
 
 #[allow(clippy::large_enum_variant)]
 enum App {
-    Uninitialzed(Opts, winit::event_loop::EventLoopProxy<EngineEvent>),
+    Uninitialzed(Opts),
     Initialized {
-        /// Hold a copy of our own context to give out to others.
-        engine_context: EngineContext,
         /// The main window the engine is rendering to. This is also the window
         /// that is receiving all the input events.
         window: Arc<winit::window::Window>,
@@ -60,10 +57,10 @@ enum App {
     },
 }
 
-impl winit::application::ApplicationHandler<EngineEvent> for App {
+impl winit::application::ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         match self {
-            App::Uninitialzed(opts, event_loop_proxy) => {
+            App::Uninitialzed(opts) => {
                 event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
                 let mut attributes = winit::window::WindowAttributes::default()
@@ -109,32 +106,26 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
                     surface.format(),
                 );
 
-                let engine_context = EngineContext::new(event_loop_proxy.clone());
+                let scene: Box<dyn Scene> = {
+                    let campaign_name = opts
+                        .campaign_name
+                        .clone()
+                        .unwrap_or(String::from("training"));
+                    let campaign_defs = data_dir().load_campaign_defs().unwrap();
 
-                let scene = if let Some(ref campaign_name) = opts.campaign_name {
-                    WorldSceneLoader::load_scene(
-                        Box::new(WorldSceneLoader {
-                            campaign_name: campaign_name.clone(),
-                        }),
-                        engine_context.clone(),
-                        &renderer,
-                        surface.format(),
-                    )
-                    .unwrap()
-                } else {
-                    SelectCampaignSceneLoader::load_scene(
-                        Box::new(SelectCampaignSceneLoader),
-                        engine_context.clone(),
-                        &renderer,
-                        surface.format(),
-                    )
-                    .unwrap()
+                    let campaign_def = campaign_defs
+                        .campaigns
+                        .iter()
+                        .find(|c| c.base_name == campaign_name)
+                        .cloned()
+                        .unwrap();
+
+                    Box::new(WorldScene::new(&renderer, surface.format(), campaign_def).unwrap())
                 };
 
                 tracing::info!("Application initialized!");
 
                 *self = App::Initialized {
-                    engine_context: engine_context.clone(),
                     window,
                     surface,
                     renderer,
@@ -166,7 +157,6 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
                 tracing::warn!("Can't process events for uninitialized application.");
             }
             App::Initialized {
-                engine_context,
                 window,
                 surface,
                 renderer,
@@ -257,14 +247,6 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
                                     &frame.surface,
                                     |ctx| {
                                         ctx.set_pixels_per_point(1.2);
-
-                                        egui::Window::new("Engine").show(ctx, |ui| {
-                                            if ui.button("Loading").clicked() {
-                                                use crate::game::scenes::select_campaign::SelectCampaignSceneLoader;
-                                                engine_context.switch_scene(SelectCampaignSceneLoader);
-                                            }
-                                        });
-
                                         // Debug stuff from the scene.
                                         scene.debug_panel(ctx, frame.frame_index);
                                     },
@@ -292,43 +274,6 @@ impl winit::application::ApplicationHandler<EngineEvent> for App {
             }
         }
     }
-
-    fn user_event(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, event: EngineEvent) {
-        let App::Initialized {
-            engine_context,
-            surface,
-            renderer,
-            requested_scene,
-            ..
-        } = self
-        else {
-            return;
-        };
-
-        match event {
-            EngineEvent::_Exit => {
-                tracing::info!("Exit requested!");
-                event_loop.exit();
-            }
-            EngineEvent::LoadScene(loader) => {
-                let engine_context = engine_context.clone();
-                let renderer = renderer.clone();
-                let surface_format = surface.format();
-
-                std::thread::spawn(move || {
-                    let scene = loader
-                        .load_scene(engine_context.clone(), &renderer, surface_format)
-                        .unwrap();
-                    engine_context
-                        .event_loop_proxy
-                        .send_event(EngineEvent::SwitchScene(scene))
-                });
-            }
-            EngineEvent::SwitchScene(new_scene) => {
-                *requested_scene = Some(new_scene);
-            }
-        }
-    }
 }
 
 fn main() {
@@ -345,12 +290,9 @@ fn main() {
     let _file_system = scoped_file_system(|| game::file_system::FileSystem::new(opts.path.clone()));
     let _data_dir = scoped_data_dir(|| DataDir);
 
-    let event_loop: winit::event_loop::EventLoop<EngineEvent> =
-        winit::event_loop::EventLoop::with_user_event()
-            .build()
-            .unwrap();
+    let event_loop = winit::event_loop::EventLoop::new().unwrap();
 
-    let mut app = App::Uninitialzed(opts, event_loop.create_proxy());
+    let mut app = App::Uninitialzed(opts);
     event_loop
         .run_app(&mut app)
         .expect("run application event loop");

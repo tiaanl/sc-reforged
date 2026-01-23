@@ -1,18 +1,8 @@
 use glam::UVec2;
 
-use crate::engine::{assets::AssetError, context::EngineContext, renderer::Renderer};
+use crate::engine::renderer::Renderer;
 
 use super::{input::InputState, renderer::Frame};
-
-/// Trait used to load [Scene]s.
-pub trait SceneLoader: Send + Sync + 'static {
-    fn load_scene(
-        self: Box<Self>,
-        engine_context: EngineContext,
-        renderer: &Renderer,
-        surface_format: wgpu::TextureFormat,
-    ) -> Result<Box<dyn Scene>, AssetError>;
-}
 
 /// Trait defining a scene with callbacks for each stage of the render pipeline.
 /// Scenes are sent across threads when switching via the `EventLoopProxy`, so they must be `Send`.

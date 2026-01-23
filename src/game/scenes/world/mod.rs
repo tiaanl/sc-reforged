@@ -4,15 +4,13 @@ use winit::keyboard::KeyCode;
 use crate::{
     engine::{
         assets::AssetError,
-        context::EngineContext,
         input::InputState,
         renderer::{Frame, Renderer},
-        scene::{Scene, SceneLoader},
+        scene::Scene,
     },
     game::{
         AssetLoader, AssetReader,
         config::CampaignDef,
-        data_dir::data_dir,
         scenes::world::{
             game_mode::GameMode,
             render::{RenderStore, RenderWorld},
@@ -456,42 +454,3 @@ impl Scene for WorldScene {
         */
     }
 }
-
-pub struct WorldSceneLoader {
-    pub campaign_name: String,
-}
-
-impl SceneLoader for WorldSceneLoader {
-    fn load_scene(
-        self: Box<Self>,
-        _engine_context: EngineContext,
-        renderer: &Renderer,
-        surface_format: wgpu::TextureFormat,
-    ) -> Result<Box<dyn Scene>, AssetError> {
-        let campaign_defs = data_dir().load_campaign_defs()?;
-
-        let campaign_name = self.campaign_name.clone();
-        tracing::info!("Loading world {}...", campaign_name);
-
-        let Some(campaign_def) = campaign_defs
-            .campaigns
-            .iter()
-            .find(|c| c.base_name == campaign_name)
-            .cloned()
-        else {
-            return Err(AssetError::custom(
-                std::path::PathBuf::new(),
-                "failed to find campaign",
-            ));
-        };
-
-        Ok(Box::new(WorldScene::new(
-            renderer,
-            surface_format,
-            campaign_def,
-        )?))
-    }
-}
-
-unsafe impl Send for WorldSceneLoader {}
-unsafe impl Sync for WorldSceneLoader {}

@@ -8,7 +8,6 @@ pub mod scene;
 pub mod shaders;
 pub mod storage;
 
-pub mod context;
 pub mod growing_buffer;
 pub mod tracked;
 pub mod transform;
