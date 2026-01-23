@@ -17,15 +17,6 @@ impl DataDir {
         self.load_config(PathBuf::from("config").join("campaign_defs.txt"))
     }
 
-    pub fn load_campaign(&self, campaign: &str) -> Result<config::Campaign, AssetError> {
-        self.load_config::<config::Campaign>(
-            PathBuf::from("campaign")
-                .join(campaign)
-                .join(campaign)
-                .with_extension("txt"),
-        )
-    }
-
     pub fn load_terrain_mapping(&self, campaign: &str) -> Result<TerrainMapping, AssetError> {
         let path = PathBuf::from("textures")
             .join("terrain")

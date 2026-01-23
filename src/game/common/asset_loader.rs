@@ -12,7 +12,9 @@ use crate::{
     },
     game::{
         AssetReader,
-        config::{ImageDefs, LodModelProfileDefinition, SubModelDefinition, parser::ConfigLines},
+        config::{
+            Campaign, ImageDefs, LodModelProfileDefinition, SubModelDefinition, parser::ConfigLines,
+        },
         file_system::file_system,
         image::Image,
         model::Model,
@@ -72,6 +74,15 @@ impl AssetLoader {
     #[inline]
     pub fn load_raw(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, AssetError> {
         Ok(file_system().load(path)?)
+    }
+
+    pub fn load_campaign(&mut self, name: &str) -> Result<Campaign, AssetError> {
+        load_config(
+            PathBuf::from("campaign")
+                .join(name)
+                .join(name)
+                .with_extension("txt"),
+        )
     }
 
     pub fn get_or_load_image(

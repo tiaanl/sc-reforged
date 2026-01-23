@@ -71,7 +71,7 @@ pub struct SimWorld {
 
 impl SimWorld {
     pub fn new(assets: &mut AssetLoader, campaign_def: &CampaignDef) -> Result<Self, AssetError> {
-        let campaign = data_dir().load_campaign(&campaign_def.base_name)?;
+        let campaign = assets.load_campaign(&campaign_def.base_name)?;
 
         let mut ecs = World::default();
 
