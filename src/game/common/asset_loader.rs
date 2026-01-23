@@ -17,6 +17,7 @@ use crate::{
         image::Image,
         model::Model,
         models::ModelName,
+        scenes::world::animation::motion::Motion,
     },
 };
 
@@ -29,6 +30,7 @@ pub struct AssetLoader {
 
     images: TypedAssetLoader<PathBuf, Image>,
     models: TypedAssetLoader<ModelName, Model>,
+    motions: TypedAssetLoader<String, Motion>,
 }
 
 impl AssetLoader {
@@ -59,11 +61,12 @@ impl AssetLoader {
             model_lod_defs,
             images: TypedAssetLoader::default(),
             models: TypedAssetLoader::default(),
+            motions: TypedAssetLoader::default(),
         })
     }
 
     pub fn into_reader(self) -> AssetReader {
-        AssetReader::new(self.images.assets, self.models.assets)
+        AssetReader::new(self.images.assets, self.models.assets, self.motions.assets)
     }
 
     #[inline]
@@ -88,11 +91,9 @@ impl AssetLoader {
 
         tracing::info!("Loading image: {}", path.display());
 
-        let data = file_system().load(&path)?;
-        let image = {
-            let mut context = AssetLoadContext { loader: self };
-            Image::from_memory(&mut context, path.clone(), &data)?
-        };
+        let data = self.load_raw(&path)?;
+        let mut context = AssetLoadContext { loader: self };
+        let image = Image::from_memory(&mut context, path.clone(), &data)?;
 
         Ok(self.images.insert(path, image))
     }
@@ -128,8 +129,8 @@ impl AssetLoader {
 
         let path = PathBuf::from("models").join(&path).with_extension("smf");
 
+        let data = self.load_raw(&path)?;
         let mut context = AssetLoadContext { loader: self };
-        let data = file_system().load(&path)?;
         let model = Model::from_memory(&mut context, path.clone(), &data)?;
 
         if model.meshes.is_empty() {
@@ -141,6 +142,20 @@ impl AssetLoader {
 
     pub fn add_model(&mut self, name: ModelName, model: Model) -> (Handle<Model>, &Model) {
         self.models.insert(name, model)
+    }
+
+    pub fn get_or_load_motion(
+        &mut self,
+        name: &str,
+    ) -> Result<(Handle<Motion>, &Motion), AssetError> {
+        let path = PathBuf::from("motions").join(name).with_extension("bmf");
+
+        let data = self.load_raw(&path)?;
+
+        let mut context = AssetLoadContext { loader: self };
+        let motion = Motion::from_memory(&mut context, path, &data)?;
+
+        Ok(self.motions.insert(name.to_string(), motion))
     }
 }
 

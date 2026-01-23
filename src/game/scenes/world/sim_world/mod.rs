@@ -130,7 +130,7 @@ impl SimWorld {
 
         init_objects(assets, &mut ecs, campaign)?;
 
-        let sequences = Sequences::new()?;
+        let sequences = Sequences::new(assets)?;
 
         let ui = Ui::new();
 

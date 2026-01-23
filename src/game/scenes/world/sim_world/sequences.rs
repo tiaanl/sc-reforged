@@ -1,10 +1,6 @@
 #![allow(dead_code)]
 
-use std::{
-    collections::{VecDeque, hash_map::Entry},
-    path::PathBuf,
-    str::FromStr,
-};
+use std::{collections::VecDeque, path::PathBuf, str::FromStr};
 
 use ahash::{HashMap, HashMapExt};
 
@@ -14,6 +10,7 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
+        AssetLoader, AssetReader,
         config::MotionSequencerDefs,
         data_dir::data_dir,
         scenes::world::{animation::motion::Motion, systems::Time},
@@ -71,70 +68,64 @@ pub enum MotionCallback {
 type Lookup<T> = HashMap<String, Handle<T>>;
 
 pub struct Sequences {
-    motions: Storage<Motion>,
     transition_sequences: HashMap<String, TransitionSequenceDef>,
     sequences: Storage<SequenceDef>,
     sequences_lookup: HashMap<String, Handle<SequenceDef>>,
 }
 
 impl Sequences {
-    pub fn new() -> Result<Self, AssetError> {
+    pub fn new(assets: &mut AssetLoader) -> Result<Self, AssetError> {
         let motion_sequence_defs = data_dir().load_config::<MotionSequencerDefs>(
             PathBuf::from("config").join("mot_sequencer_defs.txt"),
         )?;
-
-        let mut motions = Storage::default();
-        let mut motions_lookup: HashMap<String, Handle<Motion>> = HashMap::default();
-
-        let mut get_or_insert_motion = |name: String| -> Result<Handle<Motion>, AssetError> {
-            let motion = match motions_lookup.entry(name) {
-                Entry::Occupied(entry) => *entry.get(),
-                Entry::Vacant(entry) => {
-                    let handle = motions.insert(data_dir().load_motion(entry.key())?);
-                    entry.insert(handle);
-                    handle
-                }
-            };
-            Ok(motion)
-        };
 
         let transition_sequences = {
             let mut out = HashMap::default();
 
             for transition_sequence in motion_sequence_defs.transition_sequences.iter() {
+                let (motion, _) = assets.get_or_load_motion(&transition_sequence.motion)?;
                 out.entry(transition_sequence.name.clone())
                     .or_insert(TransitionSequenceDef {
                         from: State::from_str(&transition_sequence.from_state).unwrap(),
                         to: State::from_str(&transition_sequence.from_state).unwrap(),
-                        motion: get_or_insert_motion(transition_sequence.motion.clone())?,
+                        motion,
                     });
             }
 
             for transition_sequence in motion_sequence_defs.transition_sequences.iter() {
-                let name = transition_sequence.motion.clone();
-                get_or_insert_motion(name)?;
+                assets.get_or_load_motion(&transition_sequence.motion)?;
             }
 
             out
         };
 
-        let (sequences, sequences_lookup) =
-            {
-                use crate::game::config::Callback as C;
-                use crate::game::config::Repeat as R;
+        let (sequences, sequences_lookup) = {
+            use crate::game::config::Callback as C;
+            use crate::game::config::Repeat as R;
 
-                let mut storage = Storage::with_capacity(motion_sequence_defs.sequences.len());
-                let mut lookup = HashMap::with_capacity(motion_sequence_defs.sequences.len());
+            let mut storage = Storage::with_capacity(motion_sequence_defs.sequences.len());
+            let mut lookup = HashMap::with_capacity(motion_sequence_defs.sequences.len());
 
-                for sequence in motion_sequence_defs.sequences.iter() {
-                    lookup.entry(sequence.name.clone()).or_insert({
-                        let sequence_def = SequenceDef { entries: sequence
+            for sequence in motion_sequence_defs.sequences.iter() {
+                lookup.entry(sequence.name.clone()).or_insert({
+                    let sequence_def = SequenceDef {
+                        entries: sequence
                             .motions
                             .iter()
                             .filter_map(
                                 |entry: &crate::game::config::Motion| -> Option<SequenceDefEntry> {
+                                    let (motion, _) = assets
+                                        .get_or_load_motion(&entry.name)
+                                        .inspect_err(|err| {
+                                            tracing::warn!(
+                                                "Could not load motion: \"{}\". ({err})",
+                                                &entry.name
+                                            );
+                                        })
+                                        .ok()?;
+
                                     Some(SequenceDefEntry {
-                                        motion: get_or_insert_motion(entry.name.clone()).ok()?,
+                                        motion,
                                         immediate: entry.immediate,
                                         repeat: match entry.repeat {
                                             R::None => Repeat::None,
@@ -155,27 +146,21 @@ impl Sequences {
                                     })
                                 },
                             )
-                            .collect() };
+                            .collect(),
+                    };
 
-                        storage.insert(sequence_def)
-                    });
-                }
+                    storage.insert(sequence_def)
+                });
+            }
 
-                (storage, lookup)
-            };
+            (storage, lookup)
+        };
 
         Ok(Self {
-            motions,
-
             transition_sequences,
             sequences,
             sequences_lookup,
         })
-    }
-
-    #[inline]
-    pub fn get_motion(&self, handle: Handle<Motion>) -> Option<&Motion> {
-        self.motions.get(handle)
     }
 }
 
@@ -187,13 +172,13 @@ pub struct Sequencer {
 }
 
 impl Sequencer {
-    pub fn enqueue(&mut self, sequences: &Sequences, sequence_def: &SequenceDef) {
+    pub fn enqueue(&mut self, assets: &AssetReader, sequence_def: &SequenceDef) {
         self.time = 0.0;
         self.entries = sequence_def
             .entries
             .iter()
             .filter_map(|entry| {
-                let motion = sequences.get_motion(entry.motion)?;
+                let motion = assets.get_motion(entry.motion)?;
 
                 let motion_time = motion.max_frame_num() as f32;
 
@@ -241,7 +226,7 @@ impl Sequencer {
 
 #[cfg(feature = "egui")]
 impl Sequencer {
-    pub fn ui(&mut self, ui: &mut egui::Ui, sequences: &Sequences) {
+    pub fn ui(&mut self, ui: &mut egui::Ui, assets: &AssetReader) {
         use crate::engine::egui_integration::UiExt;
 
         if self.entries.is_empty() {
@@ -253,7 +238,7 @@ impl Sequencer {
         for motion in self
             .entries
             .iter()
-            .map(|e| sequences.get_motion(e.motion).unwrap())
+            .map(|e| assets.get_motion(e.motion).unwrap())
         {
             ui.h3(&motion.name);
         }
