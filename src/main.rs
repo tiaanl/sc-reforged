@@ -15,7 +15,6 @@ use crate::{
     game::{
         data_dir::{DataDir, scoped_data_dir},
         file_system::scoped_file_system,
-        models::{Models, scoped_models},
         scenes::{select_campaign::SelectCampaignSceneLoader, world::WorldSceneLoader},
     },
 };
@@ -345,7 +344,6 @@ fn main() {
 
     let _file_system = scoped_file_system(|| game::file_system::FileSystem::new(opts.path.clone()));
     let _data_dir = scoped_data_dir(|| DataDir);
-    let _models = scoped_models(|| Models::new().expect("Could not initialize models."));
 
     let event_loop: winit::event_loop::EventLoop<EngineEvent> =
         winit::event_loop::EventLoop::with_user_event()

@@ -9,7 +9,7 @@ use shadow_company_tools::smf;
 use crate::{
     engine::{assets::AssetError, mesh::IndexedMesh, storage::Handle, transform::Transform},
     game::{
-        AssetLoader,
+        Asset,
         image::Image,
         math::{BoundingBox, Ray, RaySegment, triangle_intersect_ray_segment},
         skeleton::{Bone, Skeleton},
@@ -73,6 +73,140 @@ impl Model {
     /// Remove all the meshes from the specified node.
     pub fn clear_meshes(&mut self, node_index: NodeIndex) {
         self.meshes.retain(|mesh| mesh.node_index != node_index);
+    }
+}
+
+impl Asset for Model {
+    fn from_memory(
+        context: &mut super::AssetLoadContext,
+        path: PathBuf,
+        data: &[u8],
+    ) -> Result<Self, AssetError> {
+        fn smf_mesh_to_mesh(smf_mesh: &smf::Mesh, node_index: u32) -> IndexedMesh<Vertex> {
+            let vertices = smf_mesh
+                .vertices
+                .iter()
+                .map(|v| Vertex {
+                    position: v.position,
+                    normal: -v.normal, // Normals are inverted.
+                    tex_coord: v.tex_coord,
+                    node_index,
+                })
+                .collect();
+
+            let indices = smf_mesh.faces.iter().flat_map(|i| i.indices).collect();
+
+            IndexedMesh { vertices, indices }
+        }
+
+        let mut reader = std::io::Cursor::new(data);
+        let smf = shadow_company_tools::smf::Model::read(&mut reader)
+            .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
+
+        let mut nodes = Vec::with_capacity(smf.nodes.len());
+        let mut meshes = Vec::default();
+        let mut collision_boxes = Vec::new();
+        let mut names = NameLookup::default();
+
+        for (node_index, smf_node) in smf.nodes.into_iter().enumerate() {
+            names.insert(smf_node.name.clone(), node_index as u32);
+
+            let parent_node_index = if smf_node.parent_name == "<root>" {
+                // Use a sentinel for root nodes.
+                NodeIndex::MAX
+            } else {
+                assert!(!smf_node.parent_name.eq("<root>"));
+                match names.get(&smf_node.parent_name) {
+                    Some(id) => *id,
+                    None => {
+                        let n = names.keys().cloned().collect::<Vec<_>>().join(", ");
+                        return Err(AssetError::custom(
+                            &smf.name,
+                            format!(
+                                "Parent name [{}] not found, existing names: {}",
+                                smf_node.parent_name, n
+                            ),
+                        ));
+                    }
+                }
+            };
+
+            // TODO: Figure out what this weird rotation on static models are so we don't use
+            //       Mat4::IDENTITY here.
+            nodes.push(Node {
+                parent: parent_node_index,
+                transform: Transform::new(smf_node.position, Quat::IDENTITY),
+                bone_id: smf_node.tree_id,
+                name: smf_node.name.clone(),
+            });
+
+            meshes.extend(
+                smf_node
+                    .meshes
+                    .iter()
+                    .map(|smf_mesh| -> Result<Mesh, AssetError> {
+                        let mesh = smf_mesh_to_mesh(smf_mesh, node_index as u32);
+
+                        // For now assume we're loading a shared image.
+                        let path = PathBuf::from("textures")
+                            .join("shared")
+                            .join(&smf_mesh.texture_name);
+
+                        let (image_handle, _) = context.loader.get_or_load_image(path)?;
+
+                        Ok(Mesh {
+                            node_index: node_index as u32,
+                            image_name: smf_mesh.texture_name.clone(),
+                            image: image_handle,
+                            mesh,
+                        })
+                    })
+                    .filter_map(|mesh| {
+                        mesh.inspect_err(|err| {
+                            tracing::warn!("Could not load mesh: {}", err);
+                        })
+                        .ok()
+                    }),
+            );
+
+            for smf_collision_box in smf_node.bounding_boxes.iter() {
+                collision_boxes.push(CollisionBox {
+                    node_index: node_index as u32,
+                    min: smf_collision_box.min,
+                    max: smf_collision_box.max,
+                });
+            }
+        }
+
+        let skeleton = Skeleton {
+            bones: nodes
+                .iter()
+                .map(|node| Bone {
+                    parent: node.parent,
+                    transform: node.transform.clone(),
+                    id: node.bone_id,
+                    _name: node.name.clone(),
+                })
+                .collect(),
+        };
+
+        let mut bounding_box = BoundingBox::default();
+
+        for mesh in meshes.iter() {
+            let local = skeleton.local_transform(mesh.node_index);
+            mesh.mesh.vertices.iter().for_each(|v| {
+                let local = local.transform_point3(v.position);
+                bounding_box.expand(local);
+            });
+        }
+
+        Ok(Model {
+            skeleton,
+            meshes,
+            collision_boxes,
+            bounding_box,
+            name_lookup: names,
+        })
     }
 }
 
@@ -307,130 +441,4 @@ pub struct CollisionBox {
     pub min: Vec3,
     /// Maximum values for the bounding box.
     pub max: Vec3,
-}
-
-impl Model {
-    pub fn from_smf(smf: smf::Model, assets: &mut AssetLoader) -> Result<Self, AssetError> {
-        fn smf_mesh_to_mesh(smf_mesh: &smf::Mesh, node_index: u32) -> IndexedMesh<Vertex> {
-            let vertices = smf_mesh
-                .vertices
-                .iter()
-                .map(|v| Vertex {
-                    position: v.position,
-                    normal: -v.normal, // Normals are inverted.
-                    tex_coord: v.tex_coord,
-                    node_index,
-                })
-                .collect();
-
-            let indices = smf_mesh.faces.iter().flat_map(|i| i.indices).collect();
-
-            IndexedMesh { vertices, indices }
-        }
-
-        let mut nodes = Vec::with_capacity(smf.nodes.len());
-        let mut meshes = Vec::default();
-        let mut collision_boxes = Vec::new();
-        let mut names = NameLookup::default();
-
-        for (node_index, smf_node) in smf.nodes.into_iter().enumerate() {
-            names.insert(smf_node.name.clone(), node_index as u32);
-
-            let parent_node_index = if smf_node.parent_name == "<root>" {
-                // Use a sentinel for root nodes.
-                NodeIndex::MAX
-            } else {
-                assert!(!smf_node.parent_name.eq("<root>"));
-                match names.get(&smf_node.parent_name) {
-                    Some(id) => *id,
-                    None => {
-                        let n = names.keys().cloned().collect::<Vec<_>>().join(", ");
-                        return Err(AssetError::custom(
-                            &smf.name,
-                            format!(
-                                "Parent name [{}] not found, existing names: {}",
-                                smf_node.parent_name, n
-                            ),
-                        ));
-                    }
-                }
-            };
-
-            // TODO: Figure out what this weird rotation on static models are so we don't use
-            //       Mat4::IDENTITY here.
-            nodes.push(Node {
-                parent: parent_node_index,
-                transform: Transform::new(smf_node.position, Quat::IDENTITY),
-                bone_id: smf_node.tree_id,
-                name: smf_node.name.clone(),
-            });
-
-            meshes.extend(
-                smf_node
-                    .meshes
-                    .iter()
-                    .map(|smf_mesh| -> Result<Mesh, AssetError> {
-                        let mesh = smf_mesh_to_mesh(smf_mesh, node_index as u32);
-
-                        // For now assume we're loading a shared image.
-                        let path = PathBuf::from("textures")
-                            .join("shared")
-                            .join(&smf_mesh.texture_name);
-
-                        let (image_handle, _) = assets.get_or_load_image(path)?;
-
-                        Ok(Mesh {
-                            node_index: node_index as u32,
-                            image_name: smf_mesh.texture_name.clone(),
-                            image: image_handle,
-                            mesh,
-                        })
-                    })
-                    .filter_map(|mesh| {
-                        mesh.inspect_err(|err| {
-                            tracing::warn!("Could not load mesh: {}", err);
-                        })
-                        .ok()
-                    }),
-            );
-
-            for smf_collision_box in smf_node.bounding_boxes.iter() {
-                collision_boxes.push(CollisionBox {
-                    node_index: node_index as u32,
-                    min: smf_collision_box.min,
-                    max: smf_collision_box.max,
-                });
-            }
-        }
-
-        let skeleton = Skeleton {
-            bones: nodes
-                .iter()
-                .map(|node| Bone {
-                    parent: node.parent,
-                    transform: node.transform.clone(),
-                    id: node.bone_id,
-                    _name: node.name.clone(),
-                })
-                .collect(),
-        };
-
-        let mut bounding_box = BoundingBox::default();
-
-        for mesh in meshes.iter() {
-            let local = skeleton.local_transform(mesh.node_index);
-            mesh.mesh.vertices.iter().for_each(|v| {
-                let local = local.transform_point3(v.position);
-                bounding_box.expand(local);
-            });
-        }
-
-        Ok(Model {
-            skeleton,
-            meshes,
-            collision_boxes,
-            bounding_box,
-            name_lookup: names,
-        })
-    }
 }

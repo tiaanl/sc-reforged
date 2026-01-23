@@ -9,7 +9,7 @@ use crate::{
         renderer::Renderer,
         storage::{Handle, Storage},
     },
-    game::{AssetReader, image::BlendMode, model::Model, models::models},
+    game::{AssetReader, image::BlendMode, model::Model},
 };
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -133,8 +133,8 @@ impl RenderModels {
         render_textures: &mut RenderTextures,
         model_handle: Handle<Model>,
     ) -> Result<Handle<RenderModel>, AssetError> {
-        let model = models()
-            .get(model_handle)
+        let model = assets
+            .get_model(model_handle)
             .expect("Model should have been loaded byt his time.");
 
         let mut opaque_mesh = IndexedMesh::default();

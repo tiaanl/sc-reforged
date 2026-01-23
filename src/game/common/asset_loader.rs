@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    hash::Hash,
+    path::{Path, PathBuf},
+};
 
 use ahash::HashMap;
 
@@ -9,9 +12,11 @@ use crate::{
     },
     game::{
         AssetReader,
-        config::{ImageDefs, parser::ConfigLines},
+        config::{ImageDefs, LodModelProfileDefinition, SubModelDefinition, parser::ConfigLines},
         file_system::file_system,
         image::Image,
+        model::Model,
+        models::ModelName,
     },
 };
 
@@ -20,22 +25,45 @@ use super::Asset;
 /// Interface for loading assets from the file system.
 pub struct AssetLoader {
     _image_defs: ImageDefs,
+    model_lod_defs: HashMap<String, Vec<SubModelDefinition>>,
 
-    images: TypedAssetLoader<Image>,
+    images: TypedAssetLoader<PathBuf, Image>,
+    models: TypedAssetLoader<ModelName, Model>,
 }
 
 impl AssetLoader {
     pub fn new() -> Result<Self, AssetError> {
         let _image_defs = load_config(PathBuf::from("config").join("image_defs.txt"))?;
 
+        let model_lod_defs = {
+            let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
+
+            let profiles_path = PathBuf::from("config").join("lod_model_profiles");
+            for lod_path in file_system().dir(&profiles_path)?.filter(|path| {
+                path.extension()
+                    .filter(|ext| ext.eq_ignore_ascii_case("txt"))
+                    .is_some()
+            }) {
+                let profile = load_config::<LodModelProfileDefinition>(lod_path)?;
+                lod_definitions.insert(
+                    profile.lod_model_name,
+                    profile.sub_model_definitions.clone(),
+                );
+            }
+
+            lod_definitions
+        };
+
         Ok(Self {
             _image_defs,
-            images: Default::default(),
+            model_lod_defs,
+            images: TypedAssetLoader::default(),
+            models: TypedAssetLoader::default(),
         })
     }
 
     pub fn into_reader(self) -> AssetReader {
-        AssetReader::new(self.images.assets)
+        AssetReader::new(self.images.assets, self.models.assets)
     }
 
     #[inline]
@@ -49,45 +77,96 @@ impl AssetLoader {
     ) -> Result<(Handle<Image>, &Image), AssetError> {
         let path = path.as_ref().to_path_buf();
 
-        if let Some(&handle) = self.images.path_lookup.get(&path) {
-            return Ok((handle, self.images.get(handle).unwrap()));
+        if let Some(handle) = self.images.lookup.get(&path).cloned() {
+            let image = self
+                .images
+                .assets
+                .get(handle)
+                .ok_or_else(|| AssetError::custom(&path, "Image handle missing"))?;
+            return Ok((handle, image));
         }
 
         tracing::info!("Loading image: {}", path.display());
 
         let data = file_system().load(&path)?;
-        let mut context = AssetLoadContext { _assets: self };
-        let image = Image::from_memory(&mut context, path.clone(), &data)?;
-        let handle = self.images.assets.insert(image);
+        let image = {
+            let mut context = AssetLoadContext { loader: self };
+            Image::from_memory(&mut context, path.clone(), &data)?
+        };
 
-        self.images.path_lookup.insert(path, handle);
+        Ok(self.images.insert(path, image))
+    }
 
-        Ok((handle, self.images.get(handle).unwrap()))
+    pub fn get_or_load_model(
+        &mut self,
+        name: ModelName,
+    ) -> Result<(Handle<Model>, &Model), AssetError> {
+        if let Some(handle) = self.models.lookup.get(&name).cloned() {
+            let model = self
+                .models
+                .assets
+                .get(handle)
+                .ok_or_else(|| AssetError::custom(PathBuf::new(), "Model handle missing"))?;
+            return Ok((handle, model));
+        }
+
+        let path = match &name {
+            ModelName::Object(name) => {
+                let lod_name = self
+                    .model_lod_defs
+                    .get(name)
+                    .map(|def| def[0].sub_model_model.as_str())
+                    .unwrap_or(name);
+
+                PathBuf::from(lod_name).join(lod_name)
+            }
+            ModelName::Body(name) => PathBuf::from("people").join("bodies").join(name).join(name),
+            ModelName::Head(name) => PathBuf::from("people").join("heads").join(name).join(name),
+            ModelName::_Misc(name) => PathBuf::from("people").join("misc").join(name).join(name),
+            ModelName::BodyDefinition(..) => panic!("Can't load body definition models!"),
+        };
+
+        let path = PathBuf::from("models").join(&path).with_extension("smf");
+
+        let mut context = AssetLoadContext { loader: self };
+        let data = file_system().load(&path)?;
+        let model = Model::from_memory(&mut context, path.clone(), &data)?;
+
+        if model.meshes.is_empty() {
+            return Err(AssetError::custom(path, "Model does not contain meshes!"));
+        }
+
+        Ok(self.models.insert(name, model))
+    }
+
+    pub fn add_model(&mut self, name: ModelName, model: Model) -> (Handle<Model>, &Model) {
+        self.models.insert(name, model)
     }
 }
 
 pub struct AssetLoadContext<'assets> {
-    pub _assets: &'assets mut AssetLoader,
+    pub loader: &'assets mut AssetLoader,
 }
 
-struct TypedAssetLoader<T: Asset> {
+struct TypedAssetLoader<K, T: Asset> {
     assets: Storage<T>,
-    path_lookup: HashMap<PathBuf, Handle<T>>,
+    lookup: HashMap<K, Handle<T>>,
 }
 
-impl<T: Asset> Default for TypedAssetLoader<T> {
+impl<K, T: Asset> Default for TypedAssetLoader<K, T> {
     fn default() -> Self {
         Self {
             assets: Default::default(),
-            path_lookup: Default::default(),
+            lookup: Default::default(),
         }
     }
 }
 
-impl<T: Asset> TypedAssetLoader<T> {
-    #[inline]
-    pub fn get(&self, handle: Handle<T>) -> Option<&T> {
-        self.assets.get(handle)
+impl<K: Eq + Hash, T: Asset> TypedAssetLoader<K, T> {
+    pub fn insert(&mut self, key: K, asset: T) -> (Handle<T>, &T) {
+        let handle = self.assets.insert(asset);
+        self.lookup.insert(key, handle);
+        (handle, self.assets.get(handle).unwrap())
     }
 }
 

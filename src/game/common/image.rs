@@ -70,7 +70,7 @@ impl Asset for Image {
             )
             .map_err(|err| image_error_to_asset_error(err, path.clone()))?;
 
-            let raw = if let Ok(data) = _context._assets.load_raw(path.with_extension("raw")) {
+            let raw = if let Ok(data) = _context.loader.load_raw(path.with_extension("raw")) {
                 Some(
                     shadow_company_tools::images::load_raw_file(
                         &mut std::io::Cursor::new(data),
