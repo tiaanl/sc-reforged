@@ -12,11 +12,11 @@ pub struct GizmoRenderSnapshot {
     pub vertices: Vec<GizmoVertex>,
 }
 
-pub struct GizmoRenderPass {
+pub struct GizmoRenderPipeline {
     pipeline: wgpu::RenderPipeline,
 }
 
-impl GizmoRenderPass {
+impl GizmoRenderPipeline {
     pub fn new(
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
@@ -72,7 +72,7 @@ impl GizmoRenderPass {
     }
 }
 
-impl GizmoRenderPass {
+impl GizmoRenderPipeline {
     pub fn prepare(
         &mut self,
         render_world: &mut RenderWorld,

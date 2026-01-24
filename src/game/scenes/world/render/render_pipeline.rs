@@ -6,8 +6,8 @@ use crate::{
     },
 };
 
-pub trait RenderPass {
-    /// The data passed to the [RenderPass] to use for rendering.
+pub trait RenderPipeline {
+    /// The data passed to the [RenderPipeline] to use for rendering.
     type Snapshot;
 
     /// Prepare GPU resources that will be used when queueing commands to the GPU.

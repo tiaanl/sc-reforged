@@ -11,7 +11,7 @@ use crate::{
         math::BoundingBox,
         scenes::world::{
             render::{
-                GizmoRenderPass, GizmoRenderSnapshot, RenderBox, RenderStore, RenderWorld,
+                GizmoRenderPipeline, GizmoRenderSnapshot, RenderBox, RenderStore, RenderWorld,
                 WorldRenderer,
             },
             sim_world::{
@@ -77,7 +77,7 @@ pub struct Systems {
     pub world_renderer: WorldRenderer,
 
     pub gizmo_render_snapshot: GizmoRenderSnapshot,
-    gizmo_render_pipeline: GizmoRenderPass,
+    gizmo_render_pipeline: GizmoRenderPipeline,
 }
 
 impl Systems {
@@ -173,7 +173,7 @@ impl Systems {
             ),
 
             gizmo_render_snapshot: GizmoRenderSnapshot::default(),
-            gizmo_render_pipeline: GizmoRenderPass::new(renderer, surface_format, render_store),
+            gizmo_render_pipeline: GizmoRenderPipeline::new(renderer, surface_format, render_store),
         }
     }
 

@@ -4,7 +4,9 @@ use crate::{
     engine::renderer::{Frame, Renderer},
     game::{
         AssetReader,
-        scenes::world::render::{RenderStore, RenderUiRect, RenderWorld, render_pass::RenderPass},
+        scenes::world::render::{
+            RenderStore, RenderUiRect, RenderWorld, render_pipeline::RenderPipeline,
+        },
     },
     wgsl_shader,
 };
@@ -15,11 +17,11 @@ pub struct UiRenderSnapshot {
     pub ui_rects: Vec<RenderUiRect>,
 }
 
-pub struct UiRenderPass {
+pub struct UiRenderPipeline {
     rect_render_pipeline: wgpu::RenderPipeline,
 }
 
-impl RenderPass for UiRenderPass {
+impl RenderPipeline for UiRenderPipeline {
     type Snapshot = UiRenderSnapshot;
 
     fn prepare(
@@ -75,7 +77,7 @@ impl RenderPass for UiRenderPass {
     }
 }
 
-impl UiRenderPass {
+impl UiRenderPipeline {
     pub fn new(
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,

@@ -10,7 +10,7 @@ use crate::{
     game::{
         AssetReader,
         scenes::world::render::{
-            GeometryBuffer, RenderStore, RenderWorld, render_pass::RenderPass,
+            GeometryBuffer, RenderStore, RenderWorld, render_pipeline::RenderPipeline,
         },
     },
     wgsl_shader,
@@ -33,7 +33,7 @@ impl BoxRenderSnapshot {
     }
 }
 
-pub struct BoxRenderPass {
+pub struct BoxRenderPipeline {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     index_count: u32,
@@ -44,7 +44,7 @@ pub struct BoxRenderPass {
     instances_cache: Vec<gpu::Instance>,
 }
 
-impl BoxRenderPass {
+impl BoxRenderPipeline {
     pub fn new(renderer: &Renderer, render_store: &mut RenderStore) -> Self {
         let (vertex_buffer, index_buffer, index_count) = Self::create_box_mesh(renderer);
 
@@ -130,7 +130,7 @@ impl BoxRenderPass {
     }
 }
 
-impl RenderPass for BoxRenderPass {
+impl RenderPipeline for BoxRenderPipeline {
     type Snapshot = BoxRenderSnapshot;
 
     fn prepare(
@@ -172,7 +172,7 @@ impl RenderPass for BoxRenderPass {
     }
 }
 
-impl BoxRenderPass {
+impl BoxRenderPipeline {
     fn create_box_mesh(renderer: &Renderer) -> (wgpu::Buffer, wgpu::Buffer, u32) {
         const VERTICES: &[[f32; 5]] = &[
             [1.0, 1.0, 1.0, 1.0, 1.0],

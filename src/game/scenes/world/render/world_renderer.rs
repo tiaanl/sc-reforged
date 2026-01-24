@@ -6,8 +6,8 @@ use crate::{
         AssetReader,
         scenes::world::{
             render::{
-                GeometryBuffer, box_render_pass::BoxRenderPass, render_pass::RenderPass,
-                ui_render_pass::UiRenderPass,
+                GeometryBuffer, box_render_pipeline::BoxRenderPipeline,
+                render_pipeline::RenderPipeline, ui_render_pipeline::UiRenderPipeline,
             },
             sim_world::ecs::Snapshots,
         },
@@ -15,17 +15,17 @@ use crate::{
 };
 
 use super::{
-    model_render_pass::ModelRenderPass, render_store::RenderStore, render_world::RenderWorld,
-    terrain_render_pass::TerrainRenderPass,
+    model_render_pipeline::ModelRenderPipeline, render_store::RenderStore,
+    render_world::RenderWorld, terrain_render_pipeline::TerrainRenderPipeline,
 };
 
 pub struct WorldRenderer {
     // TODO: should not be pub.
-    pub terrain_pipeline: TerrainRenderPass,
+    pub terrain_pipeline: TerrainRenderPipeline,
     // TODO: should not be pub.
-    pub model_pipeline: ModelRenderPass,
-    ui_pipeline: UiRenderPass,
-    box_pipeline: BoxRenderPass,
+    pub model_pipeline: ModelRenderPipeline,
+    ui_pipeline: UiRenderPipeline,
+    box_pipeline: BoxRenderPipeline,
 
     /// Render bounding boxes?
     pub render_bounding_boxes: bool,
@@ -39,10 +39,11 @@ impl WorldRenderer {
         render_store: &mut RenderStore,
         sim_world: &World,
     ) -> Self {
-        let terrain_pipeline = TerrainRenderPass::new(assets, renderer, render_store, sim_world);
-        let model_pipeline = ModelRenderPass::new(renderer, render_store);
-        let ui_pipeline = UiRenderPass::new(renderer, surface_format, render_store);
-        let box_pipeline = BoxRenderPass::new(renderer, render_store);
+        let terrain_pipeline =
+            TerrainRenderPipeline::new(assets, renderer, render_store, sim_world);
+        let model_pipeline = ModelRenderPipeline::new(renderer, render_store);
+        let ui_pipeline = UiRenderPipeline::new(renderer, surface_format, render_store);
+        let box_pipeline = BoxRenderPipeline::new(renderer, render_store);
 
         Self {
             terrain_pipeline,

@@ -6,7 +6,7 @@ use crate::{
     game::{
         AssetReader,
         scenes::world::{
-            render::{GeometryBuffer, RenderStore, RenderWorld, render_pass::RenderPass},
+            render::{GeometryBuffer, RenderStore, RenderWorld, render_pipeline::RenderPipeline},
             sim_world::Terrain,
         },
     },
@@ -24,7 +24,7 @@ pub struct TerrainRenderSnapshot {
     pub strata_instances_side_count: [u32; 4],
 }
 
-pub struct TerrainRenderPass {
+pub struct TerrainRenderPipeline {
     /// Buffer holding indices to render a single chunk at various LOD's.
     chunk_indices_buffer: wgpu::Buffer,
     /// Buffer holding indices to render a wireframe over a single chunk of various LOD's.
@@ -52,7 +52,7 @@ pub struct TerrainRenderPass {
     pub debug_render_terrain_wireframe: bool,
 }
 
-impl TerrainRenderPass {
+impl TerrainRenderPipeline {
     pub fn new(
         assets: &AssetReader,
         renderer: &Renderer,
@@ -429,7 +429,7 @@ impl TerrainRenderPass {
     }
 }
 
-impl RenderPass for TerrainRenderPass {
+impl RenderPipeline for TerrainRenderPipeline {
     type Snapshot = TerrainRenderSnapshot;
 
     fn prepare(
@@ -536,7 +536,7 @@ impl RenderPass for TerrainRenderPass {
     }
 }
 
-impl TerrainRenderPass {
+impl TerrainRenderPipeline {
     const STRATA_DESCENT: f32 = -20_000.0;
 
     const INDEX_RANGES: [std::ops::Range<u32>; 4] = [0..384, 384..480, 480..504, 504..510];
@@ -544,7 +544,7 @@ impl TerrainRenderPass {
         [0..512, 512..640, 640..672, 672..680];
 }
 
-impl TerrainRenderPass {
+impl TerrainRenderPipeline {
     /// Build a list of instances per LOD.
     /// `chunk_instances` *must* be sorted by LOD.
     fn build_draw_commands(
