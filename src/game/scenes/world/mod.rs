@@ -1,3 +1,4 @@
+use bevy_ecs::prelude::*;
 use glam::UVec2;
 use winit::keyboard::KeyCode;
 
@@ -15,8 +16,9 @@ use crate::{
             game_mode::GameMode,
             render::{RenderStore, RenderWorld},
             sim_world::{
-                Camera, SimWorld,
+                Camera,
                 ecs::{Snapshots, Viewport},
+                init_sim_world,
             },
             systems::Time,
         },
@@ -43,7 +45,7 @@ struct FrameTime {
 pub struct WorldScene {
     assets: AssetReader,
 
-    sim_world: SimWorld,
+    sim_world: World,
     render_worlds: [RenderWorld; Self::RENDER_FRAME_COUNT],
     render_store: RenderStore,
 
@@ -74,7 +76,9 @@ impl WorldScene {
 
         let mut assets = AssetLoader::new()?;
 
-        let mut sim_world = SimWorld::new(&mut assets, &campaign_def)?;
+        let mut sim_world = World::default();
+
+        init_sim_world(&mut sim_world, &mut assets, &campaign_def)?;
 
         let mut render_store = RenderStore::new(renderer, surface_format);
 
@@ -125,13 +129,12 @@ impl Scene for WorldScene {
         let [width, height] = size.as_vec2().to_array();
         let aspect = width / height.max(1.0);
 
-        self.sim_world.ecs.resource_mut::<Viewport>().resize(size);
+        self.sim_world.resource_mut::<Viewport>().resize(size);
 
         for mut camera in self
             .sim_world
-            .ecs
             .query::<&mut Camera>()
-            .query_mut(&mut self.sim_world.ecs)
+            .query_mut(&mut self.sim_world)
         {
             camera.aspect_ratio = aspect;
         }
@@ -144,12 +147,12 @@ impl Scene for WorldScene {
         {
             // Update Time.
             {
-                let mut time = self.sim_world.ecs.resource_mut::<Time>();
+                let mut time = self.sim_world.resource_mut::<Time>();
                 time.next_frame(delta_time);
             }
 
             {
-                let mut res = self.sim_world.ecs.resource_mut::<InputState>();
+                let mut res = self.sim_world.resource_mut::<InputState>();
                 *res = input.clone();
             }
 
@@ -188,7 +191,7 @@ impl Scene for WorldScene {
             // Prepare
             let start = std::time::Instant::now();
             {
-                let snapshots = self.sim_world.ecs.resource::<Snapshots>();
+                let snapshots = self.sim_world.resource::<Snapshots>();
                 self.systems.prepare(
                     &self.assets,
                     &mut self.render_store,
@@ -203,14 +206,14 @@ impl Scene for WorldScene {
             // Queue
             let start = std::time::Instant::now();
             {
-                let snapshots = self.sim_world.ecs.resource::<Snapshots>();
+                let snapshots = self.sim_world.resource::<Snapshots>();
                 self.systems
                     .queue(&self.render_store, render_world, snapshots, frame);
             }
             frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
 
-            self.sim_world.ecs.clear_trackers();
-            self.sim_world.ecs.increment_change_tick();
+            self.sim_world.clear_trackers();
+            self.sim_world.increment_change_tick();
         }
 
         self.fps_history_cursor = (self.fps_history_cursor + 1) % self.fps_history.len();
@@ -278,7 +281,7 @@ impl Scene for WorldScene {
                 {
                     use crate::game::scenes::world::sim_world::SimWorldState;
 
-                    let mut state = self.sim_world.ecs.resource_mut::<SimWorldState>();
+                    let mut state = self.sim_world.resource_mut::<SimWorldState>();
 
                     ui.heading("Environment");
                     ui.horizontal(|ui| {
@@ -375,7 +378,7 @@ impl Scene for WorldScene {
             });
 
         egui::Window::new("Stats").show(ctx, |ui| {
-            let snapshots = self.sim_world.ecs.resource::<Snapshots>();
+            let snapshots = self.sim_world.resource::<Snapshots>();
 
             ui.horizontal(|ui| {
                 ui.label("Frame index");
@@ -432,7 +435,7 @@ impl Scene for WorldScene {
                         .collect();
 
                     for handle in selected.drain(..) {
-                        let mut objects = self.sim_world.ecs.resource_mut::<Objects>();
+                        let mut objects = self.sim_world.resource_mut::<Objects>();
 
                         if let Some(object) = objects.get_mut(handle) {
                             use crate::engine::egui_integration::UiExt;

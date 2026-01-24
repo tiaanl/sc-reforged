@@ -1,3 +1,5 @@
+use bevy_ecs::prelude::*;
+
 use crate::{
     engine::renderer::{Frame, Renderer},
     game::{
@@ -7,7 +9,7 @@ use crate::{
                 GeometryBuffer, box_render_pass::BoxRenderPass, render_pass::RenderPass,
                 ui_render_pass::UiRenderPass,
             },
-            sim_world::{SimWorld, ecs::Snapshots},
+            sim_world::ecs::Snapshots,
         },
     },
 };
@@ -35,7 +37,7 @@ impl WorldRenderer {
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
         render_store: &mut RenderStore,
-        sim_world: &SimWorld,
+        sim_world: &World,
     ) -> Self {
         let terrain_pipeline = TerrainRenderPass::new(assets, renderer, render_store, sim_world);
         let model_pipeline = ModelRenderPass::new(renderer, render_store);

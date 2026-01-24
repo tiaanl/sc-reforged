@@ -15,7 +15,7 @@ use crate::{
                 WorldRenderer,
             },
             sim_world::{
-                DynamicBvh, DynamicBvhHandle, SimWorld, StaticBvh, StaticBvhHandle,
+                DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle,
                 ecs::{self, BoundingBoxComponent, Snapshots},
                 free_camera_controller, top_down_camera_controller,
             },
@@ -86,7 +86,7 @@ impl Systems {
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
         render_store: &mut RenderStore,
-        sim_world: &mut SimWorld,
+        sim_world: &mut World,
     ) -> Self {
         // Update schedule.
         let update_schedule = {
@@ -162,7 +162,7 @@ impl Systems {
             update_schedule,
             extract_schedule,
 
-            gizmo_extract: GizmoExtract::new(sim_world),
+            gizmo_extract: GizmoExtract::world(sim_world),
 
             world_renderer: WorldRenderer::new(
                 assets,
@@ -177,20 +177,19 @@ impl Systems {
         }
     }
 
-    pub fn update(&mut self, sim_world: &mut SimWorld) {
+    pub fn update(&mut self, sim_world: &mut World) {
         // TODO: What does self.sim_time actually do?
         self.sim_time = sim_world
-            .ecs
             .resource::<Time>()
             .scene_start
             .elapsed()
             .as_secs_f32();
 
-        self.update_schedule.run(&mut sim_world.ecs);
+        self.update_schedule.run(sim_world);
     }
 
-    pub fn extract(&mut self, sim_world: &mut SimWorld) {
-        self.extract_schedule.run(&mut sim_world.ecs);
+    pub fn extract(&mut self, sim_world: &mut World) {
+        self.extract_schedule.run(sim_world);
 
         self.gizmo_extract
             .extract(sim_world, &mut self.gizmo_render_snapshot);

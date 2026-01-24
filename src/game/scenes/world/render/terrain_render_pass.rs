@@ -1,3 +1,4 @@
+use bevy_ecs::prelude::*;
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -6,7 +7,7 @@ use crate::{
         AssetReader,
         scenes::world::{
             render::{GeometryBuffer, RenderStore, RenderWorld, render_pass::RenderPass},
-            sim_world::{SimWorld, Terrain},
+            sim_world::Terrain,
         },
     },
     wgsl_shader,
@@ -56,9 +57,9 @@ impl TerrainRenderPass {
         assets: &AssetReader,
         renderer: &Renderer,
         render_store: &mut RenderStore,
-        sim_world: &SimWorld,
+        sim_world: &World,
     ) -> Self {
-        let terrain = sim_world.ecs.resource::<Terrain>();
+        let terrain = sim_world.resource::<Terrain>();
         let height_map = &terrain.height_map;
 
         let cells_dim = height_map.size;
