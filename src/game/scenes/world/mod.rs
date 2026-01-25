@@ -13,13 +13,10 @@ use crate::{
         AssetLoader, AssetReader,
         config::CampaignDef,
         scenes::world::{
+            extract::RenderSnapshot,
             game_mode::GameMode,
             render::{RenderStore, RenderWorld},
-            sim_world::{
-                Camera,
-                ecs::{Snapshots, Viewport},
-                init_sim_world,
-            },
+            sim_world::{Camera, ecs::Viewport, init_sim_world},
             systems::Time,
         },
     },
@@ -191,13 +188,13 @@ impl Scene for WorldScene {
             // Prepare
             let start = std::time::Instant::now();
             {
-                let snapshots = self.sim_world.resource::<Snapshots>();
+                let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
                 self.systems.prepare(
                     &self.assets,
                     &mut self.render_store,
                     render_world,
                     renderer,
-                    snapshots,
+                    render_snapshot,
                     frame.size,
                 );
             }
@@ -206,9 +203,9 @@ impl Scene for WorldScene {
             // Queue
             let start = std::time::Instant::now();
             {
-                let snapshots = self.sim_world.resource::<Snapshots>();
+                let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
                 self.systems
-                    .queue(&self.render_store, render_world, snapshots, frame);
+                    .queue(&self.render_store, render_world, render_snapshot, frame);
             }
             frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
 
@@ -310,10 +307,6 @@ impl Scene for WorldScene {
                 // Objects
                 {
                     ui.heading("Objects");
-                    ui.checkbox(
-                        &mut self.systems.world_renderer.render_bounding_boxes,
-                        "Render bounding boxes",
-                    );
                 }
             });
 
@@ -378,7 +371,7 @@ impl Scene for WorldScene {
             });
 
         egui::Window::new("Stats").show(ctx, |ui| {
-            let snapshots = self.sim_world.resource::<Snapshots>();
+            let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
 
             ui.horizontal(|ui| {
                 ui.label("Frame index");
@@ -386,31 +379,19 @@ impl Scene for WorldScene {
             });
             ui.horizontal(|ui| {
                 ui.label("Visible chunks");
-                ui.label(
-                    snapshots
-                        .terrain_render_snapshot
-                        .chunk_instances
-                        .len()
-                        .to_string(),
-                );
-            });
-            ui.horizontal(|ui| {
-                ui.label("Visible objects");
-                ui.label(format!("{}", snapshots.model_render_snapshot.models.len()));
+                ui.label(format!("{}", render_snapshot.terrain.chunks.len()));
             });
             ui.horizontal(|ui| {
                 ui.label("Visible strata");
-                ui.label(format!(
-                    "{}",
-                    snapshots.terrain_render_snapshot.chunk_instances.len()
-                ));
+                ui.label(format!("{}", render_snapshot.terrain.strata.len()));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Visible objects");
+                ui.label(format!("{}", render_snapshot.models.models.len()));
             });
             ui.horizontal(|ui| {
                 ui.label("Gizmo vertices");
-                ui.label(format!(
-                    "{}",
-                    self.systems.gizmo_render_snapshot.vertices.len()
-                ));
+                ui.label(format!("{}", render_snapshot.gizmos.vertices.len()));
             });
         });
 

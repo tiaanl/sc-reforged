@@ -10,13 +10,13 @@ use crate::{
         AssetReader,
         math::BoundingBox,
         scenes::world::{
+            extract,
             render::{
-                GizmoRenderPipeline, GizmoRenderSnapshot, RenderBox, RenderStore, RenderWorld,
-                WorldRenderer,
+                GizmoRenderPipeline, RenderPipeline, RenderStore, RenderWorld, WorldRenderer,
             },
             sim_world::{
                 DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle,
-                ecs::{self, BoundingBoxComponent, Snapshots},
+                ecs::{self, BoundingBoxComponent},
                 free_camera_controller, top_down_camera_controller,
             },
         },
@@ -71,12 +71,9 @@ pub struct Systems {
     pub update_schedule: Schedule,
     pub extract_schedule: Schedule,
 
-    gizmo_extract: GizmoExtract,
-
     // pub camera_system: camera_system::CameraSystem,
     pub world_renderer: WorldRenderer,
 
-    pub gizmo_render_snapshot: GizmoRenderSnapshot,
     gizmo_render_pipeline: GizmoRenderPipeline,
 }
 
@@ -124,45 +121,13 @@ impl Systems {
             schedule
         };
 
-        let extract_schedule = {
-            let mut schedule = Schedule::default();
-
-            fn clear_snapshots(mut snapshots: ResMut<ecs::Snapshots>) {
-                snapshots.clear();
-            }
-
-            schedule.add_systems(
-                (
-                    clear_snapshots,
-                    camera_system::extract_camera_env_snapshot,
-                    extract_terrain_snapshot,
-                    extract_model_snapshot,
-                    extract_ui_snapshot,
-                    |bounding_boxes: Query<(&Transform, &BoundingBoxComponent)>,
-                     mut snapshots: ResMut<ecs::Snapshots>| {
-                        snapshots.box_render_snapshot.boxes.clear();
-                        for (transform, bounding_box_component) in bounding_boxes.iter() {
-                            snapshots.box_render_snapshot.boxes.push(RenderBox {
-                                transform: transform.clone(),
-                                min: bounding_box_component.0.min,
-                                max: bounding_box_component.0.max,
-                            });
-                        }
-                    },
-                )
-                    .chain(),
-            );
-
-            schedule
-        };
+        let extract_schedule = extract::create_extract_schedule();
 
         Self {
             sim_time: 0.0,
 
             update_schedule,
             extract_schedule,
-
-            gizmo_extract: GizmoExtract::world(sim_world),
 
             world_renderer: WorldRenderer::new(
                 assets,
@@ -172,7 +137,6 @@ impl Systems {
                 sim_world,
             ),
 
-            gizmo_render_snapshot: GizmoRenderSnapshot::default(),
             gizmo_render_pipeline: GizmoRenderPipeline::new(renderer, surface_format, render_store),
         }
     }
@@ -190,9 +154,6 @@ impl Systems {
 
     pub fn extract(&mut self, sim_world: &mut World) {
         self.extract_schedule.run(sim_world);
-
-        self.gizmo_extract
-            .extract(sim_world, &mut self.gizmo_render_snapshot);
     }
 
     pub fn prepare(
@@ -201,7 +162,7 @@ impl Systems {
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         renderer: &Renderer,
-        snapshots: &Snapshots,
+        render_snapshot: &RenderSnapshot,
         surface_size: UVec2,
     ) {
         // Make sure the geometry buffer is the correct size.
@@ -211,39 +172,55 @@ impl Systems {
                 .resize(&renderer.device, surface_size);
         }
 
-        camera_system::prepare(renderer, render_world, snapshots);
-        self.world_renderer
-            .prepare(assets, renderer, render_store, render_world, snapshots);
-        self.gizmo_render_pipeline
-            .prepare(render_world, renderer, &self.gizmo_render_snapshot);
+        camera_system::prepare(renderer, render_world, render_snapshot);
+        self.world_renderer.prepare(
+            assets,
+            renderer,
+            render_store,
+            render_world,
+            render_snapshot,
+        );
+
+        self.gizmo_render_pipeline.prepare(
+            assets,
+            renderer,
+            render_store,
+            render_world,
+            render_snapshot,
+        );
     }
 
     pub fn queue(
         &mut self,
         render_store: &RenderStore,
         render_world: &RenderWorld,
-        snapshots: &Snapshots,
+        snapshot: &RenderSnapshot,
         frame: &mut Frame,
     ) {
         clear_render_targets::clear_render_targets(
             frame,
             &render_store.geometry_buffer,
-            snapshots.camera_env_snapshot.fog_color,
+            snapshot.environment.fog_color,
         );
         self.world_renderer.queue(
             render_store,
             render_world,
-            snapshots,
             frame,
             &render_store.geometry_buffer,
+            snapshot,
         );
 
         render_store
             .compositor
             .render(frame, &render_store.geometry_buffer);
 
-        self.gizmo_render_pipeline
-            .queue(render_world, &self.gizmo_render_snapshot, frame);
+        self.gizmo_render_pipeline.queue(
+            render_store,
+            render_world,
+            frame,
+            &render_store.geometry_buffer,
+            snapshot,
+        );
     }
 }
 

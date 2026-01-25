@@ -1,4 +1,3 @@
-use bevy_ecs::prelude::*;
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -6,23 +5,13 @@ use crate::{
     game::{
         AssetReader,
         scenes::world::{
+            extract::{RenderSnapshot, TerrainChunk},
             render::{GeometryBuffer, RenderStore, RenderWorld, render_pipeline::RenderPipeline},
             sim_world::Terrain,
         },
     },
     wgsl_shader,
 };
-
-/// A snapshot of data for terrain elements to be rendered.
-#[derive(Default)]
-pub struct TerrainRenderSnapshot {
-    /// Data for each chunk instance to render.    
-    pub chunk_instances: Vec<gpu::ChunkInstanceData>,
-    /// Data for each strata instance to render.
-    pub strata_instances: Vec<gpu::ChunkInstanceData>,
-    /// Amount of instances per side. [south, west, north, east]
-    pub strata_instances_side_count: [u32; 4],
-}
 
 pub struct TerrainRenderPipeline {
     /// Buffer holding indices to render a single chunk at various LOD's.
@@ -57,7 +46,7 @@ impl TerrainRenderPipeline {
         assets: &AssetReader,
         renderer: &Renderer,
         render_store: &mut RenderStore,
-        sim_world: &World,
+        sim_world: &bevy_ecs::world::World,
     ) -> Self {
         let terrain = sim_world.resource::<Terrain>();
         let height_map = &terrain.height_map;
@@ -430,23 +419,43 @@ impl TerrainRenderPipeline {
 }
 
 impl RenderPipeline for TerrainRenderPipeline {
-    type Snapshot = TerrainRenderSnapshot;
-
     fn prepare(
         &mut self,
         _assets: &AssetReader,
         renderer: &Renderer,
         _render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
-        snapshot: &Self::Snapshot,
+        snapshot: &RenderSnapshot,
     ) {
+        let chunk_instances: Vec<_> = snapshot
+            .terrain
+            .chunks
+            .iter()
+            .map(|chunk| gpu::ChunkInstanceData {
+                coord: chunk.coord.as_uvec2().to_array(),
+                lod: chunk.lod,
+                flags: chunk.flags,
+            })
+            .collect();
+
         render_world
             .terrain_chunk_instances_buffer
-            .write(renderer, &snapshot.chunk_instances);
+            .write(renderer, &chunk_instances);
+
+        let strata_instances: Vec<_> = snapshot
+            .terrain
+            .strata
+            .iter()
+            .map(|chunk| gpu::ChunkInstanceData {
+                coord: chunk.coord.as_uvec2().to_array(),
+                lod: chunk.lod,
+                flags: chunk.flags,
+            })
+            .collect();
 
         render_world
             .strata_instances_buffer
-            .write(renderer, &snapshot.strata_instances);
+            .write(renderer, &strata_instances);
     }
 
     fn queue(
@@ -455,7 +464,7 @@ impl RenderPipeline for TerrainRenderPipeline {
         render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
-        snapshot: &Self::Snapshot,
+        snapshot: &RenderSnapshot,
     ) {
         let mut render_pass =
             geometry_buffer.begin_opaque_render_pass(&mut frame.encoder, "terrain_render_pass");
@@ -477,7 +486,7 @@ impl RenderPipeline for TerrainRenderPipeline {
 
             const INDEX_START: [u32; 4] = [0, 72, 112, 136];
 
-            for (i, strata_instance) in snapshot.strata_instances.iter().enumerate() {
+            for (i, strata_instance) in snapshot.terrain.strata.iter().enumerate() {
                 let side = strata_instance.flags >> 8 & 0b11;
                 let lod = strata_instance.lod;
 
@@ -503,7 +512,7 @@ impl RenderPipeline for TerrainRenderPipeline {
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             let draw_commands =
-                Self::build_draw_commands(&snapshot.chunk_instances, &Self::INDEX_RANGES);
+                Self::build_draw_commands(&snapshot.terrain.chunks, &Self::INDEX_RANGES);
 
             for (indices, instances) in draw_commands {
                 if instances.is_empty() {
@@ -524,7 +533,7 @@ impl RenderPipeline for TerrainRenderPipeline {
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             let draw_commands =
-                Self::build_draw_commands(&snapshot.chunk_instances, &Self::WIREFRAME_INDEX_RANGES);
+                Self::build_draw_commands(&snapshot.terrain.chunks, &Self::WIREFRAME_INDEX_RANGES);
 
             for (indices, instances) in draw_commands {
                 if instances.is_empty() {
@@ -548,7 +557,7 @@ impl TerrainRenderPipeline {
     /// Build a list of instances per LOD.
     /// `chunk_instances` *must* be sorted by LOD.
     fn build_draw_commands(
-        chunk_instances: &[gpu::ChunkInstanceData],
+        chunk_instances: &[TerrainChunk],
         ranges: &[std::ops::Range<u32>],
     ) -> [(std::ops::Range<u32>, std::ops::Range<u32>); Terrain::LOD_COUNT as usize] {
         // TODO: This is probably not needed.

@@ -3,15 +3,14 @@ use bevy_ecs::prelude::*;
 use glam::IVec2;
 
 use crate::game::scenes::world::{
-    render::gpu,
-    sim_world::{
-        ComputedCamera, SimWorldState, Terrain,
-        ecs::{ActiveCamera, Snapshots},
-    },
+    extract::TerrainChunk,
+    sim_world::{ComputedCamera, SimWorldState, Terrain, ecs::ActiveCamera},
 };
 
+use super::RenderSnapshot;
+
 pub fn extract_terrain_snapshot(
-    mut snapshots: ResMut<Snapshots>,
+    mut snapshot: ResMut<RenderSnapshot>,
     computed_camera: Single<&ComputedCamera, With<ActiveCamera>>,
     terrain: Res<Terrain>,
     state: Res<SimWorldState>,
@@ -19,40 +18,39 @@ pub fn extract_terrain_snapshot(
     mut visible_chunks_cache: Local<Vec<IVec2>>,
     mut chunk_lod_cache: Local<HashMap<IVec2, u32>>,
 ) {
-    let snapshot = &mut snapshots.terrain_render_snapshot;
     chunk_lod_cache.clear();
 
-    let camera_position = computed_camera.position;
-    let camera_forward = computed_camera.forward;
-    let camera_far = computed_camera.far;
+    snapshot.terrain.chunks.clear();
+    snapshot.terrain.strata.clear();
+    snapshot.terrain.strata_side_count = [0; 4];
 
-    let chunk_instances = &mut snapshot.chunk_instances;
-    let strata_instances = &mut snapshot.strata_instances;
-    let strata_instances_side_count = &mut snapshot.strata_instances_side_count;
-
-    chunk_instances.clear();
-    strata_instances.clear();
-    *strata_instances_side_count = [0; 4];
+    let super::Camera {
+        position,
+        forward,
+        far,
+        ..
+    } = snapshot.camera;
 
     let chunk_dim = terrain.chunk_dim;
 
     terrain
         .quad_tree
         .visible_chunks(&computed_camera.frustum, &mut visible_chunks_cache);
-    for visible_coord in visible_chunks_cache.iter() {
+
+    for &visible_coord in visible_chunks_cache.iter() {
         let mut lod_at = |coord: IVec2| {
             if let Some(lod) = chunk_lod_cache.get(&coord) {
                 return Some(*lod);
             }
 
             terrain
-                .chunk_lod(coord, camera_position, camera_forward, camera_far)
+                .chunk_lod(coord, position, forward, far)
                 .inspect(|&lod| {
                     chunk_lod_cache.insert(coord, lod);
                 })
         };
 
-        let center_lod = lod_at(*visible_coord).expect("Center chunk is always valid!");
+        let center_lod = lod_at(visible_coord).expect("Center chunk is always valid!");
 
         let mut flags = 0_u32;
 
@@ -63,7 +61,7 @@ pub fn extract_terrain_snapshot(
             IVec2::new(1, 0),
         ];
 
-        let neighbors = NEIGHBORS.map(|offset| lod_at(*visible_coord + offset));
+        let neighbors = NEIGHBORS.map(|offset| lod_at(visible_coord + offset));
         for (i, neighbor_lod) in neighbors.iter().enumerate() {
             // A higher LOD means the resolution is lower, so we check greater than here.
             if neighbor_lod.unwrap_or(center_lod) > center_lod {
@@ -73,17 +71,17 @@ pub fn extract_terrain_snapshot(
 
         // Highlight the chunk.
         const HIGHLIGHT: u32 = 1 << 15;
-        if state.highlighted_chunks.contains(visible_coord) {
+        if state.highlighted_chunks.contains(&visible_coord) {
             flags |= HIGHLIGHT;
         }
 
-        let chunk_instance = gpu::ChunkInstanceData {
-            coord: visible_coord.as_uvec2().to_array(),
+        let chunk_instance = TerrainChunk {
+            coord: visible_coord,
             lod: center_lod,
             flags,
         };
 
-        chunk_instances.push(chunk_instance);
+        snapshot.terrain.chunks.push(chunk_instance);
 
         const SOUTH: u32 = 0;
         const WEST: u32 = 1;
@@ -91,41 +89,45 @@ pub fn extract_terrain_snapshot(
         const EAST: u32 = 3;
 
         if visible_coord.x == 0 {
-            let chunk_instance = gpu::ChunkInstanceData {
+            let chunk_instance = TerrainChunk {
                 flags: chunk_instance.flags | (EAST << 8),
                 ..chunk_instance
             };
-            strata_instances.push(chunk_instance);
-            strata_instances_side_count[EAST as usize] += 1;
+            snapshot.terrain.strata.push(chunk_instance);
+            snapshot.terrain.strata_side_count[EAST as usize] += 1;
         } else if visible_coord.x == chunk_dim.x as i32 - 1 {
-            let chunk_instance = gpu::ChunkInstanceData {
+            let chunk_instance = TerrainChunk {
                 flags: chunk_instance.flags | (WEST << 8),
                 ..chunk_instance
             };
-            strata_instances.push(chunk_instance);
-            strata_instances_side_count[WEST as usize] += 1;
+            snapshot.terrain.strata.push(chunk_instance);
+            snapshot.terrain.strata_side_count[WEST as usize] += 1;
         }
 
         if visible_coord.y == 0 {
-            let chunk_instance = gpu::ChunkInstanceData {
+            let chunk_instance = TerrainChunk {
                 flags: chunk_instance.flags | (SOUTH << 8),
                 ..chunk_instance
             };
-            strata_instances.push(chunk_instance);
-            strata_instances_side_count[SOUTH as usize] += 1;
+            snapshot.terrain.strata.push(chunk_instance);
+            snapshot.terrain.strata_side_count[SOUTH as usize] += 1;
         } else if visible_coord.y == chunk_dim.y as i32 - 1 {
-            let chunk_instance = gpu::ChunkInstanceData {
+            let chunk_instance = TerrainChunk {
                 flags: chunk_instance.flags | (NORTH << 8),
                 ..chunk_instance
             };
-            strata_instances.push(chunk_instance);
-            strata_instances_side_count[NORTH as usize] += 1;
+            snapshot.terrain.strata.push(chunk_instance);
+            snapshot.terrain.strata_side_count[NORTH as usize] += 1;
         }
     }
 
-    strata_instances.sort_unstable_by_key(|instance| instance.flags >> 8 & 0b11);
+    snapshot
+        .terrain
+        .strata
+        .sort_unstable_by_key(|instance| instance.flags >> 8 & 0b11);
 
     snapshot
-        .chunk_instances
+        .terrain
+        .chunks
         .sort_unstable_by_key(|instance| instance.lod);
 }

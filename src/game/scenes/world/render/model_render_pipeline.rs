@@ -1,4 +1,3 @@
-use bevy_ecs::prelude::*;
 use glam::Mat4;
 
 use crate::{
@@ -8,10 +7,12 @@ use crate::{
     },
     game::{
         AssetReader,
-        model::Model,
-        scenes::world::render::{
-            GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex, RenderWorld,
-            render_pipeline::RenderPipeline,
+        scenes::world::{
+            extract::RenderSnapshot,
+            render::{
+                GeometryBuffer, ModelInstanceData, RenderModel, RenderStore, RenderVertex,
+                RenderWorld, render_pipeline::RenderPipeline,
+            },
         },
     },
     wgsl_shader,
@@ -24,13 +25,6 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone)]
-pub struct ModelToRender {
-    pub model: Handle<Model>,
-    pub transform: Mat4,
-    pub flags: ModelRenderFlags,
-}
-
 pub struct RenderModelToRender {
     pub render_model: Handle<RenderModel>,
     pub transform: Mat4,
@@ -41,14 +35,6 @@ pub struct RenderModelToRender {
 struct Batch {
     render_model: Handle<RenderModel>,
     range: std::ops::Range<u32>,
-}
-
-#[derive(Default, Resource)]
-pub struct ModelRenderSnapshot {
-    /// A list of any new models that needs to be prepared before rendering.
-    pub models_to_prepare: Vec<Handle<Model>>,
-    /// A list of models to render.
-    pub models: Vec<ModelToRender>,
 }
 
 pub struct ModelRenderPipeline {
@@ -183,18 +169,16 @@ impl ModelRenderPipeline {
 }
 
 impl RenderPipeline for ModelRenderPipeline {
-    type Snapshot = ModelRenderSnapshot;
-
     fn prepare(
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
-        snapshot: &Self::Snapshot,
+        snapshot: &RenderSnapshot,
     ) {
-        if !snapshot.models_to_prepare.is_empty() {
-            let models_to_prepare = &snapshot.models_to_prepare;
+        if !snapshot.models.models_to_prepare.is_empty() {
+            let models_to_prepare = &snapshot.models.models_to_prepare;
             tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
 
             for &model_handle in models_to_prepare {
@@ -207,14 +191,14 @@ impl RenderPipeline for ModelRenderPipeline {
         }
 
         // TODO: Don't copy all the models to render data here.
-        let mut models = snapshot.models.clone();
+        let mut models = snapshot.models.models.clone();
 
         models.sort_unstable_by(|a, b| a.model.cmp(&b.model));
 
         self.render_models_cache.clear();
 
         // Build an intermediate list of render models to render with some of the details resolved.
-        for model_to_render in snapshot.models.iter() {
+        for model_to_render in snapshot.models.models.iter() {
             let Some(render_model_handle) =
                 render_store.render_model_for_model(model_to_render.model)
             else {
@@ -231,7 +215,11 @@ impl RenderPipeline for ModelRenderPipeline {
                 render_model: render_model_handle,
                 transform: model_to_render.transform,
                 first_node_index,
-                flags: model_to_render.flags,
+                flags: {
+                    let mut flags = ModelRenderFlags::empty();
+                    flags.set(ModelRenderFlags::HIGHLIGHTED, model_to_render.highlighted);
+                    flags
+                },
             });
         }
 
@@ -281,7 +269,7 @@ impl RenderPipeline for ModelRenderPipeline {
         render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
-        _snapshot: &Self::Snapshot,
+        _snapshot: &RenderSnapshot,
     ) {
         self.opaque_render_pass(
             &mut frame.encoder,

@@ -13,7 +13,7 @@ use crate::{
         data_dir::data_dir,
         scenes::world::{
             sim_world::{
-                ecs::{ActiveCamera, GizmoVertices, Snapshots, Viewport},
+                ecs::{ActiveCamera, GizmoVertices, Viewport},
                 free_camera_controller::FreeCameraController,
                 sequences::Sequences,
                 top_down_camera_controller::TopDownCameraController,
@@ -76,7 +76,7 @@ pub fn init_sim_world(
 
     world.init_resource::<WorldInteraction>();
 
-    world.init_resource::<Snapshots>();
+    world.init_resource::<super::extract::RenderSnapshot>();
 
     world.insert_resource(GizmoVertices::with_capacity(1024));
 

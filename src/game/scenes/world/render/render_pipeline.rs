@@ -2,14 +2,14 @@ use crate::{
     engine::renderer::{Frame, Renderer},
     game::{
         AssetReader,
-        scenes::world::render::{GeometryBuffer, RenderStore, RenderWorld},
+        scenes::world::{
+            extract::RenderSnapshot,
+            render::{GeometryBuffer, RenderStore, RenderWorld},
+        },
     },
 };
 
 pub trait RenderPipeline {
-    /// The data passed to the [RenderPipeline] to use for rendering.
-    type Snapshot;
-
     /// Prepare GPU resources that will be used when queueing commands to the GPU.
     fn prepare(
         &mut self,
@@ -17,7 +17,7 @@ pub trait RenderPipeline {
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
-        snapshot: &Self::Snapshot,
+        snapshot: &RenderSnapshot,
     );
 
     /// Queue draw commands to the GPU.
@@ -27,6 +27,6 @@ pub trait RenderPipeline {
         render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
-        snapshot: &Self::Snapshot,
+        snapshot: &RenderSnapshot,
     );
 }

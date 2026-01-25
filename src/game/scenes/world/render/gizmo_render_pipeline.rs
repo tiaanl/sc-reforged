@@ -3,14 +3,15 @@ use crate::{
         gizmos::GizmoVertex,
         renderer::{Frame, Renderer},
     },
-    game::scenes::world::render::{RenderStore, RenderWorld},
+    game::{
+        AssetReader,
+        scenes::world::{
+            extract::RenderSnapshot,
+            render::{GeometryBuffer, RenderStore, RenderWorld, render_pipeline::RenderPipeline},
+        },
+    },
     wgsl_shader,
 };
-
-#[derive(Default)]
-pub struct GizmoRenderSnapshot {
-    pub vertices: Vec<GizmoVertex>,
-}
 
 pub struct GizmoRenderPipeline {
     pipeline: wgpu::RenderPipeline,
@@ -72,23 +73,27 @@ impl GizmoRenderPipeline {
     }
 }
 
-impl GizmoRenderPipeline {
-    pub fn prepare(
+impl RenderPipeline for GizmoRenderPipeline {
+    fn prepare(
         &mut self,
-        render_world: &mut RenderWorld,
+        _assets: &AssetReader,
         renderer: &Renderer,
-        snapshot: &GizmoRenderSnapshot,
+        _render_store: &mut RenderStore,
+        render_world: &mut RenderWorld,
+        snapshot: &RenderSnapshot,
     ) {
         render_world
             .gizmo_vertices_buffer
-            .write(renderer, &snapshot.vertices);
+            .write(renderer, &snapshot.gizmos.vertices);
     }
 
-    pub fn queue(
-        &mut self,
+    fn queue(
+        &self,
+        _render_store: &RenderStore,
         render_world: &RenderWorld,
-        snapshot: &GizmoRenderSnapshot,
         frame: &mut Frame,
+        _geometry_buffer: &GeometryBuffer,
+        snapshot: &RenderSnapshot,
     ) {
         let mut render_pass = frame
             .encoder
@@ -108,6 +113,6 @@ impl GizmoRenderPipeline {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, render_world.gizmo_vertices_buffer.slice(..));
         render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
-        render_pass.draw(0..(snapshot.vertices.len() as u32), 0..1);
+        render_pass.draw(0..(snapshot.gizmos.vertices.len() as u32), 0..1);
     }
 }

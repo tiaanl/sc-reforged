@@ -3,7 +3,10 @@ use bytemuck::NoUninit;
 use crate::{
     engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, renderer::Renderer},
     game::scenes::world::{
-        render::{render_store::RenderStore, terrain_render_pipeline::gpu::ChunkInstanceData},
+        render::{
+            render_store::RenderStore, terrain_render_pipeline::gpu::ChunkInstanceData,
+            ui_render_pipeline,
+        },
         systems::camera_system,
     },
 };
@@ -50,7 +53,7 @@ pub struct RenderWorld {
     pub ui_state_buffer: wgpu::Buffer,
     pub ui_state_bind_group: wgpu::BindGroup,
 
-    pub ui_rects_buffer: GrowingBuffer<RenderUiRect>,
+    pub ui_rects_buffer: GrowingBuffer<ui_render_pipeline::gpu::UiRect>,
 }
 
 impl RenderWorld {

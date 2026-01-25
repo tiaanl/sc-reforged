@@ -1,15 +1,13 @@
-use bevy_ecs::prelude::*;
-
 use crate::{
     engine::renderer::{Frame, Renderer},
     game::{
         AssetReader,
         scenes::world::{
+            extract::RenderSnapshot,
             render::{
-                GeometryBuffer, box_render_pipeline::BoxRenderPipeline,
-                render_pipeline::RenderPipeline, ui_render_pipeline::UiRenderPipeline,
+                GeometryBuffer, render_pipeline::RenderPipeline,
+                ui_render_pipeline::UiRenderPipeline,
             },
-            sim_world::ecs::Snapshots,
         },
     },
 };
@@ -25,10 +23,6 @@ pub struct WorldRenderer {
     // TODO: should not be pub.
     pub model_pipeline: ModelRenderPipeline,
     ui_pipeline: UiRenderPipeline,
-    box_pipeline: BoxRenderPipeline,
-
-    /// Render bounding boxes?
-    pub render_bounding_boxes: bool,
 }
 
 impl WorldRenderer {
@@ -37,100 +31,51 @@ impl WorldRenderer {
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
         render_store: &mut RenderStore,
-        sim_world: &World,
+        sim_world: &bevy_ecs::world::World,
     ) -> Self {
         let terrain_pipeline =
             TerrainRenderPipeline::new(assets, renderer, render_store, sim_world);
         let model_pipeline = ModelRenderPipeline::new(renderer, render_store);
         let ui_pipeline = UiRenderPipeline::new(renderer, surface_format, render_store);
-        let box_pipeline = BoxRenderPipeline::new(renderer, render_store);
 
         Self {
             terrain_pipeline,
             model_pipeline,
             ui_pipeline,
-            box_pipeline,
-
-            render_bounding_boxes: false,
         }
     }
+}
 
-    pub fn prepare(
+impl RenderPipeline for WorldRenderer {
+    fn prepare(
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
         render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
-        snapshots: &Snapshots,
+        snapshot: &RenderSnapshot,
     ) {
-        self.terrain_pipeline.prepare(
-            assets,
-            renderer,
-            render_store,
-            render_world,
-            &snapshots.terrain_render_snapshot,
-        );
-        self.model_pipeline.prepare(
-            assets,
-            renderer,
-            render_store,
-            render_world,
-            &snapshots.model_render_snapshot,
-        );
-        self.ui_pipeline.prepare(
-            assets,
-            renderer,
-            render_store,
-            render_world,
-            &snapshots.ui_render_snapshot,
-        );
-        self.box_pipeline.prepare(
-            assets,
-            renderer,
-            render_store,
-            render_world,
-            &snapshots.box_render_snapshot,
-        );
+        self.terrain_pipeline
+            .prepare(assets, renderer, render_store, render_world, snapshot);
+        self.model_pipeline
+            .prepare(assets, renderer, render_store, render_world, snapshot);
+        self.ui_pipeline
+            .prepare(assets, renderer, render_store, render_world, snapshot);
     }
 
-    pub fn queue(
-        &mut self,
+    fn queue(
+        &self,
         render_store: &RenderStore,
         render_world: &RenderWorld,
-        snapshots: &Snapshots,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
+        snapshot: &RenderSnapshot,
     ) {
-        self.terrain_pipeline.queue(
-            render_store,
-            render_world,
-            frame,
-            geometry_buffer,
-            &snapshots.terrain_render_snapshot,
-        );
-        self.model_pipeline.queue(
-            render_store,
-            render_world,
-            frame,
-            geometry_buffer,
-            &snapshots.model_render_snapshot,
-        );
-        self.ui_pipeline.queue(
-            render_store,
-            render_world,
-            frame,
-            geometry_buffer,
-            &snapshots.ui_render_snapshot,
-        );
-
-        if self.render_bounding_boxes {
-            self.box_pipeline.queue(
-                render_store,
-                render_world,
-                frame,
-                geometry_buffer,
-                &snapshots.box_render_snapshot,
-            );
-        }
+        self.terrain_pipeline
+            .queue(render_store, render_world, frame, geometry_buffer, snapshot);
+        self.model_pipeline
+            .queue(render_store, render_world, frame, geometry_buffer, snapshot);
+        self.ui_pipeline
+            .queue(render_store, render_world, frame, geometry_buffer, snapshot);
     }
 }

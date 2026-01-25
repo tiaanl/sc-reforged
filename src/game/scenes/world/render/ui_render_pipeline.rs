@@ -1,36 +1,27 @@
-use glam::Mat4;
-
 use crate::{
     engine::renderer::{Frame, Renderer},
     game::{
         AssetReader,
-        scenes::world::render::{
-            RenderStore, RenderUiRect, RenderWorld, render_pipeline::RenderPipeline,
+        scenes::world::{
+            extract::RenderSnapshot,
+            render::{RenderStore, RenderUiRect, RenderWorld, render_pipeline::RenderPipeline},
         },
     },
     wgsl_shader,
 };
-
-#[derive(Default)]
-pub struct UiRenderSnapshot {
-    pub view_proj: Mat4,
-    pub ui_rects: Vec<RenderUiRect>,
-}
 
 pub struct UiRenderPipeline {
     rect_render_pipeline: wgpu::RenderPipeline,
 }
 
 impl RenderPipeline for UiRenderPipeline {
-    type Snapshot = UiRenderSnapshot;
-
     fn prepare(
         &mut self,
         _assets: &AssetReader,
         renderer: &Renderer,
         _render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
-        snapshot: &Self::Snapshot,
+        snapshot: &RenderSnapshot,
     ) {
         renderer.queue.write_buffer(
             &render_world.ui_state_buffer,
@@ -38,9 +29,18 @@ impl RenderPipeline for UiRenderPipeline {
             bytemuck::bytes_of(&render_world.ui_state),
         );
 
-        render_world
-            .ui_rects_buffer
-            .write(renderer, &snapshot.ui_rects);
+        let rects: Vec<_> = snapshot
+            .ui
+            .ui_rects
+            .iter()
+            .map(|rect| gpu::UiRect {
+                min: rect.min.to_array(),
+                max: rect.max.to_array(),
+                color: rect.color.to_array(),
+            })
+            .collect();
+
+        render_world.ui_rects_buffer.write(renderer, &rects);
     }
 
     fn queue(
@@ -49,7 +49,7 @@ impl RenderPipeline for UiRenderPipeline {
         render_world: &RenderWorld,
         frame: &mut Frame,
         _geometry_buffer: &super::GeometryBuffer,
-        snapshot: &Self::Snapshot,
+        snapshot: &RenderSnapshot,
     ) {
         let mut render_pass = frame
             .encoder
@@ -73,7 +73,7 @@ impl RenderPipeline for UiRenderPipeline {
         render_pass.set_vertex_buffer(0, render_world.ui_rects_buffer.slice(..));
         render_pass.set_bind_group(0, &render_world.ui_state_bind_group, &[]);
 
-        render_pass.draw(0..4, 0..(snapshot.ui_rects.len() as u32));
+        render_pass.draw(0..4, 0..(snapshot.ui.ui_rects.len() as u32));
     }
 }
 
@@ -133,5 +133,17 @@ impl UiRenderPipeline {
         Self {
             rect_render_pipeline,
         }
+    }
+}
+
+pub mod gpu {
+    use bytemuck::NoUninit;
+
+    #[derive(Clone, Copy, NoUninit)]
+    #[repr(C)]
+    pub struct UiRect {
+        pub min: [f32; 2],
+        pub max: [f32; 2],
+        pub color: [f32; 4],
     }
 }
