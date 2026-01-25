@@ -15,7 +15,10 @@ pub fn create_extract_schedule() -> Schedule {
 
     schedule.add_systems(
         (
+            // Do the camera and environment first, becuase the rest of the
+            // systems rely on their data.
             (camera::extract_camera, environment::extract_environment),
+            // These can be done in any order.
             (
                 terrain::extract_terrain_snapshot,
                 models::extract_model_snapshot,
