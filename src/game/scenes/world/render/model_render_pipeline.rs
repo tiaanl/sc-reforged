@@ -198,7 +198,7 @@ impl RenderPipeline for ModelRenderPipeline {
         self.render_models_cache.clear();
 
         // Build an intermediate list of render models to render with some of the details resolved.
-        for model_to_render in snapshot.models.models.iter() {
+        for model_to_render in models.iter() {
             let Some(render_model_handle) =
                 render_store.render_model_for_model(model_to_render.model)
             else {

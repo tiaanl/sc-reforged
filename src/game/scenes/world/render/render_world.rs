@@ -22,12 +22,6 @@ pub struct ModelInstanceData {
 
 #[derive(Clone, Copy, Debug, Default, NoUninit)]
 #[repr(C)]
-pub struct UiState {
-    pub view_proj: [[f32; 4]; 4],
-}
-
-#[derive(Clone, Copy, Debug, Default, NoUninit)]
-#[repr(C)]
 pub struct RenderUiRect {
     pub min: [f32; 2],
     pub max: [f32; 2],
@@ -49,11 +43,10 @@ pub struct RenderWorld {
 
     pub gizmo_vertices_buffer: GrowingBuffer<GizmoVertex>,
 
-    pub ui_state: UiState,
     pub ui_state_buffer: wgpu::Buffer,
     pub ui_state_bind_group: wgpu::BindGroup,
 
-    pub ui_rects_buffer: GrowingBuffer<ui_render_pipeline::gpu::UiRect>,
+    pub ui_rects_buffer: GrowingBuffer<ui_render_pipeline::gpu::Rect>,
 }
 
 impl RenderWorld {
@@ -109,7 +102,7 @@ impl RenderWorld {
 
         let ui_state_buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("ui_state_buffer"),
-            size: std::mem::size_of::<UiState>() as wgpu::BufferAddress,
+            size: std::mem::size_of::<ui_render_pipeline::gpu::State>() as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
             mapped_at_creation: false,
         });
@@ -144,7 +137,6 @@ impl RenderWorld {
 
             gizmo_vertices_buffer,
 
-            ui_state: UiState::default(),
             ui_state_buffer,
             ui_state_bind_group,
             ui_rects_buffer,

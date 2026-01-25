@@ -7,6 +7,7 @@ use crate::{engine::gizmos::GizmoVertex, game::math::BoundingBox};
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UpdateSet {
+    Start,
     Input,
     Update,
 }
@@ -28,6 +29,11 @@ impl GizmoVertices {
         Self {
             vertices: Vec::with_capacity(capacity),
         }
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.vertices.clear()
     }
 
     #[inline]

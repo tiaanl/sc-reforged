@@ -27,6 +27,7 @@ use super::extract::*;
 
 pub mod camera_system;
 mod clear_render_targets;
+mod gizmos;
 mod orders;
 pub mod world_interaction;
 
@@ -91,8 +92,12 @@ impl Systems {
 
             let mut schedule = Schedule::default();
 
-            schedule.configure_sets((Input, Update).chain());
+            schedule.configure_sets((Start, Input, Update).chain());
 
+            // Start
+            schedule.add_systems(gizmos::clear_gizmo_vertices.in_set(Start));
+
+            // Input
             schedule.add_systems(
                 (
                     (
@@ -106,6 +111,7 @@ impl Systems {
                     .chain(),
             );
 
+            // Update
             schedule.add_systems(
                 (
                     orders::process_biped_orders,

@@ -23,17 +23,19 @@ impl RenderPipeline for UiRenderPipeline {
         render_world: &mut RenderWorld,
         snapshot: &RenderSnapshot,
     ) {
-        renderer.queue.write_buffer(
-            &render_world.ui_state_buffer,
-            0,
-            bytemuck::bytes_of(&render_world.ui_state),
-        );
+        let state = gpu::State {
+            view_proj: snapshot.ui.proj_view.to_cols_array_2d(),
+        };
+
+        renderer
+            .queue
+            .write_buffer(&render_world.ui_state_buffer, 0, bytemuck::bytes_of(&state));
 
         let rects: Vec<_> = snapshot
             .ui
             .ui_rects
             .iter()
-            .map(|rect| gpu::UiRect {
+            .map(|rect| gpu::Rect {
                 min: rect.min.to_array(),
                 max: rect.max.to_array(),
                 color: rect.color.to_array(),
@@ -141,7 +143,13 @@ pub mod gpu {
 
     #[derive(Clone, Copy, NoUninit)]
     #[repr(C)]
-    pub struct UiRect {
+    pub struct State {
+        pub view_proj: [[f32; 4]; 4],
+    }
+
+    #[derive(Clone, Copy, NoUninit)]
+    #[repr(C)]
+    pub struct Rect {
         pub min: [f32; 2],
         pub max: [f32; 2],
         pub color: [f32; 4],
