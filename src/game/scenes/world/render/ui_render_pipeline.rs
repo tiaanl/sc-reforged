@@ -5,13 +5,36 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                RenderLayouts, RenderUiRect, RenderWorld, render_pipeline::RenderPipeline,
-                render_world::UiStateLayout,
+                RenderLayouts, RenderUiRect, RenderWorld, render_layouts::RenderLayout,
+                render_pipeline::RenderPipeline,
             },
         },
     },
     wgsl_shader,
 };
+
+pub struct UiStateLayout;
+
+impl RenderLayout for UiStateLayout {
+    fn label() -> &'static str {
+        "ui_state_bind_group_layout"
+    }
+
+    fn entries() -> &'static [wgpu::BindGroupLayoutEntry] {
+        const ENTRIES: &[wgpu::BindGroupLayoutEntry] = &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }];
+
+        ENTRIES
+    }
+}
 
 pub struct UiRenderPipeline {
     rect_render_pipeline: wgpu::RenderPipeline,

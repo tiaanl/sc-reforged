@@ -4,34 +4,11 @@ use crate::{
     engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, renderer::Renderer},
     game::scenes::world::render::{
         camera_render_pipeline::{self, CameraEnvironmentLayout},
-        render_layouts::{RenderLayout, RenderLayouts},
+        render_layouts::RenderLayouts,
         terrain_render_pipeline::gpu::ChunkInstanceData,
-        ui_render_pipeline,
+        ui_render_pipeline::{self, UiStateLayout},
     },
 };
-
-pub struct UiStateLayout;
-
-impl RenderLayout for UiStateLayout {
-    fn label() -> &'static str {
-        "ui_state_bind_group_layout"
-    }
-
-    fn entries() -> &'static [wgpu::BindGroupLayoutEntry] {
-        const ENTRIES: &[wgpu::BindGroupLayoutEntry] = &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }];
-
-        ENTRIES
-    }
-}
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
