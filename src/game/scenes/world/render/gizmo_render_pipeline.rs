@@ -7,7 +7,10 @@ use crate::{
         AssetReader,
         scenes::world::{
             extract::RenderSnapshot,
-            render::{GeometryBuffer, RenderLayouts, RenderWorld, render_pipeline::RenderPipeline},
+            render::{
+                GeometryBuffer, RenderLayouts, RenderWorld,
+                camera_render_pipeline::CameraEnvironmentLayout, render_pipeline::RenderPipeline,
+            },
         },
     },
     wgsl_shader,
@@ -21,7 +24,7 @@ impl GizmoRenderPipeline {
     pub fn new(
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
-        layouts: &RenderLayouts,
+        layouts: &mut RenderLayouts,
     ) -> Self {
         let device = &renderer.device;
 
@@ -29,7 +32,7 @@ impl GizmoRenderPipeline {
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("gizmos_pipeline_layout"),
-            bind_group_layouts: &[&layouts.camera_bind_group_layout],
+            bind_group_layouts: &[layouts.get::<CameraEnvironmentLayout>(renderer)],
             push_constant_ranges: &[],
         });
 

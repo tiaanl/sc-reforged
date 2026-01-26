@@ -1,3 +1,4 @@
+mod camera_render_pipeline;
 mod compositor;
 mod geometry_buffers;
 mod gizmo_render_pipeline;

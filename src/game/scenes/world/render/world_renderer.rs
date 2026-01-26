@@ -6,7 +6,8 @@ use crate::{
             extract::RenderSnapshot,
             render::{
                 Compositor, GeometryBuffer, GizmoRenderPipeline, RenderTargets,
-                render_pipeline::RenderPipeline, ui_render_pipeline::UiRenderPipeline,
+                camera_render_pipeline::CameraRenderPipeline, render_pipeline::RenderPipeline,
+                ui_render_pipeline::UiRenderPipeline,
             },
         },
     },
@@ -18,6 +19,7 @@ use super::{
 };
 
 pub struct WorldRenderer {
+    camera_pipeline: CameraRenderPipeline,
     // TODO: should not be pub.
     pub terrain_pipeline: TerrainRenderPipeline,
     // TODO: should not be pub.
@@ -35,6 +37,7 @@ impl WorldRenderer {
         layouts: &mut RenderLayouts,
         sim_world: &bevy_ecs::world::World,
     ) -> Self {
+        let camera_pipeline = CameraRenderPipeline;
         let terrain_pipeline = TerrainRenderPipeline::new(assets, renderer, layouts, sim_world);
         let model_pipeline = ModelRenderPipeline::new(renderer, layouts);
         let ui_pipeline = UiRenderPipeline::new(renderer, render_targets.surface_format, layouts);
@@ -43,6 +46,7 @@ impl WorldRenderer {
             GizmoRenderPipeline::new(renderer, render_targets.surface_format, layouts);
 
         Self {
+            camera_pipeline,
             terrain_pipeline,
             model_pipeline,
             ui_pipeline,
@@ -60,6 +64,8 @@ impl RenderPipeline for WorldRenderer {
         render_world: &mut RenderWorld,
         snapshot: &RenderSnapshot,
     ) {
+        self.camera_pipeline
+            .prepare(assets, renderer, render_world, snapshot);
         self.terrain_pipeline
             .prepare(assets, renderer, render_world, snapshot);
         self.model_pipeline
@@ -79,6 +85,8 @@ impl RenderPipeline for WorldRenderer {
         geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,
     ) {
+        self.camera_pipeline
+            .queue(render_world, frame, geometry_buffer, snapshot);
         self.terrain_pipeline
             .queue(render_world, frame, geometry_buffer, snapshot);
         self.model_pipeline

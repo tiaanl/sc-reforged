@@ -80,12 +80,12 @@ impl WorldScene {
 
         let render_targets = RenderTargets::new(renderer, surface_size, surface_format);
 
-        let mut layouts = RenderLayouts::new(renderer);
+        let mut layouts = RenderLayouts::new();
 
         let render_worlds = [
-            RenderWorld::new(0, renderer, &layouts),
-            RenderWorld::new(1, renderer, &layouts),
-            RenderWorld::new(2, renderer, &layouts),
+            RenderWorld::new(0, renderer, &mut layouts),
+            RenderWorld::new(1, renderer, &mut layouts),
+            RenderWorld::new(2, renderer, &mut layouts),
         ];
 
         // All assets should be loaded now, turn the [AssetLoader] into an [AssetReader].

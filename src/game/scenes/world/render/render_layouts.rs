@@ -1,20 +1,36 @@
+use ahash::HashMap;
+
 use crate::engine::renderer::Renderer;
 
-use super::RenderWorld;
+pub trait RenderLayout {
+    fn label() -> &'static str;
+    fn entries() -> &'static [wgpu::BindGroupLayoutEntry];
+}
 
 pub struct RenderLayouts {
-    pub camera_bind_group_layout: wgpu::BindGroupLayout,
-    pub ui_state_bind_group_layout: wgpu::BindGroupLayout,
+    layouts: HashMap<std::any::TypeId, wgpu::BindGroupLayout>,
 }
 
 impl RenderLayouts {
-    pub fn new(renderer: &Renderer) -> Self {
-        let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(renderer);
-        let ui_state_bind_group_layout = RenderWorld::create_ui_state_bind_group_layout(renderer);
-
+    pub fn new() -> Self {
         Self {
-            camera_bind_group_layout,
-            ui_state_bind_group_layout,
+            layouts: HashMap::default(),
         }
+    }
+
+    pub fn get<L: RenderLayout + 'static>(
+        &mut self,
+        renderer: &Renderer,
+    ) -> &wgpu::BindGroupLayout {
+        let id = std::any::TypeId::of::<L>();
+
+        self.layouts.entry(id).or_insert_with(|| {
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some(L::label()),
+                    entries: L::entries(),
+                })
+        })
     }
 }

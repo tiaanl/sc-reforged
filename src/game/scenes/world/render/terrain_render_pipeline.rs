@@ -6,7 +6,10 @@ use crate::{
         AssetReader,
         scenes::world::{
             extract::{RenderSnapshot, TerrainChunk},
-            render::{GeometryBuffer, RenderLayouts, RenderWorld, render_pipeline::RenderPipeline},
+            render::{
+                GeometryBuffer, RenderLayouts, RenderWorld,
+                camera_render_pipeline::CameraEnvironmentLayout, render_pipeline::RenderPipeline,
+            },
             sim_world::Terrain,
         },
     },
@@ -237,7 +240,7 @@ impl TerrainRenderPipeline {
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain_pipeline_layout"),
                 bind_group_layouts: &[
-                    &layouts.camera_bind_group_layout,
+                    layouts.get::<CameraEnvironmentLayout>(renderer),
                     &terrain_bind_group_layout,
                 ],
                 push_constant_ranges: &[],

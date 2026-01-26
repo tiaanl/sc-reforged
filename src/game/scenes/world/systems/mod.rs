@@ -23,7 +23,7 @@ use crate::{
 
 use super::extract::*;
 
-pub mod camera_system;
+mod camera;
 mod clear_render_targets;
 mod debug;
 mod gizmos;
@@ -101,7 +101,7 @@ impl Systems {
                         top_down_camera_controller::input,
                         free_camera_controller::input,
                     ),
-                    camera_system::compute_cameras,
+                    camera::compute_cameras,
                     world_interaction::input,
                 )
                     .in_set(Input)
@@ -165,7 +165,6 @@ impl Systems {
         renderer: &Renderer,
         render_snapshot: &RenderSnapshot,
     ) {
-        camera_system::prepare(renderer, render_world, render_snapshot);
         self.world_renderer
             .prepare(assets, renderer, render_world, render_snapshot);
     }

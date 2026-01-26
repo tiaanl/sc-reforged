@@ -4,7 +4,10 @@ use crate::{
         AssetReader,
         scenes::world::{
             extract::RenderSnapshot,
-            render::{RenderLayouts, RenderUiRect, RenderWorld, render_pipeline::RenderPipeline},
+            render::{
+                RenderLayouts, RenderUiRect, RenderWorld, render_pipeline::RenderPipeline,
+                render_world::UiStateLayout,
+            },
         },
     },
     wgsl_shader,
@@ -81,7 +84,7 @@ impl UiRenderPipeline {
     pub fn new(
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
-        layouts: &RenderLayouts,
+        layouts: &mut RenderLayouts,
     ) -> Self {
         let device = &renderer.device;
 
@@ -89,7 +92,7 @@ impl UiRenderPipeline {
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("ui_rect_pipeline_layout"),
-            bind_group_layouts: &[&layouts.ui_state_bind_group_layout],
+            bind_group_layouts: &[layouts.get::<UiStateLayout>(renderer)],
             push_constant_ranges: &[],
         });
 

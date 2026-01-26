@@ -2,14 +2,36 @@ use bytemuck::NoUninit;
 
 use crate::{
     engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, renderer::Renderer},
-    game::scenes::world::{
-        render::{
-            render_layouts::RenderLayouts, terrain_render_pipeline::gpu::ChunkInstanceData,
-            ui_render_pipeline,
-        },
-        systems::camera_system,
+    game::scenes::world::render::{
+        camera_render_pipeline::{self, CameraEnvironmentLayout},
+        render_layouts::{RenderLayout, RenderLayouts},
+        terrain_render_pipeline::gpu::ChunkInstanceData,
+        ui_render_pipeline,
     },
 };
+
+pub struct UiStateLayout;
+
+impl RenderLayout for UiStateLayout {
+    fn label() -> &'static str {
+        "ui_state_bind_group_layout"
+    }
+
+    fn entries() -> &'static [wgpu::BindGroupLayoutEntry] {
+        const ENTRIES: &[wgpu::BindGroupLayoutEntry] = &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }];
+
+        ENTRIES
+    }
+}
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
@@ -50,10 +72,10 @@ pub struct RenderWorld {
 }
 
 impl RenderWorld {
-    pub fn new(index: usize, renderer: &Renderer, layouts: &RenderLayouts) -> Self {
+    pub fn new(index: usize, renderer: &Renderer, layouts: &mut RenderLayouts) -> Self {
         let camera_env_buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("cameras"),
-            size: std::mem::size_of::<camera_system::gpu::CameraEnvironment>()
+            size: std::mem::size_of::<camera_render_pipeline::gpu::CameraEnvironment>()
                 as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -63,7 +85,7 @@ impl RenderWorld {
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(&format!("cmaera_bind_group_{index}")),
-                layout: &layouts.camera_bind_group_layout,
+                layout: layouts.get::<CameraEnvironmentLayout>(renderer),
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: camera_env_buffer.as_entire_binding(),
@@ -111,7 +133,7 @@ impl RenderWorld {
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(&format!("ui_state_bind_group_{index}")),
-                layout: &layouts.ui_state_bind_group_layout,
+                layout: layouts.get::<UiStateLayout>(renderer),
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: ui_state_buffer.as_entire_binding(),
@@ -141,41 +163,5 @@ impl RenderWorld {
             ui_state_bind_group,
             ui_rects_buffer,
         }
-    }
-
-    pub fn create_camera_bind_group_layout(renderer: &Renderer) -> wgpu::BindGroupLayout {
-        renderer
-            .device
-            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("camera_bind_group_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            })
-    }
-
-    pub fn create_ui_state_bind_group_layout(renderer: &Renderer) -> wgpu::BindGroupLayout {
-        renderer
-            .device
-            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("ui_state_bind_group_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            })
     }
 }

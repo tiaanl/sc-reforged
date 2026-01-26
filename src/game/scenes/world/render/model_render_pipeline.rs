@@ -14,7 +14,8 @@ use crate::{
             extract::RenderSnapshot,
             render::{
                 GeometryBuffer, ModelInstanceData, RenderLayouts, RenderModel, RenderVertex,
-                RenderWorld, render_pipeline::RenderPipeline,
+                RenderWorld, camera_render_pipeline::CameraEnvironmentLayout,
+                render_pipeline::RenderPipeline,
             },
         },
     },
@@ -75,7 +76,7 @@ impl ModelRenderPipeline {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("objects_pipeline_layout"),
             bind_group_layouts: &[
-                &layouts.camera_bind_group_layout,
+                layouts.get::<CameraEnvironmentLayout>(renderer),
                 &textures.texture_data_bind_group_layout,
                 &models.nodes_bind_group_layout,
             ],
