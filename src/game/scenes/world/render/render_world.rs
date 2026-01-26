@@ -1,5 +1,5 @@
 use crate::{
-    engine::{growing_buffer::GrowingBuffer, renderer::Renderer},
+    engine::renderer::Renderer,
     game::scenes::world::render::{
         camera_render_pipeline::{self, CameraEnvironmentLayout},
         render_layouts::RenderLayouts,
@@ -14,8 +14,6 @@ pub struct RenderWorld {
 
     pub ui_state_buffer: wgpu::Buffer,
     pub ui_state_bind_group: wgpu::BindGroup,
-
-    pub ui_rects_buffer: GrowingBuffer<ui_render_pipeline::gpu::Rect>,
 }
 
 impl RenderWorld {
@@ -57,20 +55,12 @@ impl RenderWorld {
                 }],
             });
 
-        let ui_rects_buffer = GrowingBuffer::new(
-            renderer,
-            1024,
-            wgpu::BufferUsages::VERTEX,
-            format!("ui_rects_buffer:{index}"),
-        );
-
         Self {
             camera_env_buffer,
             camera_env_bind_group,
 
             ui_state_buffer,
             ui_state_bind_group,
-            ui_rects_buffer,
         }
     }
 }

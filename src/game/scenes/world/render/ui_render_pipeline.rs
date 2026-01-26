@@ -1,11 +1,14 @@
 use crate::{
-    engine::renderer::{Frame, Renderer},
+    engine::{
+        growing_buffer::GrowingBuffer,
+        renderer::{Frame, Renderer},
+    },
     game::{
         AssetReader,
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                RenderLayouts, RenderWorld, render_layouts::RenderLayout,
+                RenderLayouts, RenderWorld, per_frame::PerFrame, render_layouts::RenderLayout,
                 render_pipeline::RenderPipeline, ui_render_pipeline,
             },
         },
@@ -38,69 +41,8 @@ impl RenderLayout for UiStateLayout {
 
 pub struct UiRenderPipeline {
     rect_render_pipeline: wgpu::RenderPipeline,
-}
 
-impl RenderPipeline for UiRenderPipeline {
-    fn prepare(
-        &mut self,
-        _assets: &AssetReader,
-        renderer: &Renderer,
-        render_world: &mut RenderWorld,
-        snapshot: &RenderSnapshot,
-    ) {
-        let state = gpu::State {
-            view_proj: snapshot.ui.proj_view.to_cols_array_2d(),
-        };
-
-        renderer
-            .queue
-            .write_buffer(&render_world.ui_state_buffer, 0, bytemuck::bytes_of(&state));
-
-        let rects: Vec<_> = snapshot
-            .ui
-            .ui_rects
-            .iter()
-            .map(|rect| gpu::Rect {
-                min: rect.min.to_array(),
-                max: rect.max.to_array(),
-                color: rect.color.to_array(),
-            })
-            .collect();
-
-        render_world.ui_rects_buffer.write(renderer, &rects);
-    }
-
-    fn queue(
-        &self,
-        render_world: &RenderWorld,
-        frame: &mut Frame,
-        _geometry_buffer: &super::GeometryBuffer,
-        snapshot: &RenderSnapshot,
-    ) {
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("ui_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-        render_pass.set_pipeline(&self.rect_render_pipeline);
-
-        render_pass.set_vertex_buffer(0, render_world.ui_rects_buffer.slice(..));
-        render_pass.set_bind_group(0, &render_world.ui_state_bind_group, &[]);
-
-        render_pass.draw(0..4, 0..(snapshot.ui.ui_rects.len() as u32));
-    }
+    rects_buffer: PerFrame<GrowingBuffer<gpu::Rect>, 3>,
 }
 
 impl UiRenderPipeline {
@@ -157,9 +99,83 @@ impl UiRenderPipeline {
             cache: None,
         });
 
+        let rects_buffer = PerFrame::new(|index| {
+            GrowingBuffer::new(
+                renderer,
+                1024,
+                wgpu::BufferUsages::VERTEX,
+                format!("ui_rects_buffer:{index}"),
+            )
+        });
+
         Self {
             rect_render_pipeline,
+            rects_buffer,
         }
+    }
+}
+
+impl RenderPipeline for UiRenderPipeline {
+    fn prepare(
+        &mut self,
+        _assets: &AssetReader,
+        renderer: &Renderer,
+        render_world: &mut RenderWorld,
+        snapshot: &RenderSnapshot,
+    ) {
+        let state = gpu::State {
+            view_proj: snapshot.ui.proj_view.to_cols_array_2d(),
+        };
+
+        renderer
+            .queue
+            .write_buffer(&render_world.ui_state_buffer, 0, bytemuck::bytes_of(&state));
+
+        let rects: Vec<_> = snapshot
+            .ui
+            .ui_rects
+            .iter()
+            .map(|rect| gpu::Rect {
+                min: rect.min.to_array(),
+                max: rect.max.to_array(),
+                color: rect.color.to_array(),
+            })
+            .collect();
+
+        let rects_buffer = self.rects_buffer.advance();
+        rects_buffer.write(renderer, rects.as_slice());
+    }
+
+    fn queue(
+        &self,
+        render_world: &RenderWorld,
+        frame: &mut Frame,
+        _geometry_buffer: &super::GeometryBuffer,
+        snapshot: &RenderSnapshot,
+    ) {
+        let mut render_pass = frame
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("ui_render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.surface,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+        render_pass.set_pipeline(&self.rect_render_pipeline);
+
+        render_pass.set_vertex_buffer(0, self.rects_buffer.current().slice(..));
+        render_pass.set_bind_group(0, &render_world.ui_state_bind_group, &[]);
+
+        render_pass.draw(0..4, 0..(snapshot.ui.ui_rects.len() as u32));
     }
 }
 
