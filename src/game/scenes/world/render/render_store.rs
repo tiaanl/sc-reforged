@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    Compositor, GeometryBuffer, RenderWorld,
+    GeometryBuffer, RenderWorld,
     render_models::{RenderModel, RenderModels},
     render_textures::RenderTextures,
 };
@@ -16,7 +16,6 @@ pub struct RenderStore {
     pub surface_size: UVec2,
 
     pub geometry_buffer: GeometryBuffer,
-    pub compositor: Compositor,
 
     pub camera_bind_group_layout: wgpu::BindGroupLayout,
     pub ui_state_bind_group_layout: wgpu::BindGroupLayout,
@@ -29,9 +28,8 @@ pub struct RenderStore {
 }
 
 impl RenderStore {
-    pub fn new(renderer: &Renderer, surface_format: wgpu::TextureFormat) -> Self {
+    pub fn new(renderer: &Renderer) -> Self {
         let geometry_buffer = GeometryBuffer::new(&renderer.device, UVec2::ZERO);
-        let compositor = Compositor::new(&renderer.device, surface_format, &geometry_buffer);
 
         let camera_bind_group_layout = RenderWorld::create_camera_bind_group_layout(renderer);
         let ui_state_bind_group_layout = RenderWorld::create_ui_state_bind_group_layout(renderer);
@@ -45,7 +43,6 @@ impl RenderStore {
             surface_size: UVec2::ZERO,
 
             geometry_buffer,
-            compositor,
 
             camera_bind_group_layout,
             ui_state_bind_group_layout,

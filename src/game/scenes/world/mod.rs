@@ -77,7 +77,7 @@ impl WorldScene {
 
         init_sim_world(&mut sim_world, &mut assets, &campaign_def)?;
 
-        let mut render_store = RenderStore::new(renderer, surface_format);
+        let mut render_store = RenderStore::new(renderer);
 
         let render_worlds = [
             RenderWorld::new(0, renderer, &render_store),
@@ -181,13 +181,15 @@ impl Scene for WorldScene {
         // Systems
         {
             // Extract
-            let start = std::time::Instant::now();
-            self.systems.extract(&mut self.sim_world);
-            frame_time.extract = (std::time::Instant::now() - start).as_secs_f64();
+            {
+                let start = std::time::Instant::now();
+                self.systems.extract(&mut self.sim_world);
+                frame_time.extract = (std::time::Instant::now() - start).as_secs_f64();
+            }
 
             // Prepare
-            let start = std::time::Instant::now();
             {
+                let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
                 self.systems.prepare(
                     &self.assets,
@@ -197,17 +199,17 @@ impl Scene for WorldScene {
                     render_snapshot,
                     frame.size,
                 );
+                frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
             }
-            frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
 
             // Queue
-            let start = std::time::Instant::now();
             {
+                let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
                 self.systems
                     .queue(&self.render_store, render_world, render_snapshot, frame);
+                frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
             }
-            frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
 
             self.sim_world.clear_trackers();
             self.sim_world.increment_change_tick();

@@ -11,9 +11,7 @@ use crate::{
         math::BoundingBox,
         scenes::world::{
             extract,
-            render::{
-                GizmoRenderPipeline, RenderPipeline, RenderStore, RenderWorld, WorldRenderer,
-            },
+            render::{RenderPipeline, RenderStore, RenderWorld, WorldRenderer},
             sim_world::{
                 DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle,
                 ecs::{self, BoundingBoxComponent},
@@ -27,6 +25,7 @@ use super::extract::*;
 
 pub mod camera_system;
 mod clear_render_targets;
+mod debug;
 mod gizmos;
 mod orders;
 pub mod world_interaction;
@@ -74,8 +73,6 @@ pub struct Systems {
 
     // pub camera_system: camera_system::CameraSystem,
     pub world_renderer: WorldRenderer,
-
-    gizmo_render_pipeline: GizmoRenderPipeline,
 }
 
 impl Systems {
@@ -119,6 +116,7 @@ impl Systems {
                     rebuild_static_bvh
                         .run_if(|q: Query<(), Added<BoundingBoxComponent>>| q.iter().count() > 0),
                     update_dynamic_bvh,
+                    debug::draw_model_bounding_boxes,
                 )
                     .in_set(Update)
                     .chain(),
@@ -142,8 +140,6 @@ impl Systems {
                 render_store,
                 sim_world,
             ),
-
-            gizmo_render_pipeline: GizmoRenderPipeline::new(renderer, surface_format, render_store),
         }
     }
 
@@ -186,14 +182,6 @@ impl Systems {
             render_world,
             render_snapshot,
         );
-
-        self.gizmo_render_pipeline.prepare(
-            assets,
-            renderer,
-            render_store,
-            render_world,
-            render_snapshot,
-        );
     }
 
     pub fn queue(
@@ -209,18 +197,6 @@ impl Systems {
             snapshot.environment.fog_color,
         );
         self.world_renderer.queue(
-            render_store,
-            render_world,
-            frame,
-            &render_store.geometry_buffer,
-            snapshot,
-        );
-
-        render_store
-            .compositor
-            .render(frame, &render_store.geometry_buffer);
-
-        self.gizmo_render_pipeline.queue(
             render_store,
             render_world,
             frame,

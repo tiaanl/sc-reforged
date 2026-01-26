@@ -1,9 +1,12 @@
 #![allow(dead_code)]
 
 use bevy_ecs::prelude::*;
-use glam::UVec2;
+use glam::{UVec2, Vec3, Vec4};
 
-use crate::{engine::gizmos::GizmoVertex, game::math::BoundingBox};
+use crate::{
+    engine::gizmos::{GizmoVertex, create_bounding_box},
+    game::math::BoundingBox,
+};
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UpdateSet {
@@ -44,6 +47,16 @@ impl GizmoVertices {
     #[inline]
     pub fn extend(&mut self, iter: impl IntoIterator<Item = GizmoVertex>) {
         self.vertices.extend(iter)
+    }
+
+    pub fn draw_line(&mut self, start: Vec3, end: Vec3, color: Vec4) {
+        self.vertices
+            .extend_from_slice(&[GizmoVertex::new(start, color), GizmoVertex::new(end, color)]);
+    }
+
+    pub fn draw_bounding_box(&mut self, bounding_box: &BoundingBox, color: Vec4) {
+        self.vertices
+            .extend(create_bounding_box(bounding_box, color));
     }
 }
 
