@@ -3,7 +3,6 @@ use crate::{
     game::scenes::world::render::{
         camera_render_pipeline::{self, CameraEnvironmentLayout},
         render_layouts::RenderLayouts,
-        terrain_render_pipeline::gpu::ChunkInstanceData,
         ui_render_pipeline::{self, UiStateLayout},
     },
 };
@@ -12,12 +11,6 @@ use crate::{
 pub struct RenderWorld {
     pub camera_env_buffer: wgpu::Buffer,
     pub camera_env_bind_group: wgpu::BindGroup,
-
-    /// Buffer holding terrain chunk instance data for chunks to be rendered per frame.
-    pub terrain_chunk_instances_buffer: GrowingBuffer<ChunkInstanceData>,
-
-    /// Buffer holding instance data for strata to be rendered per frame.
-    pub strata_instances_buffer: GrowingBuffer<ChunkInstanceData>,
 
     pub ui_state_buffer: wgpu::Buffer,
     pub ui_state_bind_group: wgpu::BindGroup,
@@ -45,22 +38,6 @@ impl RenderWorld {
                     resource: camera_env_buffer.as_entire_binding(),
                 }],
             });
-
-        let capacity = 1 << 7;
-        let terrain_chunk_instances_buffer = GrowingBuffer::new(
-            renderer,
-            capacity,
-            wgpu::BufferUsages::VERTEX,
-            format!("terrain_chunk_instances:{index}"),
-        );
-
-        let capacity = 1 << 7;
-        let strata_instances_buffer = GrowingBuffer::new(
-            renderer,
-            capacity,
-            wgpu::BufferUsages::VERTEX,
-            format!("strata_instances:{index}"),
-        );
 
         let ui_state_buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("ui_state_buffer"),
@@ -90,10 +67,6 @@ impl RenderWorld {
         Self {
             camera_env_buffer,
             camera_env_bind_group,
-
-            terrain_chunk_instances_buffer,
-
-            strata_instances_buffer,
 
             ui_state_buffer,
             ui_state_bind_group,

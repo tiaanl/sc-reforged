@@ -1,14 +1,18 @@
 use wgpu::util::DeviceExt;
 
 use crate::{
-    engine::renderer::{Frame, Renderer},
+    engine::{
+        growing_buffer::GrowingBuffer,
+        renderer::{Frame, Renderer},
+    },
     game::{
         AssetReader,
         scenes::world::{
             extract::{RenderSnapshot, TerrainChunk},
             render::{
                 GeometryBuffer, RenderLayouts, RenderWorld,
-                camera_render_pipeline::CameraEnvironmentLayout, render_pipeline::RenderPipeline,
+                camera_render_pipeline::CameraEnvironmentLayout, per_frame::PerFrame,
+                render_pipeline::RenderPipeline,
             },
             sim_world::Terrain,
         },
@@ -31,6 +35,9 @@ pub struct TerrainRenderPipeline {
     /// Pipeline to render the terrain chunks as wireframe.
     terrain_wireframe_pipeline: wgpu::RenderPipeline,
 
+    /// Buffer holding terrain chunk instance data for chunks to be rendered per frame.
+    terrain_chunk_instances_buffer: PerFrame<GrowingBuffer<gpu::ChunkInstanceData>, 3>,
+
     /// Pipeline to render the stratas.
     strata_pipeline: wgpu::RenderPipeline,
 
@@ -39,6 +46,9 @@ pub struct TerrainRenderPipeline {
 
     /// Buffer holding indices for the strata at different sides and lod's.
     strata_index_buffer: wgpu::Buffer,
+
+    /// Buffer holding instance data for strata to be rendered per frame.
+    strata_instances_buffer: PerFrame<GrowingBuffer<gpu::ChunkInstanceData>, 3>,
 
     /// Debug toggle: render terrain wireframe overlay.
     pub debug_render_terrain_wireframe: bool,
@@ -231,6 +241,16 @@ impl TerrainRenderPipeline {
             (chunk_indices_buffer, chunk_wireframe_indices_buffer)
         };
 
+        let capacity = 1 << 7;
+        let terrain_chunk_instances_buffer = PerFrame::new(|index| {
+            GrowingBuffer::new(
+                renderer,
+                capacity,
+                wgpu::BufferUsages::VERTEX,
+                format!("terrain_chunk_instances:{index}"),
+            )
+        });
+
         let module = renderer
             .device
             .create_shader_module(wgsl_shader!("terrain"));
@@ -403,6 +423,16 @@ impl TerrainRenderPipeline {
                 })
         };
 
+        let capacity = 1 << 7;
+        let strata_instances_buffer = PerFrame::new(|index| {
+            GrowingBuffer::new(
+                renderer,
+                capacity,
+                wgpu::BufferUsages::VERTEX,
+                format!("strata_instances:{index}"),
+            )
+        });
+
         Self {
             chunk_indices_buffer,
             chunk_wireframe_indices_buffer,
@@ -412,9 +442,11 @@ impl TerrainRenderPipeline {
             terrain_pipeline,
             terrain_wireframe_pipeline,
             strata_pipeline,
+            terrain_chunk_instances_buffer,
 
             strata_vertex_buffer,
             strata_index_buffer,
+            strata_instances_buffer,
 
             debug_render_terrain_wireframe: false,
         }
@@ -426,7 +458,7 @@ impl RenderPipeline for TerrainRenderPipeline {
         &mut self,
         _assets: &AssetReader,
         renderer: &Renderer,
-        render_world: &mut RenderWorld,
+        _render_world: &mut RenderWorld,
         snapshot: &RenderSnapshot,
     ) {
         let chunk_instances: Vec<_> = snapshot
@@ -440,9 +472,8 @@ impl RenderPipeline for TerrainRenderPipeline {
             })
             .collect();
 
-        render_world
-            .terrain_chunk_instances_buffer
-            .write(renderer, &chunk_instances);
+        let terrain_chunk_instances_buffer = self.terrain_chunk_instances_buffer.advance();
+        terrain_chunk_instances_buffer.write(renderer, chunk_instances.as_slice());
 
         let strata_instances: Vec<_> = snapshot
             .terrain
@@ -455,9 +486,8 @@ impl RenderPipeline for TerrainRenderPipeline {
             })
             .collect();
 
-        render_world
-            .strata_instances_buffer
-            .write(renderer, &strata_instances);
+        let strata_instances_buffer = self.strata_instances_buffer.advance();
+        strata_instances_buffer.write(renderer, strata_instances.as_slice());
     }
 
     fn queue(
@@ -473,7 +503,7 @@ impl RenderPipeline for TerrainRenderPipeline {
         // Strata
         {
             render_pass.set_pipeline(&self.strata_pipeline);
-            render_pass.set_vertex_buffer(0, render_world.strata_instances_buffer.slice(..));
+            render_pass.set_vertex_buffer(0, self.strata_instances_buffer.current().slice(..));
             render_pass.set_vertex_buffer(1, self.strata_vertex_buffer.slice(..));
             render_pass.set_index_buffer(
                 self.strata_index_buffer.slice(..),
@@ -504,7 +534,8 @@ impl RenderPipeline for TerrainRenderPipeline {
         // Terrain Chunks
         {
             render_pass.set_pipeline(&self.terrain_pipeline);
-            render_pass.set_vertex_buffer(0, render_world.terrain_chunk_instances_buffer.slice(..));
+            render_pass
+                .set_vertex_buffer(0, self.terrain_chunk_instances_buffer.current().slice(..));
             render_pass.set_index_buffer(
                 self.chunk_indices_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
@@ -525,7 +556,8 @@ impl RenderPipeline for TerrainRenderPipeline {
 
         if self.debug_render_terrain_wireframe {
             render_pass.set_pipeline(&self.terrain_wireframe_pipeline);
-            render_pass.set_vertex_buffer(0, render_world.terrain_chunk_instances_buffer.slice(..));
+            render_pass
+                .set_vertex_buffer(0, self.terrain_chunk_instances_buffer.current().slice(..));
             render_pass.set_index_buffer(
                 self.chunk_wireframe_indices_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
