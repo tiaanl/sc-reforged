@@ -1,6 +1,7 @@
 #import camera_env::{CameraEnv, diffuse_with_fog};
 
 const FLAGS_HIGHLIGHTED: u32 = 1 << 0;
+const COLOR_KEYED: u32 = 1 << 0;
 
 @group(0) @binding(0)
 var<uniform> u_camera_env: CameraEnv;
@@ -8,6 +9,8 @@ var<uniform> u_camera_env: CameraEnv;
 struct TextureData {
     bucket: u32,
     layer: u32,
+    flags: u32,
+    _pad: u32,
 }
 
 @group(1) @binding(0) var u_texture_buckets: binding_array<texture_2d_array<f32>>;
@@ -108,6 +111,14 @@ fn fragment_opaque(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffe
     let texture_data = u_texture_data[vertex.texture_data_index];
     let texture = u_texture_buckets[texture_data.bucket];
     let base_color = textureSample(texture, u_texture_sampler, vertex.tex_coord, texture_data.layer);
+
+    // Handle color keyed textures.
+    if (texture_data.flags & COLOR_KEYED) != 0 {
+        // We just go with black as being the keyed color.
+        if base_color.r + base_color.g + base_color.b == 0.0 {
+            discard;
+        }
+    }
 
     let distance = length(vertex.world_position - u_camera_env.position.xyz);
 

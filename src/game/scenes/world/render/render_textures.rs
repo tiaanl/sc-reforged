@@ -1,6 +1,7 @@
 use std::num::NonZeroU32;
 
 use ahash::HashMap;
+use bitflags::bitflags;
 use glam::UVec2;
 
 use crate::{
@@ -18,6 +19,12 @@ use crate::{
 pub struct RenderTexture {
     pub blend_mode: BlendMode,
     pub texture_data_index: u32,
+}
+
+bitflags! {
+    struct RenderTextureFlags : u32 {
+        const COLOR_KEYED = 1 << 0;
+    }
 }
 
 /// A store/cache for textures used by the [super::ModelRenderer].
@@ -171,9 +178,17 @@ impl RenderTextures {
             let index = self.texture_data_count;
             self.texture_data_count += 1;
 
+            let mut flags = RenderTextureFlags::empty();
+            flags.set(
+                RenderTextureFlags::COLOR_KEYED,
+                image.blend_mode == BlendMode::ColorKeyed,
+            );
+
             let texture_data = gpu::TextureData {
                 bucket: bucket_index as u32,
                 layer,
+                flags: flags.bits(),
+                _pad: Default::default(),
             };
             let offset = index as u64 * std::mem::size_of::<gpu::TextureData>() as u64;
             renderer.queue.write_buffer(
@@ -353,6 +368,8 @@ mod gpu {
     pub struct TextureData {
         pub bucket: u32,
         pub layer: u32,
+        pub flags: u32,
+        pub _pad: u32,
     }
 }
 
