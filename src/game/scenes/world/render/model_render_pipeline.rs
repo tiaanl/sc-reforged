@@ -1,12 +1,15 @@
+use ahash::HashMap;
 use glam::Mat4;
 
 use crate::{
     engine::{
+        assets::AssetError,
         renderer::{Frame, Renderer},
         storage::Handle,
     },
     game::{
         AssetReader,
+        model::Model,
         scenes::world::{
             extract::RenderSnapshot,
             render::{
@@ -17,6 +20,8 @@ use crate::{
     },
     wgsl_shader,
 };
+
+use super::{render_models::RenderModels, render_textures::RenderTextures};
 
 bitflags::bitflags! {
     #[derive(Clone, Copy)]
@@ -38,6 +43,12 @@ struct Batch {
 }
 
 pub struct ModelRenderPipeline {
+    textures: RenderTextures,
+    models: RenderModels,
+
+    /// Cache of model handles to render model handles.
+    model_to_render_model: HashMap<Handle<Model>, Handle<RenderModel>>,
+
     opaque_pipeline: wgpu::RenderPipeline,
     alpha_pipeline: wgpu::RenderPipeline,
 
@@ -54,14 +65,19 @@ impl ModelRenderPipeline {
     pub fn new(renderer: &Renderer, render_store: &mut RenderStore) -> Self {
         let device = &renderer.device;
 
+        let textures = RenderTextures::new(renderer);
+        let models = RenderModels::new(renderer);
+
+        let model_to_render_model = HashMap::default();
+
         let module = device.create_shader_module(wgsl_shader!("models"));
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("objects_pipeline_layout"),
             bind_group_layouts: &[
                 &render_store.camera_bind_group_layout,
-                &render_store.textures.texture_data_bind_group_layout,
-                &render_store.models.nodes_bind_group_layout,
+                &textures.texture_data_bind_group_layout,
+                &models.nodes_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -157,14 +173,44 @@ impl ModelRenderPipeline {
         });
 
         Self {
+            textures,
+            models,
+
             opaque_pipeline,
             alpha_pipeline,
+            model_to_render_model,
 
             render_models_cache: Vec::default(),
             model_instances_cache: Vec::default(),
 
             batches: Vec::default(),
         }
+    }
+
+    pub fn get_or_create_render_model(
+        &mut self,
+        assets: &AssetReader,
+        renderer: &Renderer,
+        model_handle: Handle<Model>,
+    ) -> Result<Handle<RenderModel>, AssetError> {
+        if let Some(render_model_handle) = self.model_to_render_model.get(&model_handle) {
+            return Ok(*render_model_handle);
+        }
+
+        let render_model_handle =
+            self.models
+                .add(assets, renderer, &mut self.textures, model_handle)?;
+
+        // Cache the new handle.
+        self.model_to_render_model
+            .insert(model_handle, render_model_handle);
+
+        Ok(render_model_handle)
+    }
+
+    #[inline]
+    pub fn render_model_for_model(&self, model: Handle<Model>) -> Option<Handle<RenderModel>> {
+        self.model_to_render_model.get(&model).cloned()
     }
 }
 
@@ -173,7 +219,7 @@ impl RenderPipeline for ModelRenderPipeline {
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
-        render_store: &mut RenderStore,
+        _render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         snapshot: &RenderSnapshot,
     ) {
@@ -182,9 +228,7 @@ impl RenderPipeline for ModelRenderPipeline {
             tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
 
             for &model_handle in models_to_prepare {
-                if let Err(err) =
-                    render_store.get_or_create_render_model(assets, renderer, model_handle)
-                {
+                if let Err(err) = self.get_or_create_render_model(assets, renderer, model_handle) {
                     tracing::warn!("Could not prepare model! ({err})");
                 }
             }
@@ -199,13 +243,12 @@ impl RenderPipeline for ModelRenderPipeline {
 
         // Build an intermediate list of render models to render with some of the details resolved.
         for model_to_render in models.iter() {
-            let Some(render_model_handle) =
-                render_store.render_model_for_model(model_to_render.model)
+            let Some(render_model_handle) = self.render_model_for_model(model_to_render.model)
             else {
                 continue;
             };
 
-            let Some(render_model) = render_store.models.get(render_model_handle) else {
+            let Some(render_model) = self.models.get(render_model_handle) else {
                 continue;
             };
 
@@ -265,25 +308,14 @@ impl RenderPipeline for ModelRenderPipeline {
 
     fn queue(
         &self,
-        render_store: &RenderStore,
+        _render_store: &RenderStore,
         render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
         _snapshot: &RenderSnapshot,
     ) {
-        self.opaque_render_pass(
-            &mut frame.encoder,
-            geometry_buffer,
-            render_store,
-            render_world,
-        );
-
-        self.alpha_render_pass(
-            &mut frame.encoder,
-            geometry_buffer,
-            render_store,
-            render_world,
-        );
+        self.opaque_render_pass(&mut frame.encoder, geometry_buffer, render_world);
+        self.alpha_render_pass(&mut frame.encoder, geometry_buffer, render_world);
     }
 }
 
@@ -291,28 +323,25 @@ impl ModelRenderPipeline {
     fn setup_render_pass(
         render_pass: &mut wgpu::RenderPass,
         pipeline: &wgpu::RenderPipeline,
-        render_store: &RenderStore,
+        textures: &RenderTextures,
+        models: &RenderModels,
         render_world: &RenderWorld,
     ) {
         render_pass.set_pipeline(pipeline);
 
         render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
-        render_pass.set_bind_group(1, &render_store.textures.texture_data_bind_group, &[]);
-        render_pass.set_bind_group(2, &render_store.models.nodes_bind_group, &[]);
+        render_pass.set_bind_group(1, &textures.texture_data_bind_group, &[]);
+        render_pass.set_bind_group(2, &models.nodes_bind_group, &[]);
 
-        render_pass.set_vertex_buffer(0, render_store.models.vertices_buffer_slice());
+        render_pass.set_vertex_buffer(0, models.vertices_buffer_slice());
         render_pass.set_vertex_buffer(1, render_world.model_instances.slice(..));
-        render_pass.set_index_buffer(
-            render_store.models.indices_buffer_slice(),
-            wgpu::IndexFormat::Uint32,
-        );
+        render_pass.set_index_buffer(models.indices_buffer_slice(), wgpu::IndexFormat::Uint32);
     }
 
     fn opaque_render_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         geometry_buffer: &GeometryBuffer,
-        render_store: &RenderStore,
         render_world: &RenderWorld,
     ) {
         let mut render_pass = geometry_buffer.begin_opaque_render_pass(encoder, "objects_opaque");
@@ -320,13 +349,13 @@ impl ModelRenderPipeline {
         Self::setup_render_pass(
             &mut render_pass,
             &self.opaque_pipeline,
-            render_store,
+            &self.textures,
+            &self.models,
             render_world,
         );
 
         for (render_model, range) in self.batches.iter().filter_map(|batch| {
-            render_store
-                .models
+            self.models
                 .get(batch.render_model)
                 .and_then(|render_model| {
                     (!render_model.opaque_range.is_empty())
@@ -341,7 +370,6 @@ impl ModelRenderPipeline {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         geometry_buffer: &GeometryBuffer,
-        render_store: &RenderStore,
         render_world: &RenderWorld,
     ) {
         let mut render_pass = geometry_buffer.begin_alpha_render_pass(encoder, "objects_opaque");
@@ -349,7 +377,8 @@ impl ModelRenderPipeline {
         Self::setup_render_pass(
             &mut render_pass,
             &self.alpha_pipeline,
-            render_store,
+            &self.textures,
+            &self.models,
             render_world,
         );
 
@@ -357,8 +386,7 @@ impl ModelRenderPipeline {
         //       the instances without alpha ranges are just filtered out. This might be good
         //       enough.
         for (render_model, range) in self.batches.iter().filter_map(|batch| {
-            render_store
-                .models
+            self.models
                 .get(batch.render_model)
                 .and_then(|render_model| {
                     (!render_model.alpha_range.is_empty())
