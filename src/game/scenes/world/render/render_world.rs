@@ -1,5 +1,5 @@
 use crate::{
-    engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, renderer::Renderer},
+    engine::{growing_buffer::GrowingBuffer, renderer::Renderer},
     game::scenes::world::render::{
         camera_render_pipeline::{self, CameraEnvironmentLayout},
         model_render_pipeline,
@@ -21,8 +21,6 @@ pub struct RenderWorld {
     pub strata_instances_buffer: GrowingBuffer<ChunkInstanceData>,
 
     pub model_instances: GrowingBuffer<model_render_pipeline::gpu::ModelInstanceData>,
-
-    pub gizmo_vertices_buffer: GrowingBuffer<GizmoVertex>,
 
     pub ui_state_buffer: wgpu::Buffer,
     pub ui_state_bind_group: wgpu::BindGroup,
@@ -74,13 +72,6 @@ impl RenderWorld {
             format!("model_instances:{index}"),
         );
 
-        let gizmo_vertices_buffer = GrowingBuffer::new(
-            renderer,
-            1024,
-            wgpu::BufferUsages::VERTEX,
-            format!("gizmo_vertices:{index}"),
-        );
-
         let ui_state_buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("ui_state_buffer"),
             size: std::mem::size_of::<ui_render_pipeline::gpu::State>() as wgpu::BufferAddress,
@@ -115,8 +106,6 @@ impl RenderWorld {
             strata_instances_buffer,
 
             model_instances,
-
-            gizmo_vertices_buffer,
 
             ui_state_buffer,
             ui_state_bind_group,

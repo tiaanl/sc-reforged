@@ -1,6 +1,7 @@
 use crate::{
     engine::{
         gizmos::GizmoVertex,
+        growing_buffer::GrowingBuffer,
         renderer::{Frame, Renderer},
     },
     game::{
@@ -9,7 +10,8 @@ use crate::{
             extract::RenderSnapshot,
             render::{
                 GeometryBuffer, RenderLayouts, RenderWorld,
-                camera_render_pipeline::CameraEnvironmentLayout, render_pipeline::RenderPipeline,
+                camera_render_pipeline::CameraEnvironmentLayout, per_frame::PerFrame,
+                render_pipeline::RenderPipeline,
             },
         },
     },
@@ -18,6 +20,8 @@ use crate::{
 
 pub struct GizmoRenderPipeline {
     pipeline: wgpu::RenderPipeline,
+
+    instances_buffer: PerFrame<GrowingBuffer<GizmoVertex>, 3>,
 }
 
 impl GizmoRenderPipeline {
@@ -72,7 +76,19 @@ impl GizmoRenderPipeline {
             cache: None,
         });
 
-        Self { pipeline }
+        let instances_buffer = PerFrame::new(|index| {
+            GrowingBuffer::new(
+                renderer,
+                1024,
+                wgpu::BufferUsages::VERTEX,
+                format!("gizmo_vertices:{index}"),
+            )
+        });
+
+        Self {
+            pipeline,
+            instances_buffer,
+        }
     }
 }
 
@@ -81,12 +97,11 @@ impl RenderPipeline for GizmoRenderPipeline {
         &mut self,
         _assets: &AssetReader,
         renderer: &Renderer,
-        render_world: &mut RenderWorld,
+        _render_world: &mut RenderWorld,
         snapshot: &RenderSnapshot,
     ) {
-        render_world
-            .gizmo_vertices_buffer
-            .write(renderer, &snapshot.gizmos.vertices);
+        let instances = self.instances_buffer.advance();
+        instances.write(renderer, &snapshot.gizmos.vertices);
     }
 
     fn queue(
@@ -112,7 +127,7 @@ impl RenderPipeline for GizmoRenderPipeline {
             });
 
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_vertex_buffer(0, render_world.gizmo_vertices_buffer.slice(..));
+        render_pass.set_vertex_buffer(0, self.instances_buffer.current().slice(..));
         render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
         render_pass.draw(0..(snapshot.gizmos.vertices.len() as u32), 0..1);
     }

@@ -3,6 +3,7 @@ mod compositor;
 mod geometry_buffers;
 mod gizmo_render_pipeline;
 mod model_render_pipeline;
+pub mod per_frame;
 mod render_layouts;
 mod render_models;
 mod render_pipeline;
