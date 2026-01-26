@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    model_render_pipeline::ModelRenderPipeline, render_store::RenderStore,
+    model_render_pipeline::ModelRenderPipeline, render_layouts::RenderLayouts,
     render_world::RenderWorld, terrain_render_pipeline::TerrainRenderPipeline,
 };
 
@@ -32,17 +32,15 @@ impl WorldRenderer {
         assets: &AssetReader,
         renderer: &Renderer,
         render_targets: &RenderTargets,
-        render_store: &mut RenderStore,
+        layouts: &mut RenderLayouts,
         sim_world: &bevy_ecs::world::World,
     ) -> Self {
-        let terrain_pipeline =
-            TerrainRenderPipeline::new(assets, renderer, render_store, sim_world);
-        let model_pipeline = ModelRenderPipeline::new(renderer, render_store);
-        let ui_pipeline =
-            UiRenderPipeline::new(renderer, render_targets.surface_format, render_store);
+        let terrain_pipeline = TerrainRenderPipeline::new(assets, renderer, layouts, sim_world);
+        let model_pipeline = ModelRenderPipeline::new(renderer, layouts);
+        let ui_pipeline = UiRenderPipeline::new(renderer, render_targets.surface_format, layouts);
         let compositor = Compositor::new(renderer, render_targets);
         let gizmo_pipeline =
-            GizmoRenderPipeline::new(renderer, render_targets.surface_format, render_store);
+            GizmoRenderPipeline::new(renderer, render_targets.surface_format, layouts);
 
         Self {
             terrain_pipeline,

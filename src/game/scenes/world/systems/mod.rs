@@ -11,7 +11,7 @@ use crate::{
         math::BoundingBox,
         scenes::world::{
             extract,
-            render::{RenderPipeline, RenderStore, RenderTargets, RenderWorld, WorldRenderer},
+            render::{RenderLayouts, RenderPipeline, RenderTargets, RenderWorld, WorldRenderer},
             sim_world::{
                 DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle,
                 ecs::{self, BoundingBoxComponent},
@@ -80,7 +80,7 @@ impl Systems {
         assets: &AssetReader,
         renderer: &Renderer,
         render_targets: &RenderTargets,
-        render_store: &mut RenderStore,
+        layouts: &mut RenderLayouts,
         sim_world: &mut World,
     ) -> Self {
         // Update schedule.
@@ -137,7 +137,7 @@ impl Systems {
                 assets,
                 renderer,
                 render_targets,
-                render_store,
+                layouts,
                 sim_world,
             ),
         }

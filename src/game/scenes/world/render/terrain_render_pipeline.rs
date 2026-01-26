@@ -6,7 +6,7 @@ use crate::{
         AssetReader,
         scenes::world::{
             extract::{RenderSnapshot, TerrainChunk},
-            render::{GeometryBuffer, RenderStore, RenderWorld, render_pipeline::RenderPipeline},
+            render::{GeometryBuffer, RenderLayouts, RenderWorld, render_pipeline::RenderPipeline},
             sim_world::Terrain,
         },
     },
@@ -45,7 +45,7 @@ impl TerrainRenderPipeline {
     pub fn new(
         assets: &AssetReader,
         renderer: &Renderer,
-        render_store: &mut RenderStore,
+        layouts: &mut RenderLayouts,
         sim_world: &bevy_ecs::world::World,
     ) -> Self {
         let terrain = sim_world.resource::<Terrain>();
@@ -237,7 +237,7 @@ impl TerrainRenderPipeline {
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain_pipeline_layout"),
                 bind_group_layouts: &[
-                    &render_store.camera_bind_group_layout,
+                    &layouts.camera_bind_group_layout,
                     &terrain_bind_group_layout,
                 ],
                 push_constant_ranges: &[],

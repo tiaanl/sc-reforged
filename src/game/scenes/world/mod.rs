@@ -15,7 +15,7 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             game_mode::GameMode,
-            render::{RenderStore, RenderTargets, RenderWorld},
+            render::{RenderLayouts, RenderTargets, RenderWorld},
             sim_world::{Camera, ecs::Viewport, init_sim_world},
             systems::Time,
         },
@@ -80,12 +80,12 @@ impl WorldScene {
 
         let render_targets = RenderTargets::new(renderer, surface_size, surface_format);
 
-        let mut render_store = RenderStore::new(renderer);
+        let mut layouts = RenderLayouts::new(renderer);
 
         let render_worlds = [
-            RenderWorld::new(0, renderer, &render_store),
-            RenderWorld::new(1, renderer, &render_store),
-            RenderWorld::new(2, renderer, &render_store),
+            RenderWorld::new(0, renderer, &layouts),
+            RenderWorld::new(1, renderer, &layouts),
+            RenderWorld::new(2, renderer, &layouts),
         ];
 
         // All assets should be loaded now, turn the [AssetLoader] into an [AssetReader].
@@ -95,7 +95,7 @@ impl WorldScene {
             &assets,
             renderer,
             &render_targets,
-            &mut render_store,
+            &mut layouts,
             &mut sim_world,
         );
 

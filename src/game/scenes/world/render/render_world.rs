@@ -4,7 +4,7 @@ use crate::{
     engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, renderer::Renderer},
     game::scenes::world::{
         render::{
-            render_store::RenderStore, terrain_render_pipeline::gpu::ChunkInstanceData,
+            render_layouts::RenderLayouts, terrain_render_pipeline::gpu::ChunkInstanceData,
             ui_render_pipeline,
         },
         systems::camera_system,
@@ -50,7 +50,7 @@ pub struct RenderWorld {
 }
 
 impl RenderWorld {
-    pub fn new(index: usize, renderer: &Renderer, render_store: &RenderStore) -> Self {
+    pub fn new(index: usize, renderer: &Renderer, layouts: &RenderLayouts) -> Self {
         let camera_env_buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("cameras"),
             size: std::mem::size_of::<camera_system::gpu::CameraEnvironment>()
@@ -63,7 +63,7 @@ impl RenderWorld {
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(&format!("cmaera_bind_group_{index}")),
-                layout: &render_store.camera_bind_group_layout,
+                layout: &layouts.camera_bind_group_layout,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: camera_env_buffer.as_entire_binding(),
@@ -111,7 +111,7 @@ impl RenderWorld {
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(&format!("ui_state_bind_group_{index}")),
-                layout: &render_store.ui_state_bind_group_layout,
+                layout: &layouts.ui_state_bind_group_layout,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: ui_state_buffer.as_entire_binding(),
