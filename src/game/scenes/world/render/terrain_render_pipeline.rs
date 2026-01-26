@@ -509,7 +509,7 @@ impl RenderPipeline for TerrainRenderPipeline {
                 self.strata_index_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
+            render_pass.set_bind_group(0, &render_world.camera_env_buffer.bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             // TODO: Reduce draw calls?  Right now this ends up being a *ver* low number of
@@ -540,7 +540,7 @@ impl RenderPipeline for TerrainRenderPipeline {
                 self.chunk_indices_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
+            render_pass.set_bind_group(0, &render_world.camera_env_buffer.bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             let draw_commands =
@@ -562,7 +562,7 @@ impl RenderPipeline for TerrainRenderPipeline {
                 self.chunk_wireframe_indices_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
+            render_pass.set_bind_group(0, &render_world.camera_env_buffer.bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             let draw_commands =

@@ -340,7 +340,7 @@ impl ModelRenderPipeline {
     ) {
         render_pass.set_pipeline(pipeline);
 
-        render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
+        render_pass.set_bind_group(0, &render_world.camera_env_buffer.bind_group, &[]);
         render_pass.set_bind_group(1, &textures.texture_data_bind_group, &[]);
         render_pass.set_bind_group(2, &models.nodes_bind_group, &[]);
 

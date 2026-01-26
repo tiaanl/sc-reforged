@@ -127,9 +127,9 @@ impl RenderPipeline for UiRenderPipeline {
             view_proj: snapshot.ui.proj_view.to_cols_array_2d(),
         };
 
-        renderer
-            .queue
-            .write_buffer(&render_world.ui_state_buffer, 0, bytemuck::bytes_of(&state));
+        render_world
+            .ui_state_buffer
+            .write(renderer, bytemuck::bytes_of(&state));
 
         let rects: Vec<_> = snapshot
             .ui
@@ -173,7 +173,7 @@ impl RenderPipeline for UiRenderPipeline {
         render_pass.set_pipeline(&self.rect_render_pipeline);
 
         render_pass.set_vertex_buffer(0, self.rects_buffer.current().slice(..));
-        render_pass.set_bind_group(0, &render_world.ui_state_bind_group, &[]);
+        render_pass.set_bind_group(0, &render_world.ui_state_buffer.bind_group, &[]);
 
         render_pass.draw(0..4, 0..(snapshot.ui.ui_rects.len() as u32));
     }

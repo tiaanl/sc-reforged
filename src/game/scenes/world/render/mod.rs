@@ -12,6 +12,7 @@ mod render_textures;
 mod render_world;
 mod terrain_render_pipeline;
 mod ui_render_pipeline;
+mod uniform_buffer;
 mod world_renderer;
 
 pub use render_pipeline::RenderPipeline;

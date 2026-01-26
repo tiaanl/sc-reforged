@@ -52,11 +52,9 @@ impl RenderPipeline for CameraRenderPipeline {
             _pad: Default::default(),
         };
 
-        renderer.queue.write_buffer(
-            &render_world.camera_env_buffer,
-            0,
-            bytemuck::bytes_of(&data),
-        );
+        render_world
+            .camera_env_buffer
+            .write(renderer, bytemuck::bytes_of(&data));
     }
 
     fn queue(

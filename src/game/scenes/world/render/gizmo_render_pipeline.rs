@@ -128,7 +128,7 @@ impl RenderPipeline for GizmoRenderPipeline {
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, self.instances_buffer.current().slice(..));
-        render_pass.set_bind_group(0, &render_world.camera_env_bind_group, &[]);
+        render_pass.set_bind_group(0, &render_world.camera_env_buffer.bind_group, &[]);
         render_pass.draw(0..(snapshot.gizmos.vertices.len() as u32), 0..1);
     }
 }
