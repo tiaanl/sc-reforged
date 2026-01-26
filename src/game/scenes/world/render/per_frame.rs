@@ -9,7 +9,7 @@ impl<T, const N: usize> PerFrame<T, N> {
         F: Fn(usize) -> T,
     {
         Self {
-            data: std::array::from_fn(|i| f(i)),
+            data: std::array::from_fn(f),
             index: 0,
         }
     }

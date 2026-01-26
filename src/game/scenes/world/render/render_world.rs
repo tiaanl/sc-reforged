@@ -2,7 +2,6 @@ use crate::{
     engine::{growing_buffer::GrowingBuffer, renderer::Renderer},
     game::scenes::world::render::{
         camera_render_pipeline::{self, CameraEnvironmentLayout},
-        model_render_pipeline,
         render_layouts::RenderLayouts,
         terrain_render_pipeline::gpu::ChunkInstanceData,
         ui_render_pipeline::{self, UiStateLayout},
@@ -19,8 +18,6 @@ pub struct RenderWorld {
 
     /// Buffer holding instance data for strata to be rendered per frame.
     pub strata_instances_buffer: GrowingBuffer<ChunkInstanceData>,
-
-    pub model_instances: GrowingBuffer<model_render_pipeline::gpu::ModelInstanceData>,
 
     pub ui_state_buffer: wgpu::Buffer,
     pub ui_state_bind_group: wgpu::BindGroup,
@@ -65,13 +62,6 @@ impl RenderWorld {
             format!("strata_instances:{index}"),
         );
 
-        let model_instances = GrowingBuffer::new(
-            renderer,
-            1 << 7,
-            wgpu::BufferUsages::VERTEX,
-            format!("model_instances:{index}"),
-        );
-
         let ui_state_buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("ui_state_buffer"),
             size: std::mem::size_of::<ui_render_pipeline::gpu::State>() as wgpu::BufferAddress,
@@ -104,8 +94,6 @@ impl RenderWorld {
             terrain_chunk_instances_buffer,
 
             strata_instances_buffer,
-
-            model_instances,
 
             ui_state_buffer,
             ui_state_bind_group,

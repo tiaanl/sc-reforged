@@ -4,6 +4,7 @@ use glam::Mat4;
 use crate::{
     engine::{
         assets::AssetError,
+        growing_buffer::GrowingBuffer,
         renderer::{Frame, Renderer},
         storage::Handle,
     },
@@ -15,7 +16,7 @@ use crate::{
             render::{
                 GeometryBuffer, RenderLayouts, RenderModel, RenderVertex, RenderWorld,
                 camera_render_pipeline::CameraEnvironmentLayout, model_render_pipeline,
-                render_pipeline::RenderPipeline,
+                per_frame::PerFrame, render_pipeline::RenderPipeline,
             },
         },
     },
@@ -58,6 +59,7 @@ pub struct ModelRenderPipeline {
 
     /// Local cache where model instance data is built from the snapshot.
     model_instances_cache: Vec<gpu::ModelInstanceData>,
+    model_instances: PerFrame<GrowingBuffer<gpu::ModelInstanceData>, 3>,
 
     batches: Vec<Batch>,
 }
@@ -68,8 +70,6 @@ impl ModelRenderPipeline {
 
         let textures = RenderTextures::new(renderer);
         let models = RenderModels::new(renderer);
-
-        let model_to_render_model = HashMap::default();
 
         let module = device.create_shader_module(wgsl_shader!("models"));
 
@@ -174,16 +174,27 @@ impl ModelRenderPipeline {
             cache: None,
         });
 
+        let model_instances = PerFrame::new(|index| {
+            GrowingBuffer::new(
+                renderer,
+                1 << 7,
+                wgpu::BufferUsages::VERTEX,
+                format!("model_instances:{index}"),
+            )
+        });
+
         Self {
             textures,
             models,
 
             opaque_pipeline,
             alpha_pipeline,
-            model_to_render_model,
+            model_to_render_model: HashMap::default(),
 
             render_models_cache: Vec::default(),
+
             model_instances_cache: Vec::default(),
+            model_instances,
 
             batches: Vec::default(),
         }
@@ -221,7 +232,7 @@ impl RenderPipeline for ModelRenderPipeline {
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
-        render_world: &mut RenderWorld,
+        _render_world: &mut RenderWorld,
         snapshot: &RenderSnapshot,
     ) {
         if !snapshot.models.models_to_prepare.is_empty() {
@@ -300,9 +311,8 @@ impl RenderPipeline for ModelRenderPipeline {
         }
 
         // Upload the instances to the GPU.
-        render_world
-            .model_instances
-            .write(renderer, &self.model_instances_cache);
+        let model_instances = self.model_instances.advance();
+        model_instances.write(renderer, self.model_instances_cache.as_slice());
 
         self.batches = batches;
     }
@@ -321,6 +331,7 @@ impl RenderPipeline for ModelRenderPipeline {
 
 impl ModelRenderPipeline {
     fn setup_render_pass(
+        &self,
         render_pass: &mut wgpu::RenderPass,
         pipeline: &wgpu::RenderPipeline,
         textures: &RenderTextures,
@@ -334,7 +345,7 @@ impl ModelRenderPipeline {
         render_pass.set_bind_group(2, &models.nodes_bind_group, &[]);
 
         render_pass.set_vertex_buffer(0, models.vertices_buffer_slice());
-        render_pass.set_vertex_buffer(1, render_world.model_instances.slice(..));
+        render_pass.set_vertex_buffer(1, self.model_instances.current().slice(..));
         render_pass.set_index_buffer(models.indices_buffer_slice(), wgpu::IndexFormat::Uint32);
     }
 
@@ -346,7 +357,7 @@ impl ModelRenderPipeline {
     ) {
         let mut render_pass = geometry_buffer.begin_opaque_render_pass(encoder, "objects_opaque");
 
-        Self::setup_render_pass(
+        self.setup_render_pass(
             &mut render_pass,
             &self.opaque_pipeline,
             &self.textures,
@@ -374,7 +385,7 @@ impl ModelRenderPipeline {
     ) {
         let mut render_pass = geometry_buffer.begin_alpha_render_pass(encoder, "objects_opaque");
 
-        Self::setup_render_pass(
+        self.setup_render_pass(
             &mut render_pass,
             &self.alpha_pipeline,
             &self.textures,
