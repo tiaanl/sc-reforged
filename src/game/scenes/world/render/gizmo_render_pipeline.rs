@@ -78,7 +78,6 @@ impl RenderPipeline for GizmoRenderPipeline {
         &mut self,
         _assets: &AssetReader,
         renderer: &Renderer,
-        _render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         snapshot: &RenderSnapshot,
     ) {
@@ -89,7 +88,6 @@ impl RenderPipeline for GizmoRenderPipeline {
 
     fn queue(
         &self,
-        _render_store: &RenderStore,
         render_world: &RenderWorld,
         frame: &mut Frame,
         _geometry_buffer: &GeometryBuffer,

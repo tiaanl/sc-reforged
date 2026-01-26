@@ -423,7 +423,6 @@ impl RenderPipeline for TerrainRenderPipeline {
         &mut self,
         _assets: &AssetReader,
         renderer: &Renderer,
-        _render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         snapshot: &RenderSnapshot,
     ) {
@@ -460,7 +459,6 @@ impl RenderPipeline for TerrainRenderPipeline {
 
     fn queue(
         &self,
-        _render_store: &RenderStore,
         render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,

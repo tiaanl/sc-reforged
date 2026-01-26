@@ -175,13 +175,8 @@ impl Systems {
         }
 
         camera_system::prepare(renderer, render_world, render_snapshot);
-        self.world_renderer.prepare(
-            assets,
-            renderer,
-            render_store,
-            render_world,
-            render_snapshot,
-        );
+        self.world_renderer
+            .prepare(assets, renderer, render_world, render_snapshot);
     }
 
     pub fn queue(
@@ -196,13 +191,8 @@ impl Systems {
             &render_store.geometry_buffer,
             snapshot.environment.fog_color,
         );
-        self.world_renderer.queue(
-            render_store,
-            render_world,
-            frame,
-            &render_store.geometry_buffer,
-            snapshot,
-        );
+        self.world_renderer
+            .queue(render_world, frame, &render_store.geometry_buffer, snapshot);
     }
 }
 

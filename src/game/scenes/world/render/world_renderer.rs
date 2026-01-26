@@ -57,39 +57,37 @@ impl RenderPipeline for WorldRenderer {
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
-        render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         snapshot: &RenderSnapshot,
     ) {
         self.terrain_pipeline
-            .prepare(assets, renderer, render_store, render_world, snapshot);
+            .prepare(assets, renderer, render_world, snapshot);
         self.model_pipeline
-            .prepare(assets, renderer, render_store, render_world, snapshot);
+            .prepare(assets, renderer, render_world, snapshot);
         self.ui_pipeline
-            .prepare(assets, renderer, render_store, render_world, snapshot);
+            .prepare(assets, renderer, render_world, snapshot);
         self.compositor
-            .prepare(assets, renderer, render_store, render_world, snapshot);
+            .prepare(assets, renderer, render_world, snapshot);
         self.gizmo_pipeline
-            .prepare(assets, renderer, render_store, render_world, snapshot);
+            .prepare(assets, renderer, render_world, snapshot);
     }
 
     fn queue(
         &self,
-        render_store: &RenderStore,
         render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,
     ) {
         self.terrain_pipeline
-            .queue(render_store, render_world, frame, geometry_buffer, snapshot);
+            .queue(render_world, frame, geometry_buffer, snapshot);
         self.model_pipeline
-            .queue(render_store, render_world, frame, geometry_buffer, snapshot);
+            .queue(render_world, frame, geometry_buffer, snapshot);
         self.ui_pipeline
-            .queue(render_store, render_world, frame, geometry_buffer, snapshot);
+            .queue(render_world, frame, geometry_buffer, snapshot);
         self.compositor
-            .queue(render_store, render_world, frame, geometry_buffer, snapshot);
+            .queue(render_world, frame, geometry_buffer, snapshot);
         self.gizmo_pipeline
-            .queue(render_store, render_world, frame, geometry_buffer, snapshot);
+            .queue(render_world, frame, geometry_buffer, snapshot);
     }
 }

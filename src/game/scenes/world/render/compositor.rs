@@ -10,7 +10,7 @@ use crate::{
     wgsl_shader,
 };
 
-use super::{RenderStore, RenderWorld};
+use super::RenderWorld;
 
 pub struct Compositor {
     pipeline: wgpu::RenderPipeline,
@@ -71,7 +71,6 @@ impl RenderPipeline for Compositor {
         &mut self,
         _assets: &AssetReader,
         _renderer: &Renderer,
-        _render_store: &mut RenderStore,
         _render_world: &mut RenderWorld,
         _snapshot: &RenderSnapshot,
     ) {
@@ -80,7 +79,6 @@ impl RenderPipeline for Compositor {
 
     fn queue(
         &self,
-        _render_store: &RenderStore,
         _render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,

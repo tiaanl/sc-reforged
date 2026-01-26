@@ -4,7 +4,7 @@ use crate::{
         AssetReader,
         scenes::world::{
             extract::RenderSnapshot,
-            render::{GeometryBuffer, RenderStore, RenderWorld},
+            render::{GeometryBuffer, RenderWorld},
         },
     },
 };
@@ -15,7 +15,6 @@ pub trait RenderPipeline {
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
-        render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         snapshot: &RenderSnapshot,
     );
@@ -23,7 +22,6 @@ pub trait RenderPipeline {
     /// Queue draw commands to the GPU.
     fn queue(
         &self,
-        render_store: &RenderStore,
         render_world: &RenderWorld,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
