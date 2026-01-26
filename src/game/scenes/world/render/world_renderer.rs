@@ -5,8 +5,8 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                Compositor, GeometryBuffer, GizmoRenderPipeline, render_pipeline::RenderPipeline,
-                ui_render_pipeline::UiRenderPipeline,
+                Compositor, GeometryBuffer, GizmoRenderPipeline, RenderTargets,
+                render_pipeline::RenderPipeline, ui_render_pipeline::UiRenderPipeline,
             },
         },
     },
@@ -31,16 +31,18 @@ impl WorldRenderer {
     pub fn new(
         assets: &AssetReader,
         renderer: &Renderer,
-        surface_format: wgpu::TextureFormat,
+        render_targets: &RenderTargets,
         render_store: &mut RenderStore,
         sim_world: &bevy_ecs::world::World,
     ) -> Self {
         let terrain_pipeline =
             TerrainRenderPipeline::new(assets, renderer, render_store, sim_world);
         let model_pipeline = ModelRenderPipeline::new(renderer, render_store);
-        let ui_pipeline = UiRenderPipeline::new(renderer, surface_format, render_store);
-        let compositor = Compositor::new(renderer, surface_format, &render_store.geometry_buffer);
-        let gizmo_pipeline = GizmoRenderPipeline::new(renderer, surface_format, render_store);
+        let ui_pipeline =
+            UiRenderPipeline::new(renderer, render_targets.surface_format, render_store);
+        let compositor = Compositor::new(renderer, render_targets);
+        let gizmo_pipeline =
+            GizmoRenderPipeline::new(renderer, render_targets.surface_format, render_store);
 
         Self {
             terrain_pipeline,

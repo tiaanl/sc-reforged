@@ -1,5 +1,5 @@
 use bevy_ecs::prelude::*;
-use glam::{UVec2, Vec3};
+use glam::Vec3;
 
 use crate::{
     engine::{
@@ -11,7 +11,7 @@ use crate::{
         math::BoundingBox,
         scenes::world::{
             extract,
-            render::{RenderPipeline, RenderStore, RenderWorld, WorldRenderer},
+            render::{RenderPipeline, RenderStore, RenderTargets, RenderWorld, WorldRenderer},
             sim_world::{
                 DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle,
                 ecs::{self, BoundingBoxComponent},
@@ -79,7 +79,7 @@ impl Systems {
     pub fn new(
         assets: &AssetReader,
         renderer: &Renderer,
-        surface_format: wgpu::TextureFormat,
+        render_targets: &RenderTargets,
         render_store: &mut RenderStore,
         sim_world: &mut World,
     ) -> Self {
@@ -136,7 +136,7 @@ impl Systems {
             world_renderer: WorldRenderer::new(
                 assets,
                 renderer,
-                surface_format,
+                render_targets,
                 render_store,
                 sim_world,
             ),
@@ -161,19 +161,10 @@ impl Systems {
     pub fn prepare(
         &mut self,
         assets: &AssetReader,
-        render_store: &mut RenderStore,
         render_world: &mut RenderWorld,
         renderer: &Renderer,
         render_snapshot: &RenderSnapshot,
-        surface_size: UVec2,
     ) {
-        // Make sure the geometry buffer is the correct size.
-        if surface_size != render_store.geometry_buffer.size {
-            render_store
-                .geometry_buffer
-                .resize(&renderer.device, surface_size);
-        }
-
         camera_system::prepare(renderer, render_world, render_snapshot);
         self.world_renderer
             .prepare(assets, renderer, render_world, render_snapshot);
@@ -181,18 +172,22 @@ impl Systems {
 
     pub fn queue(
         &mut self,
-        render_store: &RenderStore,
+        render_targets: &RenderTargets,
         render_world: &RenderWorld,
         snapshot: &RenderSnapshot,
         frame: &mut Frame,
     ) {
         clear_render_targets::clear_render_targets(
             frame,
-            &render_store.geometry_buffer,
+            &render_targets.geometry_buffer,
             snapshot.environment.fog_color,
         );
-        self.world_renderer
-            .queue(render_world, frame, &render_store.geometry_buffer, snapshot);
+        self.world_renderer.queue(
+            render_world,
+            frame,
+            &render_targets.geometry_buffer,
+            snapshot,
+        );
     }
 }
 

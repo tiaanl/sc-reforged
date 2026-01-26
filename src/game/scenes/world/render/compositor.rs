@@ -4,7 +4,7 @@ use crate::{
         AssetReader,
         scenes::world::{
             extract::RenderSnapshot,
-            render::{GeometryBuffer, RenderPipeline},
+            render::{GeometryBuffer, RenderPipeline, RenderTargets},
         },
     },
     wgsl_shader,
@@ -17,11 +17,7 @@ pub struct Compositor {
 }
 
 impl Compositor {
-    pub fn new(
-        renderer: &Renderer,
-        surface_format: wgpu::TextureFormat,
-        geometry_buffer: &GeometryBuffer,
-    ) -> Self {
+    pub fn new(renderer: &Renderer, render_targets: &RenderTargets) -> Self {
         let module = renderer
             .device
             .create_shader_module(wgsl_shader!("compositor"));
@@ -30,7 +26,7 @@ impl Compositor {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compositor_pipeline_layout"),
-                bind_group_layouts: &[&geometry_buffer.bind_group_layout],
+                bind_group_layouts: &[&render_targets.geometry_buffer.bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -53,7 +49,7 @@ impl Compositor {
                     entry_point: Some("fragment"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: surface_format,
+                        format: render_targets.surface_format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],

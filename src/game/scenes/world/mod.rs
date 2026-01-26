@@ -15,7 +15,7 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             game_mode::GameMode,
-            render::{RenderStore, RenderWorld},
+            render::{RenderStore, RenderTargets, RenderWorld},
             sim_world::{Camera, ecs::Viewport, init_sim_world},
             systems::Time,
         },
@@ -43,8 +43,8 @@ pub struct WorldScene {
     assets: AssetReader,
 
     sim_world: World,
+    render_targets: RenderTargets,
     render_worlds: [RenderWorld; Self::RENDER_FRAME_COUNT],
-    render_store: RenderStore,
 
     // Systems
     systems: systems::Systems,
@@ -63,6 +63,7 @@ impl WorldScene {
 
     pub fn new(
         renderer: &Renderer,
+        surface_size: UVec2,
         surface_format: wgpu::TextureFormat,
         campaign_def: CampaignDef,
     ) -> Result<Self, AssetError> {
@@ -76,6 +77,8 @@ impl WorldScene {
         let mut sim_world = World::default();
 
         init_sim_world(&mut sim_world, &mut assets, &campaign_def)?;
+
+        let render_targets = RenderTargets::new(renderer, surface_size, surface_format);
 
         let mut render_store = RenderStore::new(renderer);
 
@@ -91,7 +94,7 @@ impl WorldScene {
         let systems = systems::Systems::new(
             &assets,
             renderer,
-            surface_format,
+            &render_targets,
             &mut render_store,
             &mut sim_world,
         );
@@ -100,8 +103,8 @@ impl WorldScene {
             assets,
 
             sim_world,
+            render_targets,
             render_worlds,
-            render_store,
 
             systems,
 
@@ -168,9 +171,8 @@ impl Scene for WorldScene {
     }
 
     fn render(&mut self, renderer: &Renderer, frame: &mut Frame) {
-        if self.render_store.surface_size != self.surface_size {
-            self.render_store
-                .resize(&renderer.device, self.surface_size);
+        if self.render_targets.surface_size != self.surface_size {
+            self.render_targets.resize(renderer, self.surface_size);
         }
 
         let render_world =
@@ -189,16 +191,17 @@ impl Scene for WorldScene {
 
             // Prepare
             {
+                // Make sure the geometry buffer is the correct size.
+                if frame.size != self.render_targets.geometry_buffer.size {
+                    self.render_targets
+                        .geometry_buffer
+                        .resize(&renderer.device, frame.size);
+                }
+
                 let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
-                self.systems.prepare(
-                    &self.assets,
-                    &mut self.render_store,
-                    render_world,
-                    renderer,
-                    render_snapshot,
-                    frame.size,
-                );
+                self.systems
+                    .prepare(&self.assets, render_world, renderer, render_snapshot);
                 frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
             }
 
@@ -207,7 +210,7 @@ impl Scene for WorldScene {
                 let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
                 self.systems
-                    .queue(&self.render_store, render_world, render_snapshot, frame);
+                    .queue(&self.render_targets, render_world, render_snapshot, frame);
                 frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
             }
 

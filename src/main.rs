@@ -120,7 +120,10 @@ impl winit::application::ApplicationHandler for App {
                         .cloned()
                         .unwrap();
 
-                    Box::new(WorldScene::new(&renderer, surface.format(), campaign_def).unwrap())
+                    Box::new(
+                        WorldScene::new(&renderer, surface.size(), surface.format(), campaign_def)
+                            .unwrap(),
+                    )
                 };
 
                 tracing::info!("Application initialized!");
