@@ -5,8 +5,8 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                RenderLayouts, RenderUiRect, RenderWorld, render_layouts::RenderLayout,
-                render_pipeline::RenderPipeline,
+                RenderLayouts, RenderWorld, render_layouts::RenderLayout,
+                render_pipeline::RenderPipeline, ui_render_pipeline,
             },
         },
     },
@@ -127,7 +127,8 @@ impl UiRenderPipeline {
                 entry_point: None,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<RenderUiRect>() as wgpu::BufferAddress,
+                    array_stride: std::mem::size_of::<ui_render_pipeline::gpu::Rect>()
+                        as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Instance,
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x2,

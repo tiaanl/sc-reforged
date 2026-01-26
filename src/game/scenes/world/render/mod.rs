@@ -21,5 +21,5 @@ pub use gizmo_render_pipeline::GizmoRenderPipeline;
 pub use render_layouts::RenderLayouts;
 pub use render_models::{RenderModel, RenderVertex};
 pub use render_targets::RenderTargets;
-pub use render_world::{ModelInstanceData, RenderUiRect, RenderWorld};
+pub use render_world::RenderWorld;
 pub use world_renderer::WorldRenderer;

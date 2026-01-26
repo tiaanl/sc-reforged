@@ -1,31 +1,13 @@
-use bytemuck::NoUninit;
-
 use crate::{
     engine::{gizmos::GizmoVertex, growing_buffer::GrowingBuffer, renderer::Renderer},
     game::scenes::world::render::{
         camera_render_pipeline::{self, CameraEnvironmentLayout},
+        model_render_pipeline,
         render_layouts::RenderLayouts,
         terrain_render_pipeline::gpu::ChunkInstanceData,
         ui_render_pipeline::{self, UiStateLayout},
     },
 };
-
-#[derive(Clone, Copy, bytemuck::NoUninit)]
-#[repr(C)]
-pub struct ModelInstanceData {
-    pub transform: [[f32; 4]; 4],
-    pub first_node_index: u32,
-    pub flags: u32,
-    pub _pad: [u32; 2],
-}
-
-#[derive(Clone, Copy, Debug, Default, NoUninit)]
-#[repr(C)]
-pub struct RenderUiRect {
-    pub min: [f32; 2],
-    pub max: [f32; 2],
-    pub color: [f32; 4],
-}
 
 /// Set of data that changes on each frame.
 pub struct RenderWorld {
@@ -38,7 +20,7 @@ pub struct RenderWorld {
     /// Buffer holding instance data for strata to be rendered per frame.
     pub strata_instances_buffer: GrowingBuffer<ChunkInstanceData>,
 
-    pub model_instances: GrowingBuffer<ModelInstanceData>,
+    pub model_instances: GrowingBuffer<model_render_pipeline::gpu::ModelInstanceData>,
 
     pub gizmo_vertices_buffer: GrowingBuffer<GizmoVertex>,
 

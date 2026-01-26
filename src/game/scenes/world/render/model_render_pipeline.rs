@@ -13,8 +13,8 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                GeometryBuffer, ModelInstanceData, RenderLayouts, RenderModel, RenderVertex,
-                RenderWorld, camera_render_pipeline::CameraEnvironmentLayout,
+                GeometryBuffer, RenderLayouts, RenderModel, RenderVertex, RenderWorld,
+                camera_render_pipeline::CameraEnvironmentLayout, model_render_pipeline,
                 render_pipeline::RenderPipeline,
             },
         },
@@ -57,7 +57,7 @@ pub struct ModelRenderPipeline {
     render_models_cache: Vec<RenderModelToRender>,
 
     /// Local cache where model instance data is built from the snapshot.
-    model_instances_cache: Vec<ModelInstanceData>,
+    model_instances_cache: Vec<gpu::ModelInstanceData>,
 
     batches: Vec<Batch>,
 }
@@ -96,7 +96,8 @@ impl ModelRenderPipeline {
                 ],
             },
             wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<ModelInstanceData>() as wgpu::BufferAddress,
+                array_stride: std::mem::size_of::<model_render_pipeline::gpu::ModelInstanceData>()
+                    as wgpu::BufferAddress,
                 step_mode: wgpu::VertexStepMode::Instance,
                 attributes: &wgpu::vertex_attr_array![
                     5 => Float32x4,  // model_mat_0
@@ -269,7 +270,7 @@ impl RenderPipeline for ModelRenderPipeline {
         self.model_instances_cache.clear();
 
         for model_to_render in self.render_models_cache.iter() {
-            self.model_instances_cache.push(ModelInstanceData {
+            self.model_instances_cache.push(gpu::ModelInstanceData {
                 transform: model_to_render.transform.to_cols_array_2d(),
                 first_node_index: model_to_render.first_node_index,
                 flags: model_to_render.flags.bits(),
@@ -394,5 +395,18 @@ impl ModelRenderPipeline {
         }) {
             render_pass.draw_indexed(render_model.alpha_range.clone(), 0, range);
         }
+    }
+}
+
+pub mod gpu {
+    use bytemuck::NoUninit;
+
+    #[derive(Clone, Copy, NoUninit)]
+    #[repr(C)]
+    pub struct ModelInstanceData {
+        pub transform: [[f32; 4]; 4],
+        pub first_node_index: u32,
+        pub flags: u32,
+        pub _pad: [u32; 2],
     }
 }
