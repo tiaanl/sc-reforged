@@ -10,7 +10,7 @@ use crate::{
     wgsl_shader,
 };
 
-use super::RenderWorld;
+use super::RenderBindings;
 
 pub struct Compositor {
     pipeline: wgpu::RenderPipeline,
@@ -67,7 +67,7 @@ impl RenderPipeline for Compositor {
         &mut self,
         _assets: &AssetReader,
         _renderer: &Renderer,
-        _render_world: &mut RenderWorld,
+        _render_world: &mut RenderBindings,
         _snapshot: &RenderSnapshot,
     ) {
         // No preparation required.
@@ -75,7 +75,7 @@ impl RenderPipeline for Compositor {
 
     fn queue(
         &self,
-        _render_world: &RenderWorld,
+        _render_world: &RenderBindings,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
         _snapshot: &RenderSnapshot,

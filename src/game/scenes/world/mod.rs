@@ -15,7 +15,7 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             game_mode::GameMode,
-            render::{RenderLayouts, RenderTargets, RenderWorld},
+            render::{RenderBindings, RenderLayouts, RenderTargets},
             sim_world::{Camera, ecs::Viewport, init_sim_world},
             systems::Time,
         },
@@ -44,7 +44,7 @@ pub struct WorldScene {
 
     sim_world: World,
     render_targets: RenderTargets,
-    render_worlds: [RenderWorld; Self::RENDER_FRAME_COUNT],
+    render_worlds: [RenderBindings; Self::RENDER_FRAME_COUNT],
 
     // Systems
     systems: systems::Systems,
@@ -83,9 +83,9 @@ impl WorldScene {
         let mut layouts = RenderLayouts::new();
 
         let render_worlds = [
-            RenderWorld::new(0, renderer, &mut layouts),
-            RenderWorld::new(1, renderer, &mut layouts),
-            RenderWorld::new(2, renderer, &mut layouts),
+            RenderBindings::new(0, renderer, &mut layouts),
+            RenderBindings::new(1, renderer, &mut layouts),
+            RenderBindings::new(2, renderer, &mut layouts),
         ];
 
         // All assets should be loaded now, turn the [AssetLoader] into an [AssetReader].
@@ -298,13 +298,10 @@ impl Scene for WorldScene {
 
                 // Terrain
                 {
+                    let mut render_snapshot = self.sim_world.resource_mut::<RenderSnapshot>();
                     ui.heading("Terrain");
                     ui.checkbox(
-                        &mut self
-                            .systems
-                            .world_renderer
-                            .terrain_pipeline
-                            .debug_render_terrain_wireframe,
+                        &mut render_snapshot.terrain.render_wireframe,
                         "Render terrain wireframe",
                     );
                 }

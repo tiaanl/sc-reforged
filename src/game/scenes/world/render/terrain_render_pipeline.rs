@@ -10,7 +10,7 @@ use crate::{
         scenes::world::{
             extract::{RenderSnapshot, TerrainChunk},
             render::{
-                GeometryBuffer, RenderLayouts, RenderWorld,
+                GeometryBuffer, RenderBindings, RenderLayouts,
                 camera_render_pipeline::CameraEnvironmentLayout, per_frame::PerFrame,
                 render_pipeline::RenderPipeline,
             },
@@ -49,9 +49,6 @@ pub struct TerrainRenderPipeline {
 
     /// Buffer holding instance data for strata to be rendered per frame.
     strata_instances_buffer: PerFrame<GrowingBuffer<gpu::ChunkInstanceData>, 3>,
-
-    /// Debug toggle: render terrain wireframe overlay.
-    pub debug_render_terrain_wireframe: bool,
 }
 
 impl TerrainRenderPipeline {
@@ -447,8 +444,6 @@ impl TerrainRenderPipeline {
             strata_vertex_buffer,
             strata_index_buffer,
             strata_instances_buffer,
-
-            debug_render_terrain_wireframe: false,
         }
     }
 }
@@ -458,7 +453,7 @@ impl RenderPipeline for TerrainRenderPipeline {
         &mut self,
         _assets: &AssetReader,
         renderer: &Renderer,
-        _render_world: &mut RenderWorld,
+        _render_world: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         let chunk_instances: Vec<_> = snapshot
@@ -492,7 +487,7 @@ impl RenderPipeline for TerrainRenderPipeline {
 
     fn queue(
         &self,
-        render_world: &RenderWorld,
+        render_world: &RenderBindings,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,
@@ -554,7 +549,7 @@ impl RenderPipeline for TerrainRenderPipeline {
             }
         }
 
-        if self.debug_render_terrain_wireframe {
+        if snapshot.terrain.render_wireframe {
             render_pass.set_pipeline(&self.terrain_wireframe_pipeline);
             render_pass
                 .set_vertex_buffer(0, self.terrain_chunk_instances_buffer.current().slice(..));

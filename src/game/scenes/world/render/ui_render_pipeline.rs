@@ -8,7 +8,7 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                RenderLayouts, RenderWorld, per_frame::PerFrame, render_layouts::RenderLayout,
+                RenderBindings, RenderLayouts, per_frame::PerFrame, render_layouts::RenderLayout,
                 render_pipeline::RenderPipeline, ui_render_pipeline, uniform_buffer::UniformBuffer,
             },
         },
@@ -151,7 +151,7 @@ impl RenderPipeline for UiRenderPipeline {
         &mut self,
         _assets: &AssetReader,
         renderer: &Renderer,
-        _render_world: &mut RenderWorld,
+        _render_world: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         let state = gpu::State {
@@ -178,7 +178,7 @@ impl RenderPipeline for UiRenderPipeline {
 
     fn queue(
         &self,
-        _render_world: &RenderWorld,
+        _render_world: &RenderBindings,
         frame: &mut Frame,
         _geometry_buffer: &super::GeometryBuffer,
         snapshot: &RenderSnapshot,

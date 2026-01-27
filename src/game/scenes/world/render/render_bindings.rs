@@ -8,11 +8,11 @@ use crate::{
 };
 
 /// Set of data that changes on each frame.
-pub struct RenderWorld {
+pub struct RenderBindings {
     pub camera_env_buffer: UniformBuffer,
 }
 
-impl RenderWorld {
+impl RenderBindings {
     pub fn new(index: usize, renderer: &Renderer, layouts: &mut RenderLayouts) -> Self {
         let camera_env_buffer = {
             let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {

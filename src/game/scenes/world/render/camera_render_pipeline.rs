@@ -30,7 +30,7 @@ impl RenderPipeline for CameraRenderPipeline {
         &mut self,
         _assets: &crate::game::AssetReader,
         renderer: &crate::engine::renderer::Renderer,
-        render_world: &mut super::RenderWorld,
+        render_world: &mut super::RenderBindings,
         snapshot: &crate::game::scenes::world::extract::RenderSnapshot,
     ) {
         let data = gpu::CameraEnvironment {
@@ -59,7 +59,7 @@ impl RenderPipeline for CameraRenderPipeline {
 
     fn queue(
         &self,
-        _render_world: &super::RenderWorld,
+        _render_world: &super::RenderBindings,
         _frame: &mut crate::engine::renderer::Frame,
         _geometry_buffer: &super::GeometryBuffer,
         _snapshot: &crate::game::scenes::world::extract::RenderSnapshot,

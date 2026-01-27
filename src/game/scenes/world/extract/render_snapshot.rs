@@ -49,6 +49,7 @@ pub struct Terrain {
     pub chunks: Vec<TerrainChunk>,
     pub strata: Vec<TerrainChunk>,
     pub strata_side_count: [u32; 4],
+    pub render_wireframe: bool,
 }
 
 #[derive(Clone, Copy, Default)]

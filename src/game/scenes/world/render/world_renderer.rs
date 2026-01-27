@@ -14,8 +14,8 @@ use crate::{
 };
 
 use super::{
-    model_render_pipeline::ModelRenderPipeline, render_layouts::RenderLayouts,
-    render_world::RenderWorld, terrain_render_pipeline::TerrainRenderPipeline,
+    model_render_pipeline::ModelRenderPipeline, render_bindings::RenderBindings,
+    render_layouts::RenderLayouts, terrain_render_pipeline::TerrainRenderPipeline,
 };
 
 pub struct WorldRenderer {
@@ -61,7 +61,7 @@ impl RenderPipeline for WorldRenderer {
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
-        render_world: &mut RenderWorld,
+        render_world: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         self.camera_pipeline
@@ -80,7 +80,7 @@ impl RenderPipeline for WorldRenderer {
 
     fn queue(
         &self,
-        render_world: &RenderWorld,
+        render_world: &RenderBindings,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,

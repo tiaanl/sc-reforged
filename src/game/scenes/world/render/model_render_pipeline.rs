@@ -14,7 +14,7 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                GeometryBuffer, RenderLayouts, RenderModel, RenderVertex, RenderWorld,
+                GeometryBuffer, RenderLayouts, RenderModel, RenderVertex, RenderBindings,
                 camera_render_pipeline::CameraEnvironmentLayout, model_render_pipeline,
                 per_frame::PerFrame, render_pipeline::RenderPipeline,
             },
@@ -232,7 +232,7 @@ impl RenderPipeline for ModelRenderPipeline {
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
-        _render_world: &mut RenderWorld,
+        _render_world: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         if !snapshot.models.models_to_prepare.is_empty() {
@@ -319,7 +319,7 @@ impl RenderPipeline for ModelRenderPipeline {
 
     fn queue(
         &self,
-        render_world: &RenderWorld,
+        render_world: &RenderBindings,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
         _snapshot: &RenderSnapshot,
@@ -336,7 +336,7 @@ impl ModelRenderPipeline {
         pipeline: &wgpu::RenderPipeline,
         textures: &RenderTextures,
         models: &RenderModels,
-        render_world: &RenderWorld,
+        render_world: &RenderBindings,
     ) {
         render_pass.set_pipeline(pipeline);
 
@@ -353,7 +353,7 @@ impl ModelRenderPipeline {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         geometry_buffer: &GeometryBuffer,
-        render_world: &RenderWorld,
+        render_world: &RenderBindings,
     ) {
         let mut render_pass = geometry_buffer.begin_opaque_render_pass(encoder, "objects_opaque");
 
@@ -381,7 +381,7 @@ impl ModelRenderPipeline {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         geometry_buffer: &GeometryBuffer,
-        render_world: &RenderWorld,
+        render_world: &RenderBindings,
     ) {
         let mut render_pass = geometry_buffer.begin_alpha_render_pass(encoder, "objects_opaque");
 
