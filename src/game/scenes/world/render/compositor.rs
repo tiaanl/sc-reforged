@@ -67,7 +67,7 @@ impl RenderPipeline for Compositor {
         &mut self,
         _assets: &AssetReader,
         _renderer: &Renderer,
-        _render_world: &mut RenderBindings,
+        _bindings: &mut RenderBindings,
         _snapshot: &RenderSnapshot,
     ) {
         // No preparation required.
@@ -75,7 +75,7 @@ impl RenderPipeline for Compositor {
 
     fn queue(
         &self,
-        _render_world: &RenderBindings,
+        _bindings: &RenderBindings,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
         _snapshot: &RenderSnapshot,

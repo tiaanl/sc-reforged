@@ -11,7 +11,7 @@ use crate::{
         math::BoundingBox,
         scenes::world::{
             extract,
-            render::{RenderLayouts, RenderPipeline, RenderTargets, RenderBindings, WorldRenderer},
+            render::{RenderBindings, RenderLayouts, RenderPipeline, RenderTargets, WorldRenderer},
             sim_world::{
                 DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle,
                 ecs::{self, BoundingBoxComponent},
@@ -161,18 +161,18 @@ impl Systems {
     pub fn prepare(
         &mut self,
         assets: &AssetReader,
-        render_world: &mut RenderBindings,
+        bindings: &mut RenderBindings,
         renderer: &Renderer,
         render_snapshot: &RenderSnapshot,
     ) {
         self.world_renderer
-            .prepare(assets, renderer, render_world, render_snapshot);
+            .prepare(assets, renderer, bindings, render_snapshot);
     }
 
     pub fn queue(
         &mut self,
         render_targets: &RenderTargets,
-        render_world: &RenderBindings,
+        bindings: &RenderBindings,
         snapshot: &RenderSnapshot,
         frame: &mut Frame,
     ) {
@@ -181,12 +181,8 @@ impl Systems {
             &render_targets.geometry_buffer,
             snapshot.environment.fog_color,
         );
-        self.world_renderer.queue(
-            render_world,
-            frame,
-            &render_targets.geometry_buffer,
-            snapshot,
-        );
+        self.world_renderer
+            .queue(bindings, frame, &render_targets.geometry_buffer, snapshot);
     }
 }
 

@@ -15,14 +15,14 @@ pub trait RenderPipeline {
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
-        render_world: &mut RenderBindings,
+        bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     );
 
     /// Queue draw commands to the GPU.
     fn queue(
         &self,
-        render_world: &RenderBindings,
+        bindings: &RenderBindings,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,

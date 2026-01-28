@@ -14,7 +14,7 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                GeometryBuffer, RenderLayouts, RenderModel, RenderVertex, RenderBindings,
+                GeometryBuffer, RenderBindings, RenderLayouts, RenderModel, RenderVertex,
                 camera_render_pipeline::CameraEnvironmentLayout, model_render_pipeline,
                 per_frame::PerFrame, render_pipeline::RenderPipeline,
             },
@@ -232,7 +232,7 @@ impl RenderPipeline for ModelRenderPipeline {
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
-        _render_world: &mut RenderBindings,
+        _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         if !snapshot.models.models_to_prepare.is_empty() {
@@ -319,13 +319,13 @@ impl RenderPipeline for ModelRenderPipeline {
 
     fn queue(
         &self,
-        render_world: &RenderBindings,
+        bindings: &RenderBindings,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
         _snapshot: &RenderSnapshot,
     ) {
-        self.opaque_render_pass(&mut frame.encoder, geometry_buffer, render_world);
-        self.alpha_render_pass(&mut frame.encoder, geometry_buffer, render_world);
+        self.opaque_render_pass(&mut frame.encoder, geometry_buffer, bindings);
+        self.alpha_render_pass(&mut frame.encoder, geometry_buffer, bindings);
     }
 }
 
@@ -336,11 +336,11 @@ impl ModelRenderPipeline {
         pipeline: &wgpu::RenderPipeline,
         textures: &RenderTextures,
         models: &RenderModels,
-        render_world: &RenderBindings,
+        bindings: &RenderBindings,
     ) {
         render_pass.set_pipeline(pipeline);
 
-        render_pass.set_bind_group(0, &render_world.camera_env_buffer.bind_group, &[]);
+        render_pass.set_bind_group(0, &bindings.camera_env_buffer.bind_group, &[]);
         render_pass.set_bind_group(1, &textures.texture_data_bind_group, &[]);
         render_pass.set_bind_group(2, &models.nodes_bind_group, &[]);
 
@@ -353,7 +353,7 @@ impl ModelRenderPipeline {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         geometry_buffer: &GeometryBuffer,
-        render_world: &RenderBindings,
+        bindings: &RenderBindings,
     ) {
         let mut render_pass = geometry_buffer.begin_opaque_render_pass(encoder, "objects_opaque");
 
@@ -362,7 +362,7 @@ impl ModelRenderPipeline {
             &self.opaque_pipeline,
             &self.textures,
             &self.models,
-            render_world,
+            bindings,
         );
 
         for (render_model, range) in self.batches.iter().filter_map(|batch| {
@@ -381,7 +381,7 @@ impl ModelRenderPipeline {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         geometry_buffer: &GeometryBuffer,
-        render_world: &RenderBindings,
+        bindings: &RenderBindings,
     ) {
         let mut render_pass = geometry_buffer.begin_alpha_render_pass(encoder, "objects_opaque");
 
@@ -390,7 +390,7 @@ impl ModelRenderPipeline {
             &self.alpha_pipeline,
             &self.textures,
             &self.models,
-            render_world,
+            bindings,
         );
 
         // TODO: Should the blend mode pipelines each have their own set of instances? Right now

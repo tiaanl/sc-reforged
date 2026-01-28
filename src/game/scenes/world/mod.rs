@@ -44,7 +44,7 @@ pub struct WorldScene {
 
     sim_world: World,
     render_targets: RenderTargets,
-    render_worlds: [RenderBindings; Self::RENDER_FRAME_COUNT],
+    bindings: [RenderBindings; Self::RENDER_FRAME_COUNT],
 
     // Systems
     systems: systems::Systems,
@@ -82,7 +82,7 @@ impl WorldScene {
 
         let mut layouts = RenderLayouts::new();
 
-        let render_worlds = [
+        let bindings = [
             RenderBindings::new(0, renderer, &mut layouts),
             RenderBindings::new(1, renderer, &mut layouts),
             RenderBindings::new(2, renderer, &mut layouts),
@@ -104,7 +104,7 @@ impl WorldScene {
 
             sim_world,
             render_targets,
-            render_worlds,
+            bindings,
 
             systems,
 
@@ -175,8 +175,7 @@ impl Scene for WorldScene {
             self.render_targets.resize(renderer, self.surface_size);
         }
 
-        let render_world =
-            &mut self.render_worlds[frame.frame_index as usize % Self::RENDER_FRAME_COUNT];
+        let bindings = &mut self.bindings[frame.frame_index as usize % Self::RENDER_FRAME_COUNT];
 
         let frame_time = &mut self.fps_history[self.fps_history_cursor];
 
@@ -201,7 +200,7 @@ impl Scene for WorldScene {
                 let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
                 self.systems
-                    .prepare(&self.assets, render_world, renderer, render_snapshot);
+                    .prepare(&self.assets, bindings, renderer, render_snapshot);
                 frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
             }
 
@@ -210,7 +209,7 @@ impl Scene for WorldScene {
                 let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
                 self.systems
-                    .queue(&self.render_targets, render_world, render_snapshot, frame);
+                    .queue(&self.render_targets, bindings, render_snapshot, frame);
                 frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
             }
 

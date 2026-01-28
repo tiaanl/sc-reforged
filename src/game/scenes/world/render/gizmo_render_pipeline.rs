@@ -9,7 +9,7 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                GeometryBuffer, RenderLayouts, RenderBindings,
+                GeometryBuffer, RenderBindings, RenderLayouts,
                 camera_render_pipeline::CameraEnvironmentLayout, per_frame::PerFrame,
                 render_pipeline::RenderPipeline,
             },
@@ -97,7 +97,7 @@ impl RenderPipeline for GizmoRenderPipeline {
         &mut self,
         _assets: &AssetReader,
         renderer: &Renderer,
-        _render_world: &mut RenderBindings,
+        _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         let instances = self.instances_buffer.advance();
@@ -106,7 +106,7 @@ impl RenderPipeline for GizmoRenderPipeline {
 
     fn queue(
         &self,
-        render_world: &RenderBindings,
+        bindings: &RenderBindings,
         frame: &mut Frame,
         _geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,
@@ -128,7 +128,7 @@ impl RenderPipeline for GizmoRenderPipeline {
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, self.instances_buffer.current().slice(..));
-        render_pass.set_bind_group(0, &render_world.camera_env_buffer.bind_group, &[]);
+        render_pass.set_bind_group(0, &bindings.camera_env_buffer.bind_group, &[]);
         render_pass.draw(0..(snapshot.gizmos.vertices.len() as u32), 0..1);
     }
 }

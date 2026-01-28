@@ -61,41 +61,41 @@ impl RenderPipeline for WorldRenderer {
         &mut self,
         assets: &AssetReader,
         renderer: &Renderer,
-        render_world: &mut RenderBindings,
+        bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         self.camera_pipeline
-            .prepare(assets, renderer, render_world, snapshot);
+            .prepare(assets, renderer, bindings, snapshot);
         self.terrain_pipeline
-            .prepare(assets, renderer, render_world, snapshot);
+            .prepare(assets, renderer, bindings, snapshot);
         self.model_pipeline
-            .prepare(assets, renderer, render_world, snapshot);
+            .prepare(assets, renderer, bindings, snapshot);
         self.ui_pipeline
-            .prepare(assets, renderer, render_world, snapshot);
+            .prepare(assets, renderer, bindings, snapshot);
         self.compositor
-            .prepare(assets, renderer, render_world, snapshot);
+            .prepare(assets, renderer, bindings, snapshot);
         self.gizmo_pipeline
-            .prepare(assets, renderer, render_world, snapshot);
+            .prepare(assets, renderer, bindings, snapshot);
     }
 
     fn queue(
         &self,
-        render_world: &RenderBindings,
+        bindings: &RenderBindings,
         frame: &mut Frame,
         geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,
     ) {
         self.camera_pipeline
-            .queue(render_world, frame, geometry_buffer, snapshot);
+            .queue(bindings, frame, geometry_buffer, snapshot);
         self.terrain_pipeline
-            .queue(render_world, frame, geometry_buffer, snapshot);
+            .queue(bindings, frame, geometry_buffer, snapshot);
         self.model_pipeline
-            .queue(render_world, frame, geometry_buffer, snapshot);
+            .queue(bindings, frame, geometry_buffer, snapshot);
         self.ui_pipeline
-            .queue(render_world, frame, geometry_buffer, snapshot);
+            .queue(bindings, frame, geometry_buffer, snapshot);
         self.compositor
-            .queue(render_world, frame, geometry_buffer, snapshot);
+            .queue(bindings, frame, geometry_buffer, snapshot);
         self.gizmo_pipeline
-            .queue(render_world, frame, geometry_buffer, snapshot);
+            .queue(bindings, frame, geometry_buffer, snapshot);
     }
 }

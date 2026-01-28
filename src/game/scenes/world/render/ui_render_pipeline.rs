@@ -151,7 +151,7 @@ impl RenderPipeline for UiRenderPipeline {
         &mut self,
         _assets: &AssetReader,
         renderer: &Renderer,
-        _render_world: &mut RenderBindings,
+        _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         let state = gpu::State {
@@ -178,7 +178,7 @@ impl RenderPipeline for UiRenderPipeline {
 
     fn queue(
         &self,
-        _render_world: &RenderBindings,
+        _bindings: &RenderBindings,
         frame: &mut Frame,
         _geometry_buffer: &super::GeometryBuffer,
         snapshot: &RenderSnapshot,
