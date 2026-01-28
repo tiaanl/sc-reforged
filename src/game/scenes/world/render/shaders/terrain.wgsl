@@ -38,10 +38,15 @@ fn get_node(coord: vec2<u32>) -> vec4<f32> {
 
 const CELLS_PER_CHUNK: u32 = 8u;
 
-const NORTH_FLAG: u32 = (1u << 0u);
-const EAST_FLAG: u32 = (1u << 1u);
-const SOUTH_FLAG: u32 = (1u << 2u);
-const WEST_FLAG: u32 = (1u << 3u);
+const NORTH: u32 = 0u;
+const EAST: u32 = 1u;
+const SOUTH: u32 = 2u;
+const WEST: u32 = 3u;
+
+const NORTH_FLAG: u32 = 1u << NORTH;
+const EAST_FLAG: u32 = 1u << EAST;
+const SOUTH_FLAG: u32 = 1u << SOUTH;
+const WEST_FLAG: u32 = 1u << WEST;
 
 const HIGHLIGHT_FLAG: u32 = (1u << 15u);
 
@@ -89,9 +94,9 @@ fn make_vertex_terrain(
     vertex_index: u32,
     z_offset: f32,
 ) -> VertexOutput {
-    let node_coord = vec2<u32>(vertex_index % 9, vertex_index / 9);
+    let node_coord = vec2<u32>(vertex_index % 9u, vertex_index / 9u);
 
-    let abs_node_coord = chunk.coord * 8 + vec2<u32>(
+    let abs_node_coord = chunk.coord * 8u + vec2<u32>(
         node_coord.x << chunk.lod,
         node_coord.y << chunk.lod,
     );
@@ -104,8 +109,6 @@ fn make_vertex_terrain(
         node.w + z_offset,
     );
 
-    let normal = node.xyz;
-
     let clip_position = u_camera_env.proj_view * vec4<f32>(world_position, 1.0);
 
     let tex_coord = vec2<f32>(
@@ -116,7 +119,7 @@ fn make_vertex_terrain(
     return VertexOutput(
         clip_position,
         world_position,
-        normal,
+        node.xyz,
         tex_coord,
         chunk.flags,
     );
@@ -133,7 +136,6 @@ fn vertex_terrain(
 @fragment
 fn fragment_terrain(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffer {
     let base_color = textureSample(u_terrain_texture, u_terrain_sampler, vertex.tex_coord);
-
     let distance = length(vertex.world_position - u_camera_env.position.xyz);
 
     let d = diffuse_with_fog(
@@ -152,29 +154,63 @@ fn fragment_terrain(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuff
     return geometry_buffer::to_opaque_geometry_buffer(d);
 }
 
-struct StrataVertexInput {
-    @location(3) normal: vec3<f32>,
-    @location(4) node_coord: vec2<u32>,
+const STRATA_SIDE_SHIFT: u32 = 8u;
+const STRATA_SIDE_MASK:  u32 = 3u;
+
+fn get_strata_side(flags: u32) -> u32 {
+    return (flags >> STRATA_SIDE_SHIFT) & STRATA_SIDE_MASK;
+}
+
+fn strata_normal_from_side(side: u32) -> vec3<f32> {
+    switch side {
+        case SOUTH: { return vec3<f32>( 0.0, -1.0,  0.0); }
+        case WEST:  { return vec3<f32>( 1.0,  0.0,  0.0); }
+        case NORTH: { return vec3<f32>( 0.0,  1.0,  0.0); }
+        default:    { return vec3<f32>(-1.0,  0.0,  0.0); } // EAST
+    }
+}
+
+fn strata_node_coord_from_side(side: u32, u: u32, cells: u32) -> vec2<u32> {
+    // u runs 0..cells inclusive (i.e. nodes per chunk - 1 at this LOD).
+    // Matches the original CPU ordering:
+    // South: [x, 0]
+    // West:  [CELLS, y]
+    // North: [CELLS - x, CELLS]
+    // East:  [0, CELLS - y]
+    switch side {
+        case SOUTH: { return vec2<u32>(u, 0u); }
+        case WEST:  { return vec2<u32>(cells, u); }
+        case NORTH: { return vec2<u32>(cells - u, cells); }
+        default:    { return vec2<u32>(0u, cells - u); } // EAST
+    }
 }
 
 @vertex
 fn strata_vertex(
     chunk: InstanceInput,
-    input: StrataVertexInput,
     @builtin(vertex_index) vertex_index: u32,
 ) -> VertexOutput {
-    let node_coord = input.node_coord;
+    let side: u32 = get_strata_side(chunk.flags);
 
-    let abs_node_coord = chunk.coord * 8 + node_coord;
+    // Each node along the edge is emitted twice: bottom then top (based on parity).
+    // U is in LOD-space (0..cells at this LOD).
+    let u: u32 = vertex_index >> 1u;
+    let is_top: bool = (vertex_index & 1u) != 0u;
+
+    let cells_lod: u32 = CELLS_PER_CHUNK >> chunk.lod;
+    let node_coord_lod: vec2<u32> = strata_node_coord_from_side(side, u, cells_lod);
+    let normal: vec3<f32> = strata_normal_from_side(side);
+
+    let scale = 1u << chunk.lod;
+    let abs_node_coord = chunk.coord * 8u + (node_coord_lod * scale);
 
     let node = get_stitched_node(
         chunk.coord,
-        node_coord,
+        node_coord_lod,
         abs_node_coord,
         chunk,
     );
 
-    let is_top = (vertex_index & 1u) != 0u;
     let top_z = node.w;
     let bottom_z = u_terrain_data.strata_descent;
     let z = select(bottom_z, top_z, is_top);
@@ -184,27 +220,30 @@ fn strata_vertex(
 
     let clip_position = u_camera_env.proj_view * vec4<f32>(world_position, 1.0);
 
-    let side = (chunk.flags >> 8u) & 3u;
+    // U runs along the edge: X for south/north, Y for west/east.
+    let edge_index_u: u32 = select(
+        node_coord_lod.x * scale,
+        node_coord_lod.y * scale,
+        (side & 1u) != 0u,
+    );
 
-    // U runs along the edge: X for south/north, y for east/west.
-    let edge_index_u: u32 = select(node_coord.x, node_coord.y, (side & 1u) != 0u);
+    // Flip U on south(2) and west(3) so texture flows consistently clockwise.
+    let flip_u = (side == SOUTH) || (side == WEST);
 
-    // Flip U on north(2) and east(3) so texture flows consistently clockwise.
-    let flip_u = (side == 0u) || (side == 1u);
     let cells_per_chunk: u32 = u_terrain_data.cells_dim.x / u_terrain_data.chunks_dim.x;
-    let edge_index_u_flipped: u32 = select(edge_index_u, (cells_per_chunk - edge_index_u), flip_u);
+    let edge_index_u_flipped: u32 =
+        select(edge_index_u, (cells_per_chunk - edge_index_u), flip_u);
 
     // Normalize to [0,1] across the edge length.
-    let u = f32(edge_index_u_flipped) / f32(cells_per_chunk);
-
-    let v = z / (f32(cells_per_chunk) * cell_size);
-
-    let tex_coord = vec2<f32>(u, v);
+    let tex_coord = vec2<f32>(
+        f32(edge_index_u_flipped) / f32(cells_per_chunk),
+        z / (f32(cells_per_chunk) * cell_size),
+    );
 
     return VertexOutput(
         clip_position,
         world_position,
-        input.normal,
+        normal,
         tex_coord,
         chunk.flags,
     );
@@ -213,7 +252,6 @@ fn strata_vertex(
 @fragment
 fn strata_fragment(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffer {
     let base_color = textureSample(u_strata_texture, u_terrain_sampler, vertex.tex_coord);
-
     let distance = length(vertex.world_position - u_camera_env.position.xyz);
 
     let d = diffuse_with_fog(

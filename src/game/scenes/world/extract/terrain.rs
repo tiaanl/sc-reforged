@@ -83,10 +83,10 @@ pub fn extract_terrain_snapshot(
 
         snapshot.terrain.chunks.push(chunk_instance);
 
-        const SOUTH: u32 = 0;
-        const WEST: u32 = 1;
-        const NORTH: u32 = 2;
-        const EAST: u32 = 3;
+        const NORTH: u32 = 0;
+        const EAST: u32 = 1;
+        const SOUTH: u32 = 2;
+        const WEST: u32 = 3;
 
         if visible_coord.x == 0 {
             let chunk_instance = TerrainChunk {

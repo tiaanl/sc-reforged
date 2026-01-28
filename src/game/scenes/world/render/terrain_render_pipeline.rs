@@ -41,12 +41,6 @@ pub struct TerrainRenderPipeline {
     /// Pipeline to render the stratas.
     strata_pipeline: wgpu::RenderPipeline,
 
-    /// Buffer holding vertices for the strata.
-    strata_vertex_buffer: wgpu::Buffer,
-
-    /// Buffer holding indices for the strata at different sides and lod's.
-    strata_index_buffer: wgpu::Buffer,
-
     /// Buffer holding instance data for strata to be rendered per frame.
     strata_instances_buffer: PerFrame<GrowingBuffer<gpu::ChunkInstanceData>>,
 }
@@ -355,23 +349,12 @@ impl TerrainRenderPipeline {
                         module: &module,
                         entry_point: Some("strata_vertex"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[
-                            wgpu::VertexBufferLayout {
-                                array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
-                                    as wgpu::BufferAddress,
-                                step_mode: wgpu::VertexStepMode::Instance,
-                                attributes: &instance_attrs,
-                            },
-                            wgpu::VertexBufferLayout {
-                                array_stride: std::mem::size_of::<StrataVertex>()
-                                    as wgpu::BufferAddress,
-                                step_mode: wgpu::VertexStepMode::Vertex,
-                                attributes: &wgpu::vertex_attr_array![
-                                    3 => Float32x3, // normal
-                                    4 => Uint32x2,  // node_coord
-                                ],
-                            },
-                        ],
+                        buffers: &[wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
+                                as wgpu::BufferAddress,
+                            step_mode: wgpu::VertexStepMode::Instance,
+                            attributes: &instance_attrs,
+                        }],
                     },
                     primitive: wgpu::PrimitiveState {
                         topology: wgpu::PrimitiveTopology::TriangleStrip,
@@ -396,30 +379,6 @@ impl TerrainRenderPipeline {
                     cache: None,
                 });
 
-        let strata_vertex_buffer = {
-            let vertices = generate_strata_vertices();
-
-            renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("strata_vertices"),
-                    contents: bytemuck::cast_slice(&vertices),
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                })
-        };
-
-        let strata_index_buffer = {
-            let indices = generate_strata_indices();
-
-            renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("strata_indices"),
-                    contents: bytemuck::cast_slice(&indices),
-                    usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-                })
-        };
-
         let capacity = 1 << 7;
         let strata_instances_buffer = PerFrame::new(|index| {
             GrowingBuffer::new(
@@ -441,8 +400,6 @@ impl TerrainRenderPipeline {
             strata_pipeline,
             terrain_chunk_instances_buffer,
 
-            strata_vertex_buffer,
-            strata_index_buffer,
             strata_instances_buffer,
         }
     }
@@ -499,30 +456,23 @@ impl RenderPipeline for TerrainRenderPipeline {
         {
             render_pass.set_pipeline(&self.strata_pipeline);
             render_pass.set_vertex_buffer(0, self.strata_instances_buffer.current().slice(..));
-            render_pass.set_vertex_buffer(1, self.strata_vertex_buffer.slice(..));
-            render_pass.set_index_buffer(
-                self.strata_index_buffer.slice(..),
-                wgpu::IndexFormat::Uint32,
-            );
             render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
-            // TODO: Reduce draw calls?  Right now this ends up being a *ver* low number of
-            //       instances.  Is it worth optimizing?
-
-            const INDEX_START: [u32; 4] = [0, 72, 112, 136];
-
             for (i, strata_instance) in snapshot.terrain.strata.iter().enumerate() {
-                let side = strata_instance.flags >> 8 & 0b11;
                 let lod = strata_instance.lod;
 
-                let stride = 2 + ((Terrain::CELLS_PER_CHUNK * 2) >> lod);
-                let start = INDEX_START[lod as usize] + stride * side;
+                // Cells along this edge at this LOD.
+                let cells = Terrain::CELLS_PER_CHUNK >> lod;
+                let nodes = cells + 1;
 
-                let indices = start..(start + stride);
+                // 2 vertices per node: bottom + top
+                let vertex_count = 2 * nodes;
+
+                let vertices = 0..vertex_count;
                 let instances = (i as u32)..(i as u32 + 1);
 
-                render_pass.draw_indexed(indices.clone(), 0, instances);
+                render_pass.draw(vertices, instances);
             }
         }
 
@@ -657,81 +607,6 @@ impl Default for ChunkIndices {
             wireframe_indices,
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
-#[repr(C)]
-struct StrataVertex {
-    normal: [f32; 3],
-    node_coord: [u32; 2],
-}
-
-fn generate_strata_vertices() -> Vec<StrataVertex> {
-    let mut vertices = Vec::with_capacity((9 + 9 + 7 + 7) * 2);
-
-    // South
-    for x in 0..Terrain::NODES_PER_CHUNK {
-        vertices.push(StrataVertex {
-            normal: [0.0, -1.0, 0.0],
-            node_coord: [x, 0],
-        });
-        vertices.push(StrataVertex {
-            normal: [0.0, -1.0, 0.0],
-            node_coord: [x, 0],
-        });
-    }
-
-    // West
-    for y in 0..Terrain::NODES_PER_CHUNK {
-        vertices.push(StrataVertex {
-            normal: [1.0, 0.0, 0.0],
-            node_coord: [Terrain::CELLS_PER_CHUNK, y],
-        });
-        vertices.push(StrataVertex {
-            normal: [1.0, 0.0, 0.0],
-            node_coord: [Terrain::CELLS_PER_CHUNK, y],
-        });
-    }
-
-    // North
-    for x in 0..Terrain::NODES_PER_CHUNK {
-        vertices.push(StrataVertex {
-            normal: [0.0, 1.0, 0.0],
-            node_coord: [Terrain::CELLS_PER_CHUNK - x, Terrain::CELLS_PER_CHUNK],
-        });
-        vertices.push(StrataVertex {
-            normal: [0.0, 1.0, 0.0],
-            node_coord: [Terrain::CELLS_PER_CHUNK - x, Terrain::CELLS_PER_CHUNK],
-        });
-    }
-
-    // East
-    for y in 0..Terrain::NODES_PER_CHUNK {
-        vertices.push(StrataVertex {
-            normal: [-1.0, 0.0, 0.0],
-            node_coord: [0, Terrain::CELLS_PER_CHUNK - y],
-        });
-        vertices.push(StrataVertex {
-            normal: [-1.0, 0.0, 0.0],
-            node_coord: [0, Terrain::CELLS_PER_CHUNK - y],
-        });
-    }
-
-    vertices
-}
-
-fn generate_strata_indices() -> Vec<u32> {
-    let mut indices: Vec<u32> = Vec::with_capacity(1024);
-
-    for lod in 0..4 {
-        for side in 0..4 {
-            let start = side * 18;
-            let end = start + 18;
-            indices.extend((start..end).step_by(2 << lod).flat_map(|i| [i, i + 1]));
-        }
-    }
-
-    indices
 }
 
 pub mod gpu {
