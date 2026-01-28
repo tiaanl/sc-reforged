@@ -112,6 +112,9 @@ pub struct OrderMove {
 
 impl OrderMove {
     pub fn update(&mut self, transform: &mut Transform, delta_time: f32) {
+        // Turn to within this angle before moving.
+        const ALIGN_ANGLE_RAD: f32 = 0.035; // ~2 degrees
+
         let to_target = self.target_location - transform.translation;
         let distance_sq = to_target.length_squared();
         if distance_sq <= 1.0e-6 {
@@ -121,6 +124,9 @@ impl OrderMove {
         let direction = to_target * distance_sq.sqrt().recip();
 
         let current_forward = transform.rotation * Vec3::Y;
+
+        // Step 1: Turn towards the target.
+
         let delta_rot = Quat::from_rotation_arc(current_forward, direction);
         let (axis, angle) = delta_rot.to_axis_angle();
         let max_angle = self.rotation_speed * delta_time;
@@ -130,11 +136,29 @@ impl OrderMove {
             transform.rotation = step * transform.rotation;
         }
 
+        let aligned_dot = (transform.rotation * Vec3::Y).dot(direction);
+        let aligned_threshold = ALIGN_ANGLE_RAD.cos();
+        if aligned_dot < aligned_threshold {
+            return;
+        }
+
+        // Step 2: Move towards the target.
+
         let move_step = self.move_speed * delta_time;
         if move_step >= distance_sq.sqrt() {
             transform.translation = self.target_location;
         } else {
             transform.translation += direction * move_step;
+        }
+    }
+}
+
+impl Default for OrderMove {
+    fn default() -> Self {
+        Self {
+            target_location: Vec3::ZERO,
+            move_speed: 100.0,
+            rotation_speed: 3.0,
         }
     }
 }

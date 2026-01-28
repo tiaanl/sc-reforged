@@ -188,8 +188,7 @@ pub fn on_clicked(
         // Issue a move order to the selected entity.
         *order = Order::_Move(OrderMove {
             target_location: terrain_hit.world_position,
-            move_speed: 1000.0,
-            rotation_speed: 5.0,
+            ..OrderMove::default()
         });
     }
 }
