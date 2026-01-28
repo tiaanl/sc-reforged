@@ -36,7 +36,7 @@ pub struct TerrainRenderPipeline {
     terrain_wireframe_pipeline: wgpu::RenderPipeline,
 
     /// Buffer holding terrain chunk instance data for chunks to be rendered per frame.
-    terrain_chunk_instances_buffer: PerFrame<GrowingBuffer<gpu::ChunkInstanceData>, 3>,
+    terrain_chunk_instances_buffer: PerFrame<GrowingBuffer<gpu::ChunkInstanceData>>,
 
     /// Pipeline to render the stratas.
     strata_pipeline: wgpu::RenderPipeline,
@@ -48,7 +48,7 @@ pub struct TerrainRenderPipeline {
     strata_index_buffer: wgpu::Buffer,
 
     /// Buffer holding instance data for strata to be rendered per frame.
-    strata_instances_buffer: PerFrame<GrowingBuffer<gpu::ChunkInstanceData>, 3>,
+    strata_instances_buffer: PerFrame<GrowingBuffer<gpu::ChunkInstanceData>>,
 }
 
 impl TerrainRenderPipeline {
@@ -504,7 +504,7 @@ impl RenderPipeline for TerrainRenderPipeline {
                 self.strata_index_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, &bindings.camera_env_buffer.bind_group, &[]);
+            render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             // TODO: Reduce draw calls?  Right now this ends up being a *ver* low number of
@@ -535,7 +535,7 @@ impl RenderPipeline for TerrainRenderPipeline {
                 self.chunk_indices_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, &bindings.camera_env_buffer.bind_group, &[]);
+            render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             let draw_commands =
@@ -557,7 +557,7 @@ impl RenderPipeline for TerrainRenderPipeline {
                 self.chunk_wireframe_indices_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, &bindings.camera_env_buffer.bind_group, &[]);
+            render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             let draw_commands =

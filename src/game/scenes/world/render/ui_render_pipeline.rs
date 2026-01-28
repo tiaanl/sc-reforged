@@ -42,8 +42,8 @@ impl RenderLayout for UiStateLayout {
 pub struct UiRenderPipeline {
     rect_render_pipeline: wgpu::RenderPipeline,
 
-    state_uniform: PerFrame<UniformBuffer, 3>,
-    rects_buffer: PerFrame<GrowingBuffer<gpu::Rect>, 3>,
+    state_uniform: PerFrame<UniformBuffer>,
+    rects_buffer: PerFrame<GrowingBuffer<gpu::Rect>>,
 }
 
 impl UiRenderPipeline {

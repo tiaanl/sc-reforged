@@ -62,6 +62,7 @@ impl RenderPipeline for CameraRenderPipeline {
 
         bindings
             .camera_env_buffer
+            .advance()
             .write(renderer, bytemuck::bytes_of(&data));
     }
 

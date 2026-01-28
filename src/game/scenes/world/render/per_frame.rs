@@ -1,9 +1,11 @@
-pub struct PerFrame<T, const N: usize> {
-    data: [T; N],
+const FRAME_COUNT: usize = 3;
+
+pub struct PerFrame<T> {
+    data: [T; FRAME_COUNT],
     index: usize,
 }
 
-impl<T, const N: usize> PerFrame<T, N> {
+impl<T> PerFrame<T> {
     pub fn new<F>(f: F) -> Self
     where
         F: Fn(usize) -> T,
@@ -23,7 +25,7 @@ impl<T, const N: usize> PerFrame<T, N> {
     }
 
     pub fn advance(&mut self) -> &mut T {
-        self.index = (self.index + 1) % N;
+        self.index = (self.index + 1) % FRAME_COUNT;
         self.current_mut()
     }
 }

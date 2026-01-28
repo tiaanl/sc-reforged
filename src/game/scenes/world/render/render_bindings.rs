@@ -1,20 +1,21 @@
 use crate::{
     engine::renderer::Renderer,
     game::scenes::world::render::{
-        camera_render_pipeline::{self},
-        render_layouts::RenderLayouts,
+        camera_render_pipeline, per_frame::PerFrame, render_layouts::RenderLayouts,
         uniform_buffer::UniformBuffer,
     },
 };
 
 /// Set of data that changes on each frame.
 pub struct RenderBindings {
-    pub camera_env_buffer: UniformBuffer,
+    pub camera_env_buffer: PerFrame<UniformBuffer>,
 }
 
 impl RenderBindings {
-    pub fn new(index: usize, renderer: &Renderer, layouts: &mut RenderLayouts) -> Self {
-        let camera_env_buffer = {
+    pub fn new(renderer: &Renderer, layouts: &mut RenderLayouts) -> Self {
+        let layout = layouts.get::<camera_render_pipeline::CameraEnvironmentLayout>(renderer);
+
+        let camera_env_buffer = PerFrame::new(|index| {
             let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("cameras"),
                 size: std::mem::size_of::<camera_render_pipeline::gpu::CameraEnvironment>()
@@ -27,8 +28,7 @@ impl RenderBindings {
                 .device
                 .create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some(&format!("cmaera_bind_group_{index}")),
-                    layout: layouts
-                        .get::<camera_render_pipeline::CameraEnvironmentLayout>(renderer),
+                    layout,
                     entries: &[wgpu::BindGroupEntry {
                         binding: 0,
                         resource: buffer.as_entire_binding(),
@@ -36,7 +36,7 @@ impl RenderBindings {
                 });
 
             UniformBuffer::new(buffer, bind_group)
-        };
+        });
 
         Self { camera_env_buffer }
     }

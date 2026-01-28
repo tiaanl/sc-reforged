@@ -59,7 +59,7 @@ pub struct ModelRenderPipeline {
 
     /// Local cache where model instance data is built from the snapshot.
     model_instances_cache: Vec<gpu::ModelInstanceData>,
-    model_instances: PerFrame<GrowingBuffer<gpu::ModelInstanceData>, 3>,
+    model_instances: PerFrame<GrowingBuffer<gpu::ModelInstanceData>>,
 
     batches: Vec<Batch>,
 }
@@ -340,7 +340,7 @@ impl ModelRenderPipeline {
     ) {
         render_pass.set_pipeline(pipeline);
 
-        render_pass.set_bind_group(0, &bindings.camera_env_buffer.bind_group, &[]);
+        render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
         render_pass.set_bind_group(1, &textures.texture_data_bind_group, &[]);
         render_pass.set_bind_group(2, &models.nodes_bind_group, &[]);
 
