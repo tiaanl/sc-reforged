@@ -289,7 +289,7 @@ impl RenderPipeline for ModelRenderPipeline {
             })
         }
 
-        let mut batches: Vec<Batch> = Vec::new();
+        self.batches.clear();
         let mut start_index: usize = 0;
 
         let instances_count = self.render_models_cache.len();
@@ -303,7 +303,7 @@ impl RenderPipeline for ModelRenderPipeline {
                 end_index += 1;
             }
 
-            batches.push(Batch {
+            self.batches.push(Batch {
                 render_model,
                 range: start_index as u32..end_index as u32,
             });
@@ -313,8 +313,6 @@ impl RenderPipeline for ModelRenderPipeline {
         // Upload the instances to the GPU.
         let model_instances = self.model_instances.advance();
         model_instances.write(renderer, self.model_instances_cache.as_slice());
-
-        self.batches = batches;
     }
 
     fn queue(
