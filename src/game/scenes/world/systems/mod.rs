@@ -13,8 +13,7 @@ use crate::{
             extract,
             render::{RenderBindings, RenderLayouts, RenderPipeline, RenderTargets, WorldRenderer},
             sim_world::{
-                DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle,
-                ecs::{self, BoundingBoxComponent},
+                DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle, ecs,
                 free_camera_controller, top_down_camera_controller,
             },
         },
@@ -24,6 +23,7 @@ use crate::{
 use super::extract::*;
 
 mod camera;
+mod changed;
 mod clear_render_targets;
 mod debug;
 mod gizmos;
@@ -101,6 +101,7 @@ impl Systems {
                         top_down_camera_controller::input,
                         free_camera_controller::input,
                     ),
+                    camera::update_far_distance.run_if(changed::time_of_day_changed),
                     camera::compute_cameras,
                     world_interaction::input,
                 )
@@ -113,8 +114,9 @@ impl Systems {
                 (
                     orders::process_biped_orders,
                     world_interaction::update,
-                    rebuild_static_bvh
-                        .run_if(|q: Query<(), Added<BoundingBoxComponent>>| q.iter().count() > 0),
+                    rebuild_static_bvh.run_if(|q: Query<(), Added<ecs::BoundingBoxComponent>>| {
+                        q.iter().count() > 0
+                    }),
                     update_dynamic_bvh,
                     debug::draw_model_bounding_boxes,
                 )
@@ -187,7 +189,7 @@ impl Systems {
 }
 
 fn rebuild_static_bvh(
-    objects: Query<(Entity, &Transform, &BoundingBoxComponent), With<StaticBvhHandle>>,
+    objects: Query<(Entity, &Transform, &ecs::BoundingBoxComponent), With<StaticBvhHandle>>,
     mut static_bvh: ResMut<StaticBvh>,
     mut bounding_box_scratch: Local<Vec<(Entity, BoundingBox)>>,
 ) {
@@ -212,7 +214,7 @@ fn rebuild_static_bvh(
 }
 
 fn update_dynamic_bvh(
-    objects: Query<(&DynamicBvhHandle, &Transform, &BoundingBoxComponent), Changed<Transform>>,
+    objects: Query<(&DynamicBvhHandle, &Transform, &ecs::BoundingBoxComponent), Changed<Transform>>,
     mut dynamic_bvh: ResMut<DynamicBvh>,
 ) {
     let bvh = dynamic_bvh.as_mut();
