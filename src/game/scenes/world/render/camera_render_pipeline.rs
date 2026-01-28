@@ -48,8 +48,16 @@ impl RenderPipeline for CameraRenderPipeline {
                 .frustum
                 .planes
                 .map(|plane| plane.normal.extend(plane.distance).to_array()),
-            position: snapshot.camera.position.extend(1.0).to_array(),
-            forward: snapshot.camera.forward.extend(0.0).to_array(),
+            position: snapshot
+                .camera
+                .position
+                .extend(snapshot.camera._near)
+                .to_array(),
+            forward: snapshot
+                .camera
+                .forward
+                .extend(snapshot.camera.far)
+                .to_array(),
             sun_dir: snapshot.environment.sun_dir.extend(0.0).to_array(),
             sun_color: snapshot.environment.sun_color.extend(1.0).to_array(),
             ambient_color: snapshot.environment.ambient_color.extend(1.0).to_array(),
