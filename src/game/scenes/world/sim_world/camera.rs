@@ -129,7 +129,7 @@ pub struct ComputedCamera {
 }
 
 impl ComputedCamera {
-    pub fn _create_ray_segment(&self, mouse_position: UVec2, viewport_size: UVec2) -> RaySegment {
+    pub fn create_ray_segment(&self, mouse_position: UVec2, viewport_size: UVec2) -> RaySegment {
         let viewport_pos = (mouse_position.as_vec2() + Vec2::splat(0.5)) / viewport_size.as_vec2();
         let ndc_x = viewport_pos.x * 2.0 - 1.0;
         let ndc_y = 1.0 - viewport_pos.y * 2.0;

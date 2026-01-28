@@ -1,41 +1,20 @@
 use bevy_ecs::prelude::*;
-use glam::{IVec2, Mat4, UVec2, Vec2, Vec3, Vec4};
+use glam::{IVec2, UVec2, Vec4};
 
 use crate::{
     engine::input::InputState,
-    game::{
-        math::{Frustum, RaySegment},
-        scenes::world::sim_world::{
-            ComputedCamera, SimWorldState, Terrain, UiRect,
-            ecs::{ActiveCamera, Viewport},
-        },
+    game::scenes::world::sim_world::{
+        ComputedCamera, DynamicBvh, Order, OrderMove, SimWorldState, Terrain, UiRect,
+        ecs::{ActiveCamera, Viewport},
     },
 };
 
-#[derive(Debug)]
-pub enum _InteractionHit {
-    Terrain {
-        world_position: Vec3,
-        _distance: f32,
-        _chunk_coord: IVec2,
-    },
-    Object {
-        _world_position: Vec3,
-        _distance: f32,
-        object: Entity,
-    },
+#[derive(Event)]
+pub struct Clicked {
+    pos: UVec2,
 }
 
-impl _InteractionHit {
-    pub fn _distance(&self) -> f32 {
-        match self {
-            _InteractionHit::Terrain { _distance, .. }
-            | _InteractionHit::Object { _distance, .. } => *_distance,
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Event)]
 pub struct SelectionRect {
     /// The position where the rect was dragged from.
     pub pos: UVec2,
@@ -69,7 +48,7 @@ impl SelectionRect {
     }
 
     #[inline]
-    pub fn min_max(&self) -> (UVec2, UVec2) {
+    pub fn _min_max(&self) -> (UVec2, UVec2) {
         let n = self.normalize();
         (n.pos, n.pos + n.size.as_uvec2())
     }
@@ -78,17 +57,15 @@ impl SelectionRect {
 #[derive(Default, Resource)]
 pub struct WorldInteraction {
     selection_rect: Option<SelectionRect>,
+    pub selected_entity: Option<Entity>,
 }
 
 const DRAG_THRESHOLD: u32 = 2;
 
 pub fn input(
+    mut commands: Commands,
     mut world_interaction: ResMut<WorldInteraction>,
-    mut state: ResMut<SimWorldState>,
-    computed_camera: Single<&ComputedCamera, With<ActiveCamera>>,
-    terrain: Res<Terrain>,
     input_state: Res<InputState>,
-    viewport: Res<Viewport>,
 ) {
     use winit::event::MouseButton;
 
@@ -100,21 +77,13 @@ pub fn input(
         });
     } else if input_state.mouse_just_released(MouseButton::Left) {
         // If the selection rect is larger than the threshold, that confirms that we drew a selection rect and not just clicked.
-        if let Some(rect) = world_interaction.selection_rect {
+        if let Some(rect) = world_interaction.selection_rect.take() {
             if rect.size.abs().min_element() > DRAG_THRESHOLD as i32 {
-                set_selection_by_rect(rect, &computed_camera, viewport.size);
+                commands.trigger(rect);
             } else {
-                interact_with(
-                    &mut state,
-                    &computed_camera,
-                    &terrain,
-                    rect.pos,
-                    viewport.size,
-                );
+                commands.trigger(Clicked { pos: rect.pos });
             }
         }
-
-        world_interaction.selection_rect = None;
     } else if let Some(ref mut selection_rect) = world_interaction.selection_rect
         && let Some(mouse_position) = input_state.mouse_position()
     {
@@ -129,7 +98,6 @@ pub fn update(world_interaction: Res<WorldInteraction>, mut state: ResMut<SimWor
 
         if size.x > DRAG_THRESHOLD && size.y > DRAG_THRESHOLD {
             const THICKNESS: u32 = 1;
-            // debug_assert!(THICKNESS <= Self::DRAG_THRESHOLD);
 
             state.ui.ui_rects.push(UiRect {
                 pos,
@@ -171,6 +139,62 @@ pub fn update(world_interaction: Res<WorldInteraction>, mut state: ResMut<SimWor
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn on_clicked(
+    clicked: On<Clicked>,
+    viewport: Res<Viewport>,
+    camera: Single<&ComputedCamera, With<ActiveCamera>>,
+    dynamic_bvh: Res<DynamicBvh>,
+    terrain: Res<Terrain>,
+    mut world_interaction: ResMut<WorldInteraction>,
+
+    mut orders: Query<&mut Order>,
+
+    mut entity_cache: Local<Vec<Entity>>,
+    mut terrain_hit_cache: Local<Vec<IVec2>>,
+) {
+    let ray = camera.create_ray_segment(clicked.pos, viewport.size);
+
+    entity_cache.clear();
+    dynamic_bvh._query_ray_segment(&ray, &mut entity_cache);
+
+    if let Some(&entity) = entity_cache.first() {
+        // TODO: Check that the entity is actually selectable.
+
+        // The user click on a selectable entity, so select it.
+        world_interaction.selected_entity = Some(entity);
+        return;
+    }
+
+    // If nothing is selected, we're done for now.
+    let Some(selected_entity) = world_interaction.selected_entity else {
+        return;
+    };
+
+    // If the user didn't click on a selectable entity, check for a terrain hit.
+    terrain_hit_cache.clear();
+    terrain
+        .quad_tree
+        .ray_intersect_chunks(&ray, &mut terrain_hit_cache);
+
+    let terrain_hits: Vec<_> = terrain_hit_cache
+        .iter()
+        .filter_map(|&chunk| terrain.chunk_intersect_ray_segment(chunk, &ray))
+        .collect();
+
+    if let Some(terrain_hit) = terrain_hits.iter().min_by(|&a, &b| a.t.total_cmp(&b.t))
+        && let Ok(mut order) = orders.get_mut(selected_entity)
+    {
+        // Issue a move order to the selected entity.
+        *order = Order::_Move(OrderMove {
+            target_location: terrain_hit.world_position,
+            move_speed: 1000.0,
+            rotation_speed: 5.0,
+        });
+    }
+}
+
+/*
 /// Update the selected objects by using a rectangle in screen coordinates.
 fn set_selection_by_rect(
     rect: SelectionRect,
@@ -343,3 +367,4 @@ fn _get_interaction_hit(
     }
     */
 }
+*/

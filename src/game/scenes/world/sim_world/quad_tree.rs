@@ -214,9 +214,7 @@ impl QuadTree {
         }
     }
 
-    pub fn _ray_intersect_chunks(&self, ray_segment: &RaySegment, out: &mut Vec<IVec2>) {
-        out.clear();
-
+    pub fn ray_intersect_chunks(&self, ray_segment: &RaySegment, out: &mut Vec<IVec2>) {
         if ray_segment.is_degenerate() {
             return;
         }

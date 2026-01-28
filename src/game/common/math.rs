@@ -246,6 +246,7 @@ impl Ray {
     }
 }
 
+#[derive(Debug)]
 pub struct RaySegment {
     pub ray: Ray,
     pub distance: f32,
@@ -614,6 +615,7 @@ impl BoundingSphere {
     }
 }
 
+#[derive(Debug)]
 pub struct RayTriangleHit {
     /// Parameter along the ray: hit_point = origin + direction * t
     pub t: f32,

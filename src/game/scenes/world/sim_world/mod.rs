@@ -19,7 +19,10 @@ use crate::{
                 top_down_camera_controller::TopDownCameraController,
                 ui::Ui,
             },
-            systems::{Time, world_interaction::WorldInteraction},
+            systems::{
+                Time,
+                world_interaction::{self, WorldInteraction},
+            },
         },
     },
 };
@@ -45,7 +48,7 @@ pub use camera::ComputedCamera;
 pub use day_night_cycle::DayNightCycle;
 pub use dynamic_bvh::{DynamicBvh, DynamicBvhHandle};
 pub use height_map::HeightMap;
-pub use orders::Order;
+pub use orders::*;
 pub use static_bvh::{StaticBvh, StaticBvhHandle};
 pub use terrain::Terrain;
 pub use ui::UiRect;
@@ -56,8 +59,6 @@ pub struct SimWorldState {
 
     /// A list of chunks that should be highlighted during rendering.
     pub highlighted_chunks: HashSet<IVec2>,
-
-    pub selected_objects: HashSet<Entity>,
 
     pub _sequences: Sequences,
 
@@ -83,6 +84,8 @@ pub fn init_sim_world(
     let time_of_day = 12.0;
 
     world.insert_resource(day_night_cycle::DayNightCycle::from_campaign(&campaign));
+
+    world.add_observer(world_interaction::on_clicked);
 
     // Cameras
 
@@ -132,14 +135,8 @@ pub fn init_sim_world(
 
     let sim_world_state = SimWorldState {
         time_of_day,
-
         highlighted_chunks: HashSet::default(),
-
-        selected_objects: HashSet::default(),
-
-        // gizmo_vertices: Vec::with_capacity(1024),
         _sequences: sequences,
-
         ui,
     };
 

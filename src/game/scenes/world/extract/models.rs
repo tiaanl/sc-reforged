@@ -6,7 +6,8 @@ use crate::{
         model::Model,
         scenes::world::{
             extract::{ModelToRender, RenderSnapshot},
-            sim_world::{ComputedCamera, DynamicBvh, SimWorldState, StaticBvh, ecs::ActiveCamera},
+            sim_world::{ComputedCamera, DynamicBvh, StaticBvh, ecs::ActiveCamera},
+            systems::world_interaction::WorldInteraction,
         },
     },
 };
@@ -16,10 +17,10 @@ pub fn extract_model_snapshot(
     mut snapshot: ResMut<RenderSnapshot>,
     models: Query<(Entity, &Transform, &Handle<Model>)>,
     models_to_prepare: Query<&Handle<Model>, Added<Handle<Model>>>,
-    state: Res<SimWorldState>,
     static_bvh: Res<StaticBvh>,
     dynamic_bvh: Res<DynamicBvh>,
     computed_camera: Single<&ComputedCamera, With<ActiveCamera>>,
+    world_interaction: Res<WorldInteraction>,
     mut visible_objects_cache: Local<Vec<Entity>>,
 ) {
     snapshot.models.models_to_prepare.clear();
@@ -42,7 +43,10 @@ pub fn extract_model_snapshot(
             snapshot.models.models.push(ModelToRender {
                 model: *model_handle,
                 transform: transform.to_mat4(),
-                highlighted: state.selected_objects.contains(&entity),
+                highlighted: world_interaction
+                    .selected_entity
+                    .map(|e| e == entity)
+                    .unwrap_or(false),
             });
         }
     }
