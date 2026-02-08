@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use heck::ToUpperCamelCase;
 use naga::{
     Module,
     back::wgsl,
@@ -8,6 +9,7 @@ use naga::{
 use naga_oil::compose::{
     ComposableModuleDescriptor, Composer, NagaModuleDescriptor, ShaderLanguage, ShaderType,
 };
+use quote::{format_ident, quote};
 
 fn main() {
     compile_shaders();
@@ -66,6 +68,8 @@ fn compile_shaders() {
 
         std::fs::write(&out_path, wgsl_text).expect("write .wgsl");
     }
+
+    write_shaders_module();
 }
 
 fn add_support_shader(composer: &mut Composer, path: impl AsRef<Path>) {
@@ -108,4 +112,115 @@ fn create_shader_module(composer: &mut Composer, path: impl AsRef<Path>) -> Modu
             );
         }
     }
+}
+
+fn write_shaders_module() {
+    println!("cargo:rerun-if-changed=build.rs");
+
+    let variants: Vec<_> = SHADERS
+        .iter()
+        .map(|path| {
+            let stem = Path::new(path)
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .to_upper_camel_case();
+            format_ident!("{stem}")
+        })
+        .collect();
+
+    let all_items: Vec<_> = SHADERS
+        .iter()
+        .map(|path| {
+            let stem = Path::new(path)
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .to_upper_camel_case();
+            let v = format_ident!("{stem}");
+            quote!(ShaderSource::#v)
+        })
+        .collect();
+
+    let source_arms: Vec<_> = SHADERS
+        .iter()
+        .map(|path| {
+            println!("cargo:rerun-if-changed={path}");
+
+            let stem = Path::new(path)
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .to_upper_camel_case();
+            let variant = format_ident!("{stem}");
+
+            // Must match how you write to OUT_DIR/shaders
+            let file_name = Path::new(path)
+                .with_extension("wgsl")
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+
+            let rel = format!("/shaders/{file_name}");
+
+            quote! {
+                ShaderSource::#variant => include_str!(concat!(env!("OUT_DIR"), #rel)),
+            }
+        })
+        .collect();
+
+    let label_arms: Vec<_> = SHADERS
+        .iter()
+        .map(|path| {
+            let stem = Path::new(path)
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .to_upper_camel_case();
+            let variant = format_ident!("{stem}");
+
+            let label = stem;
+
+            quote! {
+                ShaderSource::#variant => #label,
+            }
+        })
+        .collect();
+
+    let tokens = quote! {
+        #[allow(dead_code)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum ShaderSource {
+            #( #variants, )*
+        }
+
+        impl ShaderSource {
+            pub const ALL: &'static [ShaderSource] = &[
+                #( #all_items, )*
+            ];
+        }
+
+        #[allow(dead_code)]
+        pub fn shader_label(source: ShaderSource) -> &'static str {
+            match source {
+                #( #label_arms )*
+            }
+        }
+
+        #[allow(dead_code)]
+        pub fn shader_source(source: ShaderSource) -> &'static str {
+            match source {
+                #( #source_arms )*
+            }
+        }
+    };
+
+    let out_file =
+        std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("shader_source.rs");
+
+    let file: syn::File = syn::parse2(tokens).unwrap();
+    let out = prettyplease::unparse(&file);
+
+    std::fs::write(out_file, out).unwrap();
 }

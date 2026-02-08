@@ -8,6 +8,7 @@ use crate::{
         input::InputState,
         renderer::{Frame, Renderer},
         scene::Scene,
+        shader_cache::ShaderCache,
     },
     game::{
         AssetLoader, AssetReader,
@@ -44,6 +45,7 @@ pub struct WorldScene {
 
     sim_world: World,
     render_targets: RenderTargets,
+    // shader_cache: ShaderCache,
     bindings: RenderBindings,
 
     // Systems
@@ -80,6 +82,8 @@ impl WorldScene {
 
         let mut layouts = RenderLayouts::new();
 
+        let mut shader_cache = ShaderCache::default();
+
         let bindings = RenderBindings::new(renderer, &mut layouts);
 
         // All assets should be loaded now, turn the [AssetLoader] into an [AssetReader].
@@ -90,6 +94,7 @@ impl WorldScene {
             renderer,
             &render_targets,
             &mut layouts,
+            &mut shader_cache,
             &mut sim_world,
         );
 
@@ -98,6 +103,7 @@ impl WorldScene {
 
             sim_world,
             render_targets,
+            // shader_cache,
             bindings,
 
             systems,

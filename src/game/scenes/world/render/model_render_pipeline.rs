@@ -6,6 +6,7 @@ use crate::{
         assets::AssetError,
         growing_buffer::GrowingBuffer,
         renderer::{Frame, Renderer},
+        shader_cache::ShaderCache,
         storage::Handle,
     },
     game::{
@@ -20,7 +21,6 @@ use crate::{
             },
         },
     },
-    wgsl_shader,
 };
 
 use super::{render_models::RenderModels, render_textures::RenderTextures};
@@ -65,13 +65,20 @@ pub struct ModelRenderPipeline {
 }
 
 impl ModelRenderPipeline {
-    pub fn new(renderer: &Renderer, layouts: &mut RenderLayouts) -> Self {
+    pub fn new(
+        renderer: &Renderer,
+        layouts: &mut RenderLayouts,
+        shader_cache: &mut ShaderCache,
+    ) -> Self {
         let device = &renderer.device;
 
         let textures = RenderTextures::new(renderer);
         let models = RenderModels::new(renderer);
 
-        let module = device.create_shader_module(wgsl_shader!("models"));
+        let module = shader_cache.get_or_create(
+            &renderer.device,
+            crate::engine::shader_cache::ShaderSource::Models,
+        );
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("objects_pipeline_layout"),
@@ -122,7 +129,7 @@ impl ModelRenderPipeline {
             label: Some("opaque_objects_pipeline"),
             layout: Some(&layout),
             vertex: wgpu::VertexState {
-                module: &module,
+                module,
                 entry_point: Some("vertex_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers,
@@ -137,7 +144,7 @@ impl ModelRenderPipeline {
             }),
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
-                module: &module,
+                module,
                 entry_point: Some("fragment_opaque"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: GeometryBuffer::opaque_targets(),
@@ -150,7 +157,7 @@ impl ModelRenderPipeline {
             label: Some("alpha_objects_pipeline"),
             layout: Some(&layout),
             vertex: wgpu::VertexState {
-                module: &module,
+                module,
                 entry_point: Some("vertex_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers,
@@ -165,7 +172,7 @@ impl ModelRenderPipeline {
             }),
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
-                module: &module,
+                module,
                 entry_point: Some("fragment_alpha"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: GeometryBuffer::alpha_targets(),

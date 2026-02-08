@@ -3,6 +3,7 @@ use crate::{
         gizmos::GizmoVertex,
         growing_buffer::GrowingBuffer,
         renderer::{Frame, Renderer},
+        shader_cache::{ShaderCache, ShaderSource},
     },
     game::{
         AssetReader,
@@ -15,7 +16,6 @@ use crate::{
             },
         },
     },
-    wgsl_shader,
 };
 
 pub struct GizmoRenderPipeline {
@@ -29,10 +29,11 @@ impl GizmoRenderPipeline {
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
         layouts: &mut RenderLayouts,
+        shader_cache: &mut ShaderCache,
     ) -> Self {
         let device = &renderer.device;
 
-        let module = device.create_shader_module(wgsl_shader!("gizmos"));
+        let module = shader_cache.get_or_create(&renderer.device, ShaderSource::Gizmos);
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("gizmos_pipeline_layout"),
@@ -44,7 +45,7 @@ impl GizmoRenderPipeline {
             label: Some("gizmos_render_pipeline"),
             layout: Some(&layout),
             vertex: wgpu::VertexState {
-                module: &module,
+                module,
                 entry_point: Some("vertex_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[wgpu::VertexBufferLayout {
@@ -63,7 +64,7 @@ impl GizmoRenderPipeline {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
-                module: &module,
+                module,
                 entry_point: Some("fragment_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {

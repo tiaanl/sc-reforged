@@ -4,6 +4,7 @@ use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
         renderer::{Frame, Renderer},
+        shader_cache::{ShaderCache, ShaderSource},
     },
     game::{
         AssetReader,
@@ -17,7 +18,6 @@ use crate::{
             sim_world::Terrain,
         },
     },
-    wgsl_shader,
 };
 
 pub struct TerrainRenderPipeline {
@@ -50,6 +50,7 @@ impl TerrainRenderPipeline {
         assets: &AssetReader,
         renderer: &Renderer,
         layouts: &mut RenderLayouts,
+        shader_cache: &mut ShaderCache,
         sim_world: &bevy_ecs::world::World,
     ) -> Self {
         let terrain = sim_world.resource::<Terrain>();
@@ -242,9 +243,7 @@ impl TerrainRenderPipeline {
             )
         });
 
-        let module = renderer
-            .device
-            .create_shader_module(wgsl_shader!("terrain"));
+        let module = shader_cache.get_or_create(&renderer.device, ShaderSource::Terrain);
 
         let layout = renderer
             .device
@@ -270,7 +269,7 @@ impl TerrainRenderPipeline {
                     label: Some("terrain_pipeline"),
                     layout: Some(&layout),
                     vertex: wgpu::VertexState {
-                        module: &module,
+                        module,
                         entry_point: Some("vertex_terrain"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[wgpu::VertexBufferLayout {
@@ -290,7 +289,7 @@ impl TerrainRenderPipeline {
                     }),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
-                        module: &module,
+                        module,
                         entry_point: Some("fragment_terrain"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffer::opaque_targets(),
@@ -306,7 +305,7 @@ impl TerrainRenderPipeline {
                     label: Some("terrain_wireframe_pipeline"),
                     layout: Some(&layout),
                     vertex: wgpu::VertexState {
-                        module: &module,
+                        module,
                         entry_point: Some("vertex_wireframe"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[wgpu::VertexBufferLayout {
@@ -330,7 +329,7 @@ impl TerrainRenderPipeline {
                     }),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
-                        module: &module,
+                        module,
                         entry_point: Some("fragment_wireframe"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffer::opaque_targets(),
@@ -346,7 +345,7 @@ impl TerrainRenderPipeline {
                     label: Some("strata_render_pipeline"),
                     layout: Some(&layout),
                     vertex: wgpu::VertexState {
-                        module: &module,
+                        module,
                         entry_point: Some("strata_vertex"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[wgpu::VertexBufferLayout {
@@ -370,7 +369,7 @@ impl TerrainRenderPipeline {
                     }),
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
-                        module: &module,
+                        module,
                         entry_point: Some("strata_fragment"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffer::opaque_targets(),

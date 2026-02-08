@@ -1,5 +1,8 @@
 use crate::{
-    engine::renderer::{Frame, Renderer},
+    engine::{
+        renderer::{Frame, Renderer},
+        shader_cache::ShaderCache,
+    },
     game::{
         AssetReader,
         scenes::world::{
@@ -35,15 +38,29 @@ impl WorldRenderer {
         renderer: &Renderer,
         render_targets: &RenderTargets,
         layouts: &mut RenderLayouts,
+        shader_cache: &mut ShaderCache,
         sim_world: &bevy_ecs::world::World,
     ) -> Self {
+        // Warm up the shader cache.
+        shader_cache.preload_all(&renderer.device);
+
         let camera_pipeline = CameraRenderPipeline;
-        let terrain_pipeline = TerrainRenderPipeline::new(assets, renderer, layouts, sim_world);
-        let model_pipeline = ModelRenderPipeline::new(renderer, layouts);
-        let ui_pipeline = UiRenderPipeline::new(renderer, render_targets.surface_format, layouts);
-        let compositor = Compositor::new(renderer, render_targets);
-        let gizmo_pipeline =
-            GizmoRenderPipeline::new(renderer, render_targets.surface_format, layouts);
+        let terrain_pipeline =
+            TerrainRenderPipeline::new(assets, renderer, layouts, shader_cache, sim_world);
+        let model_pipeline = ModelRenderPipeline::new(renderer, layouts, shader_cache);
+        let ui_pipeline = UiRenderPipeline::new(
+            renderer,
+            render_targets.surface_format,
+            layouts,
+            shader_cache,
+        );
+        let compositor = Compositor::new(renderer, render_targets, shader_cache);
+        let gizmo_pipeline = GizmoRenderPipeline::new(
+            renderer,
+            render_targets.surface_format,
+            layouts,
+            shader_cache,
+        );
 
         Self {
             camera_pipeline,

@@ -2,6 +2,7 @@ use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
         renderer::{Frame, Renderer},
+        shader_cache::{ShaderCache, ShaderSource},
     },
     game::{
         AssetReader,
@@ -13,7 +14,6 @@ use crate::{
             },
         },
     },
-    wgsl_shader,
 };
 
 pub struct UiStateLayout;
@@ -51,8 +51,9 @@ impl UiRenderPipeline {
         renderer: &Renderer,
         surface_format: wgpu::TextureFormat,
         layouts: &mut RenderLayouts,
+        shader_cache: &mut ShaderCache,
     ) -> Self {
-        let module = renderer.device.create_shader_module(wgsl_shader!("ui"));
+        let module = shader_cache.get_or_create(&renderer.device, ShaderSource::Ui);
 
         let layout = renderer
             .device
@@ -69,7 +70,7 @@ impl UiRenderPipeline {
                     label: Some("ui_rect_render_pipeline"),
                     layout: Some(&layout),
                     vertex: wgpu::VertexState {
-                        module: &module,
+                        module,
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         buffers: &[wgpu::VertexBufferLayout {
@@ -90,7 +91,7 @@ impl UiRenderPipeline {
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
-                        module: &module,
+                        module,
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: &[Some(wgpu::ColorTargetState {

@@ -4,6 +4,7 @@ use glam::Vec3;
 use crate::{
     engine::{
         renderer::{Frame, Renderer},
+        shader_cache::ShaderCache,
         transform::Transform,
     },
     game::{
@@ -81,6 +82,7 @@ impl Systems {
         renderer: &Renderer,
         render_targets: &RenderTargets,
         layouts: &mut RenderLayouts,
+        shader_cache: &mut ShaderCache,
         sim_world: &mut World,
     ) -> Self {
         // Update schedule.
@@ -140,6 +142,7 @@ impl Systems {
                 renderer,
                 render_targets,
                 layouts,
+                shader_cache,
                 sim_world,
             ),
         }

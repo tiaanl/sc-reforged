@@ -1,5 +1,8 @@
 use crate::{
-    engine::renderer::{Frame, Renderer},
+    engine::{
+        renderer::{Frame, Renderer},
+        shader_cache::{ShaderCache, ShaderSource},
+    },
     game::{
         AssetReader,
         scenes::world::{
@@ -7,7 +10,6 @@ use crate::{
             render::{GeometryBuffer, RenderPipeline, RenderTargets},
         },
     },
-    wgsl_shader,
 };
 
 use super::RenderBindings;
@@ -17,10 +19,12 @@ pub struct Compositor {
 }
 
 impl Compositor {
-    pub fn new(renderer: &Renderer, render_targets: &RenderTargets) -> Self {
-        let module = renderer
-            .device
-            .create_shader_module(wgsl_shader!("compositor"));
+    pub fn new(
+        renderer: &Renderer,
+        render_targets: &RenderTargets,
+        shader_cache: &mut ShaderCache,
+    ) -> Self {
+        let module = shader_cache.get_or_create(&renderer.device, ShaderSource::Compositor);
 
         let layout = renderer
             .device
@@ -36,7 +40,7 @@ impl Compositor {
                 label: Some("compositor_pipeline"),
                 layout: Some(&layout),
                 vertex: wgpu::VertexState {
-                    module: &module,
+                    module,
                     entry_point: Some("vertex"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     buffers: &[],
@@ -45,7 +49,7 @@ impl Compositor {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
-                    module: &module,
+                    module,
                     entry_point: Some("fragment"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
