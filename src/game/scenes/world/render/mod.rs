@@ -4,6 +4,7 @@ mod geometry_buffers;
 mod gizmo_render_pipeline;
 mod model_render_pipeline;
 pub mod per_frame;
+mod pipeline;
 mod render_bindings;
 mod render_layouts;
 mod render_models;

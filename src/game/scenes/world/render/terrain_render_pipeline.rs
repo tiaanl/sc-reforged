@@ -12,7 +12,12 @@ use crate::{
             extract::{RenderSnapshot, TerrainChunk},
             render::{
                 GeometryBuffer, RenderBindings, RenderLayouts,
-                camera_render_pipeline::CameraEnvironmentLayout, per_frame::PerFrame,
+                camera_render_pipeline::CameraEnvironmentLayout,
+                per_frame::PerFrame,
+                pipeline::{
+                    BindGroupLayoutDescriptor, DepthState, FragmentState, PrimitiveState,
+                    RenderPipelineDescriptor, VertexBufferLayout, VertexState,
+                },
                 render_pipeline::RenderPipeline,
             },
             sim_world::Terrain,
@@ -261,6 +266,36 @@ impl TerrainRenderPipeline {
             1 => Uint32,
             2 => Uint32,
         ];
+
+        {
+            let _terrain_pipeline_descriptor = RenderPipelineDescriptor {
+                label: String::from("terrain"),
+                layout: vec![BindGroupLayoutDescriptor {
+                    label: String::from("terrain"),
+                    entries: vec![],
+                }],
+                vertex: VertexState {
+                    shader: ShaderSource::Terrain,
+                    entry_point: String::from("vertex_terrain"),
+                    buffers: vec![VertexBufferLayout {
+                        array_stride: std::mem::size_of::<gpu::ChunkInstanceData>() as u64,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: instance_attrs.to_vec(),
+                    }],
+                },
+                primitive: PrimitiveState::default(),
+                depth: Some(DepthState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    enabled: true,
+                    compare: wgpu::CompareFunction::LessEqual,
+                }),
+                fragment: Some(FragmentState {
+                    shader: ShaderSource::Terrain,
+                    entry_point: String::from("fragment_terrain"),
+                    targets: GeometryBuffer::opaque_targets().to_vec(),
+                }),
+            };
+        }
 
         let terrain_pipeline =
             renderer
