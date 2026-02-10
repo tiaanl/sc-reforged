@@ -40,6 +40,10 @@ impl GizmoRenderPipeline {
             bind_group_layouts: &[layouts.get::<CameraEnvironmentLayout>(renderer)],
             push_constant_ranges: &[],
         });
+        let gizmo_vertex_layout = <GizmoVertex as renderer::AsVertexLayout>::vertex_buffer_layout();
+        let gizmo_vertex_attributes =
+            renderer::to_wgpu_vertex_attributes(gizmo_vertex_layout.attributes);
+        let gizmo_vertex_buffers = [gizmo_vertex_layout.to_wgpu(&gizmo_vertex_attributes)];
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("gizmos_render_pipeline"),
@@ -48,14 +52,7 @@ impl GizmoRenderPipeline {
                 module,
                 entry_point: Some("vertex_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<GizmoVertex>() as wgpu::BufferAddress,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x4, // position
-                        1 => Float32x4, // color
-                    ],
-                }],
+                buffers: &gizmo_vertex_buffers,
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::LineList,

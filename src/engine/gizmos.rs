@@ -1,14 +1,17 @@
 #![allow(dead_code)]
 
 use glam::{Mat4, Vec3, Vec4};
+use renderer_macros::AsVertexLayout;
 
 use crate::game::math::{BoundingBox, ViewProjection};
 
-#[derive(Clone, Copy, Debug, bytemuck::NoUninit)]
+#[derive(Clone, Copy, Debug, bytemuck::NoUninit, AsVertexLayout)]
 #[repr(C)]
 pub struct GizmoVertex {
+    #[vertex_attribute(location = 0, format = Float32x4)]
     pub position: Vec3,
     _padding: f32,
+    #[vertex_attribute(location = 1, format = Float32x4)]
     pub color: Vec4,
 }
 

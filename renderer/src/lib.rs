@@ -2,9 +2,11 @@
 
 mod bind_groups;
 mod buffers;
+mod vertex_layouts;
 
 pub use bind_groups::*;
 pub use buffers::*;
+pub use vertex_layouts::*;
 
 use generational_arena::Arena;
 
