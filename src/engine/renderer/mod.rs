@@ -8,7 +8,7 @@ pub use render::*;
 pub use surface::*;
 use winit::window::Window;
 
-pub fn create(window: Arc<Window>) -> (Surface, Renderer) {
+pub fn create(window: Arc<Window>) -> (Surface, Renderer, renderer::Renderer) {
     let winit::dpi::PhysicalSize { width, height } = window.inner_size();
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -68,7 +68,9 @@ pub fn create(window: Arc<Window>) -> (Surface, Renderer) {
 
     surface.configure(&device);
 
-    let renderer = Renderer::new(device, queue);
+    let renderer = Renderer::new(device.clone(), queue.clone());
 
-    (surface, renderer)
+    let new_renderer = renderer::Renderer::new(device, queue);
+
+    (surface, renderer, new_renderer)
 }

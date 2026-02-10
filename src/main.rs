@@ -41,6 +41,7 @@ enum App {
         surface: Surface,
         /// The placeholder for the scoped global [Renderer].
         renderer: Renderer,
+        new_renderer: renderer::Renderer,
         /// The current input state of the engine.
         input: InputState,
         /// The index of the current frame being rendered.
@@ -96,7 +97,8 @@ impl winit::application::ApplicationHandler for App {
                     UVec2::new(width, height)
                 };
 
-                let (surface, renderer) = engine::renderer::create(Arc::clone(&window));
+                let (surface, renderer, new_renderer) =
+                    engine::renderer::create(Arc::clone(&window));
 
                 #[cfg(feature = "egui")]
                 let egui_integration = engine::egui_integration::EguiIntegration::new(
@@ -132,6 +134,7 @@ impl winit::application::ApplicationHandler for App {
                     window,
                     surface,
                     renderer,
+                    new_renderer,
                     #[cfg(feature = "egui")]
                     egui_integration,
                     input: InputState::default(),
