@@ -1,9 +1,11 @@
 [workspace]
-members = ["renderer"]
+members = ["renderer", "renderer-macros"]
 
 [workspace.dependencies]
 generational-arena = "0.2"
 glam = { version = "0.30", features = ["bytemuck"] }
+renderer = { path = "renderer" }
+renderer-macros = { path = "renderer-macros" }
 wgpu = "24.0"
 
 [package]
@@ -25,7 +27,8 @@ egui-winit = { version = "0.31", optional = true, default-features = false }
 wgpu.workspace = true
 winit = "0.30"
 
-renderer = { path = "renderer" }
+renderer.workspace = true
+renderer-macros.workspace = true
 
 ahash = "0.8"
 bytemuck = { version = "1.18", default-features = false, features = ["derive"] }

@@ -1,3 +1,5 @@
+use renderer_macros::AsBindGroup;
+
 use crate::{
     engine::renderer::Frame,
     game::scenes::world::{
@@ -7,6 +9,13 @@ use crate::{
 };
 
 use super::{GeometryBuffer, RenderBindings};
+
+#[derive(AsBindGroup)]
+pub struct CameraEnvironmentBindGroup {
+    #[allow(dead_code)]
+    #[uniform(0)]
+    camera_env: gpu::CameraEnvironment,
+}
 
 pub struct CameraEnvironmentLayout;
 

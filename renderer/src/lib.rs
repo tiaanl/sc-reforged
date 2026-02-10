@@ -1,7 +1,9 @@
 //! A wrapper around `wgpu` primitives to render graphics to a surface.
 
+mod bind_groups;
 mod buffers;
 
+pub use bind_groups::*;
 pub use buffers::*;
 
 use generational_arena::Arena;
@@ -23,14 +25,10 @@ impl Renderer {
     }
 
     pub fn create_buffer(&mut self, descriptor: BufferDescriptor) -> BufferId {
-        BufferId(self.buffers.insert(BufferEntry {
-            descriptor,
-            buffer: None,
-        }))
+        BufferId(self.buffers.insert(BufferEntry { descriptor }))
     }
 }
 
 struct BufferEntry {
     pub descriptor: BufferDescriptor,
-    pub buffer: Option<wgpu::Buffer>,
 }
