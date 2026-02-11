@@ -1,7 +1,17 @@
 use bevy_ecs::prelude::*;
 use glam::{Quat, Vec3};
 
-use crate::engine::{egui_integration::UiExt, transform::Transform};
+use crate::{
+    engine::{egui_integration::UiExt, transform::Transform},
+    game::scenes::world::sim_world::Sequencer,
+};
+
+/// A message sent when a new order is issues to an Entity.
+#[derive(Message)]
+pub enum OrderMessage {
+    /// Issue a new order.
+    New { entity: Entity, order: Order },
+}
 
 // 1  -> order_move
 // 3  -> order_move_to_use_vehicle
@@ -40,7 +50,7 @@ use crate::engine::{egui_integration::UiExt, transform::Transform};
 // 36 -> order_move_to_transfer_item_weapons_locker (alt entry)
 // 37 -> order_move_to_transfer_item_from_body (alt entry)
 
-#[derive(Component, Default)]
+#[derive(Component, Clone, Debug, Default)]
 pub enum Order {
     #[default]
     Idle,
@@ -88,6 +98,7 @@ impl Order {
                 target_location: world_position,
                 move_speed,
                 rotation_speed,
+                ..
             }) => {
                 ui.vertical(|ui| {
                     ui.h3("Move");
@@ -104,21 +115,30 @@ impl Order {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct OrderMove {
     pub target_location: Vec3,
     pub move_speed: f32,
     pub rotation_speed: f32,
+
+    /// Whether the entity finished turning towards the target and is moving.
+    pub is_moving: bool,
 }
 
 impl OrderMove {
-    pub fn update(&mut self, transform: &mut Transform, delta_time: f32) {
+    pub fn update(
+        &mut self,
+        transform: &mut Transform,
+        delta_time: f32,
+        sequencer: &mut Sequencer,
+    ) -> bool {
         // Turn to within this angle before moving.
         const ALIGN_ANGLE_RAD: f32 = 0.035; // ~2 degrees
 
         let to_target = self.target_location - transform.translation;
         let distance_sq = to_target.length_squared();
         if distance_sq <= 1.0e-6 {
-            return;
+            return false;
         }
 
         let direction = to_target * distance_sq.sqrt().recip();
@@ -126,31 +146,45 @@ impl OrderMove {
         let current_forward = transform.rotation * Vec3::Y;
 
         // Step 1: Turn towards the target.
+        if !self.is_moving {
+            let delta_rot = Quat::from_rotation_arc(current_forward, direction);
+            let (axis, angle) = delta_rot.to_axis_angle();
+            let max_angle = self.rotation_speed * delta_time;
+            if angle > 1.0e-6 {
+                let clamped = angle.min(max_angle);
+                let step = Quat::from_axis_angle(axis, clamped);
+                transform.rotation = step * transform.rotation;
+            }
 
-        let delta_rot = Quat::from_rotation_arc(current_forward, direction);
-        let (axis, angle) = delta_rot.to_axis_angle();
-        let max_angle = self.rotation_speed * delta_time;
-        if angle > 1.0e-6 {
-            let clamped = angle.min(max_angle);
-            let step = Quat::from_axis_angle(axis, clamped);
-            transform.rotation = step * transform.rotation;
-        }
+            let aligned_dot = (transform.rotation * Vec3::Y).dot(direction);
+            let aligned_threshold = ALIGN_ANGLE_RAD.cos();
+            if aligned_dot < aligned_threshold {
+                return false;
+            }
 
-        let aligned_dot = (transform.rotation * Vec3::Y).dot(direction);
-        let aligned_threshold = ALIGN_ANGLE_RAD.cos();
-        if aligned_dot < aligned_threshold {
-            return;
+            println!("starting to move");
+            self.is_moving = true;
+
+            // When we start to move, start playing the movement sequence.
+            sequencer.play("MSEQ_WALK");
         }
 
         // Step 2: Move towards the target.
 
         let move_step = self.move_speed * delta_time;
-        if move_step >= distance_sq.sqrt() {
-            transform.translation = self.target_location;
-        } else {
+        if move_step < distance_sq.sqrt() {
             transform.translation += direction * move_step;
+            return false;
         }
+
+        // We're within the threshold to the target.
+        transform.translation = self.target_location;
+
+        // Order is done.
+        true
     }
+
+    fn turn_towards_target(&mut self) {}
 }
 
 impl Default for OrderMove {
@@ -159,6 +193,7 @@ impl Default for OrderMove {
             target_location: Vec3::ZERO,
             move_speed: 100.0,
             rotation_speed: 3.0,
+            is_moving: false,
         }
     }
 }

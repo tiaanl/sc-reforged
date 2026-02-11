@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+use bevy_ecs::prelude::*;
 
 use std::{collections::VecDeque, path::PathBuf, str::FromStr};
 
@@ -41,10 +41,12 @@ pub struct TransitionSequenceDef {
 }
 
 /// A sequence of motions that will play.
+#[derive(Debug)]
 pub struct SequenceDef {
     entries: Vec<SequenceDefEntry>,
 }
 
+#[derive(Debug)]
 pub struct SequenceDefEntry {
     pub motion: Handle<Motion>,
     pub immediate: bool,
@@ -52,14 +54,14 @@ pub struct SequenceDefEntry {
     pub callbacks: Vec<MotionCallback>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Repeat {
     None,
     Infinite,
     Count(i32),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum MotionCallback {
     NotifyEnd,
     Frame { name: String, frame: i32 },
@@ -67,6 +69,7 @@ pub enum MotionCallback {
 
 type Lookup<T> = HashMap<String, Handle<T>>;
 
+#[derive(Resource)]
 pub struct Sequences {
     transition_sequences: HashMap<String, TransitionSequenceDef>,
     sequences: Storage<SequenceDef>,
@@ -162,17 +165,39 @@ impl Sequences {
             sequences_lookup,
         })
     }
+
+    #[inline]
+    pub fn sequence_def_by_name(&self, name: &str) -> Option<&SequenceDef> {
+        if let Some(&handle) = self.sequences_lookup.get(name) {
+            self.sequences.get(handle)
+        } else {
+            None
+        }
+    }
 }
 
 /// Play a sequence of motions in order.
-#[derive(Default)]
+#[derive(Component, Debug, Default)]
 pub struct Sequencer {
     entries: VecDeque<SequencerEntry>,
     time: f32,
+    next_sequence: Option<String>,
 }
 
 impl Sequencer {
+    #[inline]
+    pub fn play(&mut self, sequence: &str) {
+        self.next_sequence = Some(sequence.into());
+    }
+
+    #[inline]
+    pub fn next_sequence(&mut self) -> Option<String> {
+        self.next_sequence.take()
+    }
+
     pub fn enqueue(&mut self, assets: &AssetReader, sequence_def: &SequenceDef) {
+        println!("Enqueue sequence: {:?}", sequence_def);
+
         self.time = 0.0;
         self.entries = sequence_def
             .entries
@@ -219,14 +244,18 @@ impl Sequencer {
         let _ = self.entries.pop_front();
     }
 
+    /// Get the currently playing motion handle and its local time.
+    #[inline]
     pub fn get(&self) -> Option<(Handle<Motion>, f32)> {
-        None
+        self.entries
+            .front()
+            .map(|entry| (entry.motion, entry.play_time))
     }
 }
 
 #[cfg(feature = "egui")]
 impl Sequencer {
-    pub fn ui(&mut self, ui: &mut egui::Ui, assets: &AssetReader) {
+    pub fn ui(&self, ui: &mut egui::Ui, assets: &AssetReader) {
         use crate::engine::egui_integration::UiExt;
 
         if self.entries.is_empty() {
@@ -245,6 +274,7 @@ impl Sequencer {
     }
 }
 
+#[derive(Debug)]
 struct SequencerEntry {
     motion: Handle<Motion>,
     play_time: f32,

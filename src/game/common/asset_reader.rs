@@ -1,8 +1,11 @@
+use bevy_ecs::prelude::*;
+
 use crate::{
     engine::storage::{Handle, Storage},
     game::{image::Image, model::Model, scenes::world::animation::motion::Motion},
 };
 
+#[derive(Resource)]
 pub struct AssetReader {
     images: Storage<Image>,
     models: Storage<Model>,

@@ -10,7 +10,12 @@ use crate::{
         math::BoundingBox,
         model::{Mesh, Model},
         models::ModelName,
-        scenes::world::sim_world::{DynamicBvh, Order, StaticBvhHandle, ecs::BoundingBoxComponent},
+        scenes::world::{
+            animation::pose::Pose,
+            sim_world::{
+                DynamicBvh, Order, StaticBvhHandle, ecs::BoundingBoxComponent, sequences::Sequencer,
+            },
+        },
     },
 };
 
@@ -163,12 +168,16 @@ impl Spawner {
             dynamic_bvh.insert(entity, bounding_box.transformed(transform.to_mat4()))
         };
 
+        let sequencer = Sequencer::default();
+
         world.entity_mut(entity).insert((
             transform.clone(),
             model_handle,
             BoundingBoxComponent(bounding_box),
             Order::default(),
             dynamic_bvh_handle,
+            sequencer,
+            Pose::default(),
         ));
 
         Ok(entity)

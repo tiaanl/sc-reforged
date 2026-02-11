@@ -15,7 +15,6 @@ use crate::{
             sim_world::{
                 ecs::{ActiveCamera, GizmoVertices, Viewport},
                 free_camera_controller::FreeCameraController,
-                sequences::Sequences,
                 top_down_camera_controller::TopDownCameraController,
                 ui::Ui,
             },
@@ -49,6 +48,7 @@ pub use day_night_cycle::DayNightCycle;
 pub use dynamic_bvh::{DynamicBvh, DynamicBvhHandle};
 pub use height_map::HeightMap;
 pub use orders::*;
+pub use sequences::{Sequencer, Sequences};
 pub use static_bvh::{StaticBvh, StaticBvhHandle};
 pub use terrain::Terrain;
 pub use ui::UiRect;
@@ -60,16 +60,16 @@ pub struct SimWorldState {
     /// A list of chunks that should be highlighted during rendering.
     pub highlighted_chunks: HashSet<IVec2>,
 
-    pub _sequences: Sequences,
-
     pub ui: Ui,
 }
 
 pub fn init_sim_world(
     world: &mut World,
-    assets: &mut AssetLoader,
+    assets: AssetLoader,
     campaign_def: &CampaignDef,
 ) -> Result<(), AssetError> {
+    let mut assets = assets;
+
     let campaign = assets.load_campaign(&campaign_def.base_name)?;
 
     world.init_resource::<Time>();
@@ -125,24 +125,29 @@ pub fn init_sim_world(
         FreeCameraController::new(1000.0, 0.2),
     ));
 
-    init_terrain(world, assets, campaign_def)?;
+    init_terrain(world, &mut assets, campaign_def)?;
 
-    init_objects(world, assets, campaign)?;
+    init_objects(world, &mut assets, campaign)?;
 
-    let sequences = Sequences::new(assets)?;
+    world.init_resource::<Messages<OrderMessage>>();
+
+    world.insert_resource(Sequences::new(&mut assets)?);
 
     let ui = Ui::new();
 
     let sim_world_state = SimWorldState {
         time_of_day,
         highlighted_chunks: HashSet::default(),
-        _sequences: sequences,
         ui,
     };
 
     world.insert_resource(sim_world_state);
 
     world.init_resource::<Viewport>();
+
+    // When we're done loading assets, convert it into a reader and insert it
+    // into the ECS.
+    world.insert_resource(assets.into_reader());
 
     Ok(())
 }

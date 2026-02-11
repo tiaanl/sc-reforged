@@ -29,6 +29,7 @@ mod clear_render_targets;
 mod debug;
 mod gizmos;
 mod orders;
+mod sequences;
 pub mod world_interaction;
 
 #[derive(Resource)]
@@ -78,7 +79,6 @@ pub struct Systems {
 
 impl Systems {
     pub fn new(
-        assets: &AssetReader,
         renderer: &Renderer,
         render_targets: &RenderTargets,
         layouts: &mut RenderLayouts,
@@ -114,12 +114,15 @@ impl Systems {
             // Update
             schedule.add_systems(
                 (
+                    orders::issue_new_orders,
                     orders::process_biped_orders,
                     world_interaction::update,
                     rebuild_static_bvh.run_if(|q: Query<(), Added<ecs::BoundingBoxComponent>>| {
                         q.iter().count() > 0
                     }),
                     update_dynamic_bvh,
+                    sequences::enqueue_next_sequences,
+                    sequences::update_sequencers,
                     // debug::draw_model_bounding_boxes,
                 )
                     .in_set(Update)
@@ -130,6 +133,8 @@ impl Systems {
         };
 
         let extract_schedule = extract::create_extract_schedule();
+
+        let assets = sim_world.resource::<AssetReader>();
 
         Self {
             sim_time: 0.0,

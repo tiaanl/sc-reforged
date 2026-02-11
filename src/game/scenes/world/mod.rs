@@ -41,8 +41,6 @@ struct FrameTime {
 
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
-    assets: AssetReader,
-
     sim_world: World,
     render_targets: RenderTargets,
     // shader_cache: ShaderCache,
@@ -72,11 +70,11 @@ impl WorldScene {
         let fps_history = vec![FrameTime::default(); 100];
         let fps_history_cursor = 0;
 
-        let mut assets = AssetLoader::new()?;
+        let assets = AssetLoader::new()?;
 
         let mut sim_world = World::default();
 
-        init_sim_world(&mut sim_world, &mut assets, &campaign_def)?;
+        init_sim_world(&mut sim_world, assets, &campaign_def)?;
 
         let render_targets = RenderTargets::new(renderer, surface_size, surface_format);
 
@@ -86,11 +84,7 @@ impl WorldScene {
 
         let bindings = RenderBindings::new(renderer, &mut layouts);
 
-        // All assets should be loaded now, turn the [AssetLoader] into an [AssetReader].
-        let assets = assets.into_reader();
-
         let systems = systems::Systems::new(
-            &assets,
             renderer,
             &render_targets,
             &mut layouts,
@@ -99,11 +93,8 @@ impl WorldScene {
         );
 
         Ok(Self {
-            assets,
-
             sim_world,
             render_targets,
-            // shader_cache,
             bindings,
 
             systems,
@@ -197,8 +188,9 @@ impl Scene for WorldScene {
 
                 let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
+                let assets = self.sim_world.resource::<AssetReader>();
                 self.systems
-                    .prepare(&self.assets, &mut self.bindings, renderer, render_snapshot);
+                    .prepare(assets, &mut self.bindings, renderer, render_snapshot);
                 frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
             }
 
@@ -305,7 +297,25 @@ impl Scene for WorldScene {
 
                 // Objects
                 {
+                    use crate::game::scenes::world::systems::world_interaction::WorldInteraction;
+
                     ui.heading("Objects");
+
+                    // Orders
+                    let world_interaction = self.sim_world.resource::<WorldInteraction>();
+                    if let Some(entity) = world_interaction.selected_entity {
+                        use crate::game::scenes::world::sim_world::{Order, Sequencer};
+
+                        if let Some(order) = self.sim_world.get::<Order>(entity) {
+                            //
+                            ui.label(format!("{order:?}"));
+                        }
+
+                        let assets = self.sim_world.resource::<AssetReader>();
+                        if let Some(sequencer) = self.sim_world.get::<Sequencer>(entity) {
+                            sequencer.ui(ui, assets);
+                        }
+                    }
                 }
             });
 
