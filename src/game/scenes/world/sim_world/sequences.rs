@@ -90,7 +90,7 @@ impl Sequences {
                 out.entry(transition_sequence.name.clone())
                     .or_insert(TransitionSequenceDef {
                         from: State::from_str(&transition_sequence.from_state).unwrap(),
-                        to: State::from_str(&transition_sequence.from_state).unwrap(),
+                        to: State::from_str(&transition_sequence.to_state).unwrap(),
                         motion,
                     });
             }
