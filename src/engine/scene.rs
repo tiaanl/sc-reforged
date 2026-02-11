@@ -6,7 +6,7 @@ use super::{input::InputState, renderer::Frame};
 
 /// Trait defining a scene with callbacks for each stage of the render pipeline.
 /// Scenes are sent across threads when switching via the `EventLoopProxy`, so they must be `Send`.
-pub trait Scene: Send {
+pub trait Scene {
     /// Handle a window surface resize to the given `size`.
     fn resize(&mut self, size: UVec2);
 

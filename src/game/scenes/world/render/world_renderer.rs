@@ -9,7 +9,8 @@ use crate::{
             extract::RenderSnapshot,
             render::{
                 Compositor, GeometryBuffer, GizmoRenderPipeline, RenderTargets,
-                camera_render_pipeline::CameraRenderPipeline, render_pipeline::RenderPipeline,
+                camera_render_pipeline::CameraRenderPipeline,
+                render_pipeline::{RenderPipeline, RenderPipelineList},
                 ui_render_pipeline::UiRenderPipeline,
             },
         },
@@ -22,14 +23,7 @@ use super::{
 };
 
 pub struct WorldRenderer {
-    camera_pipeline: CameraRenderPipeline,
-    // TODO: should not be pub.
-    pub terrain_pipeline: TerrainRenderPipeline,
-    // TODO: should not be pub.
-    pub model_pipeline: ModelRenderPipeline,
-    ui_pipeline: UiRenderPipeline,
-    compositor: Compositor,
-    gizmo_pipeline: GizmoRenderPipeline,
+    pipelines: RenderPipelineList,
 }
 
 impl WorldRenderer {
@@ -44,32 +38,33 @@ impl WorldRenderer {
         // Warm up the shader cache.
         shader_cache.preload_all(&renderer.device);
 
-        let camera_pipeline = CameraRenderPipeline;
-        let terrain_pipeline =
-            TerrainRenderPipeline::new(assets, renderer, layouts, shader_cache, sim_world);
-        let model_pipeline = ModelRenderPipeline::new(renderer, layouts, shader_cache);
-        let ui_pipeline = UiRenderPipeline::new(
-            renderer,
-            render_targets.surface_format,
-            layouts,
-            shader_cache,
-        );
-        let compositor = Compositor::new(renderer, render_targets, shader_cache);
-        let gizmo_pipeline = GizmoRenderPipeline::new(
-            renderer,
-            render_targets.surface_format,
-            layouts,
-            shader_cache,
-        );
+        let mut pipelines = RenderPipelineList::default();
 
-        Self {
-            camera_pipeline,
-            terrain_pipeline,
-            model_pipeline,
-            ui_pipeline,
-            compositor,
-            gizmo_pipeline,
-        }
+        pipelines.push(CameraRenderPipeline);
+        pipelines.push(TerrainRenderPipeline::new(
+            assets,
+            renderer,
+            layouts,
+            shader_cache,
+            sim_world,
+        ));
+
+        pipelines.push(ModelRenderPipeline::new(renderer, layouts, shader_cache));
+        pipelines.push(UiRenderPipeline::new(
+            renderer,
+            render_targets.surface_format,
+            layouts,
+            shader_cache,
+        ));
+        pipelines.push(Compositor::new(renderer, render_targets, shader_cache));
+        pipelines.push(GizmoRenderPipeline::new(
+            renderer,
+            render_targets.surface_format,
+            layouts,
+            shader_cache,
+        ));
+
+        Self { pipelines }
     }
 }
 
@@ -81,18 +76,7 @@ impl RenderPipeline for WorldRenderer {
         bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
-        self.camera_pipeline
-            .prepare(assets, renderer, bindings, snapshot);
-        self.terrain_pipeline
-            .prepare(assets, renderer, bindings, snapshot);
-        self.model_pipeline
-            .prepare(assets, renderer, bindings, snapshot);
-        self.ui_pipeline
-            .prepare(assets, renderer, bindings, snapshot);
-        self.compositor
-            .prepare(assets, renderer, bindings, snapshot);
-        self.gizmo_pipeline
-            .prepare(assets, renderer, bindings, snapshot);
+        self.pipelines.prepare(assets, renderer, bindings, snapshot);
     }
 
     fn queue(
@@ -102,17 +86,7 @@ impl RenderPipeline for WorldRenderer {
         geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,
     ) {
-        self.camera_pipeline
-            .queue(bindings, frame, geometry_buffer, snapshot);
-        self.terrain_pipeline
-            .queue(bindings, frame, geometry_buffer, snapshot);
-        self.model_pipeline
-            .queue(bindings, frame, geometry_buffer, snapshot);
-        self.ui_pipeline
-            .queue(bindings, frame, geometry_buffer, snapshot);
-        self.compositor
-            .queue(bindings, frame, geometry_buffer, snapshot);
-        self.gizmo_pipeline
+        self.pipelines
             .queue(bindings, frame, geometry_buffer, snapshot);
     }
 }

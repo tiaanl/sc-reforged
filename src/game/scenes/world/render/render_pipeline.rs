@@ -28,3 +28,40 @@ pub trait RenderPipeline {
         snapshot: &RenderSnapshot,
     );
 }
+
+#[derive(Default)]
+pub struct RenderPipelineList {
+    pipelines: Vec<Box<dyn RenderPipeline>>,
+}
+
+impl RenderPipelineList {
+    pub fn push<T: 'static + RenderPipeline>(&mut self, pipeline: T) {
+        self.pipelines.push(Box::new(pipeline));
+    }
+}
+
+impl RenderPipeline for RenderPipelineList {
+    fn prepare(
+        &mut self,
+        assets: &AssetReader,
+        renderer: &Renderer,
+        bindings: &mut RenderBindings,
+        snapshot: &RenderSnapshot,
+    ) {
+        for pipeline in self.pipelines.iter_mut() {
+            pipeline.prepare(assets, renderer, bindings, snapshot);
+        }
+    }
+
+    fn queue(
+        &self,
+        bindings: &RenderBindings,
+        frame: &mut Frame,
+        geometry_buffer: &GeometryBuffer,
+        snapshot: &RenderSnapshot,
+    ) {
+        for pipeline in self.pipelines.iter() {
+            pipeline.queue(bindings, frame, geometry_buffer, snapshot);
+        }
+    }
+}
