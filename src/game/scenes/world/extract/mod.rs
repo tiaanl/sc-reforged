@@ -21,6 +21,7 @@ pub fn create_extract_schedule() -> Schedule {
             // These can be done in any order.
             (
                 terrain::extract_terrain_snapshot,
+                models::extract_models_to_prepare,
                 models::extract_model_snapshot,
                 ui::extract_ui_snapshot,
                 gizmos::extract_gizmos,

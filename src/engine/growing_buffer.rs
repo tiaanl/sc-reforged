@@ -56,8 +56,8 @@ impl<T: NoUninit> GrowingBuffer<T> {
     }
 
     /// Write the given data to the start of the buffer. Returns the range where it was written.
-    pub fn write(&mut self, renderer: &Renderer, data: &[T]) -> Range<u32> {
-        self.ensure_size(renderer, data.len() as u32);
+    pub fn write(&mut self, renderer: &Renderer, data: &[T]) -> bool {
+        let resized = self.ensure_size(renderer, data.len() as u32);
 
         renderer
             .queue
@@ -65,12 +65,13 @@ impl<T: NoUninit> GrowingBuffer<T> {
 
         self.count = data.len() as u32;
 
-        0..self.count
+        resized
     }
 
-    /// Write the given data to the end of the buffer. Returns the range where it was written.
-    pub fn extend(&mut self, renderer: &Renderer, data: &[T]) -> Range<u32> {
-        self.ensure_size(renderer, self.count + data.len() as u32);
+    /// Write the given data to the end of the buffer. Returns the range where
+    /// it was written to and whether the buffer was resized.
+    pub fn extend(&mut self, renderer: &Renderer, data: &[T]) -> (Range<u32>, bool) {
+        let resized = self.ensure_size(renderer, self.count + data.len() as u32);
 
         let start = self.count;
 
@@ -83,12 +84,17 @@ impl<T: NoUninit> GrowingBuffer<T> {
         self.count += data.len() as u32;
         let end = self.count;
 
-        start..end
+        (start..end, resized)
     }
 
-    fn ensure_size(&mut self, renderer: &Renderer, required_capacity: u32) {
+    /// Ensure the buffer is at least the `required_capacity` and return `true`
+    /// if it was resized.
+    fn ensure_size(&mut self, renderer: &Renderer, required_capacity: u32) -> bool {
         if required_capacity > self.capacity {
             self.resize(renderer, required_capacity);
+            true
+        } else {
+            false
         }
     }
 

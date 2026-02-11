@@ -3,7 +3,7 @@ use glam::{IVec2, Mat4, Vec2, Vec3, Vec4};
 
 use crate::{
     engine::{gizmos::GizmoVertex, storage::Handle},
-    game::{math::Frustum, model::Model},
+    game::{math::Frustum, model::Model, scenes::world::animation::pose::Pose},
 };
 
 /// Camera information.
@@ -71,6 +71,8 @@ pub struct Models {
 pub struct ModelToRender {
     pub model: Handle<Model>,
     pub transform: Mat4,
+    /// If specified, overrides the default skeleton pose.
+    pub pose: Option<Pose>,
     pub highlighted: bool,
 }
 

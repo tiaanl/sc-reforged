@@ -183,8 +183,6 @@ impl OrderMove {
         // Order is done.
         true
     }
-
-    fn turn_towards_target(&mut self) {}
 }
 
 impl Default for OrderMove {

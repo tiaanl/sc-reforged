@@ -1,6 +1,6 @@
 use glam::Mat4;
 
-use crate::engine::transform::Transform;
+use crate::{engine::transform::Transform, game::scenes::world::animation::pose::Pose};
 
 #[derive(Clone, Debug)]
 pub struct Bone {
@@ -22,6 +22,14 @@ impl Skeleton {
             node.transform.to_mat4()
         } else {
             self.local_transform(node.parent) * node.transform.to_mat4()
+        }
+    }
+
+    pub fn to_pose(&self) -> Pose {
+        Pose {
+            bones: (0..self.bones.len() as u32)
+                .map(|i| self.local_transform(i))
+                .collect(),
         }
     }
 }

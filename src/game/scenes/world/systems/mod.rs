@@ -123,7 +123,8 @@ impl Systems {
                     update_dynamic_bvh,
                     sequences::enqueue_next_sequences,
                     sequences::update_sequencers,
-                    // debug::draw_model_bounding_boxes,
+                    sequences::update_entity_poses,
+                    debug::_draw_model_bounding_boxes,
                 )
                     .in_set(Update)
                     .chain(),

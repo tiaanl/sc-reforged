@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use bevy_ecs::prelude::*;
 
 use std::{collections::VecDeque, path::PathBuf, str::FromStr};
@@ -10,10 +12,8 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
-        AssetLoader, AssetReader,
-        config::MotionSequencerDefs,
-        data_dir::data_dir,
-        scenes::world::{animation::motion::Motion, systems::Time},
+        AssetLoader, AssetReader, config::MotionSequencerDefs, data_dir::data_dir,
+        scenes::world::animation::motion::Motion,
     },
 };
 
@@ -196,8 +196,6 @@ impl Sequencer {
     }
 
     pub fn enqueue(&mut self, assets: &AssetReader, sequence_def: &SequenceDef) {
-        println!("Enqueue sequence: {:?}", sequence_def);
-
         self.time = 0.0;
         self.entries = sequence_def
             .entries
@@ -219,22 +217,18 @@ impl Sequencer {
             .collect();
     }
 
-    pub fn update(&mut self, time: &Time) {
-        self.time += time.delta_time;
+    pub fn update(&mut self, delta_time: f32) {
+        self.time += delta_time;
 
         // Advance through any entries that have finished, carrying over leftover time.
         while let Some(play_time) = self.entries.front().map(|entry| entry.play_time) {
-            if play_time <= 0.0 {
+            if self.time >= play_time {
+                self.time -= play_time;
                 self.next();
                 continue;
             }
 
-            if self.time < play_time {
-                break;
-            }
-
-            self.time -= play_time;
-            self.next();
+            break;
         }
     }
 
@@ -264,12 +258,11 @@ impl Sequencer {
 
         ui.h2("Sequences");
 
-        for motion in self
-            .entries
-            .iter()
-            .map(|e| assets.get_motion(e.motion).unwrap())
-        {
-            ui.h3(&motion.name);
+        for entry in self.entries.iter() {
+            if let Some(motion) = assets.get_motion(entry.motion) {
+                ui.label(&motion.name);
+            }
+            ui.label(format!("Time: {}", entry.play_time));
         }
     }
 }

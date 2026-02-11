@@ -181,7 +181,7 @@ impl RenderModels {
         }
 
         let mut push_mesh = |mut indexed_mesh: IndexedMesh<RenderVertex>| {
-            let vertices_range = self
+            let (vertices_range, _) = self
                 .vertices_buffer
                 .extend(renderer, &indexed_mesh.vertices);
             // Adjust the indices to point to the range of the vertices.
@@ -193,13 +193,13 @@ impl RenderModels {
             self.indices_buffer.extend(renderer, &indexed_mesh.indices)
         };
 
-        let opaque_range = push_mesh(opaque_mesh);
-        let alpha_range = push_mesh(alpha_mesh);
-        let additive_range = push_mesh(additive_mesh);
+        let (opaque_range, _) = push_mesh(opaque_mesh);
+        let (alpha_range, _) = push_mesh(alpha_mesh);
+        let (additive_range, _) = push_mesh(additive_mesh);
 
         let nodes_range = {
             let old_capacity = self.nodes_buffer.capacity;
-            let range = self.nodes_buffer.extend(renderer, &nodes);
+            let (range, _) = self.nodes_buffer.extend(renderer, &nodes);
             if self.nodes_buffer.capacity != old_capacity {
                 // The buffer capacity changed, so we have a new buffer; recreate the bind group.
                 self.nodes_bind_group = Self::create_nodes_bind_group(

@@ -1,6 +1,7 @@
 #import camera_env::{CameraEnv, diffuse_with_fog};
 
 const FLAGS_HIGHLIGHTED: u32 = 1 << 0;
+const FLAGS_CUSTOM_POSE: u32 = 1 << 1;
 const COLOR_KEYED: u32 = 1 << 0;
 
 @group(0) @binding(0)
@@ -23,6 +24,8 @@ struct Node {
 }
 
 @group(2) @binding(0) var<storage, read> u_nodes: array<Node>;
+
+@group(3) @binding(0) var<storage, read> u_custom_nodes: array<mat4x4<f32>>;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -74,7 +77,16 @@ fn get_node_transform(first_index: u32, index: u32) -> mat4x4<f32> {
 
 @vertex
 fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
-    let local_matrix = get_node_transform(instance.first_node_index, vertex.node_index);
+    var local_matrix: mat4x4<f32>;
+
+    if (instance.flags & FLAGS_CUSTOM_POSE) != 0 {
+        local_matrix = u_custom_nodes[instance.first_node_index + vertex.node_index];
+    } else {
+        local_matrix = get_node_transform(
+            instance.first_node_index,
+            vertex.node_index,
+        );
+    }
 
     let model_matrix = mat4x4<f32>(
         instance.model_mat_0,

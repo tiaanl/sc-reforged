@@ -29,6 +29,7 @@ bitflags::bitflags! {
     #[derive(Clone, Copy)]
     pub struct ModelRenderFlags : u32 {
         const HIGHLIGHTED = 1 << 0;
+        const CUSTOM_POSE = 1 << 1;
     }
 }
 
@@ -61,6 +62,11 @@ pub struct ModelRenderPipeline {
     model_instances_cache: Vec<gpu::ModelInstanceData>,
     model_instances: PerFrame<GrowingBuffer<gpu::ModelInstanceData>>,
 
+    /// Local cache where custom Pose data is stored per frame.
+    poses_bind_group_layout: wgpu::BindGroupLayout,
+    poses_cache: Vec<gpu::Bone>,
+    poses: PerFrame<(GrowingBuffer<gpu::Bone>, wgpu::BindGroup)>,
+
     batches: Vec<Batch>,
 }
 
@@ -75,6 +81,23 @@ impl ModelRenderPipeline {
         let textures = RenderTextures::new(renderer);
         let models = RenderModels::new(renderer);
 
+        let poses_bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("poses_bind_group_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
         let module = shader_cache.get_or_create(
             &renderer.device,
             crate::engine::shader_cache::ShaderSource::Models,
@@ -86,6 +109,7 @@ impl ModelRenderPipeline {
                 layouts.get::<CameraEnvironmentLayout>(renderer),
                 &textures.texture_data_bind_group_layout,
                 &models.nodes_bind_group_layout,
+                &poses_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -190,6 +214,28 @@ impl ModelRenderPipeline {
             )
         });
 
+        let poses = PerFrame::new(|index| {
+            let buffer = GrowingBuffer::new(
+                renderer,
+                1 << 7,
+                wgpu::BufferUsages::STORAGE,
+                format!("poses:{index}"),
+            );
+
+            let bind_group = renderer
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some(&format!("poses_bind_group:{index}")),
+                    layout: &poses_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.buffer().as_entire_binding(),
+                    }],
+                });
+
+            (buffer, bind_group)
+        });
+
         Self {
             textures,
             models,
@@ -202,6 +248,10 @@ impl ModelRenderPipeline {
 
             model_instances_cache: Vec::default(),
             model_instances,
+
+            poses_bind_group_layout,
+            poses_cache: Vec::default(),
+            poses,
 
             batches: Vec::default(),
         }
@@ -258,6 +308,7 @@ impl RenderPipeline for ModelRenderPipeline {
 
         models.sort_unstable_by(|a, b| a.model.cmp(&b.model));
 
+        self.poses_cache.clear();
         self.render_models_cache.clear();
 
         // Build an intermediate list of render models to render with some of the details resolved.
@@ -271,18 +322,49 @@ impl RenderPipeline for ModelRenderPipeline {
                 continue;
             };
 
-            let first_node_index = render_model.nodes_range.start;
+            let mut flags = ModelRenderFlags::empty();
+            flags.set(ModelRenderFlags::HIGHLIGHTED, model_to_render.highlighted);
+
+            let first_node_index = if let Some(ref pose) = model_to_render.pose {
+                let first_node = self.poses_cache.len() as u32;
+
+                pose.bones.iter().for_each(|bone| {
+                    self.poses_cache.push(gpu::Bone {
+                        transform: bone.to_cols_array_2d(),
+                    });
+                });
+
+                flags.set(ModelRenderFlags::CUSTOM_POSE, true);
+
+                first_node
+            } else {
+                render_model.nodes_range.start
+            };
 
             self.render_models_cache.push(RenderModelToRender {
                 render_model: render_model_handle,
                 transform: model_to_render.transform,
                 first_node_index,
-                flags: {
-                    let mut flags = ModelRenderFlags::empty();
-                    flags.set(ModelRenderFlags::HIGHLIGHTED, model_to_render.highlighted);
-                    flags
-                },
+                flags,
             });
+        }
+
+        {
+            // Write all the custom poses to the GPU.
+            let (buffer, bind_group) = self.poses.advance();
+
+            if buffer.write(renderer, self.poses_cache.as_slice()) {
+                *bind_group = renderer
+                    .device
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("poses_bind_group"),
+                        layout: &self.poses_bind_group_layout,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: buffer.buffer().as_entire_binding(),
+                        }],
+                    });
+            }
         }
 
         self.model_instances_cache.clear();
@@ -348,6 +430,7 @@ impl ModelRenderPipeline {
         render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
         render_pass.set_bind_group(1, &textures.texture_data_bind_group, &[]);
         render_pass.set_bind_group(2, &models.nodes_bind_group, &[]);
+        render_pass.set_bind_group(3, &self.poses.current().1, &[]);
 
         render_pass.set_vertex_buffer(0, models.vertices_buffer_slice());
         render_pass.set_vertex_buffer(1, self.model_instances.current().slice(..));
@@ -388,7 +471,7 @@ impl ModelRenderPipeline {
         geometry_buffer: &GeometryBuffer,
         bindings: &RenderBindings,
     ) {
-        let mut render_pass = geometry_buffer.begin_alpha_render_pass(encoder, "objects_opaque");
+        let mut render_pass = geometry_buffer.begin_alpha_render_pass(encoder, "objects_alpha");
 
         self.setup_render_pass(
             &mut render_pass,
@@ -424,5 +507,11 @@ pub mod gpu {
         pub first_node_index: u32,
         pub flags: u32,
         pub _pad: [u32; 2],
+    }
+
+    #[derive(Clone, Copy, NoUninit)]
+    #[repr(C)]
+    pub struct Bone {
+        pub transform: [[f32; 4]; 4],
     }
 }

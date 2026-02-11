@@ -29,7 +29,7 @@ pub fn enqueue_next_sequences(
 
 pub fn update_sequencers(mut sequencers: Query<&mut Sequencer>, time: Res<Time>) {
     for mut sequencer in sequencers.iter_mut() {
-        sequencer.update(&time);
+        sequencer.update(time.delta_time);
     }
 }
 
@@ -38,16 +38,18 @@ pub fn update_entity_poses(
     assets: Res<AssetReader>,
 ) {
     for (&model_handle, mut pose, sequencer) in sequencers {
-        if let Some((motion_handle, time)) = sequencer.get() {
-            let Some(model) = assets.get_model(model_handle) else {
-                continue;
-            };
+        let Some(model) = assets.get_model(model_handle) else {
+            continue;
+        };
 
+        if let Some((motion_handle, time)) = sequencer.get() {
             let Some(motion) = assets.get_motion(motion_handle) else {
                 continue;
             };
 
             *pose = generate_pose(&model.skeleton, motion, time, true);
+        } else {
+            *pose = model.skeleton.to_pose();
         }
     }
 }
