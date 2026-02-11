@@ -19,7 +19,7 @@ pub enum Callback {
     Frame { name: String, frame: i32 },
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Repeat {
     #[default]
     None,
@@ -101,19 +101,20 @@ impl From<ConfigLines> for MotionSequencerDefs {
                         let mut motion = Motion::from_name(line.string(0));
 
                         // [IMMEDIATE] [LOOP] [REP=<count>]
-                        match line.string(1).as_str() {
-                            "IMMEDIATE" => motion.immediate = true,
-                            "LOOP" => motion.repeat = Repeat::Infinite,
-                            s if s.starts_with("REP") => {
-                                let count = s
-                                    .split("=")
-                                    .nth(1)
-                                    .unwrap()
-                                    .parse::<i32>()
-                                    .unwrap_or_default();
-                                motion.repeat = Repeat::Count(count);
+                        for modifier in line.params().iter().skip(1) {
+                            let modifier = String::from(modifier.clone());
+                            match modifier.as_str() {
+                                "IMMEDIATE" => motion.immediate = true,
+                                "LOOP" => motion.repeat = Repeat::Infinite,
+                                s if s.starts_with("REP=") => {
+                                    let count = s
+                                        .split_once('=')
+                                        .map(|(_, c)| c.parse::<i32>().unwrap_or_default())
+                                        .unwrap_or_default();
+                                    motion.repeat = Repeat::Count(count);
+                                }
+                                _ => {}
                             }
-                            _ => {}
                         }
 
                         sequence.motions.push(motion);
@@ -196,5 +197,41 @@ impl From<ConfigLines> for MotionSequencerDefs {
         }
 
         motion_sequence_defs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MotionSequencerDefs, Repeat};
+    use crate::game::config::parser::ConfigLines;
+
+    #[test]
+    fn motion_modifiers_parse_multiple_tokens() {
+        let defs = MotionSequencerDefs::from(ConfigLines::parse(
+            r#"
+BEGIN_SEQUENCE MSEQ_TEST
+MOTION bipedal_dead_float IMMEDIATE LOOP
+END_SEQUENCE
+"#,
+        ));
+
+        let motion = &defs.sequences[0].motions[0];
+        assert!(motion.immediate);
+        assert_eq!(motion.repeat, Repeat::Infinite);
+    }
+
+    #[test]
+    fn motion_rep_count_modifier_is_parsed() {
+        let defs = MotionSequencerDefs::from(ConfigLines::parse(
+            r#"
+BEGIN_SEQUENCE MSEQ_TEST
+MOTION bipedal_walk IMMEDIATE REP=3
+END_SEQUENCE
+"#,
+        ));
+
+        let motion = &defs.sequences[0].motions[0];
+        assert!(motion.immediate);
+        assert_eq!(motion.repeat, Repeat::Count(3));
     }
 }
