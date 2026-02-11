@@ -6,6 +6,7 @@ generational-arena = "0.2"
 glam = { version = "0.30", features = ["bytemuck"] }
 renderer = { path = "renderer" }
 renderer-macros = { path = "renderer-macros" }
+tracing = { version = "0.1", default-features = false, features = ["release_max_level_info", "max_level_debug"] }
 wgpu = "24.0"
 
 [package]
@@ -43,7 +44,7 @@ pcx = { version = "0.2", default-features = false }
 pollster = { version = "0.4", default-features = false }
 strum = { version = "0.27", features = ["derive"] }
 thiserror = { version = "2.0", default-features = false }
-tracing = { version = "0.1", default-features = false, features = ["release_max_level_info", "max_level_debug"] }
+tracing.workspace = true
 tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "fmt"] }
 walkdir = { version = "2.5", default-features = false }
 zune-jpeg = { version = "=0.5.5" }

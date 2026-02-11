@@ -1,5 +1,6 @@
 pub use wgpu::BufferUsages;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct BufferId(pub generational_arena::Index);
 
 pub struct BufferDescriptor {

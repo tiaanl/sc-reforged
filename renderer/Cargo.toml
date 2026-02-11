@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 generational-arena.workspace = true
 glam.workspace = true
+tracing.workspace = true
 wgpu.workspace = true
