@@ -120,7 +120,7 @@ impl Systems {
                         q.iter().count() > 0
                     }),
                     update_dynamic_bvh,
-                    debug::draw_model_bounding_boxes,
+                    // debug::draw_model_bounding_boxes,
                 )
                     .in_set(Update)
                     .chain(),

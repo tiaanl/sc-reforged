@@ -6,7 +6,7 @@ use crate::{
     game::scenes::world::sim_world::ecs::{BoundingBoxComponent, GizmoVertices},
 };
 
-pub fn draw_model_bounding_boxes(
+pub fn _draw_model_bounding_boxes(
     models: Query<(&Transform, &BoundingBoxComponent)>,
     mut gizmo_vertices: ResMut<GizmoVertices>,
 ) {
