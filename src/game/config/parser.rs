@@ -27,6 +27,7 @@ impl From<ConfigToken> for f32 {
     fn from(value: ConfigToken) -> Self {
         match value {
             ConfigToken::Float(value) => value,
+            ConfigToken::Number(value) => value as f32,
             _ => Default::default(),
         }
     }

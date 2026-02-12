@@ -2157,7 +2157,6 @@ dependencies = [
 [[package]]
 name = "shadow_company_tools"
 version = "0.1.0"
-source = "git+https://github.com/tiaanl/shadow_company_tools.git#386fab17fbd97e4191f39c07c0b8cc15ac9a9a32"
 dependencies = [
  "bitflags 2.10.0",
  "bytemuck",

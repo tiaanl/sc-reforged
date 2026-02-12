@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use ahash::HashSet;
 use bevy_ecs::prelude::*;
-use bevy_ecs::resource::Resource;
 use glam::{IVec2, Quat, Vec2, Vec3};
 
 use crate::{
@@ -15,11 +14,12 @@ use crate::{
             sim_world::{
                 ecs::{ActiveCamera, GizmoVertices, Viewport},
                 free_camera_controller::FreeCameraController,
+                sequences::MotionSequencer,
                 top_down_camera_controller::TopDownCameraController,
                 ui::Ui,
             },
             systems::{
-                Time,
+                SimulationControl, Time,
                 world_interaction::{self, WorldInteraction},
             },
         },
@@ -32,10 +32,8 @@ mod dynamic_bvh;
 pub mod ecs;
 pub mod free_camera_controller;
 mod height_map;
-mod order_queue;
-mod orders;
 mod quad_tree;
-mod sequences;
+pub mod sequences;
 mod spawner;
 mod static_bvh;
 mod terrain;
@@ -47,8 +45,8 @@ pub use camera::ComputedCamera;
 pub use day_night_cycle::DayNightCycle;
 pub use dynamic_bvh::{DynamicBvh, DynamicBvhHandle};
 pub use height_map::HeightMap;
-pub use orders::*;
-pub use sequences::{Sequencer, Sequences};
+pub use spawner::SpawnInfo;
+
 pub use static_bvh::{StaticBvh, StaticBvhHandle};
 pub use terrain::Terrain;
 pub use ui::UiRect;
@@ -73,6 +71,7 @@ pub fn init_sim_world(
     let campaign = assets.load_campaign(&campaign_def.base_name)?;
 
     world.init_resource::<Time>();
+    world.init_resource::<SimulationControl>();
     world.init_resource::<InputState>();
 
     world.init_resource::<WorldInteraction>();
@@ -86,6 +85,42 @@ pub fn init_sim_world(
     world.insert_resource(day_night_cycle::DayNightCycle::from_campaign(&campaign));
 
     world.add_observer(world_interaction::on_clicked);
+
+    let motion_sequencer = {
+        let mut motion_sequencer = MotionSequencer::default();
+
+        motion_sequencer.load_motion_sequencer_defs(
+            &mut assets,
+            PathBuf::from("config").join("mot_sequencer_defs.txt"),
+        )?;
+
+        motion_sequencer
+    };
+
+    world.insert_resource(motion_sequencer);
+
+    world.add_observer(
+        |request: On<sequences::MotionSequenceRequest>,
+         motion_sequencer: Res<sequences::MotionSequencer>,
+         mut motion_controllers: Query<&mut sequences::MotionController>| {
+            if request.entity == Entity::PLACEHOLDER {
+                tracing::warn!(
+                    "Requesting motion sequence on a placeholder entity. {}",
+                    request.caller()
+                );
+                return;
+            }
+
+            let Ok(mut motion_controller) = motion_controllers.get_mut(request.entity) else {
+                tracing::warn!("Requesting sequence for entity without MotionController");
+                return;
+            };
+
+            if !motion_sequencer.request_sequence(request.event().clone(), &mut motion_controller) {
+                tracing::warn!("Could not request motion sequence {:?}", request.event());
+            }
+        },
+    );
 
     // Cameras
 
@@ -129,9 +164,9 @@ pub fn init_sim_world(
 
     init_objects(world, &mut assets, campaign)?;
 
-    world.init_resource::<Messages<OrderMessage>>();
+    // world.init_resource::<Messages<OrderMessage>>();
 
-    world.insert_resource(Sequences::new(&mut assets)?);
+    // world.insert_resource(Sequences::new(&mut assets)?);
 
     let ui = Ui::new();
 

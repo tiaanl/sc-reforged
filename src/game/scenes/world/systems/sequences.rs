@@ -5,51 +5,58 @@ use crate::{
     game::{
         AssetReader,
         model::Model,
-        scenes::world::{
-            animation::{generate_pose, pose::Pose},
-            sim_world::{Sequencer, Sequences},
-            systems::Time,
+        scenes::world::sim_world::sequences::{
+            MotionController, MotionSequencer, Pose, generate_pose,
         },
     },
 };
 
-pub fn enqueue_next_sequences(
-    mut sequencers: Query<&mut Sequencer>,
-    sequences: Res<Sequences>,
-    assets: Res<AssetReader>,
+use super::Time;
+
+/// Advance all motion controllers for the current frame.
+pub fn update_motion_controllers(
+    mut motion_controllers: Query<&mut MotionController>,
+    time: Res<Time>,
 ) {
-    for mut sequencer in sequencers.iter_mut() {
-        if let Some(sequence) = sequencer.next_sequence()
-            && let Some(sequence_def) = sequences.sequence_def_by_name(&sequence)
-        {
-            sequencer.enqueue(&assets, sequence_def);
-        }
+    for mut motion_controller in motion_controllers.iter_mut() {
+        motion_controller.update(time.delta_time);
     }
 }
 
-pub fn update_sequencers(mut sequencers: Query<&mut Sequencer>, time: Res<Time>) {
-    for mut sequencer in sequencers.iter_mut() {
-        sequencer.update(time.delta_time);
-    }
-}
-
-pub fn update_entity_poses(
-    sequencers: Query<(&Handle<Model>, &mut Pose, &Sequencer)>,
+/// Build a full pose for each animated entity from the currently active motion.
+pub fn update_poses(
+    mut poses: Query<(&MotionController, &Handle<Model>, &mut Pose)>,
     assets: Res<AssetReader>,
+    motion_sequencer: Res<MotionSequencer>,
 ) {
-    for (&model_handle, mut pose, sequencer) in sequencers {
-        let Some(model) = assets.get_model(model_handle) else {
+    for (motion_controller, model_handle, mut pose) in poses.iter_mut() {
+        let Some(model) = assets.get_model(*model_handle) else {
+            continue;
+        };
+        let skeleton = &model.skeleton;
+
+        let Some(active) = motion_controller.active.as_ref() else {
+            if pose.bones.len() != skeleton.bones.len() {
+                *pose = skeleton.to_pose();
+            }
             continue;
         };
 
-        if let Some((motion_handle, time)) = sequencer.get() {
-            let Some(motion) = assets.get_motion(motion_handle) else {
-                continue;
-            };
-
-            *pose = generate_pose(&model.skeleton, motion, time, true);
+        let sample_time = if active.scaled_ticks_per_frame <= 0 {
+            0.0
         } else {
-            *pose = model.skeleton.to_pose();
-        }
+            active.current_time_ticks.max(0) as f32 / active.scaled_ticks_per_frame as f32
+        };
+
+        let root_translation_override =
+            motion_sequencer.default_cog_position(motion_controller.transition_check_state());
+
+        *pose = generate_pose(
+            skeleton,
+            active.motion_info.motion.as_ref(),
+            sample_time,
+            active.motion_info.looping,
+            root_translation_override,
+        );
     }
 }

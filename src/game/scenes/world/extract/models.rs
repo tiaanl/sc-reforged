@@ -5,9 +5,10 @@ use crate::{
     game::{
         model::Model,
         scenes::world::{
-            animation::pose::Pose,
             extract::{ModelToRender, RenderSnapshot},
-            sim_world::{ComputedCamera, DynamicBvh, StaticBvh, ecs::ActiveCamera},
+            sim_world::{
+                ComputedCamera, DynamicBvh, StaticBvh, ecs::ActiveCamera, sequences::Pose,
+            },
             systems::world_interaction::WorldInteraction,
         },
     },

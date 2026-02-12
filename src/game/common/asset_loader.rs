@@ -19,7 +19,6 @@ use crate::{
         image::Image,
         model::Model,
         models::ModelName,
-        scenes::world::animation::motion::Motion,
     },
 };
 
@@ -32,7 +31,6 @@ pub struct AssetLoader {
 
     images: TypedAssetLoader<PathBuf, Image>,
     models: TypedAssetLoader<ModelName, Model>,
-    motions: TypedAssetLoader<String, Motion>,
 }
 
 impl AssetLoader {
@@ -63,12 +61,11 @@ impl AssetLoader {
             model_lod_defs,
             images: TypedAssetLoader::default(),
             models: TypedAssetLoader::default(),
-            motions: TypedAssetLoader::default(),
         })
     }
 
     pub fn into_reader(self) -> AssetReader {
-        AssetReader::new(self.images.assets, self.models.assets, self.motions.assets)
+        AssetReader::new(self.images.assets, self.models.assets)
     }
 
     #[inline]
@@ -153,20 +150,6 @@ impl AssetLoader {
 
     pub fn add_model(&mut self, name: ModelName, model: Model) -> (Handle<Model>, &Model) {
         self.models.insert(name, model)
-    }
-
-    pub fn get_or_load_motion(
-        &mut self,
-        name: &str,
-    ) -> Result<(Handle<Motion>, &Motion), AssetError> {
-        let path = PathBuf::from("motions").join(name).with_extension("bmf");
-
-        let data = self.load_raw(&path)?;
-
-        let mut context = AssetLoadContext { loader: self };
-        let motion = Motion::from_memory(&mut context, path, &data)?;
-
-        Ok(self.motions.insert(name.to_string(), motion))
     }
 }
 

@@ -18,13 +18,12 @@ use crate::{
             game_mode::GameMode,
             render::{RenderBindings, RenderLayouts, RenderTargets},
             sim_world::{Camera, ecs::Viewport, init_sim_world},
-            systems::Time,
+            systems::{SimulationControl, Time},
         },
     },
 };
 
 pub mod actions;
-pub mod animation;
 mod extract;
 mod game_mode;
 mod render;
@@ -56,6 +55,15 @@ pub struct WorldScene {
 
     fps_history: Vec<FrameTime>,
     fps_history_cursor: usize,
+
+    /// When true, simulation systems stop updating unless a step is requested.
+    simulation_paused: bool,
+    /// Fixed delta-time used by the single-step debug control.
+    simulation_step_delta_time: f32,
+    /// Number of pending fixed-step simulation ticks to execute.
+    pending_simulation_steps: u32,
+
+    sequence_to_play: String,
 }
 
 impl WorldScene {
@@ -105,6 +113,12 @@ impl WorldScene {
 
             fps_history,
             fps_history_cursor,
+
+            simulation_paused: false,
+            simulation_step_delta_time: 1.0 / 30.0,
+            pending_simulation_steps: 0,
+
+            sequence_to_play: String::from("MSEQ_WALK"),
         })
     }
 
@@ -133,13 +147,38 @@ impl Scene for WorldScene {
 
     fn update(&mut self, delta_time: f32, input: &InputState) {
         let frame_time = &mut self.fps_history[self.fps_history_cursor];
+        let run_simulation = if self.simulation_paused {
+            if self.pending_simulation_steps > 0 {
+                self.pending_simulation_steps -= 1;
+                true
+            } else {
+                false
+            }
+        } else {
+            true
+        };
+        let simulation_delta_time = if self.simulation_paused && run_simulation {
+            self.simulation_step_delta_time
+        } else {
+            delta_time
+        };
 
         // Run systems
         {
             // Update Time.
             {
                 let mut time = self.sim_world.resource_mut::<Time>();
-                time.next_frame(delta_time);
+                if run_simulation {
+                    time.next_frame(simulation_delta_time);
+                } else {
+                    // Keep camera/input responsiveness while pausing simulation.
+                    time.delta_time = delta_time;
+                }
+            }
+
+            {
+                let mut control = self.sim_world.resource_mut::<SimulationControl>();
+                control.run_update = run_simulation;
             }
 
             {
@@ -272,6 +311,34 @@ impl Scene for WorldScene {
                 {
                     use crate::game::scenes::world::sim_world::SimWorldState;
 
+                    ui.heading("Simulation");
+                    ui.horizontal(|ui| {
+                        let toggle_label = if self.simulation_paused {
+                            "Play"
+                        } else {
+                            "Pause"
+                        };
+                        if ui.button(toggle_label).clicked() {
+                            self.simulation_paused = !self.simulation_paused;
+                        }
+                        if ui.button("Step").clicked() {
+                            self.pending_simulation_steps =
+                                self.pending_simulation_steps.saturating_add(1);
+                        }
+                        ui.label("Step dt");
+                        ui.add(
+                            egui::DragValue::new(&mut self.simulation_step_delta_time)
+                                .range(1.0 / 240.0..=0.25)
+                                .speed(0.0005)
+                                .fixed_decimals(4),
+                        );
+                        ui.label(if self.simulation_paused {
+                            "Paused"
+                        } else {
+                            "Running"
+                        });
+                    });
+
                     let mut state = self.sim_world.resource_mut::<SimWorldState>();
 
                     ui.heading("Environment");
@@ -293,29 +360,6 @@ impl Scene for WorldScene {
                         &mut render_snapshot.terrain.render_wireframe,
                         "Render terrain wireframe",
                     );
-                }
-
-                // Objects
-                {
-                    use crate::game::scenes::world::systems::world_interaction::WorldInteraction;
-
-                    ui.heading("Objects");
-
-                    // Orders
-                    let world_interaction = self.sim_world.resource::<WorldInteraction>();
-                    if let Some(entity) = world_interaction.selected_entity {
-                        use crate::game::scenes::world::sim_world::{Order, Sequencer};
-
-                        if let Some(order) = self.sim_world.get::<Order>(entity) {
-                            //
-                            ui.label(format!("{order:?}"));
-                        }
-
-                        let assets = self.sim_world.resource::<AssetReader>();
-                        if let Some(sequencer) = self.sim_world.get::<Sequencer>(entity) {
-                            sequencer.ui(ui, assets);
-                        }
-                    }
                 }
             });
 
@@ -403,6 +447,83 @@ impl Scene for WorldScene {
                 ui.label(format!("{}", render_snapshot.gizmos.vertices.len()));
             });
         });
+
+        {
+            let world_interaction = self
+                .sim_world
+                .resource::<systems::world_interaction::WorldInteraction>();
+
+            if let Some(selected_entity) = world_interaction.selected_entity {
+                egui::Window::new("Selected").show(ctx, |ui| {
+                    use crate::game::hash;
+
+                    if let Some(spawn_info) =
+                        self.sim_world.get::<sim_world::SpawnInfo>(selected_entity)
+                    {
+                        ui.label(format!("{} ({})", spawn_info._title, spawn_info._name));
+                    }
+
+                    {
+                        use crate::game::scenes::world::sim_world::sequences::MotionController;
+
+                        if let Some(mc) = self.sim_world.get::<MotionController>(selected_entity) {
+                            ui.label(format!(
+                                "Transition check state: {:?}",
+                                mc.transition_check_state()
+                            ));
+                        }
+                    }
+
+                    ui.horizontal(|ui| {
+                        ui.text_edit_singleline(&mut self.sequence_to_play);
+                        if ui.button("Request").clicked() {
+                            let request = sim_world::sequences::MotionSequenceRequest {
+                                entity: selected_entity,
+                                sequence_hash: hash(self.sequence_to_play.as_str()),
+                                playback_speed: 1.0,
+                                ..Default::default()
+                            };
+                            self.sim_world.trigger(request);
+                        }
+                    });
+
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label("States:");
+                        for (label, sequence_name) in [
+                            ("Stand", "MSEQ_STAND"),
+                            ("Crouch", "MSEQ_CROUCH"),
+                            ("Prone", "MSEQ_PRONE"),
+                            ("OnBack", "MSEQ_ON_BACK"),
+                            ("Sit", "MSEQ_SIT"),
+                            ("Scuba", "MSEQ_SCUBA"),
+                        ] {
+                            if ui.button(label).clicked() {
+                                self.sequence_to_play = sequence_name.to_string();
+                                let request = sim_world::sequences::MotionSequenceRequest {
+                                    entity: selected_entity,
+                                    sequence_hash: hash(sequence_name),
+                                    playback_speed: 1.0,
+                                    ..Default::default()
+                                };
+                                self.sim_world.trigger(request);
+                            }
+                        }
+                    });
+
+                    if let Some(mc) = self
+                        .sim_world
+                        .get_mut::<sim_world::sequences::MotionController>(selected_entity)
+                    {
+                        mc.pending.iter().for_each(|context| {
+                            ui.label(format!(
+                                "{} ({:.02})",
+                                &context.motion_info.motion.name, context.playback_speed
+                            ));
+                        });
+                    }
+                });
+            }
+        }
 
         // TODO: Should probably move somewhere.
         /*

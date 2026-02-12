@@ -1,6 +1,6 @@
 use glam::Mat4;
 
-use crate::{engine::transform::Transform, game::scenes::world::animation::pose::Pose};
+use crate::{engine::transform::Transform, game::scenes::world::sim_world::sequences::Pose};
 
 #[derive(Clone, Debug)]
 pub struct Bone {

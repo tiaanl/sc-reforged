@@ -10,14 +10,13 @@ use crate::{
         math::BoundingBox,
         model::{Mesh, Model},
         models::ModelName,
-        scenes::world::{
-            animation::pose::Pose,
-            sim_world::{
-                DynamicBvh, Order, StaticBvhHandle, ecs::BoundingBoxComponent, sequences::Sequencer,
-            },
+        scenes::world::sim_world::{
+            DynamicBvh, StaticBvhHandle, ecs::BoundingBoxComponent, sequences::MotionController,
         },
     },
 };
+
+use super::sequences::Pose;
 
 #[derive(Component)]
 pub struct SpawnInfo {
@@ -168,15 +167,19 @@ impl Spawner {
             dynamic_bvh.insert(entity, bounding_box.transformed(transform.to_mat4()))
         };
 
-        let sequencer = Sequencer::default();
+        let motion_controller = MotionController::default();
 
         world.entity_mut(entity).insert((
+            SpawnInfo {
+                _name: _name.to_string(),
+                _title: title.to_string(),
+                _object_type,
+            },
             transform.clone(),
             model_handle,
             BoundingBoxComponent(bounding_box),
-            Order::default(),
             dynamic_bvh_handle,
-            sequencer,
+            motion_controller,
             Pose::default(),
         ));
 

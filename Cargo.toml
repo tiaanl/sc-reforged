@@ -8,7 +8,7 @@ default = ["egui"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit"]
 
 [dependencies]
-shadow_company_tools = { git = "https://github.com/tiaanl/shadow_company_tools.git" }
+shadow_company_tools = { path = "../shadow_company_tools" }
 
 # Graphics
 egui = { version = "0.31", optional = true, default-features = false, features = ["default_fonts"] }

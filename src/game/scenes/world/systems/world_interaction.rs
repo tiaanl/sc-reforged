@@ -4,7 +4,7 @@ use glam::{IVec2, UVec2, Vec4};
 use crate::{
     engine::input::InputState,
     game::scenes::world::sim_world::{
-        ComputedCamera, DynamicBvh, Order, OrderMessage, OrderMove, SimWorldState, Terrain, UiRect,
+        ComputedCamera, DynamicBvh, SimWorldState, Terrain, UiRect,
         ecs::{ActiveCamera, Viewport},
     },
 };
@@ -150,8 +150,6 @@ pub fn on_clicked(
 
     mut entity_cache: Local<Vec<Entity>>,
     mut terrain_hit_cache: Local<Vec<IVec2>>,
-
-    mut new_orders_writer: MessageWriter<OrderMessage>,
 ) {
     let ray = camera.create_ray_segment(clicked.pos, viewport.size);
 
@@ -166,6 +164,7 @@ pub fn on_clicked(
         return;
     }
 
+    /*
     // If nothing is selected, we're done for now.
     let Some(selected_entity) = world_interaction.selected_entity else {
         return;
@@ -182,15 +181,8 @@ pub fn on_clicked(
         .filter_map(|&chunk| terrain.chunk_intersect_ray_segment(chunk, &ray))
         .collect();
 
-    if let Some(terrain_hit) = terrain_hits.iter().min_by(|&a, &b| a.t.total_cmp(&b.t)) {
-        new_orders_writer.write(OrderMessage::New {
-            entity: selected_entity,
-            order: Order::_Move(OrderMove {
-                target_location: terrain_hit.world_position,
-                ..OrderMove::default()
-            }),
-        });
-    }
+    if let Some(terrain_hit) = terrain_hits.iter().min_by(|&a, &b| a.t.total_cmp(&b.t)) {}
+    */
 }
 
 /*

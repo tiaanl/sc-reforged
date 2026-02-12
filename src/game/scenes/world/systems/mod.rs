@@ -28,7 +28,6 @@ mod changed;
 mod clear_render_targets;
 mod debug;
 mod gizmos;
-mod orders;
 mod sequences;
 pub mod world_interaction;
 
@@ -44,6 +43,18 @@ pub struct Time {
     /// The number of the current frame. This will loop round to 0 when it runs
     /// out of numbers.
     pub frame_index: u64,
+}
+
+#[derive(Resource)]
+pub struct SimulationControl {
+    /// Whether systems in [ecs::UpdateSet::Update] should run this frame.
+    pub run_update: bool,
+}
+
+impl Default for SimulationControl {
+    fn default() -> Self {
+        Self { run_update: true }
+    }
 }
 
 impl Default for Time {
@@ -92,6 +103,7 @@ impl Systems {
             let mut schedule = Schedule::default();
 
             schedule.configure_sets((Start, Input, Update).chain());
+            schedule.configure_sets(Update.run_if(should_run_simulation_update));
 
             // Start
             schedule.add_systems(gizmos::clear_gizmo_vertices.in_set(Start));
@@ -114,17 +126,14 @@ impl Systems {
             // Update
             schedule.add_systems(
                 (
-                    orders::issue_new_orders,
-                    orders::process_biped_orders,
                     world_interaction::update,
+                    sequences::update_motion_controllers,
+                    sequences::update_poses,
                     rebuild_static_bvh.run_if(|q: Query<(), Added<ecs::BoundingBoxComponent>>| {
                         q.iter().count() > 0
                     }),
                     update_dynamic_bvh,
-                    sequences::enqueue_next_sequences,
-                    sequences::update_sequencers,
-                    sequences::update_entity_poses,
-                    debug::_draw_model_bounding_boxes,
+                    // debug::_draw_model_bounding_boxes,
                 )
                     .in_set(Update)
                     .chain(),
@@ -195,6 +204,10 @@ impl Systems {
         self.world_renderer
             .queue(bindings, frame, &render_targets.geometry_buffer, snapshot);
     }
+}
+
+fn should_run_simulation_update(control: Res<SimulationControl>) -> bool {
+    control.run_update
 }
 
 fn rebuild_static_bvh(
