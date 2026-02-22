@@ -37,6 +37,8 @@ pub struct MotionSequenceRequest {
     pub force_clear_queue: bool,
     /// Don't queue any state transition motions.
     pub skip_state_transitions: bool,
+    /// Start tick override applied to the first queued motion in the requested sequence.
+    pub first_entry_start_time_ticks: u32,
 }
 
 impl Default for MotionSequenceRequest {
@@ -48,7 +50,7 @@ impl Default for MotionSequenceRequest {
             dedupe: false,
             force_clear_queue: false,
             skip_state_transitions: false,
-            // first_entry_start_time_ticks: 0,
+            first_entry_start_time_ticks: 0,
         }
     }
 }
@@ -117,12 +119,17 @@ impl MotionSequencer {
             }
         }
 
-        // TODO: Set the first [MotionInfo]'s `start_time_ticks` to
-        //       `request.first_start_time_ticks`.
+        for (index, motion_info) in sequence.motions.iter().enumerate() {
+            if index == 0 {
+                let mut first_motion_info = (*motion_info.as_ref()).clone();
+                first_motion_info.start_time_ticks = request.first_entry_start_time_ticks;
+                motion_controller
+                    .push_motion_info(Arc::new(first_motion_info), request.playback_speed);
+                continue;
+            }
 
-        sequence.motions.iter().for_each(|motion_info| {
             motion_controller.push_motion_info(Arc::clone(motion_info), request.playback_speed);
-        });
+        }
 
         true
     }

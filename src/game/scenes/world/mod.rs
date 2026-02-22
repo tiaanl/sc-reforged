@@ -475,6 +475,7 @@ impl Scene for WorldScene {
                                     "Transition check state: {:?}",
                                     mc.transition_check_state()
                                 ));
+                                ui.label(format!("Current state: {:?}", mc.current_state()));
                             }
                         }
 

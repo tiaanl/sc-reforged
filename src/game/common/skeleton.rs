@@ -30,6 +30,11 @@ impl Skeleton {
             bones: (0..self.bones.len() as u32)
                 .map(|i| self.local_transform(i))
                 .collect(),
+            local_transforms: self
+                .bones
+                .iter()
+                .map(|bone| bone.transform.clone())
+                .collect(),
         }
     }
 }

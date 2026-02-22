@@ -12,19 +12,28 @@ pub struct MotionInfoContext {
 }
 
 #[derive(Debug)]
+pub struct SampledMotionFrame {
+    pub motion_info: Arc<MotionInfo>,
+    pub current_time_ticks: i32,
+    pub scaled_ticks_per_frame: i32,
+    pub terminal_frame_index: Option<u32>,
+}
+
+#[derive(Debug)]
 pub struct ActiveMotionInfo {
     pub motion_info: Arc<MotionInfo>,
-    pub playback_speed: f32,
     pub current_time_ticks: i32,
     pub scaled_ticks_per_frame: i32,
     pub remaining_repeats: i32,
     pub transition_guard: bool,
+    pub last_root_sample: Vec3,
 }
 
 #[derive(Component, Debug, Default)]
 pub struct MotionController {
     pub pending: VecDeque<MotionInfoContext>,
     pub active: Option<ActiveMotionInfo>,
+    pub last_sampled_motion: Option<SampledMotionFrame>,
 
     /// The amount the object should move every frame.
     pub root_motion: Vec3,
@@ -67,9 +76,21 @@ impl MotionController {
         self.current_target_state
     }
 
+    /// Returns the controller's effective current posture state.
+    ///
+    /// When motions are queued, this reflects the most recently queued motion's
+    /// target state (the eventual posture after queued transitions complete).
+    pub fn current_state(&self) -> State {
+        self.pending
+            .back()
+            .map(|context| context.motion_info.motion.to_state)
+            .unwrap_or(self.current_target_state)
+    }
+
     pub fn reset(&mut self) {
         self.pending.clear();
         self.active = None;
+        self.last_sampled_motion = None;
 
         self.root_motion = Vec3::ZERO;
         self.transition_guard = false;
@@ -91,18 +112,45 @@ impl MotionController {
             delta_time_ms = (delta_time_ms * 3) / 2;
         }
 
-        let mut disable_active = false;
-        let mut sampled_root_motion = None;
-        if let Some(active) = self.active.as_mut() {
-            if has_pending {
-                // Match original behavior: pending work clears transition guard so looped
-                // motions can hand off naturally at their next boundary.
+        if has_pending {
+            // Match original behavior: pending work clears transition guard so looped
+            // motions can hand off naturally at their next boundary.
+            if let Some(active) = self.active.as_mut() {
                 active.transition_guard = false;
             }
 
-            let previous_time_ticks = active.current_time_ticks;
+            let Some(next_is_immediate) = self.pending.front().map(|p| p.motion_info.immediate)
+            else {
+                return;
+            };
+
+            if next_is_immediate {
+                // Immediate requests interrupt active playback before active motion advancement.
+                if let Some(interrupted) = self.active.as_ref() {
+                    self.handle_immediate_interrupt(interrupted);
+                }
+
+                if let Some(next) = self.pending.pop_front() {
+                    self.promote_to_active(next);
+                }
+                return;
+            }
+
+            // Non-immediate requests become active as soon as there is no active motion.
+            if self.active.is_none() {
+                if let Some(next) = self.pending.pop_front() {
+                    self.promote_to_active(next);
+                }
+                return;
+            }
+        }
+
+        let mut disable_active = false;
+        let mut sampled_root_motion = None;
+        let mut sampled_motion_frame = None;
+        if let Some(active) = self.active.as_mut() {
+            let mut terminal_frame_index = None;
             active.current_time_ticks = active.current_time_ticks.saturating_add(delta_time_ms);
-            let mut wrapped_this_update = false;
 
             if Self::is_active_motion_finished(active) {
                 let duration_ticks = Self::active_motion_duration_ticks(active);
@@ -117,19 +165,33 @@ impl MotionController {
                     if active.current_time_ticks < 0 {
                         active.current_time_ticks = 0;
                     }
-                    wrapped_this_update = true;
+                    active.last_root_sample = Vec3::ZERO;
                 } else {
+                    terminal_frame_index = Self::active_terminal_frame_index(active);
+                    if let Some(frame_index) = terminal_frame_index {
+                        active.current_time_ticks = (frame_index as i32)
+                            .saturating_mul(active.scaled_ticks_per_frame.max(1));
+                    } else {
+                        // Fall back to duration-based clamping if no valid terminal keyframe exists.
+                        active.current_time_ticks = duration_ticks.max(0);
+                    }
                     disable_active = true;
                 }
             }
 
-            sampled_root_motion = Some(Self::sample_root_motion_delta(
-                active,
-                previous_time_ticks,
-                wrapped_this_update,
-            ));
+            sampled_root_motion = Some(Self::sample_root_motion_delta(active));
+            sampled_motion_frame = Some(SampledMotionFrame {
+                motion_info: Arc::clone(&active.motion_info),
+                current_time_ticks: active.current_time_ticks,
+                scaled_ticks_per_frame: active.scaled_ticks_per_frame,
+                terminal_frame_index,
+            });
 
             // Key frame sampling is done by the pose update system using `current_time_ticks`.
+        }
+
+        if let Some(sampled_motion_frame) = sampled_motion_frame {
+            self.last_sampled_motion = Some(sampled_motion_frame);
         }
 
         if disable_active {
@@ -139,61 +201,30 @@ impl MotionController {
             self.root_motion = root_motion;
         }
 
-        if self.pending.is_empty() && self.active.is_none() {
-            self.root_motion = Vec3::ZERO;
-            return;
-        }
-
-        // Pending work exists; allow transition/handoff logic to run.
-        if has_pending {
-            self.transition_guard = false;
-        }
-
-        let Some(next_is_immediate) = self
-            .pending
-            .front()
-            .map(|pending| pending.motion_info.immediate)
-        else {
-            return;
-        };
-
-        if !next_is_immediate {
-            if self.active.is_some() {
+        if self.active.is_none() {
+            if let Some(next) = self.pending.pop_front() {
+                self.promote_to_active(next);
                 return;
             }
 
-            let Some(next) = self.pending.pop_front() else {
-                return;
-            };
-
-            self.promote_to_active(next);
+            self.root_motion = Vec3::ZERO;
             return;
         }
-
-        // Immediate motions should interrupt and hand off right away.
-        let Some(next) = self.pending.pop_front() else {
-            return;
-        };
-
-        if let Some(interrupted) = self.active.as_ref() {
-            self.handle_immediate_interrupt(interrupted);
-        }
-        self.promote_to_active(next);
     }
 
     /// Promote a queued motion into active runtime state without cloning motion data.
     fn promote_to_active(&mut self, next: MotionInfoContext) {
         let scaled_ticks_per_frame =
-            (next.motion_info.base_ticks_per_frame as f32 * next.playback_speed).round() as i32;
+            (next.motion_info.base_ticks_per_frame as f32 * next.playback_speed) as i32;
         let scaled_ticks_per_frame = scaled_ticks_per_frame.max(1);
 
         self.active = Some(ActiveMotionInfo {
             current_time_ticks: next.motion_info.start_time_ticks as i32,
             scaled_ticks_per_frame,
-            playback_speed: next.playback_speed,
             remaining_repeats: next.motion_info.repeat_count.max(0),
             transition_guard: next.motion_info.transition_guard,
             motion_info: next.motion_info,
+            last_root_sample: Vec3::ZERO,
         });
 
         if let Some(active) = self.active.as_ref() {
@@ -229,10 +260,30 @@ impl MotionController {
             .saturating_mul(end_frame_count)
     }
 
+    /// Return the explicit terminal frame index used for final keyframe application.
+    fn active_terminal_frame_index(active: &ActiveMotionInfo) -> Option<u32> {
+        let motion = active.motion_info.motion.as_ref();
+        let frame_index = motion.last_frame;
+        let frame_count = motion.frame_count;
+
+        if frame_count == 0 {
+            return None;
+        }
+
+        if frame_index < frame_count {
+            return Some(frame_index);
+        }
+
+        None
+    }
+
     /// Return the end-frame count used for completion timing.
     fn active_motion_end_frame_count(active: &ActiveMotionInfo) -> i32 {
-        // Original controller can finish a frame early when SKIP_LAST_FRAME is set.
-        let mut end_frame_count = active.motion_info.motion.frame_count as i32;
+        let motion = active.motion_info.motion.as_ref();
+
+        // Original completion checks use frame-count duration (not end-frame-index).
+        let mut end_frame_count = motion.frame_count as i32;
+
         if active
             .motion_info
             .motion
@@ -240,20 +291,18 @@ impl MotionController {
         {
             end_frame_count = end_frame_count.saturating_sub(1);
         }
-        end_frame_count.max(0)
+
+        end_frame_count.clamp(0, motion.frame_count as i32)
     }
 
     /// Sample the active motion's root-motion delta for this update.
-    fn sample_root_motion_delta(
-        active: &ActiveMotionInfo,
-        previous_time_ticks: i32,
-        wrapped_this_update: bool,
-    ) -> Vec3 {
+    fn sample_root_motion_delta(active: &mut ActiveMotionInfo) -> Vec3 {
         if active
             .motion_info
             .motion
             .has_flags(MotionFlags::NO_LVE_MOTION)
         {
+            // Match original apply path: NO_LVE motions do not apply root-motion deltas.
             return Vec3::ZERO;
         }
 
@@ -270,19 +319,12 @@ impl MotionController {
         let motion = active.motion_info.motion.as_ref();
         let end_frame = end_frame_count as f32;
 
-        let from_local_frame = (previous_time_ticks.max(0) as f32 / ticks_per_frame).clamp(0.0, end_frame);
         let to_local_frame =
             (active.current_time_ticks.max(0) as f32 / ticks_per_frame).clamp(0.0, end_frame);
 
-        let from_root = motion.sample_linear_velocity(from_local_frame, false);
-        if !wrapped_this_update {
-            let to_root = motion.sample_linear_velocity(to_local_frame, false);
-            return to_root - from_root;
-        }
-
-        // On wrap, baseline resets to zero: include tail-to-end and start-to-current head.
-        let end_root = motion.sample_linear_velocity(end_frame, false);
-        let head_root = motion.sample_linear_velocity(to_local_frame, false);
-        (end_root - from_root) + head_root
+        let to_root = motion.sample_linear_velocity(to_local_frame, false);
+        let delta = to_root - active.last_root_sample;
+        active.last_root_sample = to_root;
+        delta
     }
 }

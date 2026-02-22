@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::{
     engine::assets::AssetError,
-    game::{Asset, AssetLoadContext, skeleton::Skeleton},
+    game::{Asset, AssetLoadContext},
 };
 
 use super::state::State;
@@ -16,12 +16,12 @@ bitflags! {
     pub struct MotionFlags: u32 {
         /// Enables Z-index/depth-style behavior for this motion.
         const Z_IND_MOTION = 1 << 0;
-        /// Enables sped-motion time scaling behavior.
-        const SPED_MOTION = 1 << 1;
         /// Disables linear/root velocity extraction from this motion.
-        const NO_LVE_MOTION = 1 << 2;
+        const NO_LVE_MOTION = 1 << 1;
         /// Skips terminal keyframe handling at motion end.
-        const SKIP_LAST_FRAME = 1 << 3;
+        const SKIP_LAST_FRAME = 1 << 2;
+        /// Enables sped-motion time scaling behavior.
+        const SPED_MOTION = 1 << 3;
     }
 }
 
@@ -37,40 +37,23 @@ pub struct Motion {
     pub base_ticks_per_frame: u32,
     pub from_state: State,
     pub to_state: State,
-    pub bone_ids: Vec<u32>,
     /// Raw keyframes as loaded from the motion asset.
     pub key_frames: Vec<bmf::KeyFrame>,
     flags: AtomicU32,
 }
 
-/// Sampled bone component value and whether both adjacent frames had this channel.
+/// A sampled per-bone update produced from keyframe interpolation/apply rules.
 #[derive(Clone, Copy, Debug)]
-pub struct BoneChannelSample<T> {
-    /// Interpolated value used for this frame.
-    pub value: T,
-    /// True when both source frames explicitly contained this channel.
-    pub has_channel: bool,
+pub struct BoneSampleUpdate {
+    /// Target bone id in the skeleton.
+    pub bone_id: u32,
+    /// Sampled translation channel, when available.
+    pub translation: Option<Vec3>,
+    /// Sampled rotation channel, when available.
+    pub rotation: Option<Quat>,
 }
 
 impl Motion {
-    /// Fallback timing used when source data reports an invalid value.
-    const DEFAULT_BMF_TICKS_PER_FRAME: u32 = 10;
-
-    /// Create an [Animation] with the bone structure of the given [Skeleton] and empty tracks.
-    pub fn from_skeleton(name: String, skeleton: &Skeleton) -> Self {
-        Self {
-            name,
-            frame_count: 0,
-            last_frame: 0,
-            base_ticks_per_frame: Self::DEFAULT_BMF_TICKS_PER_FRAME,
-            from_state: State::None,
-            to_state: State::None,
-            bone_ids: (0..skeleton.bones.len() as u32).collect(),
-            key_frames: Vec::new(),
-            flags: AtomicU32::new(MotionFlags::empty().bits()),
-        }
-    }
-
     /// Resolve adjacent keyframes and interpolation factor similar to original runtime behavior.
     fn interpolation_pair(
         &self,
@@ -120,24 +103,6 @@ impl Motion {
         // Original runtime skips interpolation when t is outside [0, 1].
         let t = if (0.0..=1.0).contains(&t) { t } else { 0.0 };
         Some((left, right, t))
-    }
-
-    /// Find the paired left/right bone entries by index as done in the original runtime.
-    fn paired_bones_by_id<'a>(
-        left: &'a bmf::KeyFrame,
-        right: &'a bmf::KeyFrame,
-        bone_id: u32,
-    ) -> Option<(&'a bmf::Bone, &'a bmf::Bone)> {
-        let pair_count = left.bones.len().min(right.bones.len());
-        for index in 0..pair_count {
-            let left_bone = &left.bones[index];
-            if left_bone.bone_id != bone_id {
-                continue;
-            }
-            let right_bone = &right.bones[index];
-            return Some((left_bone, right_bone));
-        }
-        None
     }
 
     /// Normalize a quaternion and fall back to identity when invalid.
@@ -198,59 +163,70 @@ impl Motion {
         ))
     }
 
-    /// Sample a bone translation at `time` in local motion frame-space.
+    /// Sample all per-bone channel updates for a timeline time.
+    ///
+    /// This follows the original keyframe interpolation behavior where bones are
+    /// paired by list index between left/right keyframes.
     #[inline]
-    pub fn sample_bone_translation(
-        &self,
-        bone_id: u32,
-        time: f32,
-        looping: bool,
-    ) -> Option<BoneChannelSample<Vec3>> {
-        let (left, right, t) = self.interpolation_pair(time, looping)?;
-        let (left_bone, right_bone) = Self::paired_bones_by_id(left, right, bone_id)?;
-
-        let sample = match (left_bone.position, right_bone.position) {
-            (Some(left_position), Some(right_position)) => BoneChannelSample {
-                value: Self::convert_source_translation(left_position)
-                    .lerp(Self::convert_source_translation(right_position), t),
-                has_channel: true,
-            },
-            _ => BoneChannelSample {
-                value: Vec3::ZERO,
-                has_channel: false,
-            },
+    pub fn sample_bone_updates(&self, time: f32, looping: bool) -> Vec<BoneSampleUpdate> {
+        let Some((left, right, t)) = self.interpolation_pair(time, looping) else {
+            return Vec::new();
         };
 
-        Some(sample)
-    }
+        let pair_count = left.bones.len().min(right.bones.len());
+        let mut updates = Vec::with_capacity(pair_count);
 
-    /// Sample a bone rotation at `time` in local motion frame-space.
-    #[inline]
-    pub fn sample_bone_rotation(
-        &self,
-        bone_id: u32,
-        time: f32,
-        looping: bool,
-    ) -> Option<BoneChannelSample<Quat>> {
-        let (left, right, t) = self.interpolation_pair(time, looping)?;
-        let (left_bone, right_bone) = Self::paired_bones_by_id(left, right, bone_id)?;
+        for index in 0..pair_count {
+            let left_bone = &left.bones[index];
+            let right_bone = &right.bones[index];
 
-        let sample = match (left_bone.rotation, right_bone.rotation) {
-            (Some(left_rotation), Some(right_rotation)) => BoneChannelSample {
-                value: Self::interpolate_rotation(
+            let rotation = match (left_bone.rotation, right_bone.rotation) {
+                (Some(left_rotation), Some(right_rotation)) => Some(Self::interpolate_rotation(
                     Self::convert_source_rotation(left_rotation),
                     Self::convert_source_rotation(right_rotation),
                     t,
+                )),
+                _ => None,
+            };
+
+            let translation = match (left_bone.position, right_bone.position) {
+                (Some(left_position), Some(right_position)) => Some(
+                    Self::convert_source_translation(left_position)
+                        .lerp(Self::convert_source_translation(right_position), t),
                 ),
-                has_channel: true,
-            },
-            _ => BoneChannelSample {
-                value: Quat::IDENTITY,
-                has_channel: false,
-            },
+                _ => None,
+            };
+
+            updates.push(BoneSampleUpdate {
+                bone_id: left_bone.bone_id,
+                translation,
+                rotation,
+            });
+        }
+
+        updates
+    }
+
+    /// Sample all per-bone channel updates from an exact keyframe.
+    #[inline]
+    pub fn sample_bone_updates_at_key_frame(&self, key_frame_index: u32) -> Vec<BoneSampleUpdate> {
+        let Some(key_frame) = self.key_frames.get(key_frame_index as usize) else {
+            return Vec::new();
         };
 
-        Some(sample)
+        let mut updates = Vec::with_capacity(key_frame.bones.len());
+        for bone in &key_frame.bones {
+            updates.push(BoneSampleUpdate {
+                bone_id: bone.bone_id,
+                translation: bone.position.map(Self::convert_source_translation),
+                rotation: bone
+                    .rotation
+                    .map(Self::convert_source_rotation)
+                    .map(Self::normalize_rotation_or_identity),
+            });
+        }
+
+        updates
     }
 
     /// Sample linear velocity at `time` in local motion frame-space.
@@ -311,7 +287,6 @@ impl Asset for Motion {
             base_ticks_per_frame: runtime_ticks_per_frame.max(1),
             from_state: State::from_motion_state_id(bmf.from_state),
             to_state: State::from_motion_state_id(bmf.to_state),
-            bone_ids: bmf.bone_ids.iter().map(|&id| id as _).collect(),
             key_frames,
             flags: AtomicU32::new(MotionFlags::empty().bits()),
         };
@@ -329,7 +304,6 @@ impl Default for Motion {
             base_ticks_per_frame: 0,
             from_state: State::None,
             to_state: State::None,
-            bone_ids: Vec::new(),
             key_frames: Vec::new(),
             flags: AtomicU32::new(MotionFlags::empty().bits()),
         }

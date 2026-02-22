@@ -8,7 +8,9 @@ use crate::{
         model::Model,
         scenes::world::sim_world::{
             ecs::GizmoVertices,
-            sequences::{MotionController, MotionSequencer, Pose, generate_pose},
+            sequences::{
+                MotionController, MotionSequencer, Pose, generate_pose, generate_pose_at_key_frame,
+            },
         },
     },
 };
@@ -42,29 +44,55 @@ pub fn update_poses(
         };
         let skeleton = &model.skeleton;
 
-        let Some(active) = motion_controller.active.as_ref() else {
-            if pose.bones.len() != skeleton.bones.len() {
-                *pose = skeleton.to_pose();
-            }
-            continue;
-        };
+        let (motion_info, current_time_ticks, scaled_ticks_per_frame, terminal_frame_index) =
+            if let Some(active) = motion_controller.active.as_ref() {
+                (
+                    &active.motion_info,
+                    active.current_time_ticks,
+                    active.scaled_ticks_per_frame,
+                    None,
+                )
+            } else if let Some(sampled) = motion_controller.last_sampled_motion.as_ref() {
+                (
+                    &sampled.motion_info,
+                    sampled.current_time_ticks,
+                    sampled.scaled_ticks_per_frame,
+                    sampled.terminal_frame_index,
+                )
+            } else {
+                if pose.bones.len() != skeleton.bones.len() {
+                    *pose = skeleton.to_pose();
+                }
+                continue;
+            };
 
-        let sample_time = if active.scaled_ticks_per_frame <= 0 {
+        let sample_time = if scaled_ticks_per_frame <= 0 {
             0.0
         } else {
-            active.current_time_ticks.max(0) as f32 / active.scaled_ticks_per_frame as f32
+            current_time_ticks.max(0) as f32 / scaled_ticks_per_frame as f32
         };
 
         let root_translation_override =
             motion_sequencer.default_cog_position(motion_controller.transition_check_state());
 
-        *pose = generate_pose(
-            skeleton,
-            active.motion_info.motion.as_ref(),
-            sample_time,
-            active.motion_info.looping,
-            root_translation_override,
-        );
+        *pose = if let Some(terminal_frame_index) = terminal_frame_index {
+            generate_pose_at_key_frame(
+                skeleton,
+                motion_info.motion.as_ref(),
+                terminal_frame_index,
+                root_translation_override,
+                Some(&pose),
+            )
+        } else {
+            generate_pose(
+                skeleton,
+                motion_info.motion.as_ref(),
+                sample_time,
+                motion_info.looping,
+                root_translation_override,
+                Some(&pose),
+            )
+        };
     }
 }
 
