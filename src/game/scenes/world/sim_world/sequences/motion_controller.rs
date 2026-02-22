@@ -17,6 +17,8 @@ pub struct ActiveMotionInfo {
     pub playback_speed: f32,
     pub current_time_ticks: i32,
     pub scaled_ticks_per_frame: i32,
+    pub remaining_repeats: i32,
+    pub transition_guard: bool,
 }
 
 #[derive(Component, Debug, Default)]
@@ -70,14 +72,14 @@ impl MotionController {
         self.active = None;
 
         self.root_motion = Vec3::ZERO;
-
-        // TODO: Mark that the "current" motion is not enabled any more.
+        self.transition_guard = false;
     }
 
     /// Called each frame with the amount of time passed since the last update in `delta_time`.
     pub fn update(&mut self, delta_time: f32) {
         // The original runtime drives motion updates with a clamped millisecond delta.
         let mut delta_time_ms = (delta_time.max(0.0) * 1000.0).clamp(0.0, 125.0) as i32;
+        let has_pending = !self.pending.is_empty();
 
         if self.active.as_ref().is_some_and(|active| {
             active
@@ -88,35 +90,52 @@ impl MotionController {
             delta_time_ms = (delta_time_ms * 3) / 2;
         }
 
+        let mut disable_active = false;
         if let Some(active) = self.active.as_mut() {
-            active.current_time_ticks = active.current_time_ticks.saturating_add(delta_time_ms);
-
-            if active.motion_info.looping {
-                // Looping controls playback wrap behavior independent of transition handoff policy.
-                let duration_ticks = Self::active_motion_duration_ticks(active);
-                if duration_ticks > 0 {
-                    active.current_time_ticks =
-                        active.current_time_ticks.rem_euclid(duration_ticks);
-                }
-            } else if Self::is_active_motion_finished(active)
-                && !active.motion_info.transition_guard
-            {
-                self.active = None;
-                self.root_motion = Vec3::ZERO;
+            if has_pending {
+                // Match original behavior: pending work clears transition guard so looped
+                // motions can hand off naturally at their next boundary.
+                active.transition_guard = false;
             }
 
-            // TODO: Sample/apply key frames based on active.current_time_ticks.
-            // TODO: Handle repeat counts, transition guards, and end-of-motion behavior.
+            active.current_time_ticks = active.current_time_ticks.saturating_add(delta_time_ms);
+
+            if Self::is_active_motion_finished(active) {
+                let duration_ticks = Self::active_motion_duration_ticks(active);
+
+                if active.transition_guard || active.remaining_repeats > 0 {
+                    if active.remaining_repeats > 0 {
+                        active.remaining_repeats -= 1;
+                    }
+
+                    active.current_time_ticks =
+                        active.current_time_ticks.saturating_sub(duration_ticks);
+                    if active.current_time_ticks < 0 {
+                        active.current_time_ticks = 0;
+                    }
+                    self.root_motion = Vec3::ZERO;
+                } else {
+                    disable_active = true;
+                }
+            }
+
+            // Key frame sampling is done by the pose update system using `current_time_ticks`.
+        }
+
+        if disable_active {
+            self.active = None;
+            self.root_motion = Vec3::ZERO;
         }
 
         if self.pending.is_empty() && self.active.is_none() {
             self.root_motion = Vec3::ZERO;
-            // TODO: If needed, track explicit idle/locked flags on the controller.
             return;
         }
 
         // Pending work exists; allow transition/handoff logic to run.
-        self.transition_guard = false;
+        if has_pending {
+            self.transition_guard = false;
+        }
 
         let Some(next_is_immediate) = self
             .pending
@@ -128,7 +147,6 @@ impl MotionController {
 
         if !next_is_immediate {
             if self.active.is_some() {
-                // TODO: Keep running current active motion until it can hand off naturally.
                 return;
             }
 
@@ -145,17 +163,14 @@ impl MotionController {
             return;
         };
 
-        // TODO: If current motion is active and has notify-on-interrupt, emit interrupt callback.
+        if let Some(interrupted) = self.active.as_ref() {
+            self.handle_immediate_interrupt(interrupted);
+        }
         self.promote_to_active(next);
     }
 
     /// Promote a queued motion into active runtime state without cloning motion data.
     fn promote_to_active(&mut self, next: MotionInfoContext) {
-        tracing::info!(
-            "Promoting pending sequence to active: {:?}",
-            next.motion_info.motion.name
-        );
-
         let scaled_ticks_per_frame =
             (next.motion_info.base_ticks_per_frame as f32 * next.playback_speed).round() as i32;
         let scaled_ticks_per_frame = scaled_ticks_per_frame.max(1);
@@ -164,6 +179,8 @@ impl MotionController {
             current_time_ticks: next.motion_info.start_time_ticks as i32,
             scaled_ticks_per_frame,
             playback_speed: next.playback_speed,
+            remaining_repeats: next.motion_info.repeat_count.max(0),
+            transition_guard: next.motion_info.transition_guard,
             motion_info: next.motion_info,
         });
 
@@ -171,18 +188,46 @@ impl MotionController {
             self.current_target_state = active.motion_info.motion.to_state;
         }
 
-        // TODO: Clear immediate-interrupt state once runtime flags exist.
+        self.transition_guard = false;
+    }
+
+    /// Handle an immediate handoff that interrupts the currently active motion.
+    fn handle_immediate_interrupt(&self, interrupted: &ActiveMotionInfo) {
+        tracing::debug!(
+            "Interrupting active motion \"{}\" for immediate handoff.",
+            interrupted.motion_info.motion.name
+        );
+        // Callback emission is intentionally deferred until callback parsing/runtime support exists.
     }
 
     /// Return whether the active motion has reached the end of its timeline.
     fn is_active_motion_finished(active: &ActiveMotionInfo) -> bool {
-        active.current_time_ticks >= Self::active_motion_duration_ticks(active)
+        let duration_ticks = Self::active_motion_duration_ticks(active);
+        if duration_ticks <= 0 {
+            return true;
+        }
+        active.current_time_ticks > duration_ticks.saturating_sub(active.scaled_ticks_per_frame)
     }
 
     /// Return duration of active motion timeline in ticks.
     fn active_motion_duration_ticks(active: &ActiveMotionInfo) -> i32 {
-        // Original controller timing advances over the motion frame count.
-        let end_frame = active.motion_info.motion.frame_count.max(1) as i32;
-        active.scaled_ticks_per_frame.saturating_mul(end_frame)
+        let end_frame_count = Self::active_motion_end_frame_count(active);
+        active
+            .scaled_ticks_per_frame
+            .saturating_mul(end_frame_count)
+    }
+
+    /// Return the end-frame count used for completion timing.
+    fn active_motion_end_frame_count(active: &ActiveMotionInfo) -> i32 {
+        // Original controller can finish a frame early when SKIP_LAST_FRAME is set.
+        let mut end_frame_count = active.motion_info.motion.frame_count as i32;
+        if active
+            .motion_info
+            .motion
+            .has_flags(MotionFlags::SKIP_LAST_FRAME)
+        {
+            end_frame_count = end_frame_count.saturating_sub(1);
+        }
+        end_frame_count.max(0)
     }
 }

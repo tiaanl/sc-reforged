@@ -175,7 +175,6 @@ impl MotionSequencer {
         assets: &mut AssetLoader,
         path: impl AsRef<Path>,
     ) -> Result<(), AssetError> {
-        // config/mot_sequencer_defs.txt
         let data = assets.load_raw(path.as_ref())?;
         let text = String::from_utf8_lossy(&data);
         let config_lines = ConfigLines::parse(&text);
@@ -231,7 +230,10 @@ impl MotionSequencer {
                     | ParseState::Sequence { motions, .. } => {
                         let motion_name = line.string(0);
 
-                        let motion = self.get_or_load_motion(assets, &motion_name)?;
+                        let Ok(motion) = self.get_or_load_motion(assets, &motion_name) else {
+                            // Skip this motion info if the motion fails to load.
+                            continue;
+                        };
 
                         let mut immediate = false;
                         let mut looping = false;
@@ -318,8 +320,9 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    let motion = self.get_or_load_motion(assets, &motion_name)?;
-                    motion.add_flags(MotionFlags::Z_IND_MOTION);
+                    if let Ok(motion) = self.get_or_load_motion(assets, &motion_name) {
+                        motion.add_flags(MotionFlags::Z_IND_MOTION);
+                    }
                 }
 
                 "DECLARE_SPED_MOTION" => {
@@ -329,8 +332,9 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    let motion = self.get_or_load_motion(assets, &motion_name)?;
-                    motion.add_flags(MotionFlags::SPED_MOTION);
+                    if let Ok(motion) = self.get_or_load_motion(assets, &motion_name) {
+                        motion.add_flags(MotionFlags::SPED_MOTION);
+                    }
                 }
 
                 "DECLARE_SKIP_LAST_FRAME" => {
@@ -340,8 +344,9 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    let motion = self.get_or_load_motion(assets, &motion_name)?;
-                    motion.add_flags(MotionFlags::SKIP_LAST_FRAME);
+                    if let Ok(motion) = self.get_or_load_motion(assets, &motion_name) {
+                        motion.add_flags(MotionFlags::SKIP_LAST_FRAME);
+                    }
                 }
 
                 "DECLARE_NO_LVE_MOTION" => {
@@ -351,8 +356,9 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    let motion = self.get_or_load_motion(assets, &motion_name)?;
-                    motion.add_flags(MotionFlags::NO_LVE_MOTION);
+                    if let Ok(motion) = self.get_or_load_motion(assets, &motion_name) {
+                        motion.add_flags(MotionFlags::NO_LVE_MOTION);
+                    }
                 }
                 "::" => {
                     // Due to an error in the game config file, "::" is used as a
