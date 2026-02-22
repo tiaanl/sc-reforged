@@ -529,47 +529,5 @@ impl Scene for WorldScene {
                     });
             }
         }
-
-        // TODO: Should probably move somewhere.
-        /*
-        if !self.sim_world.state().selected_objects.is_empty() {
-            egui::Window::new("Selected")
-                .resizable(false)
-                .default_width(400.0)
-                .show(ctx, |ui| {
-                    use crate::{
-                        engine::storage::Handle,
-                        game::scenes::world::sim_world::{Object, ObjectData},
-                    };
-
-                    let mut selected: Vec<Handle<Object>> = self
-                        .sim_world
-                        .state()
-                        .selected_objects
-                        .iter()
-                        .cloned()
-                        .collect();
-
-                    for handle in selected.drain(..) {
-                        let mut objects = self.sim_world.resource_mut::<Objects>();
-
-                        if let Some(object) = objects.get_mut(handle) {
-                            use crate::engine::egui_integration::UiExt;
-
-                            ui.h1(format!("{} ({})", &object.title, &object.name));
-
-                            match &mut object.data {
-                                ObjectData::Scenery { .. } => {}
-                                ObjectData::Biped { order_queue, .. } => {
-                                    // sequencer.ui(ui, &state.sequences);
-                                    order_queue.ui(ui);
-                                }
-                                ObjectData::SingleModel { .. } => {}
-                            }
-                        }
-                    }
-                });
-        }
-        */
     }
 }

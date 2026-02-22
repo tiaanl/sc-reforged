@@ -61,11 +61,6 @@ pub struct Storage<T>(generational_arena::Arena<T>);
 
 impl<T> Storage<T> {
     #[inline]
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self(generational_arena::Arena::with_capacity(capacity))
-    }
-
-    #[inline]
     pub fn get(&self, id: Handle<T>) -> Option<&T> {
         self.0.get(id.0)
     }

@@ -273,7 +273,6 @@ impl MotionSequencer {
                             // LOOP drives both playback wrapping intent and transition guard.
                             transition_guard: looping,
                             immediate,
-                            enabled: true,
                             start_time_ticks: 0,
                             base_ticks_per_frame,
                         }));
@@ -391,10 +390,10 @@ impl MotionSequencer {
         motions: Vec<Arc<MotionInfo>>,
     ) -> Arc<Sequence> {
         Arc::new(Sequence {
-            hash: hash(name.as_str()),
-            name,
+            _hash: hash(name.as_str()),
+            _name: name,
             begin_state,
-            end_state,
+            _end_state: end_state,
             motions,
         })
     }

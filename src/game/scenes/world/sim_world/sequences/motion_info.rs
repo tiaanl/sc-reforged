@@ -11,7 +11,6 @@ pub struct MotionInfo {
     pub looping: bool,
     pub transition_guard: bool,
     pub immediate: bool,
-    pub enabled: bool,
 
     pub start_time_ticks: u32,
     pub base_ticks_per_frame: u32,

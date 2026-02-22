@@ -164,10 +164,6 @@ pub fn init_sim_world(
 
     init_objects(world, &mut assets, campaign)?;
 
-    // world.init_resource::<Messages<OrderMessage>>();
-
-    // world.insert_resource(Sequences::new(&mut assets)?);
-
     let ui = Ui::new();
 
     let sim_world_state = SimWorldState {

@@ -145,11 +145,11 @@ pub fn on_clicked(
     viewport: Res<Viewport>,
     camera: Single<&ComputedCamera, With<ActiveCamera>>,
     dynamic_bvh: Res<DynamicBvh>,
-    terrain: Res<Terrain>,
+    _terrain: Res<Terrain>,
     mut world_interaction: ResMut<WorldInteraction>,
 
     mut entity_cache: Local<Vec<Entity>>,
-    mut terrain_hit_cache: Local<Vec<IVec2>>,
+    mut _terrain_hit_cache: Local<Vec<IVec2>>,
 ) {
     let ray = camera.create_ray_segment(clicked.pos, viewport.size);
 
