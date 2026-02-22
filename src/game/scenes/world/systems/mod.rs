@@ -134,6 +134,7 @@ impl Systems {
                     }),
                     update_dynamic_bvh,
                     // debug::_draw_model_bounding_boxes,
+                    sequences::_debug_draw_root_motion,
                 )
                     .in_set(Update)
                     .chain(),

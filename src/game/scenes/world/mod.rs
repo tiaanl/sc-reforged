@@ -454,74 +454,78 @@ impl Scene for WorldScene {
                 .resource::<systems::world_interaction::WorldInteraction>();
 
             if let Some(selected_entity) = world_interaction.selected_entity {
-                egui::Window::new("Selected").show(ctx, |ui| {
-                    use crate::game::hash;
+                egui::Window::new("Selected")
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        use crate::game::hash;
 
-                    if let Some(spawn_info) =
-                        self.sim_world.get::<sim_world::SpawnInfo>(selected_entity)
-                    {
-                        ui.label(format!("{} ({})", spawn_info._title, spawn_info._name));
-                    }
-
-                    {
-                        use crate::game::scenes::world::sim_world::sequences::MotionController;
-
-                        if let Some(mc) = self.sim_world.get::<MotionController>(selected_entity) {
-                            ui.label(format!(
-                                "Transition check state: {:?}",
-                                mc.transition_check_state()
-                            ));
+                        if let Some(spawn_info) =
+                            self.sim_world.get::<sim_world::SpawnInfo>(selected_entity)
+                        {
+                            ui.label(format!("{} ({})", spawn_info._title, spawn_info._name));
                         }
-                    }
 
-                    ui.horizontal(|ui| {
-                        ui.text_edit_singleline(&mut self.sequence_to_play);
-                        if ui.button("Request").clicked() {
-                            let request = sim_world::sequences::MotionSequenceRequest {
-                                entity: selected_entity,
-                                sequence_hash: hash(self.sequence_to_play.as_str()),
-                                playback_speed: 1.0,
-                                ..Default::default()
-                            };
-                            self.sim_world.trigger(request);
+                        {
+                            use crate::game::scenes::world::sim_world::sequences::MotionController;
+
+                            if let Some(mc) =
+                                self.sim_world.get::<MotionController>(selected_entity)
+                            {
+                                ui.label(format!(
+                                    "Transition check state: {:?}",
+                                    mc.transition_check_state()
+                                ));
+                            }
                         }
-                    });
 
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label("States:");
-                        for (label, sequence_name) in [
-                            ("Stand", "MSEQ_STAND"),
-                            ("Crouch", "MSEQ_CROUCH"),
-                            ("Prone", "MSEQ_PRONE"),
-                            ("OnBack", "MSEQ_ON_BACK"),
-                            ("Sit", "MSEQ_SIT"),
-                            ("Scuba", "MSEQ_SCUBA"),
-                        ] {
-                            if ui.button(label).clicked() {
-                                self.sequence_to_play = sequence_name.to_string();
+                        ui.horizontal(|ui| {
+                            ui.text_edit_singleline(&mut self.sequence_to_play);
+                            if ui.button("Request").clicked() {
                                 let request = sim_world::sequences::MotionSequenceRequest {
                                     entity: selected_entity,
-                                    sequence_hash: hash(sequence_name),
+                                    sequence_hash: hash(self.sequence_to_play.as_str()),
                                     playback_speed: 1.0,
                                     ..Default::default()
                                 };
                                 self.sim_world.trigger(request);
                             }
+                        });
+
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label("States:");
+                            for (label, sequence_name) in [
+                                ("Stand", "MSEQ_STAND"),
+                                ("Crouch", "MSEQ_CROUCH"),
+                                ("Prone", "MSEQ_PRONE"),
+                                ("OnBack", "MSEQ_ON_BACK"),
+                                ("Sit", "MSEQ_SIT"),
+                                ("Scuba", "MSEQ_SCUBA"),
+                            ] {
+                                if ui.button(label).clicked() {
+                                    self.sequence_to_play = sequence_name.to_string();
+                                    let request = sim_world::sequences::MotionSequenceRequest {
+                                        entity: selected_entity,
+                                        sequence_hash: hash(sequence_name),
+                                        playback_speed: 1.0,
+                                        ..Default::default()
+                                    };
+                                    self.sim_world.trigger(request);
+                                }
+                            }
+                        });
+
+                        if let Some(mc) = self
+                            .sim_world
+                            .get_mut::<sim_world::sequences::MotionController>(selected_entity)
+                        {
+                            mc.pending.iter().for_each(|context| {
+                                ui.label(format!(
+                                    "{} ({:.02})",
+                                    &context.motion_info.motion.name, context.playback_speed
+                                ));
+                            });
                         }
                     });
-
-                    if let Some(mc) = self
-                        .sim_world
-                        .get_mut::<sim_world::sequences::MotionController>(selected_entity)
-                    {
-                        mc.pending.iter().for_each(|context| {
-                            ui.label(format!(
-                                "{} ({:.02})",
-                                &context.motion_info.motion.name, context.playback_speed
-                            ));
-                        });
-                    }
-                });
             }
         }
 

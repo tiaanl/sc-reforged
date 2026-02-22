@@ -27,7 +27,7 @@ pub struct MotionController {
     pub active: Option<ActiveMotionInfo>,
 
     /// The amount the object should move every frame.
-    root_motion: Vec3,
+    pub root_motion: Vec3,
 
     /// The [State] of the biped when all pending motions are completed.
     current_target_state: State,
@@ -80,6 +80,7 @@ impl MotionController {
         // The original runtime drives motion updates with a clamped millisecond delta.
         let mut delta_time_ms = (delta_time.max(0.0) * 1000.0).clamp(0.0, 125.0) as i32;
         let has_pending = !self.pending.is_empty();
+        self.root_motion = Vec3::ZERO;
 
         if self.active.as_ref().is_some_and(|active| {
             active
@@ -91,6 +92,7 @@ impl MotionController {
         }
 
         let mut disable_active = false;
+        let mut sampled_root_motion = None;
         if let Some(active) = self.active.as_mut() {
             if has_pending {
                 // Match original behavior: pending work clears transition guard so looped
@@ -98,7 +100,9 @@ impl MotionController {
                 active.transition_guard = false;
             }
 
+            let previous_time_ticks = active.current_time_ticks;
             active.current_time_ticks = active.current_time_ticks.saturating_add(delta_time_ms);
+            let mut wrapped_this_update = false;
 
             if Self::is_active_motion_finished(active) {
                 let duration_ticks = Self::active_motion_duration_ticks(active);
@@ -113,11 +117,17 @@ impl MotionController {
                     if active.current_time_ticks < 0 {
                         active.current_time_ticks = 0;
                     }
-                    self.root_motion = Vec3::ZERO;
+                    wrapped_this_update = true;
                 } else {
                     disable_active = true;
                 }
             }
+
+            sampled_root_motion = Some(Self::sample_root_motion_delta(
+                active,
+                previous_time_ticks,
+                wrapped_this_update,
+            ));
 
             // Key frame sampling is done by the pose update system using `current_time_ticks`.
         }
@@ -125,6 +135,8 @@ impl MotionController {
         if disable_active {
             self.active = None;
             self.root_motion = Vec3::ZERO;
+        } else if let Some(root_motion) = sampled_root_motion {
+            self.root_motion = root_motion;
         }
 
         if self.pending.is_empty() && self.active.is_none() {
@@ -229,5 +241,48 @@ impl MotionController {
             end_frame_count = end_frame_count.saturating_sub(1);
         }
         end_frame_count.max(0)
+    }
+
+    /// Sample the active motion's root-motion delta for this update.
+    fn sample_root_motion_delta(
+        active: &ActiveMotionInfo,
+        previous_time_ticks: i32,
+        wrapped_this_update: bool,
+    ) -> Vec3 {
+        if active
+            .motion_info
+            .motion
+            .has_flags(MotionFlags::NO_LVE_MOTION)
+        {
+            return Vec3::ZERO;
+        }
+
+        if active.scaled_ticks_per_frame <= 0 {
+            return Vec3::ZERO;
+        }
+
+        let end_frame_count = Self::active_motion_end_frame_count(active);
+        if end_frame_count <= 0 {
+            return Vec3::ZERO;
+        }
+
+        let ticks_per_frame = active.scaled_ticks_per_frame as f32;
+        let motion = active.motion_info.motion.as_ref();
+        let end_frame = end_frame_count as f32;
+
+        let from_local_frame = (previous_time_ticks.max(0) as f32 / ticks_per_frame).clamp(0.0, end_frame);
+        let to_local_frame =
+            (active.current_time_ticks.max(0) as f32 / ticks_per_frame).clamp(0.0, end_frame);
+
+        let from_root = motion.sample_linear_velocity(from_local_frame, false);
+        if !wrapped_this_update {
+            let to_root = motion.sample_linear_velocity(to_local_frame, false);
+            return to_root - from_root;
+        }
+
+        // On wrap, baseline resets to zero: include tail-to-end and start-to-current head.
+        let end_root = motion.sample_linear_velocity(end_frame, false);
+        let head_root = motion.sample_linear_velocity(to_local_frame, false);
+        (end_root - from_root) + head_root
     }
 }

@@ -1,12 +1,14 @@
 use bevy_ecs::prelude::*;
+use glam::Vec4;
 
 use crate::{
-    engine::storage::Handle,
+    engine::{storage::Handle, transform::Transform},
     game::{
         AssetReader,
         model::Model,
-        scenes::world::sim_world::sequences::{
-            MotionController, MotionSequencer, Pose, generate_pose,
+        scenes::world::sim_world::{
+            ecs::GizmoVertices,
+            sequences::{MotionController, MotionSequencer, Pose, generate_pose},
         },
     },
 };
@@ -15,11 +17,16 @@ use super::Time;
 
 /// Advance all motion controllers for the current frame.
 pub fn update_motion_controllers(
-    mut motion_controllers: Query<&mut MotionController>,
+    mut motion_controllers: Query<(&mut MotionController, &mut Transform)>,
     time: Res<Time>,
 ) {
-    for mut motion_controller in motion_controllers.iter_mut() {
+    for (mut motion_controller, mut transform) in motion_controllers.iter_mut() {
         motion_controller.update(time.delta_time);
+
+        // Once the motion has been calculated, adjust the transform of the
+        // entity by the `root_motion` from the [MotionController].
+        let adjust = transform.rotation * motion_controller.root_motion;
+        transform.translation += adjust;
     }
 }
 
@@ -58,5 +65,19 @@ pub fn update_poses(
             active.motion_info.looping,
             root_translation_override,
         );
+    }
+}
+
+pub fn _debug_draw_root_motion(
+    query: Query<(&Transform, &MotionController)>,
+    mut gizmos: ResMut<GizmoVertices>,
+) {
+    const COLOR: Vec4 = Vec4::new(1.0, 0.0, 0.0, 1.0);
+
+    for (transform, motion_controller) in query.iter() {
+        let origin = transform.translation;
+        let dir = transform.rotation * motion_controller.root_motion;
+
+        gizmos.draw_line(origin, origin + dir * 100.0, COLOR);
     }
 }
