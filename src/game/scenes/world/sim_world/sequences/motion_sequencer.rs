@@ -41,17 +41,61 @@ pub struct MotionSequenceRequest {
     pub first_entry_start_time_ticks: u32,
 }
 
-impl Default for MotionSequenceRequest {
-    fn default() -> Self {
+#[allow(dead_code)]
+impl MotionSequenceRequest {
+    pub fn new(entity: Entity, sequence_hash: u32) -> Self {
         Self {
-            entity: Entity::PLACEHOLDER,
-            sequence_hash: u32::MAX,
+            entity,
+            sequence_hash,
             playback_speed: 1.0,
             dedupe: false,
             force_clear_queue: false,
             skip_state_transitions: false,
             first_entry_start_time_ticks: 0,
         }
+    }
+
+    pub fn with_playback_speed(mut self, playback_speed: f32) -> Self {
+        self.playback_speed = playback_speed;
+        self
+    }
+
+    pub fn with_dedupe(mut self) -> Self {
+        self.dedupe = true;
+        self
+    }
+
+    pub fn without_dedupe(mut self) -> Self {
+        self.dedupe = false;
+        self
+    }
+
+    pub fn with_force_clear_queue(mut self) -> Self {
+        self.force_clear_queue = true;
+        self
+    }
+
+    pub fn without_force_clear_queue(mut self) -> Self {
+        self.force_clear_queue = false;
+        self
+    }
+
+    pub fn with_skip_state_transitions(mut self) -> Self {
+        self.skip_state_transitions = true;
+        self
+    }
+
+    pub fn without_skip_state_transitions(mut self) -> Self {
+        self.skip_state_transitions = false;
+        self
+    }
+
+    pub fn without_first_entry_start_time_ticks(
+        mut self,
+        first_entry_start_time_ticks: u32,
+    ) -> Self {
+        self.first_entry_start_time_ticks = first_entry_start_time_ticks;
+        self
     }
 }
 
@@ -302,6 +346,7 @@ impl MotionSequencer {
                         tracing::warn!("Invalid DEFAULT_COG_POSITION state label: {}", state_name);
                     }
                 }
+
                 "BEGIN_SEQUENCE" => {
                     let current = std::mem::replace(&mut parse_state, ParseState::None);
                     self.commit_parse_state(current);
@@ -383,21 +428,6 @@ impl MotionSequencer {
         Ok(())
     }
 
-    fn create_sequence(
-        name: String,
-        begin_state: State,
-        end_state: State,
-        motions: Vec<Arc<MotionInfo>>,
-    ) -> Arc<Sequence> {
-        Arc::new(Sequence {
-            _hash: hash(name.as_str()),
-            _name: name,
-            begin_state,
-            _end_state: end_state,
-            motions,
-        })
-    }
-
     fn commit_parse_state(&mut self, parse_state: ParseState) {
         match parse_state {
             ParseState::None => {}
@@ -409,29 +439,41 @@ impl MotionSequencer {
             } => {
                 self.transition_sequences.insert(
                     (begin_state, end_state),
-                    Self::create_sequence(name, begin_state, end_state, motions),
+                    Arc::new(Sequence {
+                        hash: hash(name.as_str()),
+                        name,
+                        begin_state,
+                        end_state,
+                        motions,
+                    }),
                 );
             }
             ParseState::Sequence { name, motions } => {
-                let (begin_state, end_state) = Self::infer_sequence_state_bounds(&motions);
+                let (begin_state, end_state) = if let Some(first) = motions.first() {
+                    let begin_state = first.motion.from_state;
+                    let end_state = motions
+                        .last()
+                        .map(|motion_info| motion_info.motion.to_state)
+                        .unwrap_or(begin_state);
+
+                    (begin_state, end_state)
+                } else {
+                    (State::None, State::None)
+                };
+
+                let hash = hash(name.as_str());
+
                 self.sequences.insert(
-                    hash(name.as_str()),
-                    Self::create_sequence(name, begin_state, end_state, motions),
+                    hash,
+                    Arc::new(Sequence {
+                        hash,
+                        name,
+                        begin_state,
+                        end_state,
+                        motions,
+                    }),
                 );
             }
         }
-    }
-
-    fn infer_sequence_state_bounds(motions: &[Arc<MotionInfo>]) -> (State, State) {
-        let Some(first_motion) = motions.first() else {
-            return (State::None, State::None);
-        };
-
-        let begin_state = first_motion.motion.from_state;
-        let end_state = motions
-            .last()
-            .map(|motion_info| motion_info.motion.to_state)
-            .unwrap_or(begin_state);
-        (begin_state, end_state)
     }
 }

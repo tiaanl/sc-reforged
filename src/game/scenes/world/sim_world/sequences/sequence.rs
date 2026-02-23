@@ -3,10 +3,11 @@ use std::sync::Arc;
 use super::{motion_info::MotionInfo, state::State};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Sequence {
-    pub _name: String,
-    pub _hash: u32,
+    pub name: String,
+    pub hash: u32,
     pub begin_state: State,
-    pub _end_state: State,
+    pub end_state: State,
     pub motions: Vec<Arc<MotionInfo>>,
 }

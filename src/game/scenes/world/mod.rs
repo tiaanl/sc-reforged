@@ -482,12 +482,10 @@ impl Scene for WorldScene {
                         ui.horizontal(|ui| {
                             ui.text_edit_singleline(&mut self.sequence_to_play);
                             if ui.button("Request").clicked() {
-                                let request = sim_world::sequences::MotionSequenceRequest {
-                                    entity: selected_entity,
-                                    sequence_hash: hash(self.sequence_to_play.as_str()),
-                                    playback_speed: 1.0,
-                                    ..Default::default()
-                                };
+                                use crate::game::scenes::world::sim_world::sequences::MotionSequenceRequest;
+
+                                let request = MotionSequenceRequest::new(selected_entity,
+                                    hash(self.sequence_to_play.as_str()));
                                 self.sim_world.trigger(request);
                             }
                         });
@@ -503,13 +501,12 @@ impl Scene for WorldScene {
                                 ("Scuba", "MSEQ_SCUBA"),
                             ] {
                                 if ui.button(label).clicked() {
+                                    use crate::game::scenes::world::sim_world::sequences::MotionSequenceRequest;
+
                                     self.sequence_to_play = sequence_name.to_string();
-                                    let request = sim_world::sequences::MotionSequenceRequest {
-                                        entity: selected_entity,
-                                        sequence_hash: hash(sequence_name),
-                                        playback_speed: 1.0,
-                                        ..Default::default()
-                                    };
+
+                                    let request = MotionSequenceRequest::new(selected_entity,
+                                        hash(sequence_name));
                                     self.sim_world.trigger(request);
                                 }
                             }
