@@ -11,10 +11,10 @@ egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit"]
 shadow_company_tools = { path = "../shadow_company_tools" }
 
 # Graphics
-egui = { version = "0.31", optional = true, default-features = false, features = ["default_fonts"] }
-egui-wgpu = { version = "0.31", optional = true, default-features = false }
-egui-winit = { version = "0.31", optional = true, default-features = false }
-wgpu = { version = "24.0", features = ["naga-ir"] }
+egui = { version = "0.33", optional = true, default-features = false, features = ["default_fonts"] }
+egui-wgpu = { version = "0.33", optional = true, default-features = false }
+egui-winit = { version = "0.33", optional = true, default-features = false }
+wgpu = { version = "27.0" }
 winit = { version = "0.30" }
 
 ahash = "0.8"
@@ -24,7 +24,6 @@ clap = { version = "4.5", features = ["derive"] }
 generational-arena = "0.2"
 glam = { version = "0.30", default-features = false, features = ["bytemuck", "std"] }
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg"] }
-naga_oil = { version = "0.17", default-features = false }
 pathdiff = "0.2"
 pcx = { version = "0.2", default-features = false }
 pollster = { version = "0.4", default-features = false }
@@ -38,12 +37,12 @@ bitflags = "2.10"
 bevy_ecs = { version = "0.17", default-features = false, features = ["std", "backtrace", "detailed_trace"] }
 
 [build-dependencies]
-heck = "0.5.0"
-naga = { version = "24.0" }
-naga_oil = { version = "0.17" }
+heck = "0.5"
+naga = { version = "27.0" } # should match wgpu
+naga_oil = { version = "0.20" }
 prettyplease = "0.2"
 quote = "1"
-syn = "2.0.114"
+syn = "2.0"
 
 [profile.dev.package.zune-jpeg]
 opt-level = 3

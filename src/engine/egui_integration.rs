@@ -39,7 +39,11 @@ impl EguiIntegration {
             );
         });
 
-        let egui_renderer = egui_wgpu::Renderer::new(&device, output_color_format, None, 1, false);
+        let egui_renderer = egui_wgpu::Renderer::new(
+            &device,
+            output_color_format,
+            egui_wgpu::RendererOptions::default(),
+        );
 
         Self {
             device,
@@ -110,6 +114,7 @@ impl EguiIntegration {
             label: Some("egui_render_pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,

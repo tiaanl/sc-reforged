@@ -1,5 +1,12 @@
 #![allow(unused)]
 
+use std::path::Path;
+
+use crate::{
+    engine::assets::AssetError,
+    game::{config::parser::ConfigLines, file_system::FileSystem},
+};
+
 mod campaign;
 mod campaign_defs;
 mod character_profiles;
@@ -19,3 +26,13 @@ pub use model_lods::*;
 pub use mtf::*;
 pub use object_templates::*;
 pub use terrain_mapping::*;
+
+pub fn load_config<C: From<ConfigLines>>(
+    file_system: &FileSystem,
+    path: impl AsRef<Path>,
+) -> Result<C, AssetError> {
+    let data = file_system.load(path)?;
+    let text = String::from_utf8_lossy(&data);
+    let config_lines = ConfigLines::parse(&text);
+    Ok(C::from(config_lines))
+}

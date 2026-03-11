@@ -170,6 +170,7 @@ impl GeometryBuffer {
             color_attachments: &[
                 Some(wgpu::RenderPassColorAttachment {
                     view: &self.inner.color.view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -183,6 +184,7 @@ impl GeometryBuffer {
                 }),
                 Some(wgpu::RenderPassColorAttachment {
                     view: &self.inner.oit_accumulation.view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -196,6 +198,7 @@ impl GeometryBuffer {
                 }),
                 Some(wgpu::RenderPassColorAttachment {
                     view: &self.inner.oit_revealage.view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -229,6 +232,7 @@ impl GeometryBuffer {
     fn opaque_attachments(&self) -> [Option<wgpu::RenderPassColorAttachment<'_>>; 1] {
         [Some(wgpu::RenderPassColorAttachment {
             view: &self.inner.color.view,
+            depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -268,6 +272,7 @@ impl GeometryBuffer {
         [
             Some(wgpu::RenderPassColorAttachment {
                 view: &self.inner.oit_accumulation.view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -276,6 +281,7 @@ impl GeometryBuffer {
             }),
             Some(wgpu::RenderPassColorAttachment {
                 view: &self.inner.oit_revealage.view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -347,6 +353,7 @@ impl GeometryBuffer {
             label: Some(label),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &self.inner.color.view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -376,6 +383,7 @@ impl GeometryBuffer {
             color_attachments: &[
                 Some(wgpu::RenderPassColorAttachment {
                     view: &self.inner.oit_accumulation.view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -384,6 +392,7 @@ impl GeometryBuffer {
                 }),
                 Some(wgpu::RenderPassColorAttachment {
                     view: &self.inner.oit_revealage.view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,

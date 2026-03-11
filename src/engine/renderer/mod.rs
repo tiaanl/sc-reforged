@@ -26,7 +26,7 @@ pub fn create(window: Arc<Window>) -> (Surface, Renderer) {
     .expect("Could not request an adapter.");
 
     let supported = adapter.features();
-    let required = wgpu::Features::MULTI_DRAW_INDIRECT
+    let required = wgpu::Features::MULTI_DRAW_INDIRECT_COUNT
         | wgpu::Features::POLYGON_MODE_LINE
         | wgpu::Features::PUSH_CONSTANTS
         | wgpu::Features::TEXTURE_BINDING_ARRAY
@@ -51,19 +51,17 @@ pub fn create(window: Arc<Window>) -> (Surface, Renderer) {
 
     let surface = Surface::new(surface, surface_config);
 
-    let (device, queue) = pollster::block_on(adapter.request_device(
-        &wgpu::DeviceDescriptor {
-            required_features: required & supported,
-            required_limits: wgpu::Limits {
-                max_bind_groups: 6,
-                max_color_attachment_bytes_per_sample: 56,
-                max_push_constant_size: 16,
-                ..Default::default()
-            },
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        required_features: required & supported,
+        required_limits: wgpu::Limits {
+            max_binding_array_elements_per_shader_stage: 1024,
+            max_bind_groups: 6,
+            max_color_attachment_bytes_per_sample: 56,
+            max_push_constant_size: 16,
             ..Default::default()
         },
-        None,
-    ))
+        ..Default::default()
+    }))
     .expect("request device");
 
     surface.configure(&device);

@@ -7,8 +7,6 @@ use ahash::{HashMap, HashSet};
 use thiserror::Error;
 use walkdir::WalkDir;
 
-use crate::global;
-
 #[derive(Debug, Error)]
 pub enum FileSystemError {
     #[error("The path was not found: {0}")]
@@ -208,5 +206,3 @@ impl FileSystem {
         self.gut_files.get(component.as_os_str().to_str()?)
     }
 }
-
-global!(FileSystem, scoped_file_system, file_system);

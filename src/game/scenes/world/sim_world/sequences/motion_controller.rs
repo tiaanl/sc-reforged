@@ -208,7 +208,6 @@ impl MotionController {
             }
 
             self.root_motion = Vec3::ZERO;
-            return;
         }
     }
 

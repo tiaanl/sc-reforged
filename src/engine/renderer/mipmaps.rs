@@ -121,6 +121,7 @@ impl MipMaps {
                 label: Some("mipmaps_render_pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &views[mip_level],
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::RED),

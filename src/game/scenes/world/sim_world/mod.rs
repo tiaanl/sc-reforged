@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ahash::HashSet;
 use bevy_ecs::prelude::*;
@@ -8,8 +8,8 @@ use crate::{
     engine::{assets::AssetError, input::InputState, transform::Transform},
     game::{
         AssetLoader,
-        config::{CampaignDef, ObjectType},
-        data_dir::data_dir,
+        config::{CampaignDef, CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
+        file_system::FileSystem,
         scenes::world::{
             sim_world::{
                 ecs::{ActiveCamera, GizmoVertices, Viewport},
@@ -62,6 +62,7 @@ pub struct SimWorldState {
 }
 
 pub fn init_sim_world(
+    file_system: &FileSystem,
     world: &mut World,
     assets: AssetLoader,
     campaign_def: &CampaignDef,
@@ -160,9 +161,9 @@ pub fn init_sim_world(
         FreeCameraController::new(1000.0, 0.2),
     ));
 
-    init_terrain(world, &mut assets, campaign_def)?;
+    init_terrain(file_system, world, &mut assets, campaign_def)?;
 
-    init_objects(world, &mut assets, campaign)?;
+    init_objects(file_system, world, &mut assets, campaign)?;
 
     let ui = Ui::new();
 
@@ -184,17 +185,62 @@ pub fn init_sim_world(
 }
 
 fn init_terrain(
+    file_system: &FileSystem,
     world: &mut World,
     assets: &mut AssetLoader,
     campaign_def: &CampaignDef,
 ) -> Result<(), AssetError> {
     let terrain = {
-        let terrain_mapping = data_dir().load_terrain_mapping(&campaign_def.base_name)?;
+        let terrain_mapping = load_config::<TerrainMapping>(
+            file_system,
+            PathBuf::from("textures")
+                .join("terrain")
+                .join(&campaign_def.base_name)
+                .join("terrain_mapping.txt"),
+        )?;
+
+        pub fn load_new_height_map(
+            file_system: &FileSystem,
+            path: impl AsRef<Path>,
+            elevation_scale: f32,
+            cell_size: f32,
+        ) -> Result<HeightMap, AssetError> {
+            use glam::UVec2;
+
+            let data = file_system.load(path.as_ref())?;
+
+            let mut reader = pcx::Reader::from_mem(&data)
+                .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
+
+            let size = UVec2::new(reader.width() as u32, reader.height() as u32);
+            if !reader.is_paletted() {
+                return Err(AssetError::custom(path, "PCX file not not paletted!"));
+            }
+
+            let mut elevations = vec![0_u8; size.x as usize * size.y as usize];
+            for row in 0..size.y {
+                let start = row as usize * size.x as usize;
+                let end = (row as usize + 1) * size.x as usize;
+                let slice = &mut elevations[start..end];
+                reader
+                    .next_row_paletted(slice)
+                    .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
+            }
+
+            Ok(HeightMap::from_iter(
+                size,
+                cell_size,
+                elevations
+                    .iter()
+                    .map(|e| (u8::MAX - *e) as f32 * elevation_scale),
+            ))
+        }
 
         let height_map = {
             let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
             tracing::info!("Loading terrain height map: {}", path.display());
-            data_dir().load_new_height_map(
+            load_new_height_map(
+                file_system,
                 path,
                 terrain_mapping.altitude_map_height_base,
                 terrain_mapping.nominal_edge_size,
@@ -222,6 +268,7 @@ fn init_terrain(
 }
 
 fn init_objects(
+    file_system: &FileSystem,
     world: &mut World,
     assets: &mut AssetLoader,
     campaign: crate::game::config::Campaign,
@@ -229,9 +276,30 @@ fn init_objects(
     world.insert_resource(StaticBvh::new(8));
     world.insert_resource(DynamicBvh::default());
 
-    let mut object_spawner = spawner::Spawner::new(data_dir().load_character_profiles()?);
+    let character_profiles = {
+        let mut character_profiles = CharacterProfiles::default();
+
+        for file in file_system
+            .dir(PathBuf::from("config").join("character_profiles"))?
+            .filter(|p| {
+                if let Some(e) = p.extension() {
+                    e.eq_ignore_ascii_case("txt")
+                } else {
+                    false
+                }
+            })
+        {
+            let config = load_config(file_system, file)?;
+            character_profiles.parse_lines(config);
+        }
+
+        character_profiles
+    };
+
+    let mut object_spawner = spawner::Spawner::new(character_profiles);
+
     if let Some(ref mtf_name) = campaign.mtf_name {
-        let mtf = data_dir().load_mtf(mtf_name)?;
+        let mtf = load_config::<Mtf>(file_system, PathBuf::from("maps").join(mtf_name))?;
 
         for object in mtf.objects.iter() {
             let object_type = ObjectType::from_string(&object.typ)

@@ -161,7 +161,6 @@ pub fn on_clicked(
 
         // The user click on a selectable entity, so select it.
         world_interaction.selected_entity = Some(entity);
-        return;
     }
 
     /*

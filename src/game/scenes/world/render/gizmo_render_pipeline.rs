@@ -118,6 +118,7 @@ impl RenderPipeline for GizmoRenderPipeline {
                 label: Some("gizmos_render_pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &frame.surface,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,

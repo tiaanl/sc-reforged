@@ -12,8 +12,8 @@ use crate::{
         scene::Scene,
     },
     game::{
-        data_dir::{DataDir, data_dir, scoped_data_dir},
-        file_system::scoped_file_system,
+        config::{CampaignDefs, load_config},
+        file_system::FileSystem,
         scenes::world::WorldScene,
     },
 };
@@ -106,12 +106,19 @@ impl winit::application::ApplicationHandler for App {
                     surface.format(),
                 );
 
+                let file_system = FileSystem::new(&opts.path);
+
                 let scene: Box<dyn Scene> = {
                     let campaign_name = opts
                         .campaign_name
                         .clone()
                         .unwrap_or(String::from("training"));
-                    let campaign_defs = data_dir().load_campaign_defs().unwrap();
+
+                    let campaign_defs = load_config::<CampaignDefs>(
+                        &file_system,
+                        PathBuf::from("config").join("campaign_defs.txt"),
+                    )
+                    .unwrap();
 
                     let campaign_def = campaign_defs
                         .campaigns
@@ -121,8 +128,14 @@ impl winit::application::ApplicationHandler for App {
                         .unwrap();
 
                     Box::new(
-                        WorldScene::new(&renderer, surface.size(), surface.format(), campaign_def)
-                            .unwrap(),
+                        WorldScene::new(
+                            &file_system,
+                            &renderer,
+                            surface.size(),
+                            surface.format(),
+                            campaign_def,
+                        )
+                        .unwrap(),
                     )
                 };
 
@@ -289,9 +302,6 @@ fn main() {
             return;
         }
     };
-
-    let _file_system = scoped_file_system(|| game::file_system::FileSystem::new(opts.path.clone()));
-    let _data_dir = scoped_data_dir(|| DataDir);
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
 

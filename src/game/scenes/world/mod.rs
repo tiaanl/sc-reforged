@@ -13,6 +13,7 @@ use crate::{
     game::{
         AssetLoader, AssetReader,
         config::CampaignDef,
+        file_system::FileSystem,
         scenes::world::{
             extract::RenderSnapshot,
             game_mode::GameMode,
@@ -68,6 +69,7 @@ pub struct WorldScene {
 
 impl WorldScene {
     pub fn new(
+        file_system: &FileSystem,
         renderer: &Renderer,
         surface_size: UVec2,
         surface_format: wgpu::TextureFormat,
@@ -78,11 +80,11 @@ impl WorldScene {
         let fps_history = vec![FrameTime::default(); 100];
         let fps_history_cursor = 0;
 
-        let assets = AssetLoader::new()?;
+        let assets = AssetLoader::new(file_system)?;
 
         let mut sim_world = World::default();
 
-        init_sim_world(&mut sim_world, assets, &campaign_def)?;
+        init_sim_world(file_system, &mut sim_world, assets, &campaign_def)?;
 
         let render_targets = RenderTargets::new(renderer, surface_size, surface_format);
 

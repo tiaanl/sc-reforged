@@ -12,10 +12,8 @@ use crate::{
     },
     game::{
         AssetReader,
-        config::{
-            Campaign, ImageDefs, LodModelProfileDefinition, SubModelDefinition, parser::ConfigLines,
-        },
-        file_system::file_system,
+        config::{Campaign, ImageDefs, LodModelProfileDefinition, SubModelDefinition, load_config},
+        file_system::FileSystem,
         image::Image,
         model::Model,
         models::ModelName,
@@ -25,7 +23,9 @@ use crate::{
 use super::Asset;
 
 /// Interface for loading assets from the file system.
-pub struct AssetLoader {
+pub struct AssetLoader<'fs> {
+    file_system: &'fs FileSystem,
+
     _image_defs: ImageDefs,
     model_lod_defs: HashMap<String, Vec<SubModelDefinition>>,
 
@@ -33,20 +33,20 @@ pub struct AssetLoader {
     models: TypedAssetLoader<ModelName, Model>,
 }
 
-impl AssetLoader {
-    pub fn new() -> Result<Self, AssetError> {
-        let _image_defs = load_config(PathBuf::from("config").join("image_defs.txt"))?;
+impl<'fs> AssetLoader<'fs> {
+    pub fn new(file_system: &'fs FileSystem) -> Result<Self, AssetError> {
+        let _image_defs = load_config(file_system, PathBuf::from("config").join("image_defs.txt"))?;
 
         let model_lod_defs = {
             let mut lod_definitions: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
             let profiles_path = PathBuf::from("config").join("lod_model_profiles");
-            for lod_path in file_system().dir(&profiles_path)?.filter(|path| {
+            for lod_path in file_system.dir(&profiles_path)?.filter(|path| {
                 path.extension()
                     .filter(|ext| ext.eq_ignore_ascii_case("txt"))
                     .is_some()
             }) {
-                let profile = load_config::<LodModelProfileDefinition>(lod_path)?;
+                let profile = load_config::<LodModelProfileDefinition>(file_system, lod_path)?;
                 lod_definitions.insert(
                     profile.lod_model_name,
                     profile.sub_model_definitions.clone(),
@@ -57,6 +57,7 @@ impl AssetLoader {
         };
 
         Ok(Self {
+            file_system,
             _image_defs,
             model_lod_defs,
             images: TypedAssetLoader::default(),
@@ -70,11 +71,12 @@ impl AssetLoader {
 
     #[inline]
     pub fn load_raw(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, AssetError> {
-        Ok(file_system().load(path)?)
+        Ok(self.file_system.load(path)?)
     }
 
     pub fn load_campaign(&mut self, name: &str) -> Result<Campaign, AssetError> {
         load_config(
+            self.file_system,
             PathBuf::from("campaign")
                 .join(name)
                 .join(name)
@@ -153,8 +155,8 @@ impl AssetLoader {
     }
 }
 
-pub struct AssetLoadContext<'assets> {
-    pub loader: &'assets mut AssetLoader,
+pub struct AssetLoadContext<'fs, 'assets> {
+    pub loader: &'assets mut AssetLoader<'fs>,
 }
 
 struct TypedAssetLoader<K, T: Asset> {
@@ -177,11 +179,4 @@ impl<K: Eq + Hash, T: Asset> TypedAssetLoader<K, T> {
         self.lookup.insert(key, handle);
         (handle, self.assets.get(handle).unwrap())
     }
-}
-
-pub fn load_config<C: From<ConfigLines>>(path: impl AsRef<Path>) -> Result<C, AssetError> {
-    let data = file_system().load(path)?;
-    let text = String::from_utf8_lossy(&data);
-    let config_lines = ConfigLines::parse(&text);
-    Ok(C::from(config_lines))
 }
