@@ -6,7 +6,7 @@ use crate::{
     game::scenes::world::sim_world::{
         ComputedCamera, DynamicBvh, SimWorldState, Terrain, UiRect,
         ecs::{ActiveCamera, Viewport},
-        orders::{Order, OrderRequest},
+        orders::{OrderRequest, RequestedOrder},
     },
 };
 
@@ -186,9 +186,10 @@ pub fn on_clicked(
         println!("hit: {terrain_hit:?}");
         commands.write_message(OrderRequest {
             entity: selected_entity,
-            order: Order::MoveTo {
+            order: RequestedOrder::MoveTo {
                 location: terrain_hit.world_position,
             },
+            priority_override: None,
         });
     }
 }

@@ -13,7 +13,7 @@ pub fn handle_order_requests(
     for request in requests.read() {
         if let Ok(mut orders_controller) = orders_controllers.get_mut(request.entity) {
             tracing::info!("({}) Requesting order {request:?}", time.frame_index);
-            orders_controller.request_order(request.clone());
+            orders_controller.enqueue_request(request.clone(), time.frame_index);
         } else {
             tracing::warn!("Entity has no OrdersController ({})", request.entity);
         }
