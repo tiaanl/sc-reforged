@@ -102,7 +102,7 @@ impl Terrain {
         ))
     }
 
-    pub fn _chunk_intersect_ray_segment(
+    pub fn chunk_intersect_ray_segment(
         &self,
         chunk_coord: IVec2,
         ray_segment: &RaySegment,

@@ -6,6 +6,7 @@ use crate::{
     game::scenes::world::sim_world::{
         ComputedCamera, DynamicBvh, SimWorldState, Terrain, UiRect,
         ecs::{ActiveCamera, Viewport},
+        orders::{Order, OrderRequest},
     },
 };
 
@@ -145,11 +146,13 @@ pub fn on_clicked(
     viewport: Res<Viewport>,
     camera: Single<&ComputedCamera, With<ActiveCamera>>,
     dynamic_bvh: Res<DynamicBvh>,
-    _terrain: Res<Terrain>,
+    terrain: Res<Terrain>,
     mut world_interaction: ResMut<WorldInteraction>,
 
+    mut commands: Commands,
+
     mut entity_cache: Local<Vec<Entity>>,
-    mut _terrain_hit_cache: Local<Vec<IVec2>>,
+    mut terrain_hit_cache: Local<Vec<IVec2>>,
 ) {
     let ray = camera.create_ray_segment(clicked.pos, viewport.size);
 
@@ -163,7 +166,6 @@ pub fn on_clicked(
         world_interaction.selected_entity = Some(entity);
     }
 
-    /*
     // If nothing is selected, we're done for now.
     let Some(selected_entity) = world_interaction.selected_entity else {
         return;
@@ -180,8 +182,15 @@ pub fn on_clicked(
         .filter_map(|&chunk| terrain.chunk_intersect_ray_segment(chunk, &ray))
         .collect();
 
-    if let Some(terrain_hit) = terrain_hits.iter().min_by(|&a, &b| a.t.total_cmp(&b.t)) {}
-    */
+    if let Some(terrain_hit) = terrain_hits.iter().min_by(|&a, &b| a.t.total_cmp(&b.t)) {
+        println!("hit: {terrain_hit:?}");
+        commands.write_message(OrderRequest {
+            entity: selected_entity,
+            order: Order::MoveTo {
+                location: terrain_hit.world_position,
+            },
+        });
+    }
 }
 
 /*

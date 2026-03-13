@@ -14,6 +14,7 @@ use crate::{
             sim_world::{
                 ecs::{ActiveCamera, GizmoVertices, Viewport},
                 free_camera_controller::FreeCameraController,
+                orders::OrderRequest,
                 sequences::MotionSequencer,
                 top_down_camera_controller::TopDownCameraController,
                 ui::Ui,
@@ -32,7 +33,7 @@ mod dynamic_bvh;
 pub mod ecs;
 pub mod free_camera_controller;
 mod height_map;
-mod orders;
+pub mod orders;
 mod quad_tree;
 pub mod sequences;
 mod spawner;
@@ -123,6 +124,9 @@ pub fn init_sim_world(
             }
         },
     );
+
+    // Orders
+    world.init_resource::<Messages<OrderRequest>>();
 
     // Cameras
 

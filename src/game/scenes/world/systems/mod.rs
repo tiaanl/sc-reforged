@@ -28,6 +28,7 @@ mod changed;
 mod clear_render_targets;
 mod debug;
 mod gizmos;
+mod orders;
 mod sequences;
 pub mod world_interaction;
 
@@ -127,14 +128,19 @@ impl Systems {
             schedule.add_systems(
                 (
                     world_interaction::update,
+                    (
+                        orders::handle_order_requests,
+                        orders::update_orders_controller,
+                    )
+                        .chain(),
                     sequences::update_motion_controllers,
                     sequences::update_poses,
                     rebuild_static_bvh.run_if(|q: Query<(), Added<ecs::BoundingBoxComponent>>| {
                         q.iter().count() > 0
                     }),
                     update_dynamic_bvh,
-                    // debug::_draw_model_bounding_boxes,
                     sequences::_debug_draw_root_motion,
+                    // debug::_draw_model_bounding_boxes,
                 )
                     .in_set(Update)
                     .chain(),

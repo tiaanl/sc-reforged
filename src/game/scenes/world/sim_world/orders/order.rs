@@ -1,5 +1,6 @@
 use glam::Vec3;
 
+#[derive(Clone, Debug)]
 pub enum Order {
     MoveTo { location: Vec3 },
 }
