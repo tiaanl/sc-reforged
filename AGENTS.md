@@ -1,23 +1,16 @@
 # sc-reforged agent notes
 
 ## Project overview
-- Rust (edition 2024) game recreation using `winit` + `wgpu`.
+- Rust (edition 2024) game recreation.
 - Requires the original game data directory at runtime.
 
 ## Common commands
 - Build: `cargo build`
 - Run (requires data path): `cargo run -- "C:\Program Files\Sinister Games\Shadow Company - Left for Dead\Data"`
 - Run with campaign override: `cargo run -- "<data_path>" <campaign_name>`
-- Run without egui (optional): `cargo run --no-default-features -- "<data_path>"`
 - Tests (if any): `cargo test`
 - Format: `cargo fmt`
 - Lint: `cargo clippy`
-
-## Repo layout
-- `src/main.rs`: application entry point and main loop.
-- `src/engine/`: renderer, input, and scene abstractions.
-- `src/game/`: data loading, file system, scenes.
-- `docs/`: design notes and file format references.
 
 ## Runtime notes
 - CLI args are parsed with `clap`; the data path is required.
