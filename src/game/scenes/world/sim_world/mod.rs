@@ -32,6 +32,7 @@ mod dynamic_bvh;
 pub mod ecs;
 pub mod free_camera_controller;
 mod height_map;
+mod orders;
 mod quad_tree;
 pub mod sequences;
 mod spawner;

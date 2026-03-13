@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-use super::sequences::Pose;
+use super::{orders::OrdersController, sequences::Pose};
 
 #[derive(Component)]
 pub struct SpawnInfo {
@@ -181,6 +181,7 @@ impl Spawner {
             dynamic_bvh_handle,
             motion_controller,
             Pose::default(),
+            OrdersController::default(),
         ));
 
         Ok(entity)
