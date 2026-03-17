@@ -157,40 +157,48 @@ pub fn on_clicked(
     let ray = camera.create_ray_segment(clicked.pos, viewport.size);
 
     entity_cache.clear();
-    dynamic_bvh._query_ray_segment(&ray, &mut entity_cache);
+    dynamic_bvh.query_ray_segment(&ray, &mut entity_cache);
 
-    if let Some(&entity) = entity_cache.first() {
-        // TODO: Check that the entity is actually selectable.
+    let clicked_entity = entity_cache.first();
 
-        // The user click on a selectable entity, so select it.
-        world_interaction.selected_entity = Some(entity);
-    }
+    match (clicked_entity, world_interaction.selected_entity) {
+        (Some(_clicked), Some(_selected)) => {
+            // TODO: Let the selected entity interact with the clicked entity, if possible.
+        }
 
-    // If nothing is selected, we're done for now.
-    let Some(selected_entity) = world_interaction.selected_entity else {
-        return;
-    };
+        (Some(clicked), None) => {
+            // Clicked on an entity, with no current entity selected, so select it.
+            world_interaction.selected_entity = Some(*clicked);
+        }
 
-    // If the user didn't click on a selectable entity, check for a terrain hit.
-    terrain_hit_cache.clear();
-    terrain
-        .quad_tree
-        .ray_intersect_chunks(&ray, &mut terrain_hit_cache);
+        (None, Some(selected)) => {
+            // Something is selected, but we did not click on anything. Pass through to allow
+            // terrain intersection checks.
+            terrain_hit_cache.clear();
+            terrain
+                .quad_tree
+                .ray_intersect_chunks(&ray, &mut terrain_hit_cache);
 
-    let terrain_hits: Vec<_> = terrain_hit_cache
-        .iter()
-        .filter_map(|&chunk| terrain.chunk_intersect_ray_segment(chunk, &ray))
-        .collect();
+            let terrain_hits: Vec<_> = terrain_hit_cache
+                .iter()
+                .filter_map(|&chunk| terrain.chunk_intersect_ray_segment(chunk, &ray))
+                .collect();
 
-    if let Some(terrain_hit) = terrain_hits.iter().min_by(|&a, &b| a.t.total_cmp(&b.t)) {
-        println!("hit: {terrain_hit:?}");
-        commands.write_message(OrderRequest {
-            entity: selected_entity,
-            order: RequestedOrder::MoveTo {
-                location: terrain_hit.world_position,
-            },
-            priority_override: None,
-        });
+            if let Some(terrain_hit) = terrain_hits.iter().min_by(|&a, &b| a.t.total_cmp(&b.t)) {
+                println!("hit: {terrain_hit:?}");
+                commands.write_message(OrderRequest {
+                    entity: selected,
+                    order: RequestedOrder::MoveTo {
+                        location: terrain_hit.world_position,
+                    },
+                    priority_override: None,
+                });
+            }
+        }
+
+        _ => {
+            // Nothing selected and nothing clicked, we can't do anything further.
+        }
     }
 }
 

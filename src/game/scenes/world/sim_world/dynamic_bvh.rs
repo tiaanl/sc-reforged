@@ -165,7 +165,7 @@ impl DynamicBvh {
         }
     }
 
-    pub fn _query_ray_segment(&self, ray: &RaySegment, out: &mut Vec<Entity>) {
+    pub fn query_ray_segment(&self, ray: &RaySegment, out: &mut Vec<Entity>) {
         let Some(root) = self.root else {
             return;
         };
