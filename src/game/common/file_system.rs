@@ -1,5 +1,5 @@
 use std::{
-    io::{ErrorKind, Read, Seek, SeekFrom},
+    io::{ErrorKind, Read},
     path::{Path, PathBuf},
 };
 
@@ -16,14 +16,13 @@ pub enum FileSystemError {
     Io(#[from] std::io::Error),
 }
 
-#[derive(Default)]
 pub struct FileSystem {
     root_dir: PathBuf,
     gut_files: HashMap<String, GutFile>,
 }
 
 struct GutFile {
-    path: PathBuf,
+    file: std::fs::File,
     entries: HashMap<String, GutEntry>,
 }
 
@@ -31,8 +30,8 @@ impl GutFile {
     fn from_path(path: impl AsRef<Path>) -> Result<Self, FileSystemError> {
         use shadow_company_tools::gut;
 
-        let file = std::fs::File::open(path.as_ref())?;
-        let gut_file = match gut::GutFile::open(&mut std::io::BufReader::new(file)) {
+        let mut file = std::fs::File::open(path.as_ref())?;
+        let gut_file = match gut::GutFile::open(&mut std::io::BufReader::new(&mut file)) {
             Ok(gut_file) => gut_file,
             Err(err) => match err {
                 gut::GutError::Io(err) => {
@@ -54,12 +53,10 @@ impl GutFile {
             );
         });
 
-        Ok(Self {
-            path: path.as_ref().to_path_buf(),
-            entries,
-        })
+        Ok(Self { file, entries })
     }
 
+    /// Reads a single file entry.
     fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         // Paths in a .gut file are all lower case and use the `\`` separator.
         let lower_path = path
@@ -73,14 +70,8 @@ impl GutFile {
             return Err(FileSystemError::FileNotFound(path.as_ref().to_path_buf()));
         };
 
-        let mut file = std::fs::File::open(&self.path)?;
-        let a = file.seek(SeekFrom::Start(entry.offset))?;
-        if a != entry.offset {
-            return Err(FileSystemError::Io(ErrorKind::InvalidData.into()));
-        }
-
         let mut data = vec![0u8; entry.size as usize];
-        file.read_exact(&mut data)?;
+        read_exact_at(&self.file, &mut data, entry.offset)?;
 
         if entry.is_plain_text {
             shadow_company_tools::common::decrypt_buf(&mut data);
@@ -98,6 +89,7 @@ struct GutEntry {
 }
 
 impl FileSystem {
+    /// Builds a virtual file system rooted at the game data directory.
     pub fn new(root_dir: impl AsRef<Path>) -> Self {
         let mut gut_files = HashMap::default();
 
@@ -134,6 +126,7 @@ impl FileSystem {
         }
     }
 
+    /// Loads a file either from disk or from a mounted .gut archive.
     pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         let full_path = self.root_dir.join(path.as_ref());
 
@@ -156,6 +149,7 @@ impl FileSystem {
         Ok(data)
     }
 
+    /// Returns all files below `root`, combining external files and matching .gut entries.
     pub fn dir(
         &self,
         root: impl AsRef<Path>,
@@ -205,4 +199,30 @@ impl FileSystem {
         let component = path.as_ref().components().next()?;
         self.gut_files.get(component.as_os_str().to_str()?)
     }
+}
+
+/// Reads exactly `buf.len()` bytes from `file` starting at `offset` without changing a shared cursor.
+#[cfg(unix)]
+fn read_exact_at(file: &std::fs::File, buf: &mut [u8], offset: u64) -> std::io::Result<()> {
+    use std::os::unix::fs::FileExt;
+
+    file.read_exact_at(buf, offset)
+}
+
+/// Reads exactly `buf.len()` bytes from `file` starting at `offset` without changing a shared cursor.
+#[cfg(windows)]
+fn read_exact_at(file: &std::fs::File, mut buf: &mut [u8], mut offset: u64) -> std::io::Result<()> {
+    use std::os::windows::fs::FileExt;
+
+    while !buf.is_empty() {
+        let bytes_read = file.seek_read(buf, offset)?;
+        if bytes_read == 0 {
+            return Err(std::io::Error::from(ErrorKind::UnexpectedEof));
+        }
+
+        buf = &mut buf[bytes_read..];
+        offset += bytes_read as u64;
+    }
+
+    Ok(())
 }

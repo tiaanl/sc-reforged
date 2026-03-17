@@ -24,7 +24,7 @@
 - Default campaign name is `"training"` if not provided.
 
 ## Code style notes
-- Use code comments when generating code, and do not mention the conversation that generated the code.
+- Use code comments when generating code. Do not mention the conversation or internal implementation details; include only what users of the code need to know.
 - All public functions must have doc comments.
 - Private functions should have doc comments if they are more than 1-2 lines of code.
 - Code formatting and linting should always be done if allowed.
