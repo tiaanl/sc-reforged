@@ -477,7 +477,8 @@ impl Scene for WorldScene {
                                     "Transition check state: {:?}",
                                     mc.transition_check_state()
                                 ));
-                                ui.label(format!("Current state: {:?}", mc.current_state()));
+                                let assets = self.sim_world.resource::<AssetReader>();
+                                ui.label(format!("Current state: {:?}", mc.current_state(assets)));
                             }
                         }
 
@@ -516,12 +517,17 @@ impl Scene for WorldScene {
 
                         if let Some(mc) = self
                             .sim_world
-                            .get_mut::<sim_world::sequences::MotionController>(selected_entity)
+                            .get::<sim_world::sequences::MotionController>(selected_entity)
                         {
+                            let assets = self.sim_world.resource::<AssetReader>();
                             mc.pending.iter().for_each(|context| {
+                                let motion_name = assets
+                                    .get_motion(context.motion_info.motion)
+                                    .map(|motion| motion.name.as_str())
+                                    .unwrap_or("<missing motion>");
                                 ui.label(format!(
                                     "{} ({:.02})",
-                                    &context.motion_info.motion.name, context.playback_speed
+                                    motion_name, context.playback_speed
                                 ));
                             });
                         }

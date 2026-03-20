@@ -2,18 +2,23 @@ use bevy_ecs::prelude::*;
 
 use crate::{
     engine::storage::{Handle, Storage},
-    game::assets::{image::Image, model::Model},
+    game::assets::{image::Image, model::Model, motion::Motion},
 };
 
 #[derive(Resource)]
 pub struct AssetReader {
     images: Storage<Image>,
     models: Storage<Model>,
+    motions: Storage<Motion>,
 }
 
 impl AssetReader {
-    pub fn new(images: Storage<Image>, models: Storage<Model>) -> Self {
-        Self { images, models }
+    pub fn new(images: Storage<Image>, models: Storage<Model>, motions: Storage<Motion>) -> Self {
+        Self {
+            images,
+            models,
+            motions,
+        }
     }
 
     #[inline]
@@ -24,5 +29,10 @@ impl AssetReader {
     #[inline]
     pub fn get_model(&self, handle: Handle<Model>) -> Option<&Model> {
         self.models.get(handle)
+    }
+
+    #[inline]
+    pub fn get_motion(&self, handle: Handle<Motion>) -> Option<&Motion> {
+        self.motions.get(handle)
     }
 }

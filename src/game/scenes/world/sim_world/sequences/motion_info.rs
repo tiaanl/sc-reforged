@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
-use crate::game::assets::motion::Motion;
+use crate::{engine::storage::Handle, game::assets::motion::Motion};
 
 #[derive(Clone, Debug)]
 pub struct MotionInfo {
     pub hash: u32,
-    pub motion: Arc<Motion>,
+    pub motion: Handle<Motion>,
 
     pub repeat_count: i32,
     pub looping: bool,

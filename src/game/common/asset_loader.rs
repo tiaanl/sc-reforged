@@ -12,7 +12,7 @@ use crate::{
     },
     game::{
         AssetReader,
-        assets::{Asset, image::Image, model::Model},
+        assets::{Asset, image::Image, model::Model, motion::Motion},
         config::{Campaign, ImageDefs, LodModelProfileDefinition, SubModelDefinition, load_config},
         file_system::FileSystem,
         models::ModelName,
@@ -28,6 +28,7 @@ pub struct AssetLoader<'fs> {
 
     images: TypedAssetLoader<PathBuf, Image>,
     models: TypedAssetLoader<ModelName, Model>,
+    motions: TypedAssetLoader<String, Motion>,
 }
 
 impl<'fs> AssetLoader<'fs> {
@@ -59,11 +60,12 @@ impl<'fs> AssetLoader<'fs> {
             model_lod_defs,
             images: TypedAssetLoader::default(),
             models: TypedAssetLoader::default(),
+            motions: TypedAssetLoader::default(),
         })
     }
 
     pub fn into_reader(self) -> AssetReader {
-        AssetReader::new(self.images.assets, self.models.assets)
+        AssetReader::new(self.images.assets, self.models.assets, self.motions.assets)
     }
 
     #[inline]
@@ -150,6 +152,42 @@ impl<'fs> AssetLoader<'fs> {
     pub fn add_model(&mut self, name: ModelName, model: Model) -> (Handle<Model>, &Model) {
         self.models.insert(name, model)
     }
+
+    pub fn get_or_load_motion(
+        &mut self,
+        name: impl Into<String>,
+    ) -> Result<(Handle<Motion>, &Motion), AssetError> {
+        let name = name.into();
+        let path = PathBuf::from("motions").join(&name).with_extension("bmf");
+
+        if let Some(handle) = self.motions.lookup.get(&name).cloned() {
+            let motion = self
+                .motions
+                .assets
+                .get(handle)
+                .ok_or_else(|| AssetError::custom(&path, "Image handle missing"))?;
+            return Ok((handle, motion));
+        }
+
+        tracing::info!("Loading motion: {}", path.display());
+
+        let data = self.load_raw(&path)?;
+        let mut context = AssetLoadContext { loader: self };
+        let image = Motion::from_memory(&mut context, path.clone(), &data)?;
+
+        Ok(self.motions.insert(name, image))
+    }
+
+    #[inline]
+    pub fn get_motion(&self, handle: Handle<Motion>) -> Option<&Motion> {
+        self.motions.get(handle)
+    }
+
+    #[inline]
+    pub fn get_motion_by_key_mut(&mut self, name: impl Into<String>) -> Option<&mut Motion> {
+        let name = name.into();
+        self.motions.get_by_key_mut(&name)
+    }
 }
 
 pub struct AssetLoadContext<'fs, 'assets> {
@@ -164,13 +202,24 @@ struct TypedAssetLoader<K, T: Asset> {
 impl<K, T: Asset> Default for TypedAssetLoader<K, T> {
     fn default() -> Self {
         Self {
-            assets: Default::default(),
-            lookup: Default::default(),
+            assets: Storage::default(),
+            lookup: HashMap::default(),
         }
     }
 }
 
 impl<K: Eq + Hash, T: Asset> TypedAssetLoader<K, T> {
+    #[inline]
+    pub fn get(&self, handle: Handle<T>) -> Option<&T> {
+        self.assets.get(handle)
+    }
+
+    pub fn get_by_key_mut(&mut self, key: &K) -> Option<&mut T> {
+        self.lookup
+            .get(key)
+            .and_then(|handle| self.assets.get_mut(*handle))
+    }
+
     pub fn insert(&mut self, key: K, asset: T) -> (Handle<T>, &T) {
         let handle = self.assets.insert(asset);
         self.lookup.insert(key, handle);
