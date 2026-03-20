@@ -3,7 +3,7 @@ use glam::{IVec2, Mat4, Vec2, Vec3, Vec4};
 
 use crate::{
     engine::{gizmos::GizmoVertex, storage::Handle},
-    game::{math::Frustum, model::Model, scenes::world::sim_world::sequences::Pose},
+    game::{assets::model::Model, math::Frustum, scenes::world::sim_world::sequences::Pose},
 };
 
 /// Camera information.

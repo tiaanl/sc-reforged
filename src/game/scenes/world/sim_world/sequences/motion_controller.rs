@@ -3,7 +3,9 @@ use glam::Vec3;
 
 use std::{collections::VecDeque, sync::Arc};
 
-use super::{motion::MotionFlags, motion_info::MotionInfo, state::State};
+use crate::game::assets::motion::{MotionFlags, State};
+
+use super::motion_info::MotionInfo;
 
 #[derive(Debug)]
 pub struct MotionInfoContext {

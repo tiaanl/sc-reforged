@@ -9,7 +9,10 @@ use crate::{
         renderer::Renderer,
         storage::{Handle, Storage},
     },
-    game::{AssetReader, image::BlendMode, model::Model},
+    game::{
+        AssetReader,
+        assets::{image::BlendMode, model::Model},
+    },
 };
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]

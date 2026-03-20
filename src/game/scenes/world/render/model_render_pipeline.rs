@@ -11,7 +11,7 @@ use crate::{
     },
     game::{
         AssetReader,
-        model::Model,
+        assets::model::Model,
         scenes::world::{
             extract::RenderSnapshot,
             render::{

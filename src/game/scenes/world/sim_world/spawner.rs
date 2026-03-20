@@ -6,9 +6,9 @@ use crate::{
     engine::{assets::AssetError, storage::Handle, transform::Transform},
     game::{
         AssetLoader,
+        assets::model::{Mesh, Model},
         config::{BodyDefinition, CharacterProfiles, ObjectType},
         math::BoundingBox,
-        model::{Mesh, Model},
         models::ModelName,
         scenes::world::sim_world::{
             DynamicBvh, StaticBvhHandle, ecs::BoundingBoxComponent, sequences::MotionController,

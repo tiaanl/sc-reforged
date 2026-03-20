@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::motion::Motion;
+use crate::game::assets::motion::Motion;
 
 #[derive(Clone, Debug)]
 pub struct MotionInfo {

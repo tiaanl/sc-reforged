@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 use crate::{
     engine::{storage::Handle, transform::Transform},
     game::{
-        model::Model,
+        assets::model::Model,
         scenes::world::{
             extract::{ModelToRender, RenderSnapshot},
             sim_world::{

@@ -9,12 +9,14 @@ use shadow_company_tools::smf;
 use crate::{
     engine::{assets::AssetError, mesh::IndexedMesh, storage::Handle, transform::Transform},
     game::{
-        Asset,
-        image::Image,
+        AssetLoadContext,
+        assets::image::Image,
         math::{BoundingBox, Ray, RaySegment, triangle_intersect_ray_segment},
         skeleton::{Bone, Skeleton},
     },
 };
+
+use super::Asset;
 
 pub type NodeIndex = u32;
 
@@ -78,7 +80,7 @@ impl Model {
 
 impl Asset for Model {
     fn from_memory(
-        context: &mut super::AssetLoadContext,
+        context: &mut AssetLoadContext,
         path: PathBuf,
         data: &[u8],
     ) -> Result<Self, AssetError> {

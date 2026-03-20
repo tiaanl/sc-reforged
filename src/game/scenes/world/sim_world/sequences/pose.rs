@@ -2,9 +2,10 @@ use bevy_ecs::prelude::*;
 use glam::{Mat4, Vec3};
 use std::collections::HashMap;
 
-use crate::{engine::transform::Transform, game::skeleton::Skeleton};
-
-use super::motion::Motion;
+use crate::{
+    engine::transform::Transform,
+    game::{assets::motion::Motion, skeleton::Skeleton},
+};
 
 #[derive(Clone, Component, Debug, Default)]
 pub struct Pose {

@@ -4,7 +4,7 @@ use glam::{IVec2, UVec2, Vec2, Vec3};
 use crate::{
     engine::storage::Handle,
     game::{
-        image::Image,
+        assets::image::Image,
         math::{BoundingBox, RaySegment, RayTriangleHit, triangle_intersect_ray_segment},
     },
 };

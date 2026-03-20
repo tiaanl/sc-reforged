@@ -11,7 +11,7 @@ use crate::{
     },
     game::{
         AssetReader,
-        image::{BlendMode, Image},
+        assets::image::{BlendMode, Image},
     },
 };
 

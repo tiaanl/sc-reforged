@@ -1,6 +1,5 @@
 use std::{
     path::{Path, PathBuf},
-    str::FromStr,
     sync::Arc,
 };
 
@@ -10,16 +9,18 @@ use glam::Vec3;
 
 use crate::{
     engine::assets::AssetError,
-    game::{Asset, AssetLoadContext, AssetLoader, config::parser::ConfigLines, hash},
+    game::{
+        AssetLoadContext, AssetLoader,
+        assets::{
+            Asset,
+            motion::{Motion, MotionFlags, State},
+        },
+        config::parser::ConfigLines,
+        hash,
+    },
 };
 
-use super::{
-    motion::{Motion, MotionFlags},
-    motion_controller::MotionController,
-    motion_info::MotionInfo,
-    sequence::Sequence,
-    state::State,
-};
+use super::{motion_controller::MotionController, motion_info::MotionInfo, sequence::Sequence};
 
 #[derive(Clone, Debug, Event)]
 pub struct MotionSequenceRequest {
@@ -239,6 +240,18 @@ impl MotionSequencer {
     ) -> Result<(), AssetError> {
         let mut parse_state = ParseState::None;
 
+        fn state_from_str(str: &str) -> Option<State> {
+            Some(match str {
+                "MSEQ_STATE_STAND" => State::Stand,
+                "MSEQ_STATE_CROUCH" => State::Crouch,
+                "MSEQ_STATE_PRONE" => State::Prone,
+                "MSEQ_STATE_ON_BACK" => State::OnBack,
+                "MSEQ_STATE_SIT" => State::Sit,
+                "MSEQ_STATE_SCUBA" => State::Scuba,
+                _ => return None,
+            })
+        }
+
         for line in config_lines.into_iter() {
             match line.key.as_str() {
                 "BEGIN_TRANSITION_SEQ" => {
@@ -248,7 +261,7 @@ impl MotionSequencer {
                     let begin_state_name = line.string(0);
                     let end_state_name = line.string(1);
 
-                    let Ok(begin_state) = State::from_str(&begin_state_name) else {
+                    let Some(begin_state) = state_from_str(&begin_state_name) else {
                         tracing::warn!(
                             "Invalid BEGIN_TRANSITION_SEQ begin state label: {}",
                             begin_state_name
@@ -256,7 +269,7 @@ impl MotionSequencer {
                         continue;
                     };
 
-                    let Ok(end_state) = State::from_str(&end_state_name) else {
+                    let Some(end_state) = state_from_str(&end_state_name) else {
                         tracing::warn!(
                             "Invalid BEGIN_TRANSITION_SEQ end state label: {}",
                             end_state_name
@@ -340,7 +353,7 @@ impl MotionSequencer {
                         line.param::<f32>(3),
                     );
 
-                    if let Ok(state) = State::from_str(&state_name) {
+                    if let Some(state) = state_from_str(&state_name) {
                         self.default_cog_positions.insert(state, position);
                     } else {
                         tracing::warn!("Invalid DEFAULT_COG_POSITION state label: {}", state_name);

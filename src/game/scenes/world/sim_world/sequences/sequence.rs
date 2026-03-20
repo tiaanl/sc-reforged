@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use super::{motion_info::MotionInfo, state::State};
+use crate::game::assets::motion::State;
+
+use super::motion_info::MotionInfo;
 
 #[derive(Debug)]
 #[allow(dead_code)]

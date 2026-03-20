@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 
 use crate::{
     engine::storage::{Handle, Storage},
-    game::{image::Image, model::Model},
+    game::assets::{image::Image, model::Model},
 };
 
 #[derive(Resource)]

@@ -3,12 +3,9 @@ use glam::{Quat, Vec3};
 use shadow_company_tools::bmf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use crate::{
-    engine::assets::AssetError,
-    game::{Asset, AssetLoadContext},
-};
+use crate::{engine::assets::AssetError, game::AssetLoadContext};
 
-use super::state::State;
+use super::Asset;
 
 bitflags! {
     /// Per-motion behavior flags used by sequencer/runtime systems.
@@ -22,6 +19,35 @@ bitflags! {
         const SKIP_LAST_FRAME = 1 << 2;
         /// Enables sped-motion time scaling behavior.
         const SPED_MOTION = 1 << 3;
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum State {
+    #[default]
+    None,
+    Stand,
+    Crouch,
+    Prone,
+    OnBack,
+    Sit,
+    Scuba,
+}
+
+impl State {
+    /// Convert a raw motion-state id into a semantic [State].
+    ///
+    /// Unknown ids are treated as [State::None].
+    pub const fn from_motion_state_id(id: u32) -> Self {
+        match id {
+            1 => Self::Stand,
+            2 => Self::Crouch,
+            3 => Self::Prone,
+            4 => Self::OnBack,
+            5 => Self::Sit,
+            6 => Self::Scuba,
+            _ => Self::None,
+        }
     }
 }
 

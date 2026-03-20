@@ -12,15 +12,12 @@ use crate::{
     },
     game::{
         AssetReader,
+        assets::{Asset, image::Image, model::Model},
         config::{Campaign, ImageDefs, LodModelProfileDefinition, SubModelDefinition, load_config},
         file_system::FileSystem,
-        image::Image,
-        model::Model,
         models::ModelName,
     },
 };
-
-use super::Asset;
 
 /// Interface for loading assets from the file system.
 pub struct AssetLoader<'fs> {
