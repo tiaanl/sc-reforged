@@ -3,13 +3,18 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 use clap::Parser;
 
 use glam::UVec2;
-use winit::dpi::PhysicalPosition;
+use winit::{
+    application::ApplicationHandler,
+    dpi::PhysicalPosition,
+    event_loop::{ActiveEventLoop, EventLoop},
+};
 
 use crate::{
     engine::{
         input::InputState,
         renderer::{Frame, Renderer, Surface},
         scene::Scene,
+        threads::main::{MainThreadEvent, MainThreadReceiver},
     },
     game::{
         config::{CampaignDefs, load_config},
@@ -32,7 +37,7 @@ struct Opts {
 
 #[allow(clippy::large_enum_variant)]
 enum App {
-    Uninitialzed(Opts),
+    Uninitialzed(Opts, MainThreadReceiver),
     Initialized {
         /// The main window the engine is rendering to. This is also the window
         /// that is receiving all the input events.
@@ -54,13 +59,16 @@ enum App {
         scene: Box<dyn Scene>,
         /// A new scene requested to be switched to.
         requested_scene: Option<Box<dyn Scene>>,
+
+        /// A receiver for events on the main thread.
+        main_thread_receiver: MainThreadReceiver,
     },
 }
 
-impl winit::application::ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+impl ApplicationHandler<MainThreadEvent> for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         match self {
-            App::Uninitialzed(opts) => {
+            App::Uninitialzed(opts, main_thread_receiver) => {
                 event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
                 let mut attributes = winit::window::WindowAttributes::default()
@@ -152,6 +160,7 @@ impl winit::application::ApplicationHandler for App {
                     last_frame_time: Instant::now(),
                     scene,
                     requested_scene: None,
+                    main_thread_receiver: main_thread_receiver.clone(),
                 };
             }
 
@@ -163,7 +172,7 @@ impl winit::application::ApplicationHandler for App {
 
     fn window_event(
         &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
+        event_loop: &ActiveEventLoop,
         window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
@@ -290,6 +299,19 @@ impl winit::application::ApplicationHandler for App {
             }
         }
     }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: MainThreadEvent) {
+        let Self::Initialized { scene, surface, .. } = self else {
+            return;
+        };
+
+        match event {
+            MainThreadEvent::ReplaceScene(new_scene) => {
+                *scene = new_scene;
+                scene.resize(surface.size());
+            }
+        }
+    }
 }
 
 fn main() {
@@ -303,9 +325,12 @@ fn main() {
         }
     };
 
-    let event_loop = winit::event_loop::EventLoop::new().unwrap();
+    let event_loop = EventLoop::<MainThreadEvent>::with_user_event()
+        .build()
+        .unwrap();
+    let main_thread_receiver = MainThreadReceiver::new(event_loop.create_proxy());
 
-    let mut app = App::Uninitialzed(opts);
+    let mut app = App::Uninitialzed(opts, main_thread_receiver);
     event_loop
         .run_app(&mut app)
         .expect("run application event loop");

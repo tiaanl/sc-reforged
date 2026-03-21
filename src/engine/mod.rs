@@ -8,6 +8,7 @@ pub mod renderer;
 pub mod scene;
 pub mod shader_cache;
 pub mod storage;
+pub mod threads;
 pub mod tracked;
 pub mod transform;
 
