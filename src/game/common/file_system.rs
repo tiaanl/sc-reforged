@@ -21,73 +21,6 @@ pub struct FileSystem {
     gut_files: HashMap<String, GutFile>,
 }
 
-struct GutFile {
-    file: std::fs::File,
-    entries: HashMap<String, GutEntry>,
-}
-
-impl GutFile {
-    fn from_path(path: impl AsRef<Path>) -> Result<Self, FileSystemError> {
-        use shadow_company_tools::gut;
-
-        let mut file = std::fs::File::open(path.as_ref())?;
-        let gut_file = match gut::GutFile::open(&mut std::io::BufReader::new(&mut file)) {
-            Ok(gut_file) => gut_file,
-            Err(err) => match err {
-                gut::GutError::Io(err) => {
-                    return Err(FileSystemError::Io(err));
-                }
-            },
-        };
-
-        let mut entries: HashMap<String, GutEntry> = HashMap::default();
-        gut_file.entries().for_each(|entry| {
-            // Although the rule is that all paths in a .gut file are lower case, we enforce it.
-            entries.insert(
-                entry.name.to_ascii_lowercase().to_string(),
-                GutEntry {
-                    offset: entry.offset,
-                    size: entry.size,
-                    is_plain_text: entry.is_plain_text,
-                },
-            );
-        });
-
-        Ok(Self { file, entries })
-    }
-
-    /// Reads a single file entry.
-    fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
-        // Paths in a .gut file are all lower case and use the `\`` separator.
-        let lower_path = path
-            .as_ref()
-            .to_string_lossy()
-            .to_ascii_lowercase()
-            .replace(std::path::MAIN_SEPARATOR, "\\")
-            .to_string();
-
-        let Some(entry) = self.entries.get(&lower_path) else {
-            return Err(FileSystemError::FileNotFound(path.as_ref().to_path_buf()));
-        };
-
-        let mut data = vec![0u8; entry.size as usize];
-        read_exact_at(&self.file, &mut data, entry.offset)?;
-
-        if entry.is_plain_text {
-            shadow_company_tools::common::decrypt_buf(&mut data);
-        }
-
-        Ok(data)
-    }
-}
-
-#[derive(Clone)]
-struct GutEntry {
-    pub offset: u64,
-    pub size: u64,
-    pub is_plain_text: bool,
-}
-
 impl FileSystem {
     /// Builds a virtual file system rooted at the game data directory.
     pub fn new(root_dir: impl AsRef<Path>) -> Self {
@@ -199,6 +132,73 @@ impl FileSystem {
         let component = path.as_ref().components().next()?;
         self.gut_files.get(component.as_os_str().to_str()?)
     }
+}
+
+struct GutFile {
+    file: std::fs::File,
+    entries: HashMap<String, GutEntry>,
+}
+
+impl GutFile {
+    fn from_path(path: impl AsRef<Path>) -> Result<Self, FileSystemError> {
+        use shadow_company_tools::gut;
+
+        let mut file = std::fs::File::open(path.as_ref())?;
+        let gut_file = match gut::GutFile::open(&mut file) {
+            Ok(gut_file) => gut_file,
+            Err(err) => match err {
+                gut::GutError::Io(err) => {
+                    return Err(FileSystemError::Io(err));
+                }
+            },
+        };
+
+        let mut entries: HashMap<String, GutEntry> = HashMap::default();
+        gut_file.entries().for_each(|entry| {
+            // Although the rule is that all paths in a .gut file are lower case, we enforce it.
+            entries.insert(
+                entry.name.to_ascii_lowercase().to_string(),
+                GutEntry {
+                    offset: entry.offset,
+                    size: entry.size,
+                    is_plain_text: entry.is_plain_text,
+                },
+            );
+        });
+
+        Ok(Self { file, entries })
+    }
+
+    /// Reads a single file entry.
+    fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
+        // Paths in a .gut file are all lower case and use the `\`` separator.
+        let lower_path = path
+            .as_ref()
+            .to_string_lossy()
+            .to_ascii_lowercase()
+            .replace(std::path::MAIN_SEPARATOR, "\\")
+            .to_string();
+
+        let Some(entry) = self.entries.get(&lower_path) else {
+            return Err(FileSystemError::FileNotFound(path.as_ref().to_path_buf()));
+        };
+
+        let mut data = vec![0u8; entry.size as usize];
+        read_exact_at(&self.file, &mut data, entry.offset)?;
+
+        if entry.is_plain_text {
+            shadow_company_tools::common::decrypt_buf(&mut data);
+        }
+
+        Ok(data)
+    }
+}
+
+#[derive(Clone)]
+struct GutEntry {
+    pub offset: u64,
+    pub size: u64,
+    pub is_plain_text: bool,
 }
 
 /// Reads exactly `buf.len()` bytes from `file` starting at `offset` without changing a shared cursor.
