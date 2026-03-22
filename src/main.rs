@@ -19,7 +19,7 @@ use crate::{
     game::{
         config::{CampaignDefs, load_config},
         file_system::FileSystem,
-        scenes::world::WorldScene,
+        scenes::{main_menu::MainMenuScene, world::WorldScene},
     },
 };
 
@@ -116,6 +116,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
 
                 let file_system = FileSystem::new(&opts.path);
 
+                /*
                 let scene: Box<dyn Scene> = {
                     let campaign_name = opts
                         .campaign_name
@@ -146,6 +147,10 @@ impl ApplicationHandler<MainThreadEvent> for App {
                         .unwrap(),
                     )
                 };
+                */
+
+                let scene =
+                    Box::new(MainMenuScene::new(&file_system, &renderer, &surface).unwrap());
 
                 tracing::info!("Application initialized!");
 

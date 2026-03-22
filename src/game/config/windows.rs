@@ -1,6 +1,6 @@
-#![allow(dead_code)]
-
 use std::collections::HashMap;
+
+use crate::game::config::parser::ConfigLines;
 
 #[derive(Debug, Default)]
 pub struct ButtonAdvice {
@@ -114,6 +114,12 @@ pub struct WindowBase {
     geometries: Vec<Geometry>,
     geometries_tiled: Vec<GeometryTiled>,
     ivars: HashMap<String, i32>,
+}
+
+impl From<ConfigLines> for WindowBase {
+    fn from(value: ConfigLines) -> Self {
+        Self::default()
+    }
 }
 
 /*
