@@ -6,6 +6,13 @@ use crate::engine::{
     renderer::{Frame, Renderer, Surface},
 };
 
+pub type TextureId = usize;
+
+struct Texture {
+    size: UVec2,
+    view: wgpu::TextureView,
+}
+
 pub struct WindowRenderer {
     render_pipeline: wgpu::RenderPipeline,
 
@@ -19,6 +26,8 @@ pub struct WindowRenderer {
     viewport: gpu::Viewport,
     viewport_buffer: wgpu::Buffer,
     viewport_bind_group: wgpu::BindGroup,
+
+    textures: Vec<Texture>,
 }
 
 impl WindowRenderer {
@@ -173,7 +182,54 @@ impl WindowRenderer {
             viewport,
             viewport_buffer,
             viewport_bind_group,
+
+            textures: Vec::default(),
         }
+    }
+
+    pub fn create_texture(&mut self, renderer: &Renderer, rgba: image::RgbaImage) -> TextureId {
+        let size = wgpu::Extent3d {
+            width: rgba.width(),
+            height: rgba.height(),
+            depth_or_array_layers: 1,
+        };
+
+        let texture = renderer.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        renderer.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &rgba,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(rgba.width() * 4),
+                rows_per_image: Some(rgba.height()),
+            },
+            size,
+        );
+
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let id = self.textures.len();
+        self.textures.push(Texture {
+            size: UVec2::new(rgba.width(), rgba.height()),
+            view,
+        });
+
+        id
     }
 
     pub fn resize(&mut self, size: UVec2) {

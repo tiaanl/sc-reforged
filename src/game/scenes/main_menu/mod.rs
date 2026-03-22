@@ -21,6 +21,8 @@ pub struct MainMenuScene {
     window_base: WindowBase,
 
     renderer: render::WindowRenderer,
+
+    frames: Vec<render::TextureId>,
 }
 
 impl MainMenuScene {
@@ -36,11 +38,28 @@ impl MainMenuScene {
                 .join("main_menu.txt"),
         )?;
 
-        let renderer = render::WindowRenderer::new(renderer, surface);
+        let mut window_renderer = render::WindowRenderer::new(renderer, surface);
+
+        let mut frames = vec![];
+
+        for i in 0..5 {
+            let path = PathBuf::from("textures")
+                .join("interface")
+                .join(format!("frame{i}.jpg"));
+
+            let data = file_system.load(&path)?;
+
+            let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
+                .map_err(|err| AssetError::custom(path, format!("{err}")))?;
+            let rgba = image.into_rgba8();
+
+            frames.push(window_renderer.create_texture(renderer, rgba));
+        }
 
         Ok(Self {
             window_base,
-            renderer,
+            renderer: window_renderer,
+            frames,
         })
     }
 }
