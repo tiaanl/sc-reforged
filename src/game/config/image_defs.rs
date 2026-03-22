@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::game::config::parser::{ConfigLine, ConfigLines};
 
 #[derive(Debug, Default)]
@@ -27,26 +25,6 @@ pub struct ColorKey {
     rh: u8,
     gh: u8,
     bh: u8,
-}
-
-impl ColorKey {
-    fn from_params(params: &[&str]) -> Self {
-        let rl = params[0].parse().unwrap();
-        let gl = params[1].parse().unwrap();
-        let bl = params[2].parse().unwrap();
-        let rh = params[3].parse().unwrap();
-        let gh = params[4].parse().unwrap();
-        let bh = params[5].parse().unwrap();
-
-        Self {
-            rl,
-            gl,
-            bl,
-            rh,
-            gh,
-            bh,
-        }
-    }
 }
 
 #[derive(Debug, Default)]
@@ -232,27 +210,53 @@ impl From<ConfigLines> for ImageDefs {
     fn from(value: ConfigLines) -> Self {
         let mut image_defs = ImageDefs::default();
 
-        #[derive(Debug)]
+        #[derive(Debug, Default)]
         enum State {
+            #[default]
             None,
             Sprite3d(Sprite3d),
             AnimSprite(AnimSprite),
             AnimSprite3d(AnimSprite3d),
         }
-        let mut state = State::None;
+
+        impl State {
+            fn is_none(&self) -> bool {
+                matches!(self, Self::None)
+            }
+
+            fn open(&mut self, state: State) {
+                if !self.is_none() {
+                    tracing::warn!("Discarding state for: {:?}", state);
+                }
+
+                *self = state;
+            }
+        }
+
+        let mut state = State::default();
 
         for line in value.into_iter() {
             match line.key.as_str() {
-                // s if s.starts_with(';') => {}
                 "IMAGE" => {
+                    state.open(State::None);
                     image_defs.images.push(line.into());
                 }
 
-                "SPRITE3D" => {
-                    state = State::Sprite3d(line.into());
-                }
+                "SPRITE3D" => state.open(State::Sprite3d(line.into())),
+                "ANIMSPRITE3D" => state.open(State::AnimSprite3d(line.into())),
+                "ANIMSPRITE" => state.open(State::AnimSprite(line.into())),
 
                 s @ "SPRITEFRAME" | s @ "SPRITEFRAME_XRUN" | s @ "SPRITEFRAME_DXRUN" => {
+                    let frames = match state {
+                        State::Sprite3d(Sprite3d { ref mut frames, .. })
+                        | State::AnimSprite(AnimSprite { ref mut frames, .. })
+                        | State::AnimSprite3d(AnimSprite3d { ref mut frames, .. }) => frames,
+                        _ => {
+                            tracing::warn!("SPRITEFRAME* without a SPRITE*");
+                            continue;
+                        }
+                    };
+
                     let sprite_frame = match s {
                         "SPRITEFRAME" => SpriteFrame {
                             x1: line.param(0),
@@ -280,30 +284,8 @@ impl From<ConfigLines> for ImageDefs {
                         },
                         _ => unreachable!("already checked"),
                     };
-                    match state {
-                        State::Sprite3d(Sprite3d { ref mut frames, .. })
-                        | State::AnimSprite(AnimSprite { ref mut frames, .. })
-                        | State::AnimSprite3d(AnimSprite3d { ref mut frames, .. }) => {
-                            frames.push(sprite_frame);
-                        }
-                        _ => panic!("Found SPRITEFRAME, but not in correct state! {state:?}"),
-                    }
-                }
 
-                "ENDDEF" => {
-                    let state = std::mem::replace(&mut state, State::None);
-                    match state {
-                        State::Sprite3d(sprite_3d) => image_defs.sprite_3d.push(sprite_3d),
-                        State::AnimSprite(anim_sprite) => image_defs.anim_sprite.push(anim_sprite),
-                        State::AnimSprite3d(anim_sprite_3d) => {
-                            image_defs.anim_sprite_3d.push(anim_sprite_3d)
-                        }
-                        _ => panic!("Found ENDDEF, but not in correct state! {state:?}"),
-                    }
-                }
-
-                "ANIMSPRITE3D" => {
-                    state = State::AnimSprite3d(line.into());
+                    frames.push(sprite_frame);
                 }
 
                 "FRAMEDESCRIPTOR" => match state {
@@ -313,7 +295,9 @@ impl From<ConfigLines> for ImageDefs {
                     State::AnimSprite3d(ref mut anim_sprite_3d) => {
                         anim_sprite_3d.frame_descriptor = line.into();
                     }
-                    _ => panic!("Found FRAMEDESCRIPTOR, but not in correct state! {state:?}"),
+                    _ => {
+                        tracing::warn!("Found FRAMEDESCRIPTOR, but not in correct state! {state:?}")
+                    }
                 },
 
                 "FRAMEORDER" => {
@@ -335,13 +319,27 @@ impl From<ConfigLines> for ImageDefs {
                         State::AnimSprite3d(ref mut anim_sprite_3d) => {
                             anim_sprite_3d.frame_order = frame_order;
                         }
-                        _ => panic!("Found FRAMEDESCRIPTOR, but not in correct state! {state:?}"),
+                        _ => tracing::warn!(
+                            "Found FRAMEDESCRIPTOR, but not in correct state! {state:?}"
+                        ),
                     }
                 }
 
-                "ANIMSPRITE" => state = State::AnimSprite(line.into()),
+                "ENDDEF" => {
+                    let state = std::mem::take(&mut state);
+                    match state {
+                        State::Sprite3d(sprite_3d) => image_defs.sprite_3d.push(sprite_3d),
+                        State::AnimSprite(anim_sprite) => image_defs.anim_sprite.push(anim_sprite),
+                        State::AnimSprite3d(anim_sprite_3d) => {
+                            image_defs.anim_sprite_3d.push(anim_sprite_3d)
+                        }
+                        _ => {
+                            tracing::warn!("Found ENDDEF, but not in correct state! {state:?}");
+                        }
+                    }
+                }
 
-                _ => panic!("Unexpected config value: {line:?}, state: {state:?}"),
+                _ => tracing::warn!("Unexpected config value: {line:?}, state: {state:?}"),
             }
         }
 

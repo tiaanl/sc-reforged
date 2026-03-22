@@ -98,7 +98,7 @@ impl<'fs> AssetLoader<'fs> {
             return Ok((handle, image));
         }
 
-        tracing::info!("Loading image: {}", path.display());
+        // tracing::info!("Loading image: {}", path.display());
 
         let data = self.load_raw(&path)?;
         let mut context = AssetLoadContext { loader: self };
@@ -169,7 +169,7 @@ impl<'fs> AssetLoader<'fs> {
             return Ok((handle, motion));
         }
 
-        tracing::info!("Loading motion: {}", path.display());
+        // tracing::info!("Loading motion: {}", path.display());
 
         let data = self.load_raw(&path)?;
         let mut context = AssetLoadContext { loader: self };
