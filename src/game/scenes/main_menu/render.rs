@@ -1,4 +1,4 @@
-use glam::UVec2;
+use glam::{UVec2, Vec2};
 use wgpu::util::DeviceExt;
 
 use crate::engine::{
@@ -8,9 +8,35 @@ use crate::engine::{
 
 pub type TextureId = usize;
 
+pub enum Primitive {
+    Rect {
+        pos: Vec2,
+        size: Vec2,
+        texture: TextureId,
+        alpha: f32,
+    },
+}
+
+#[derive(Default)]
+pub struct Primitives {
+    primitives: Vec<Primitive>,
+}
+
+impl Primitives {
+    pub fn add_rect(&mut self, pos: Vec2, size: Vec2, texture: TextureId, alpha: f32) {
+        self.primitives.push(Primitive::Rect {
+            pos,
+            size,
+            texture,
+            alpha,
+        });
+    }
+}
+
 struct Texture {
     size: UVec2,
     view: wgpu::TextureView,
+    bind_group: wgpu::BindGroup,
 }
 
 pub struct WindowRenderer {
@@ -27,6 +53,8 @@ pub struct WindowRenderer {
     viewport_buffer: wgpu::Buffer,
     viewport_bind_group: wgpu::BindGroup,
 
+    texture_bind_group_layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
     textures: Vec<Texture>,
 }
 
@@ -73,6 +101,41 @@ impl WindowRenderer {
                 }],
             });
 
+        let texture_bind_group_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("texture"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
+
+        let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("sampler"),
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
         let shader = renderer
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -87,8 +150,11 @@ impl WindowRenderer {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("window_renderer"),
-                    bind_group_layouts: &[&viewport_bind_group_layout],
-                    push_constant_ranges: &[],
+                    bind_group_layouts: &[&viewport_bind_group_layout, &texture_bind_group_layout],
+                    push_constant_ranges: &[wgpu::PushConstantRange {
+                        stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        range: 0..20,
+                    }],
                 });
 
         let render_pipeline =
@@ -120,7 +186,7 @@ impl WindowRenderer {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: &[Some(wgpu::ColorTargetState {
                             format: surface.format(),
-                            blend: None,
+                            blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                             write_mask: wgpu::ColorWrites::ALL,
                         })],
                     }),
@@ -128,27 +194,26 @@ impl WindowRenderer {
                     cache: None,
                 });
 
-        const SIZE: f32 = 100.0;
         let vertices = vec![
             gpu::Vertex {
                 pos: [0.0, 0.0],
                 uv: [0.0, 0.0],
-                color: [0.0, 0.0, 0.0, 1.0],
+                color: [1.0, 1.0, 1.0, 1.0],
             },
             gpu::Vertex {
-                pos: [SIZE, 0.0],
+                pos: [1.0, 0.0],
                 uv: [1.0, 0.0],
-                color: [0.0, 0.0, 0.0, 1.0],
+                color: [1.0, 1.0, 1.0, 1.0],
             },
             gpu::Vertex {
-                pos: [SIZE, SIZE],
+                pos: [1.0, 1.0],
                 uv: [1.0, 1.0],
-                color: [0.0, 0.0, 0.0, 1.0],
+                color: [1.0, 1.0, 1.0, 1.0],
             },
             gpu::Vertex {
-                pos: [0.0, SIZE],
+                pos: [0.0, 1.0],
                 uv: [0.0, 1.0],
-                color: [0.0, 0.0, 0.0, 1.0],
+                color: [1.0, 1.0, 1.0, 1.0],
             },
         ];
 
@@ -183,6 +248,8 @@ impl WindowRenderer {
             viewport_buffer,
             viewport_bind_group,
 
+            texture_bind_group_layout,
+            sampler,
             textures: Vec::default(),
         }
     }
@@ -200,8 +267,8 @@ impl WindowRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
 
@@ -224,9 +291,28 @@ impl WindowRenderer {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let id = self.textures.len();
+
+        let bind_group = renderer
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(&format!("texture_bind_group_{id}")),
+                layout: &self.texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                ],
+            });
+
         self.textures.push(Texture {
             size: UVec2::new(rgba.width(), rgba.height()),
             view,
+            bind_group,
         });
 
         id
@@ -239,7 +325,7 @@ impl WindowRenderer {
         self.viewport_dirty = true;
     }
 
-    pub fn draw(&mut self, renderer: &Renderer, frame: &mut Frame) {
+    pub fn submit(&mut self, renderer: &Renderer, frame: &mut Frame, primitives: Primitives) {
         if self.viewport_dirty {
             renderer.queue.write_buffer(
                 &self.viewport_buffer,
@@ -257,12 +343,7 @@ impl WindowRenderer {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -272,8 +353,32 @@ impl WindowRenderer {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_vertex_buffer(0, self.vertices_buffer.slice(..));
         render_pass.set_index_buffer(self.indices_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
-        render_pass.draw_indexed(0..self.indices_buffer.count, 0, 0..1);
+
+        for p in primitives.primitives.iter() {
+            match p {
+                Primitive::Rect {
+                    pos,
+                    size,
+                    texture,
+                    alpha,
+                } => {
+                    let Some(texture) = self.textures.get(*texture) else {
+                        continue;
+                    };
+
+                    let bytes = [pos.x, pos.y, size.x, size.y, *alpha];
+
+                    render_pass.set_push_constants(
+                        wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        0,
+                        bytemuck::bytes_of(&bytes),
+                    );
+                    render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
+                    render_pass.set_bind_group(1, &texture.bind_group, &[]);
+                    render_pass.draw_indexed(0..self.indices_buffer.count, 0, 0..1);
+                }
+            }
+        }
     }
 }
 
