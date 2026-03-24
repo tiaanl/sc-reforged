@@ -6,7 +6,7 @@ use crate::{
     engine::{
         assets::AssetError,
         input::InputState,
-        renderer::{Frame, Renderer, Surface},
+        renderer::{Frame, Renderer, SurfaceDesc},
         scene::Scene,
     },
     game::{
@@ -46,7 +46,7 @@ impl MainMenuScene {
     pub fn new(
         file_system: &FileSystem,
         renderer: &Renderer,
-        surface: &Surface,
+        surface: &SurfaceDesc,
     ) -> Result<Self, AssetError> {
         let window_base: WindowBase = load_config(
             file_system,

@@ -5,6 +5,11 @@ pub struct Surface {
     surface_config: wgpu::SurfaceConfiguration,
 }
 
+pub struct SurfaceDesc {
+    pub size: UVec2,
+    pub format: wgpu::TextureFormat,
+}
+
 impl Surface {
     pub fn new(
         surface: wgpu::Surface<'static>,

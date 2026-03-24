@@ -12,7 +12,7 @@ use winit::{
 use crate::{
     engine::{
         input::InputState,
-        renderer::{Frame, Renderer, Surface},
+        renderer::{Frame, Renderer, Surface, SurfaceDesc},
         scene::Scene,
         threads::main::{MainThreadEvent, MainThreadReceiver},
     },
@@ -41,6 +41,8 @@ enum App {
         /// The main window the engine is rendering to. This is also the window
         /// that is receiving all the input events.
         window: Arc<winit::window::Window>,
+        /// A description of the surface we can pass around.
+        surface_desc: SurfaceDesc,
         /// The window surface where the scene will be displayed.
         surface: Surface,
         /// The placeholder for the scoped global [Renderer].
@@ -103,6 +105,11 @@ impl ApplicationHandler<MainThreadEvent> for App {
 
                 let (surface, renderer) = engine::renderer::create(Arc::clone(&window));
 
+                let surface_desc = SurfaceDesc {
+                    size: surface.size(),
+                    format: surface.format(),
+                };
+
                 #[cfg(feature = "egui")]
                 let egui_integration = engine::egui_integration::EguiIntegration::new(
                     event_loop,
@@ -155,13 +162,14 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 // println!("campaign_defs: {:#?}", _campaign_defs);
 
                 let scene =
-                    Box::new(MainMenuScene::new(&file_system, &renderer, &surface).unwrap());
+                    Box::new(MainMenuScene::new(&file_system, &renderer, &surface_desc).unwrap());
 
                 tracing::info!("Application initialized!");
 
                 *self = App::Initialized {
                     window,
                     surface,
+                    surface_desc,
                     renderer,
                     #[cfg(feature = "egui")]
                     egui_integration,
@@ -194,6 +202,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
             App::Initialized {
                 window,
                 surface,
+                surface_desc,
                 renderer,
                 input,
                 frame_index,
@@ -227,6 +236,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                         let size = UVec2::new(width, height);
 
                         surface.resize(&renderer.device, size);
+                        surface_desc.size = surface.size();
 
                         scene.resize(size);
 

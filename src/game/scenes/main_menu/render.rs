@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 
 use crate::engine::{
     growing_buffer::GrowingBuffer,
-    renderer::{Frame, Renderer, Surface},
+    renderer::{Frame, Renderer, SurfaceDesc},
 };
 
 pub type TextureId = usize;
@@ -59,9 +59,9 @@ pub struct WindowRenderer {
 }
 
 impl WindowRenderer {
-    pub fn new(renderer: &Renderer, surface: &Surface) -> Self {
+    pub fn new(renderer: &Renderer, surface: &SurfaceDesc) -> Self {
         let viewport = gpu::Viewport {
-            size: surface.size().as_vec2().to_array(),
+            size: surface.size.as_vec2().to_array(),
         };
 
         let viewport_buffer =
@@ -185,7 +185,7 @@ impl WindowRenderer {
                         entry_point: None,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: &[Some(wgpu::ColorTargetState {
-                            format: surface.format(),
+                            format: surface.format,
                             blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                             write_mask: wgpu::ColorWrites::ALL,
                         })],
