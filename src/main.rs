@@ -68,15 +68,13 @@ impl ApplicationHandler<MainThreadEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         match self {
             App::Uninitialzed(opts, main_thread_receiver) => {
-                event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
-
                 let mut attributes = winit::window::WindowAttributes::default()
                     .with_title("Shadow Company - Reforged")
-                    // .with_inner_size(winit::dpi::LogicalSize::new(640, 480))
-                    .with_inner_size(winit::dpi::LogicalSize::new(1600.0, 900.0));
+                    .with_resizable(false)
+                    .with_inner_size(winit::dpi::LogicalSize::new(640, 480));
 
                 // No resizing?
-                if false {
+                if true {
                     attributes = attributes.with_resizable(false).with_enabled_buttons(
                         winit::window::WindowButtons::MINIMIZE
                             | winit::window::WindowButtons::CLOSE,
@@ -154,7 +152,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 )
                 .unwrap();
 
-                println!("campaign_defs: {:#?}", _campaign_defs);
+                // println!("campaign_defs: {:#?}", _campaign_defs);
 
                 let scene =
                     Box::new(MainMenuScene::new(&file_system, &renderer, &surface).unwrap());
