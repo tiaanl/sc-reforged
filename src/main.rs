@@ -17,9 +17,8 @@ use crate::{
         threads::main::{MainThreadEvent, MainThreadReceiver},
     },
     game::{
-        config::{CampaignDefs, load_config},
-        file_system::FileSystem,
-        scenes::{main_menu::MainMenuScene, world::WorldScene},
+        assets::config::campaign_def::CampaignDefs, config::load_config, file_system::FileSystem,
+        scenes::main_menu::MainMenuScene,
     },
 };
 
@@ -61,7 +60,7 @@ enum App {
         requested_scene: Option<Box<dyn Scene>>,
 
         /// A receiver for events on the main thread.
-        main_thread_receiver: MainThreadReceiver,
+        _main_thread_receiver: MainThreadReceiver,
     },
 }
 
@@ -149,6 +148,14 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 };
                 */
 
+                let _campaign_defs: CampaignDefs = load_config(
+                    &file_system,
+                    PathBuf::from("config").join("campaign_defs.txt"),
+                )
+                .unwrap();
+
+                println!("campaign_defs: {:#?}", _campaign_defs);
+
                 let scene =
                     Box::new(MainMenuScene::new(&file_system, &renderer, &surface).unwrap());
 
@@ -165,7 +172,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                     last_frame_time: Instant::now(),
                     scene,
                     requested_scene: None,
-                    main_thread_receiver: main_thread_receiver.clone(),
+                    _main_thread_receiver: main_thread_receiver.clone(),
                 };
             }
 

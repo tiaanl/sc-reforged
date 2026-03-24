@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::path::{Path, PathBuf};
 
 use ahash::HashSet;
@@ -8,7 +10,8 @@ use crate::{
     engine::{assets::AssetError, input::InputState, transform::Transform},
     game::{
         AssetLoader,
-        config::{CampaignDef, CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
+        assets::config::campaign_def::CampaignDef,
+        config::{CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
         file_system::FileSystem,
         scenes::world::{
             sim_world::{

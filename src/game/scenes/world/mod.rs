@@ -12,7 +12,7 @@ use crate::{
     },
     game::{
         AssetLoader, AssetReader,
-        config::CampaignDef,
+        assets::config::campaign_def::CampaignDef,
         file_system::FileSystem,
         scenes::world::{
             extract::RenderSnapshot,

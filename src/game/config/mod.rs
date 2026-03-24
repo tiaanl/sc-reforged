@@ -8,7 +8,6 @@ use crate::{
 };
 
 mod campaign;
-mod campaign_defs;
 mod character_profiles;
 mod image_defs;
 mod model_lods;
@@ -19,7 +18,6 @@ mod terrain_mapping;
 pub mod windows;
 
 pub use campaign::*;
-pub use campaign_defs::*;
 pub use character_profiles::*;
 pub use image_defs::*;
 pub use model_lods::*;
