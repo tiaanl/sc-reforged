@@ -1,6 +1,6 @@
 use glam::UVec2;
 
-use crate::engine::renderer::Renderer;
+use crate::engine::renderer::RenderContext;
 
 use super::GeometryBuffer;
 
@@ -12,11 +12,11 @@ pub struct RenderTargets {
 
 impl RenderTargets {
     pub fn new(
-        renderer: &Renderer,
+        context: &RenderContext,
         surface_size: UVec2,
         surface_format: wgpu::TextureFormat,
     ) -> Self {
-        let geometry_buffer = GeometryBuffer::new(&renderer.device, surface_size);
+        let geometry_buffer = GeometryBuffer::new(&context.device, surface_size);
 
         Self {
             surface_size,
@@ -25,8 +25,8 @@ impl RenderTargets {
         }
     }
 
-    pub fn resize(&mut self, renderer: &Renderer, size: UVec2) {
+    pub fn resize(&mut self, context: &RenderContext, size: UVec2) {
         self.surface_size = size;
-        self.geometry_buffer.resize(&renderer.device, size);
+        self.geometry_buffer.resize(&context.device, size);
     }
 }

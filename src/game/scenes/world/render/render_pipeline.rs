@@ -1,5 +1,5 @@
 use crate::{
-    engine::renderer::{Frame, Renderer},
+    engine::renderer::{Frame, RenderContext},
     game::{
         AssetReader,
         scenes::world::{
@@ -14,7 +14,7 @@ pub trait RenderPipeline {
     fn prepare(
         &mut self,
         assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     );
@@ -44,12 +44,12 @@ impl RenderPipeline for RenderPipelineList {
     fn prepare(
         &mut self,
         assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         for pipeline in self.pipelines.iter_mut() {
-            pipeline.prepare(assets, renderer, bindings, snapshot);
+            pipeline.prepare(assets, context, bindings, snapshot);
         }
     }
 

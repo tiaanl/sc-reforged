@@ -6,7 +6,7 @@ use crate::{
     engine::{
         assets::AssetError,
         input::InputState,
-        renderer::{Frame, Renderer},
+        renderer::{Frame, RenderContext},
         scene::Scene,
         shader_cache::ShaderCache,
     },
@@ -70,7 +70,7 @@ pub struct WorldScene {
 impl WorldScene {
     pub fn new(
         file_system: &FileSystem,
-        renderer: &Renderer,
+        context: &RenderContext,
         surface_size: UVec2,
         surface_format: wgpu::TextureFormat,
         campaign_def: CampaignDef,
@@ -86,16 +86,16 @@ impl WorldScene {
 
         init_sim_world(file_system, &mut sim_world, assets, &campaign_def)?;
 
-        let render_targets = RenderTargets::new(renderer, surface_size, surface_format);
+        let render_targets = RenderTargets::new(context, surface_size, surface_format);
 
         let mut layouts = RenderLayouts::new();
 
         let mut shader_cache = ShaderCache::default();
 
-        let bindings = RenderBindings::new(renderer, &mut layouts);
+        let bindings = RenderBindings::new(context, &mut layouts);
 
         let systems = systems::Systems::new(
-            renderer,
+            context,
             &render_targets,
             &mut layouts,
             &mut shader_cache,
@@ -202,9 +202,9 @@ impl Scene for WorldScene {
         }
     }
 
-    fn render(&mut self, renderer: &Renderer, frame: &mut Frame) {
+    fn render(&mut self, context: &RenderContext, frame: &mut Frame) {
         if self.render_targets.surface_size != self.surface_size {
-            self.render_targets.resize(renderer, self.surface_size);
+            self.render_targets.resize(context, self.surface_size);
         }
 
         let frame_time = &mut self.fps_history[self.fps_history_cursor];
@@ -224,14 +224,14 @@ impl Scene for WorldScene {
                 if frame.size != self.render_targets.geometry_buffer.size {
                     self.render_targets
                         .geometry_buffer
-                        .resize(&renderer.device, frame.size);
+                        .resize(&context.device, frame.size);
                 }
 
                 let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
                 let assets = self.sim_world.resource::<AssetReader>();
                 self.systems
-                    .prepare(assets, &mut self.bindings, renderer, render_snapshot);
+                    .prepare(assets, &mut self.bindings, context, render_snapshot);
                 frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
             }
 

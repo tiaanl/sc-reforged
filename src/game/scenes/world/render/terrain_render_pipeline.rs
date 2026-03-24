@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
-        renderer::{Frame, Renderer},
+        renderer::{Frame, RenderContext},
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::{
@@ -48,7 +48,7 @@ pub struct TerrainRenderPipeline {
 impl TerrainRenderPipeline {
     pub fn new(
         assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
         sim_world: &bevy_ecs::world::World,
@@ -78,7 +78,7 @@ impl TerrainRenderPipeline {
                 _pad: Default::default(),
             };
 
-            renderer
+            context
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("terrain_data_buffer"),
@@ -94,7 +94,7 @@ impl TerrainRenderPipeline {
                 .map(|node| node.to_array())
                 .collect();
 
-            renderer
+            context
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("height_map_buffer"),
@@ -105,17 +105,18 @@ impl TerrainRenderPipeline {
 
         let terrain_texture = {
             let image = assets.get_image(terrain.terrain_texture).unwrap();
-            renderer.create_texture("terrain_texture", &image.data)
+            Self::create_texture(context, "terrain_texture", &image.data)
         };
 
         let strata_texture = {
             let image = assets
                 .get_image(terrain.strata_texture)
                 .expect("Could not load strate texture.");
-            renderer.create_texture("strata", &image.data)
+            Self::create_texture(context, "strata", &image.data)
         };
 
-        let terrain_sampler = renderer.create_sampler(
+        let terrain_sampler = Self::create_sampler(
+            context,
             "terrain_sampler",
             wgpu::AddressMode::Repeat,
             wgpu::FilterMode::Linear,
@@ -123,7 +124,7 @@ impl TerrainRenderPipeline {
         );
 
         let terrain_bind_group_layout = {
-            renderer
+            context
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("terrain_bind_group_layout"),
@@ -179,7 +180,7 @@ impl TerrainRenderPipeline {
         };
 
         let terrain_bind_group = {
-            renderer
+            context
                 .device
                 .create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("terrain_bind_group"),
@@ -213,7 +214,7 @@ impl TerrainRenderPipeline {
             let chunk_indices = ChunkIndices::default();
 
             let chunk_indices_buffer =
-                renderer
+                context
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("chunk_indices_buffer"),
@@ -222,7 +223,7 @@ impl TerrainRenderPipeline {
                     });
 
             let chunk_wireframe_indices_buffer =
-                renderer
+                context
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("chunk_indices_buffer"),
@@ -236,21 +237,21 @@ impl TerrainRenderPipeline {
         let capacity = 1 << 7;
         let terrain_chunk_instances_buffer = PerFrame::new(|index| {
             GrowingBuffer::new(
-                renderer,
+                context,
                 capacity,
                 wgpu::BufferUsages::VERTEX,
                 format!("terrain_chunk_instances:{index}"),
             )
         });
 
-        let module = shader_cache.get_or_create(&renderer.device, ShaderSource::Terrain);
+        let module = shader_cache.get_or_create(&context.device, ShaderSource::Terrain);
 
-        let layout = renderer
+        let layout = context
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain_pipeline_layout"),
                 bind_group_layouts: &[
-                    layouts.get::<CameraEnvironmentLayout>(renderer),
+                    layouts.get::<CameraEnvironmentLayout>(context),
                     &terrain_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
@@ -263,7 +264,7 @@ impl TerrainRenderPipeline {
         ];
 
         let terrain_pipeline =
-            renderer
+            context
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("terrain_pipeline"),
@@ -299,7 +300,7 @@ impl TerrainRenderPipeline {
                 });
 
         let terrain_wireframe_pipeline =
-            renderer
+            context
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("terrain_wireframe_pipeline"),
@@ -339,7 +340,7 @@ impl TerrainRenderPipeline {
                 });
 
         let strata_pipeline =
-            renderer
+            context
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("strata_render_pipeline"),
@@ -381,7 +382,7 @@ impl TerrainRenderPipeline {
         let capacity = 1 << 7;
         let strata_instances_buffer = PerFrame::new(|index| {
             GrowingBuffer::new(
-                renderer,
+                context,
                 capacity,
                 wgpu::BufferUsages::VERTEX,
                 format!("strata_instances:{index}"),
@@ -408,7 +409,7 @@ impl RenderPipeline for TerrainRenderPipeline {
     fn prepare(
         &mut self,
         _assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
@@ -424,7 +425,7 @@ impl RenderPipeline for TerrainRenderPipeline {
             .collect();
 
         let terrain_chunk_instances_buffer = self.terrain_chunk_instances_buffer.advance();
-        terrain_chunk_instances_buffer.write(renderer, chunk_instances.as_slice());
+        terrain_chunk_instances_buffer.write(context, chunk_instances.as_slice());
 
         let strata_instances: Vec<_> = snapshot
             .terrain
@@ -438,7 +439,7 @@ impl RenderPipeline for TerrainRenderPipeline {
             .collect();
 
         let strata_instances_buffer = self.strata_instances_buffer.advance();
-        strata_instances_buffer.write(renderer, strata_instances.as_slice());
+        strata_instances_buffer.write(context, strata_instances.as_slice());
     }
 
     fn queue(
@@ -528,6 +529,69 @@ impl TerrainRenderPipeline {
     const INDEX_RANGES: [std::ops::Range<u32>; 4] = [0..384, 384..480, 480..504, 504..510];
     const WIREFRAME_INDEX_RANGES: [std::ops::Range<u32>; 4] =
         [0..512, 512..640, 640..672, 672..680];
+
+    fn create_texture(
+        context: &RenderContext,
+        label: &str,
+        image: &image::RgbaImage,
+    ) -> wgpu::TextureView {
+        let (width, height) = (image.width(), image.height());
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let mip_level_count = (width.max(height) as f32).log2().floor() as u32 + 1;
+
+        let texture = context.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size,
+            mip_level_count,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        context.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::default(),
+                aspect: wgpu::TextureAspect::All,
+            },
+            image,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
+            },
+            size,
+        );
+
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
+    }
+
+    fn create_sampler(
+        context: &RenderContext,
+        label: &str,
+        address_mode: wgpu::AddressMode,
+        mag_filter: wgpu::FilterMode,
+        min_filter: wgpu::FilterMode,
+    ) -> wgpu::Sampler {
+        context.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some(label),
+            address_mode_u: address_mode,
+            address_mode_v: address_mode,
+            address_mode_w: address_mode,
+            mag_filter,
+            min_filter,
+            ..Default::default()
+        })
+    }
 }
 
 impl TerrainRenderPipeline {

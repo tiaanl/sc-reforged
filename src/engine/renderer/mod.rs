@@ -1,14 +1,18 @@
+mod frame;
 mod mipmaps;
-mod render;
+// mod render;
+mod render_context;
 mod surface;
 
 use std::sync::Arc;
 
-pub use render::*;
-pub use surface::*;
 use winit::window::Window;
 
-pub fn create(window: Arc<Window>) -> (Surface, Renderer) {
+pub use frame::Frame;
+pub use render_context::RenderContext;
+pub use surface::{Surface, SurfaceDesc};
+
+pub fn create(window: Arc<Window>) -> (surface::Surface, RenderContext) {
     let winit::dpi::PhysicalSize { width, height } = window.inner_size();
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -49,7 +53,7 @@ pub fn create(window: Arc<Window>) -> (Surface, Renderer) {
     // surface_config.present_mode = wgpu::PresentMode::AutoNoVsync;
     surface_config.present_mode = wgpu::PresentMode::AutoVsync;
 
-    let surface = Surface::new(surface, surface_config);
+    let surface = surface::Surface::new(surface, surface_config);
 
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         required_features: required & supported,
@@ -66,7 +70,7 @@ pub fn create(window: Arc<Window>) -> (Surface, Renderer) {
 
     surface.configure(&device);
 
-    let renderer = Renderer::new(device, queue);
+    let context = RenderContext::new(device, queue);
 
-    (surface, renderer)
+    (surface, context)
 }

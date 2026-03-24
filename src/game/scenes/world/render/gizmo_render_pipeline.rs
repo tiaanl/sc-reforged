@@ -2,7 +2,7 @@ use crate::{
     engine::{
         gizmos::GizmoVertex,
         growing_buffer::GrowingBuffer,
-        renderer::{Frame, Renderer},
+        renderer::{Frame, RenderContext},
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::{
@@ -26,18 +26,18 @@ pub struct GizmoRenderPipeline {
 
 impl GizmoRenderPipeline {
     pub fn new(
-        renderer: &Renderer,
+        context: &RenderContext,
         surface_format: wgpu::TextureFormat,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
     ) -> Self {
-        let device = &renderer.device;
+        let device = &context.device;
 
-        let module = shader_cache.get_or_create(&renderer.device, ShaderSource::Gizmos);
+        let module = shader_cache.get_or_create(&context.device, ShaderSource::Gizmos);
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("gizmos_pipeline_layout"),
-            bind_group_layouts: &[layouts.get::<CameraEnvironmentLayout>(renderer)],
+            bind_group_layouts: &[layouts.get::<CameraEnvironmentLayout>(context)],
             push_constant_ranges: &[],
         });
 
@@ -79,7 +79,7 @@ impl GizmoRenderPipeline {
 
         let instances_buffer = PerFrame::new(|index| {
             GrowingBuffer::new(
-                renderer,
+                context,
                 1024,
                 wgpu::BufferUsages::VERTEX,
                 format!("gizmo_vertices:{index}"),
@@ -97,12 +97,12 @@ impl RenderPipeline for GizmoRenderPipeline {
     fn prepare(
         &mut self,
         _assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         let instances = self.instances_buffer.advance();
-        instances.write(renderer, &snapshot.gizmos.vertices);
+        instances.write(context, &snapshot.gizmos.vertices);
     }
 
     fn queue(

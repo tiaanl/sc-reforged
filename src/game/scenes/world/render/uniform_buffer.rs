@@ -1,4 +1,4 @@
-use crate::engine::renderer::Renderer;
+use crate::engine::renderer::RenderContext;
 
 pub struct UniformBuffer {
     pub buffer: wgpu::Buffer,
@@ -11,7 +11,7 @@ impl UniformBuffer {
     }
 
     #[inline]
-    pub fn write(&self, renderer: &Renderer, data: &[u8]) {
-        renderer.queue.write_buffer(&self.buffer, 0, data)
+    pub fn write(&self, context: &RenderContext, data: &[u8]) {
+        context.queue.write_buffer(&self.buffer, 0, data)
     }
 }

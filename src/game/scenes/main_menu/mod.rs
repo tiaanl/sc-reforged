@@ -6,7 +6,7 @@ use crate::{
     engine::{
         assets::AssetError,
         input::InputState,
-        renderer::{Frame, Renderer, SurfaceDesc},
+        renderer::{Frame, RenderContext, SurfaceDesc},
         scene::Scene,
     },
     game::{
@@ -45,7 +45,7 @@ impl MainMenuScene {
 
     pub fn new(
         file_system: &FileSystem,
-        renderer: &Renderer,
+        context: &RenderContext,
         surface: &SurfaceDesc,
     ) -> Result<Self, AssetError> {
         let window_base: WindowBase = load_config(
@@ -55,7 +55,7 @@ impl MainMenuScene {
                 .join("main_menu.txt"),
         )?;
 
-        let mut window_renderer = render::WindowRenderer::new(renderer, surface);
+        let mut window_renderer = render::WindowRenderer::new(context, surface);
 
         let mut frames = vec![];
 
@@ -78,7 +78,7 @@ impl MainMenuScene {
                             .map_err(|err| AssetError::custom(path, format!("{err}")))?;
                     let rgba = image.into_rgba8();
 
-                    let texture_id = window_renderer.create_texture(renderer, rgba);
+                    let texture_id = window_renderer.create_texture(context, rgba);
 
                     frames.push(BackFrame {
                         texture_id,
@@ -160,7 +160,7 @@ impl Scene for MainMenuScene {
         self.update_background_frames(delta_time);
     }
 
-    fn render(&mut self, renderer: &Renderer, frame: &mut Frame) {
+    fn render(&mut self, context: &RenderContext, frame: &mut Frame) {
         let mut primitives = render::Primitives::default();
 
         for f in self.frames.iter().rev() {
@@ -172,6 +172,6 @@ impl Scene for MainMenuScene {
             );
         }
 
-        self.renderer.submit(renderer, frame, primitives);
+        self.renderer.submit(context, frame, primitives);
     }
 }

@@ -12,7 +12,7 @@ use winit::{
 use crate::{
     engine::{
         input::InputState,
-        renderer::{Frame, Renderer, Surface, SurfaceDesc},
+        renderer::{Frame, RenderContext, Surface, SurfaceDesc},
         scene::Scene,
         threads::main::{MainThreadEvent, MainThreadReceiver},
     },
@@ -45,8 +45,8 @@ enum App {
         surface_desc: SurfaceDesc,
         /// The window surface where the scene will be displayed.
         surface: Surface,
-        /// The placeholder for the scoped global [Renderer].
-        renderer: Renderer,
+        /// Our main [RenderContext] holding the device and queue.
+        context: RenderContext,
         /// The current input state of the engine.
         input: InputState,
         /// The index of the current frame being rendered.
@@ -103,7 +103,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                     UVec2::new(width, height)
                 };
 
-                let (surface, renderer) = engine::renderer::create(Arc::clone(&window));
+                let (surface, context) = engine::renderer::create(Arc::clone(&window));
 
                 let surface_desc = SurfaceDesc {
                     size: surface.size(),
@@ -113,9 +113,9 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 #[cfg(feature = "egui")]
                 let egui_integration = engine::egui_integration::EguiIntegration::new(
                     event_loop,
-                    renderer.device.clone(),
-                    renderer.queue.clone(),
-                    surface.format(),
+                    context.device.clone(),
+                    context.queue.clone(),
+                    surface_desc.format,
                 );
 
                 let file_system = FileSystem::new(&opts.path);
@@ -162,7 +162,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 // println!("campaign_defs: {:#?}", _campaign_defs);
 
                 let scene =
-                    Box::new(MainMenuScene::new(&file_system, &renderer, &surface_desc).unwrap());
+                    Box::new(MainMenuScene::new(&file_system, &context, &surface_desc).unwrap());
 
                 tracing::info!("Application initialized!");
 
@@ -170,7 +170,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                     window,
                     surface,
                     surface_desc,
-                    renderer,
+                    context,
                     #[cfg(feature = "egui")]
                     egui_integration,
                     input: InputState::default(),
@@ -203,7 +203,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 window,
                 surface,
                 surface_desc,
-                renderer,
+                context,
                 input,
                 frame_index,
                 last_frame_time,
@@ -235,7 +235,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                     WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
                         let size = UVec2::new(width, height);
 
-                        surface.resize(&renderer.device, size);
+                        surface.resize(&context.device, size);
                         surface_desc.size = surface.size();
 
                         scene.resize(size);
@@ -260,12 +260,12 @@ impl ApplicationHandler<MainThreadEvent> for App {
                         }
 
                         {
-                            let output = surface.get_texture(&renderer.device);
+                            let output = surface.get_texture(&context.device);
                             let surface_view = output
                                 .texture
                                 .create_view(&wgpu::TextureViewDescriptor::default());
 
-                            let encoder = renderer.device.create_command_encoder(
+                            let encoder = context.device.create_command_encoder(
                                 &wgpu::CommandEncoderDescriptor {
                                     label: Some("main command encoder"),
                                 },
@@ -279,7 +279,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                             };
 
                             {
-                                scene.render(renderer, &mut frame);
+                                scene.render(context, &mut frame);
                                 input.reset_current_frame();
                             }
 
@@ -298,7 +298,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                                 );
                             }
 
-                            renderer
+                            context
                                 .queue
                                 .submit(std::iter::once(frame.encoder.finish()));
 

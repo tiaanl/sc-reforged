@@ -3,7 +3,7 @@ use glam::Vec3;
 
 use crate::{
     engine::{
-        renderer::{Frame, Renderer},
+        renderer::{Frame, RenderContext},
         shader_cache::ShaderCache,
         transform::Transform,
     },
@@ -91,7 +91,7 @@ pub struct Systems {
 
 impl Systems {
     pub fn new(
-        renderer: &Renderer,
+        context: &RenderContext,
         render_targets: &RenderTargets,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
@@ -161,7 +161,7 @@ impl Systems {
 
             world_renderer: WorldRenderer::new(
                 assets,
-                renderer,
+                context,
                 render_targets,
                 layouts,
                 shader_cache,
@@ -189,11 +189,11 @@ impl Systems {
         &mut self,
         assets: &AssetReader,
         bindings: &mut RenderBindings,
-        renderer: &Renderer,
+        context: &RenderContext,
         render_snapshot: &RenderSnapshot,
     ) {
         self.world_renderer
-            .prepare(assets, renderer, bindings, render_snapshot);
+            .prepare(assets, context, bindings, render_snapshot);
     }
 
     pub fn queue(

@@ -5,7 +5,7 @@ use crate::{
     engine::{
         assets::AssetError,
         growing_buffer::GrowingBuffer,
-        renderer::{Frame, Renderer},
+        renderer::{Frame, RenderContext},
         shader_cache::ShaderCache,
         storage::Handle,
     },
@@ -72,17 +72,17 @@ pub struct ModelRenderPipeline {
 
 impl ModelRenderPipeline {
     pub fn new(
-        renderer: &Renderer,
+        context: &RenderContext,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
     ) -> Self {
-        let device = &renderer.device;
+        let device = &context.device;
 
-        let textures = RenderTextures::new(renderer);
-        let models = RenderModels::new(renderer);
+        let textures = RenderTextures::new(context);
+        let models = RenderModels::new(context);
 
         let poses_bind_group_layout =
-            renderer
+            context
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("poses_bind_group_layout"),
@@ -99,14 +99,14 @@ impl ModelRenderPipeline {
                 });
 
         let module = shader_cache.get_or_create(
-            &renderer.device,
+            &context.device,
             crate::engine::shader_cache::ShaderSource::Models,
         );
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("objects_pipeline_layout"),
             bind_group_layouts: &[
-                layouts.get::<CameraEnvironmentLayout>(renderer),
+                layouts.get::<CameraEnvironmentLayout>(context),
                 &textures.texture_data_bind_group_layout,
                 &models.nodes_bind_group_layout,
                 &poses_bind_group_layout,
@@ -207,7 +207,7 @@ impl ModelRenderPipeline {
 
         let model_instances = PerFrame::new(|index| {
             GrowingBuffer::new(
-                renderer,
+                context,
                 1 << 7,
                 wgpu::BufferUsages::VERTEX,
                 format!("model_instances:{index}"),
@@ -216,13 +216,13 @@ impl ModelRenderPipeline {
 
         let poses = PerFrame::new(|index| {
             let buffer = GrowingBuffer::new(
-                renderer,
+                context,
                 1 << 7,
                 wgpu::BufferUsages::STORAGE,
                 format!("poses:{index}"),
             );
 
-            let bind_group = renderer
+            let bind_group = context
                 .device
                 .create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some(&format!("poses_bind_group:{index}")),
@@ -260,7 +260,7 @@ impl ModelRenderPipeline {
     pub fn get_or_create_render_model(
         &mut self,
         assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         model_handle: Handle<Model>,
     ) -> Result<Handle<RenderModel>, AssetError> {
         if let Some(render_model_handle) = self.model_to_render_model.get(&model_handle) {
@@ -269,7 +269,7 @@ impl ModelRenderPipeline {
 
         let render_model_handle =
             self.models
-                .add(assets, renderer, &mut self.textures, model_handle)?;
+                .add(assets, context, &mut self.textures, model_handle)?;
 
         // Cache the new handle.
         self.model_to_render_model
@@ -288,7 +288,7 @@ impl RenderPipeline for ModelRenderPipeline {
     fn prepare(
         &mut self,
         assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
@@ -297,7 +297,7 @@ impl RenderPipeline for ModelRenderPipeline {
             tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
 
             for &model_handle in models_to_prepare {
-                if let Err(err) = self.get_or_create_render_model(assets, renderer, model_handle) {
+                if let Err(err) = self.get_or_create_render_model(assets, context, model_handle) {
                     tracing::warn!("Could not prepare model! ({err})");
                 }
             }
@@ -353,8 +353,8 @@ impl RenderPipeline for ModelRenderPipeline {
             // Write all the custom poses to the GPU.
             let (buffer, bind_group) = self.poses.advance();
 
-            if buffer.write(renderer, self.poses_cache.as_slice()) {
-                *bind_group = renderer
+            if buffer.write(context, self.poses_cache.as_slice()) {
+                *bind_group = context
                     .device
                     .create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some("poses_bind_group"),
@@ -401,7 +401,7 @@ impl RenderPipeline for ModelRenderPipeline {
 
         // Upload the instances to the GPU.
         let model_instances = self.model_instances.advance();
-        model_instances.write(renderer, self.model_instances_cache.as_slice());
+        model_instances.write(context, self.model_instances_cache.as_slice());
     }
 
     fn queue(

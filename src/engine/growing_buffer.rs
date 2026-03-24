@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use bytemuck::{NoUninit, cast_slice};
 
-use crate::engine::renderer::Renderer;
+use crate::engine::renderer::RenderContext;
 
 pub struct GrowingBuffer<T: NoUninit> {
     /// Label used for the buffer.
@@ -23,7 +23,7 @@ impl<T: NoUninit> GrowingBuffer<T> {
     const STRIDE: u64 = std::mem::size_of::<T>() as u64;
 
     pub fn new(
-        renderer: &Renderer,
+        renderer: &RenderContext,
         capacity: u32,
         usage: wgpu::BufferUsages,
         label: impl Into<String>,
@@ -56,10 +56,10 @@ impl<T: NoUninit> GrowingBuffer<T> {
     }
 
     /// Write the given data to the start of the buffer. Returns the range where it was written.
-    pub fn write(&mut self, renderer: &Renderer, data: &[T]) -> bool {
-        let resized = self.ensure_size(renderer, data.len() as u32);
+    pub fn write(&mut self, context: &RenderContext, data: &[T]) -> bool {
+        let resized = self.ensure_size(context, data.len() as u32);
 
-        renderer
+        context
             .queue
             .write_buffer(&self.buffer, 0, cast_slice(data));
 
@@ -70,14 +70,14 @@ impl<T: NoUninit> GrowingBuffer<T> {
 
     /// Write the given data to the end of the buffer. Returns the range where
     /// it was written to and whether the buffer was resized.
-    pub fn extend(&mut self, renderer: &Renderer, data: &[T]) -> (Range<u32>, bool) {
-        let resized = self.ensure_size(renderer, self.count + data.len() as u32);
+    pub fn extend(&mut self, context: &RenderContext, data: &[T]) -> (Range<u32>, bool) {
+        let resized = self.ensure_size(context, self.count + data.len() as u32);
 
         let start = self.count;
 
         let offset = Self::STRIDE * start as u64;
 
-        renderer
+        context
             .queue
             .write_buffer(&self.buffer, offset, cast_slice(data));
 
@@ -89,16 +89,16 @@ impl<T: NoUninit> GrowingBuffer<T> {
 
     /// Ensure the buffer is at least the `required_capacity` and return `true`
     /// if it was resized.
-    fn ensure_size(&mut self, renderer: &Renderer, required_capacity: u32) -> bool {
+    fn ensure_size(&mut self, context: &RenderContext, required_capacity: u32) -> bool {
         if required_capacity > self.capacity {
-            self.resize(renderer, required_capacity);
+            self.resize(context, required_capacity);
             true
         } else {
             false
         }
     }
 
-    fn resize(&mut self, renderer: &Renderer, required_capacity: u32) {
+    fn resize(&mut self, context: &RenderContext, required_capacity: u32) {
         let mut new_capacity = self.capacity * 2;
         while new_capacity < required_capacity {
             new_capacity *= 2;
@@ -113,9 +113,9 @@ impl<T: NoUninit> GrowingBuffer<T> {
             new_size_in_bytes,
         );
 
-        let buffer = Self::create_buffer(renderer, &self.label, new_size_in_bytes, self.usage);
+        let buffer = Self::create_buffer(context, &self.label, new_size_in_bytes, self.usage);
 
-        let mut encoder = renderer
+        let mut encoder = context
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some(&format!("{}_grow", self.label)),
@@ -129,7 +129,7 @@ impl<T: NoUninit> GrowingBuffer<T> {
             self.count as u64 * Self::STRIDE,
         );
 
-        renderer.queue.submit(std::iter::once(encoder.finish()));
+        context.queue.submit(std::iter::once(encoder.finish()));
 
         self.capacity = new_capacity;
         self.buffer = buffer;
@@ -137,12 +137,12 @@ impl<T: NoUninit> GrowingBuffer<T> {
 
     #[inline]
     fn create_buffer(
-        renderer: &Renderer,
+        context: &RenderContext,
         label: &str,
         size_in_bytes: u64,
         usage: wgpu::BufferUsages,
     ) -> wgpu::Buffer {
-        renderer.device.create_buffer(&wgpu::BufferDescriptor {
+        context.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(&format!("{label}_buffer")),
             size: size_in_bytes,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC | usage,

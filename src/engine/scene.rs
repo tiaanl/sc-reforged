@@ -1,8 +1,8 @@
 use glam::UVec2;
 
-use crate::engine::renderer::Renderer;
+use crate::engine::renderer::{Frame, RenderContext};
 
-use super::{input::InputState, renderer::Frame};
+use super::input::InputState;
 
 /// Trait defining a scene with callbacks for each stage of the render pipeline.
 /// Scenes are sent across threads when switching via the `EventLoopProxy`, so they must be `Send`.
@@ -14,7 +14,7 @@ pub trait Scene {
     fn update(&mut self, delta_time: f32, input: &InputState);
 
     /// Render the scene into the provided frame.
-    fn render(&mut self, renderer: &Renderer, frame: &mut Frame);
+    fn render(&mut self, renderer: &RenderContext, frame: &mut Frame);
 
     /// Hook for adding debug panels.
     #[cfg(feature = "egui")]

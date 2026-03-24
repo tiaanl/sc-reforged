@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
-use glam::UVec2;
+use crate::engine::renderer::render_context::RenderContext;
 
 use super::mipmaps::MipMaps;
 
 #[derive(Clone)]
 pub struct Renderer {
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
+    pub context: RenderContext,
 
     mipmaps: Arc<MipMaps>,
 }
@@ -16,13 +15,11 @@ impl Renderer {
     const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
-        let mipmaps = Arc::new(MipMaps::new(&device, Self::TEXTURE_FORMAT));
+        let context = RenderContext::new(device, queue);
 
-        Self {
-            device,
-            queue,
-            mipmaps,
-        }
+        let mipmaps = Arc::new(MipMaps::new(context.clone(), Self::TEXTURE_FORMAT));
+
+        Self { context, mipmaps }
     }
 
     pub fn create_texture(&self, label: &str, image: &image::RgbaImage) -> wgpu::TextureView {
@@ -78,29 +75,16 @@ impl Renderer {
         mag_filter: wgpu::FilterMode,
         min_filter: wgpu::FilterMode,
     ) -> wgpu::Sampler {
-        self.device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some(label),
-            address_mode_u: address_mode,
-            address_mode_v: address_mode,
-            address_mode_w: address_mode,
-            mag_filter,
-            min_filter,
-            ..Default::default()
-        })
+        self.context
+            .device
+            .create_sampler(&wgpu::SamplerDescriptor {
+                label: Some(label),
+                address_mode_u: address_mode,
+                address_mode_v: address_mode,
+                address_mode_w: address_mode,
+                mag_filter,
+                min_filter,
+                ..Default::default()
+            })
     }
-}
-
-/// A single object passed around during the rendering of a single frame.
-pub struct Frame {
-    /// The encoder to use for creating render passes.
-    pub encoder: wgpu::CommandEncoder,
-
-    /// The window surface.
-    pub surface: wgpu::TextureView,
-
-    /// The index of the frame being rendered.
-    pub frame_index: u64,
-
-    /// The size of the surface.
-    pub size: UVec2,
 }

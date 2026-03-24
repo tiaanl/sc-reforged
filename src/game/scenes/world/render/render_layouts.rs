@@ -1,6 +1,6 @@
 use ahash::HashMap;
 
-use crate::engine::renderer::Renderer;
+use crate::engine::renderer::RenderContext;
 
 pub trait RenderLayout {
     fn label() -> &'static str;
@@ -20,12 +20,12 @@ impl RenderLayouts {
 
     pub fn get<L: RenderLayout + 'static>(
         &mut self,
-        renderer: &Renderer,
+        context: &RenderContext,
     ) -> &wgpu::BindGroupLayout {
         let id = std::any::TypeId::of::<L>();
 
         self.layouts.entry(id).or_insert_with(|| {
-            renderer
+            context
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some(L::label()),

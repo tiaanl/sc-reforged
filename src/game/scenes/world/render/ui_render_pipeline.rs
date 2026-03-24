@@ -1,7 +1,7 @@
 use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
-        renderer::{Frame, Renderer},
+        renderer::{Frame, RenderContext},
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::{
@@ -48,23 +48,23 @@ pub struct UiRenderPipeline {
 
 impl UiRenderPipeline {
     pub fn new(
-        renderer: &Renderer,
+        context: &RenderContext,
         surface_format: wgpu::TextureFormat,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
     ) -> Self {
-        let module = shader_cache.get_or_create(&renderer.device, ShaderSource::Ui);
+        let module = shader_cache.get_or_create(&context.device, ShaderSource::Ui);
 
-        let layout = renderer
+        let layout = context
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("ui_rect_pipeline_layout"),
-                bind_group_layouts: &[layouts.get::<UiStateLayout>(renderer)],
+                bind_group_layouts: &[layouts.get::<UiStateLayout>(context)],
                 push_constant_ranges: &[],
             });
 
         let rect_render_pipeline =
-            renderer
+            context
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("ui_rect_render_pipeline"),
@@ -105,17 +105,17 @@ impl UiRenderPipeline {
                 });
 
         let state_uniform = {
-            let layout = layouts.get::<UiStateLayout>(renderer);
+            let layout = layouts.get::<UiStateLayout>(context);
 
             PerFrame::new(|index| {
-                let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
+                let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some(&format!("ui_state_buffer_{index}")),
                     size: std::mem::size_of::<gpu::State>() as wgpu::BufferAddress,
                     usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
                     mapped_at_creation: false,
                 });
 
-                let bind_group = renderer
+                let bind_group = context
                     .device
                     .create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some(&format!("ui_state_bind_group_{index}")),
@@ -132,7 +132,7 @@ impl UiRenderPipeline {
 
         let rects_buffer = PerFrame::new(|index| {
             GrowingBuffer::new(
-                renderer,
+                context,
                 1024,
                 wgpu::BufferUsages::VERTEX,
                 format!("ui_rects_buffer:{index}"),
@@ -151,7 +151,7 @@ impl RenderPipeline for UiRenderPipeline {
     fn prepare(
         &mut self,
         _assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
@@ -160,7 +160,7 @@ impl RenderPipeline for UiRenderPipeline {
         };
 
         let state_uniform = self.state_uniform.advance();
-        state_uniform.write(renderer, bytemuck::bytes_of(&state));
+        state_uniform.write(context, bytemuck::bytes_of(&state));
 
         let rects: Vec<_> = snapshot
             .ui
@@ -174,7 +174,7 @@ impl RenderPipeline for UiRenderPipeline {
             .collect();
 
         let rects_buffer = self.rects_buffer.advance();
-        rects_buffer.write(renderer, rects.as_slice());
+        rects_buffer.write(context, rects.as_slice());
     }
 
     fn queue(

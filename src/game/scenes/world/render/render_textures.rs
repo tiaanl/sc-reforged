@@ -6,7 +6,7 @@ use glam::UVec2;
 
 use crate::{
     engine::{
-        renderer::Renderer,
+        renderer::RenderContext,
         storage::{Handle, Storage},
     },
     game::{
@@ -50,8 +50,8 @@ impl RenderTextures {
     const FIRST_POW: u32 = 4; // 16
     const MAX_POW: u32 = 9; // 512
 
-    pub fn new(renderer: &Renderer) -> Self {
-        let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
+    pub fn new(context: &RenderContext) -> Self {
+        let sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("model_renderer_sampler"),
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
@@ -62,7 +62,7 @@ impl RenderTextures {
         });
 
         let buckets: Vec<Bucket> = (0..=(Self::MAX_POW - Self::FIRST_POW))
-            .map(|i| Bucket::new(renderer, Self::calculate_bucket_size(i as usize)))
+            .map(|i| Bucket::new(context, Self::calculate_bucket_size(i as usize)))
             .collect();
 
         let texture_data_buffer = {
@@ -72,7 +72,7 @@ impl RenderTextures {
 
             tracing::info!("Allocating texture data buffer of {} bytes.", initial_size);
 
-            renderer.device.create_buffer(&wgpu::BufferDescriptor {
+            context.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("texture_data"),
                 size: initial_size as wgpu::BufferAddress,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
@@ -81,7 +81,7 @@ impl RenderTextures {
         };
 
         let texture_data_bind_group_layout =
-            renderer
+            context
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("texture_data_bind_group_layout"),
@@ -117,7 +117,7 @@ impl RenderTextures {
 
         let texture_data_bind_group = {
             let texture_views: Vec<_> = buckets.iter().map(|b| &b.texture_view).collect();
-            renderer
+            context
                 .device
                 .create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("texture_data_bind_group"),
@@ -158,7 +158,7 @@ impl RenderTextures {
     pub fn get_or_create(
         &mut self,
         assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         image_handle: Handle<Image>,
     ) -> Handle<RenderTexture> {
         if let Some(render_texture) = self.image_to_render_texture.get(&image_handle) {
@@ -171,7 +171,7 @@ impl RenderTextures {
 
         let bucket_index = Self::calculate_bucket_index(image.size);
         let bucket = &mut self.buckets[bucket_index];
-        let layer = bucket.insert(renderer, image);
+        let layer = bucket.insert(context, image);
 
         // Write the texture data into the buffer.
         let texture_data_index = {
@@ -191,7 +191,7 @@ impl RenderTextures {
                 _pad: Default::default(),
             };
             let offset = index as u64 * std::mem::size_of::<gpu::TextureData>() as u64;
-            renderer.queue.write_buffer(
+            context.queue.write_buffer(
                 &self.texture_data_buffer,
                 offset as u64,
                 bytemuck::bytes_of(&texture_data),
@@ -207,7 +207,7 @@ impl RenderTextures {
                 depth_or_array_layers: 1,
             };
 
-            let texture = renderer.device.create_texture(&wgpu::TextureDescriptor {
+            let texture = context.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(&format!("texture_{image_handle}")),
                 size,
                 mip_level_count: 1,
@@ -218,7 +218,7 @@ impl RenderTextures {
                 view_formats: &[],
             });
 
-            renderer.queue.write_texture(
+            context.queue.write_texture(
                 wgpu::TexelCopyTextureInfoBase {
                     texture: &texture,
                     mip_level: 0,
@@ -286,10 +286,10 @@ struct Bucket {
 impl Bucket {
     const INITIAL_LAYER_COUNT: u32 = 256;
 
-    fn new(renderer: &Renderer, size: u32) -> Self {
+    fn new(context: &RenderContext, size: u32) -> Self {
         let label = format!("texture_bucket_{size}");
 
-        let texture = renderer.device.create_texture(&wgpu::TextureDescriptor {
+        let texture = context.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(&label),
             size: wgpu::Extent3d {
                 width: size,
@@ -324,7 +324,7 @@ impl Bucket {
     }
 
     /// Insert the image into the first available layer and return the index to the layer.
-    fn insert(&mut self, renderer: &Renderer, image: &Image) -> u32 {
+    fn insert(&mut self, context: &RenderContext, image: &Image) -> u32 {
         if self.next_layer >= self.layer_capacity {
             panic!("Too many textures!");
         }
@@ -332,7 +332,7 @@ impl Bucket {
         let layer = self.next_layer;
         self.next_layer += 1;
 
-        renderer.queue.write_texture(
+        context.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &self.texture,
                 mip_level: 0,

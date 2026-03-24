@@ -1,6 +1,6 @@
 use crate::{
     engine::{
-        renderer::{Frame, Renderer},
+        renderer::{Frame, RenderContext},
         shader_cache::ShaderCache,
     },
     game::{
@@ -29,36 +29,36 @@ pub struct WorldRenderer {
 impl WorldRenderer {
     pub fn new(
         assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         render_targets: &RenderTargets,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
         sim_world: &bevy_ecs::world::World,
     ) -> Self {
         // Warm up the shader cache.
-        shader_cache.preload_all(&renderer.device);
+        shader_cache.preload_all(&context.device);
 
         let mut pipelines = RenderPipelineList::default();
 
         pipelines.push(CameraRenderPipeline);
         pipelines.push(TerrainRenderPipeline::new(
             assets,
-            renderer,
+            context,
             layouts,
             shader_cache,
             sim_world,
         ));
 
-        pipelines.push(ModelRenderPipeline::new(renderer, layouts, shader_cache));
+        pipelines.push(ModelRenderPipeline::new(context, layouts, shader_cache));
         pipelines.push(UiRenderPipeline::new(
-            renderer,
+            context,
             render_targets.surface_format,
             layouts,
             shader_cache,
         ));
-        pipelines.push(Compositor::new(renderer, render_targets, shader_cache));
+        pipelines.push(Compositor::new(context, render_targets, shader_cache));
         pipelines.push(GizmoRenderPipeline::new(
-            renderer,
+            context,
             render_targets.surface_format,
             layouts,
             shader_cache,
@@ -72,11 +72,11 @@ impl RenderPipeline for WorldRenderer {
     fn prepare(
         &mut self,
         assets: &AssetReader,
-        renderer: &Renderer,
+        context: &RenderContext,
         bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
-        self.pipelines.prepare(assets, renderer, bindings, snapshot);
+        self.pipelines.prepare(assets, context, bindings, snapshot);
     }
 
     fn queue(

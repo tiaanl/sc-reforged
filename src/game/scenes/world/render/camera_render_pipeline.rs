@@ -37,7 +37,7 @@ impl RenderPipeline for CameraRenderPipeline {
     fn prepare(
         &mut self,
         _assets: &crate::game::AssetReader,
-        renderer: &crate::engine::renderer::Renderer,
+        context: &crate::engine::renderer::RenderContext,
         bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
@@ -71,7 +71,7 @@ impl RenderPipeline for CameraRenderPipeline {
         bindings
             .camera_env_buffer
             .advance()
-            .write(renderer, bytemuck::bytes_of(&data));
+            .write(context, bytemuck::bytes_of(&data));
     }
 
     fn queue(

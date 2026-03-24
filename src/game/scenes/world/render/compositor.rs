@@ -1,6 +1,6 @@
 use crate::{
     engine::{
-        renderer::{Frame, Renderer},
+        renderer::{Frame, RenderContext},
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::{
@@ -20,13 +20,13 @@ pub struct Compositor {
 
 impl Compositor {
     pub fn new(
-        renderer: &Renderer,
+        context: &RenderContext,
         render_targets: &RenderTargets,
         shader_cache: &mut ShaderCache,
     ) -> Self {
-        let module = shader_cache.get_or_create(&renderer.device, ShaderSource::Compositor);
+        let module = shader_cache.get_or_create(&context.device, ShaderSource::Compositor);
 
-        let layout = renderer
+        let layout = context
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compositor_pipeline_layout"),
@@ -34,7 +34,7 @@ impl Compositor {
                 push_constant_ranges: &[],
             });
 
-        let pipeline = renderer
+        let pipeline = context
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("compositor_pipeline"),
@@ -70,7 +70,7 @@ impl RenderPipeline for Compositor {
     fn prepare(
         &mut self,
         _assets: &AssetReader,
-        _renderer: &Renderer,
+        _context: &RenderContext,
         _bindings: &mut RenderBindings,
         _snapshot: &RenderSnapshot,
     ) {

@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 
 use crate::engine::{
     growing_buffer::GrowingBuffer,
-    renderer::{Frame, Renderer, SurfaceDesc},
+    renderer::{Frame, RenderContext, SurfaceDesc},
 };
 
 pub type TextureId = usize;
@@ -59,13 +59,13 @@ pub struct WindowRenderer {
 }
 
 impl WindowRenderer {
-    pub fn new(renderer: &Renderer, surface: &SurfaceDesc) -> Self {
+    pub fn new(context: &RenderContext, surface: &SurfaceDesc) -> Self {
         let viewport = gpu::Viewport {
             size: surface.size.as_vec2().to_array(),
         };
 
         let viewport_buffer =
-            renderer
+            context
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("viewport_buffer"),
@@ -74,7 +74,7 @@ impl WindowRenderer {
                 });
 
         let viewport_bind_group_layout =
-            renderer
+            context
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("viewport_bind_group_layout"),
@@ -90,7 +90,7 @@ impl WindowRenderer {
                     }],
                 });
 
-        let viewport_bind_group = renderer
+        let viewport_bind_group = context
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("viewport_bind_group"),
@@ -102,7 +102,7 @@ impl WindowRenderer {
             });
 
         let texture_bind_group_layout =
-            renderer
+            context
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("texture"),
@@ -126,7 +126,7 @@ impl WindowRenderer {
                     ],
                 });
 
-        let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
+        let sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("sampler"),
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
@@ -136,20 +136,20 @@ impl WindowRenderer {
             ..Default::default()
         });
 
-        let shader = renderer
+        let shader = context
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("window_renderer"),
+                label: Some("window_context"),
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
                     "window.wgsl"
                 ))),
             });
 
         let pipeline_layout =
-            renderer
+            context
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("window_renderer"),
+                    label: Some("window_context"),
                     bind_group_layouts: &[&viewport_bind_group_layout, &texture_bind_group_layout],
                     push_constant_ranges: &[wgpu::PushConstantRange {
                         stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
@@ -158,10 +158,10 @@ impl WindowRenderer {
                 });
 
         let render_pipeline =
-            renderer
+            context
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("window_renderer"),
+                    label: Some("window_context"),
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &shader,
@@ -218,22 +218,22 @@ impl WindowRenderer {
         ];
 
         let mut vertices_buffer = GrowingBuffer::new(
-            renderer,
+            context,
             vertices.len() as u32,
             wgpu::BufferUsages::VERTEX,
-            "window_renderer_vertices",
+            "window_context_vertices",
         );
-        vertices_buffer.write(renderer, &vertices);
+        vertices_buffer.write(context, &vertices);
 
         let indices = vec![0, 1, 2, 2, 3, 0];
 
         let mut indices_buffer = GrowingBuffer::new(
-            renderer,
+            context,
             indices.len() as u32,
             wgpu::BufferUsages::INDEX,
-            "window_renderer_indices",
+            "window_context_indices",
         );
-        indices_buffer.write(renderer, &indices);
+        indices_buffer.write(context, &indices);
 
         Self {
             render_pipeline,
@@ -254,14 +254,14 @@ impl WindowRenderer {
         }
     }
 
-    pub fn create_texture(&mut self, renderer: &Renderer, rgba: image::RgbaImage) -> TextureId {
+    pub fn create_texture(&mut self, context: &RenderContext, rgba: image::RgbaImage) -> TextureId {
         let size = wgpu::Extent3d {
             width: rgba.width(),
             height: rgba.height(),
             depth_or_array_layers: 1,
         };
 
-        let texture = renderer.device.create_texture(&wgpu::TextureDescriptor {
+        let texture = context.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size,
             mip_level_count: 1,
@@ -272,7 +272,7 @@ impl WindowRenderer {
             view_formats: &[],
         });
 
-        renderer.queue.write_texture(
+        context.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
@@ -292,7 +292,7 @@ impl WindowRenderer {
 
         let id = self.textures.len();
 
-        let bind_group = renderer
+        let bind_group = context
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(&format!("texture_bind_group_{id}")),
@@ -325,9 +325,9 @@ impl WindowRenderer {
         self.viewport_dirty = true;
     }
 
-    pub fn submit(&mut self, renderer: &Renderer, frame: &mut Frame, primitives: Primitives) {
+    pub fn submit(&mut self, context: &RenderContext, frame: &mut Frame, primitives: Primitives) {
         if self.viewport_dirty {
-            renderer.queue.write_buffer(
+            context.queue.write_buffer(
                 &self.viewport_buffer,
                 0,
                 bytemuck::bytes_of(&self.viewport),
@@ -337,7 +337,7 @@ impl WindowRenderer {
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("window_renderer"),
+                label: Some("window_context"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &frame.surface,
                     depth_slice: None,
