@@ -32,7 +32,6 @@ pub fn create(window: Arc<Window>) -> (surface::Surface, RenderContext) {
     let supported = adapter.features();
     let required = wgpu::Features::MULTI_DRAW_INDIRECT_COUNT
         | wgpu::Features::POLYGON_MODE_LINE
-        | wgpu::Features::PUSH_CONSTANTS
         | wgpu::Features::TEXTURE_BINDING_ARRAY
         | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
 
@@ -61,7 +60,6 @@ pub fn create(window: Arc<Window>) -> (surface::Surface, RenderContext) {
             max_binding_array_elements_per_shader_stage: 1024,
             max_bind_groups: 6,
             max_color_attachment_bytes_per_sample: 56,
-            max_push_constant_size: 40,
             ..Default::default()
         },
         ..Default::default()

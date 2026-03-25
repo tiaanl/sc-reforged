@@ -57,6 +57,8 @@ pub struct WindowRenderer {
     _indices: Vec<u32>,
     indices_buffer: GrowingBuffer<u32>,
 
+    instances_buffer: GrowingBuffer<gpu::RectInstance>,
+
     viewport_dirty: bool,
     viewport: gpu::Viewport,
     viewport_buffer: wgpu::Buffer,
@@ -152,10 +154,7 @@ impl WindowRenderer {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("window_context"),
             bind_group_layouts: &[&viewport_bind_group_layout, &texture_bind_group_layout],
-            push_constant_ranges: &[wgpu::PushConstantRange {
-                stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                range: 0..40,
-            }],
+            push_constant_ranges: &[],
         });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -165,15 +164,29 @@ impl WindowRenderer {
                 module: &shader,
                 entry_point: None,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<gpu::Vertex>() as wgpu::BufferAddress,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x2,
-                        1 => Float32x2,
-                        2 => Float32x4,
-                    ],
-                }],
+                buffers: &[
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<gpu::Vertex>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &wgpu::vertex_attr_array![
+                            0 => Float32x2,
+                            1 => Float32x2,
+                            2 => Float32x4,
+                        ],
+                    },
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<gpu::RectInstance>()
+                            as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &wgpu::vertex_attr_array![
+                            3 => Float32x2,
+                            4 => Float32x2,
+                            5 => Float32,
+                            6 => Float32x2,
+                            7 => Float32x2,
+                        ],
+                    },
+                ],
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -233,6 +246,13 @@ impl WindowRenderer {
         );
         indices_buffer.write(&render_context, &indices);
 
+        let instances_buffer = GrowingBuffer::new(
+            &render_context,
+            64,
+            wgpu::BufferUsages::VERTEX,
+            "window_context_instances",
+        );
+
         Self {
             render_context,
 
@@ -242,6 +262,7 @@ impl WindowRenderer {
             vertices_buffer,
             _indices: indices,
             indices_buffer,
+            instances_buffer,
 
             viewport_dirty: false,
             viewport,
@@ -334,6 +355,35 @@ impl WindowRenderer {
             );
         }
 
+        let instances: Vec<_> = primitives
+            .primitives
+            .iter()
+            .map(|primitive| match primitive {
+                Primitive::Rect {
+                    pos,
+                    size,
+                    texture,
+                    alpha,
+                } => {
+                    let (uv_min, uv_max) = self
+                        .textures
+                        .get(*texture)
+                        .map(|texture_data| (texture_data.uv_min, texture_data.uv_max))
+                        .unwrap_or((Vec2::ZERO, Vec2::ONE));
+
+                    gpu::RectInstance {
+                        pos: pos.to_array(),
+                        size: size.to_array(),
+                        alpha: *alpha,
+                        uv_min: uv_min.to_array(),
+                        uv_max: uv_max.to_array(),
+                    }
+                }
+            })
+            .collect();
+
+        self.instances_buffer.write(context, &instances);
+
         let mut render_pass = frame
             .encoder
             .begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -352,44 +402,23 @@ impl WindowRenderer {
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_vertex_buffer(0, self.vertices_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, self.instances_buffer.slice(..));
         render_pass.set_index_buffer(self.indices_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
 
-        for p in primitives.primitives.iter() {
+        for (index, p) in primitives.primitives.iter().enumerate() {
             match p {
-                Primitive::Rect {
-                    pos,
-                    size,
-                    texture,
-                    alpha,
-                } => {
-                    let Some(texture_data) = self.textures.get(*texture) else {
-                        continue;
-                    };
+                Primitive::Rect { texture, .. } => {
                     let Some(bind_group) = self.bind_groups.get(texture) else {
                         continue;
                     };
 
-                    let bytes = [
-                        pos.x,
-                        pos.y,
-                        size.x,
-                        size.y,
-                        *alpha,
-                        0.0,
-                        texture_data.uv_min.x,
-                        texture_data.uv_min.y,
-                        texture_data.uv_max.x,
-                        texture_data.uv_max.y,
-                    ];
-
-                    render_pass.set_push_constants(
-                        wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        0,
-                        bytemuck::bytes_of(&bytes),
-                    );
-                    render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
                     render_pass.set_bind_group(1, bind_group, &[]);
-                    render_pass.draw_indexed(0..self.indices_buffer.count, 0, 0..1);
+                    render_pass.draw_indexed(
+                        0..self.indices_buffer.count,
+                        0,
+                        index as u32..index as u32 + 1,
+                    );
                 }
             }
         }
@@ -411,5 +440,15 @@ pub mod gpu {
         pub pos: [f32; 2],
         pub uv: [f32; 2],
         pub color: [f32; 4],
+    }
+
+    #[derive(Clone, Copy, NoUninit)]
+    #[repr(C)]
+    pub struct RectInstance {
+        pub pos: [f32; 2],
+        pub size: [f32; 2],
+        pub alpha: f32,
+        pub uv_min: [f32; 2],
+        pub uv_max: [f32; 2],
     }
 }
