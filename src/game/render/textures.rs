@@ -44,14 +44,6 @@ impl Textures {
         self.textures.get(handle)
     }
 
-    pub fn load(&mut self, path: &Path) -> Result<Handle<Texture>, AssetError> {
-        let image_handle = self.images.load(path)?;
-        // SAFETY: We can unwrap here, because the only reason
-        //         `create_from_image` can fail is if the image handle is not
-        //         found, but we just created it here, so no error is expected.
-        Ok(self.create_from_image(image_handle).unwrap())
-    }
-
     /// Returns a texture handle that covers the full source image.
     pub fn create_from_image(&mut self, image: Handle<Image>) -> Option<Handle<Texture>> {
         let key = TextureKey::Image(image);
