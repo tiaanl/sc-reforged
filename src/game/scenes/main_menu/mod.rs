@@ -69,6 +69,8 @@ impl MainMenuScene {
         let mut window_renderer =
             window_renderer::WindowRenderer::new(context, surface, Arc::clone(&images));
 
+        Self::spawn_buttons(&images, &mut world, &window_base);
+
         let mut frames = [Entity::PLACEHOLDER; 5];
 
         for (i, geometry) in window_base.geometries.iter().enumerate() {
@@ -113,6 +115,44 @@ impl MainMenuScene {
             update_schedule,
             renderer: window_renderer,
         })
+    }
+
+    fn spawn_buttons(images: &Images, world: &mut World, window_base: &WindowBase) {
+        macro_rules! get_ivar {
+            ($name:literal) => {{
+                window_base
+                    .ivars
+                    .get("button_offset_x")
+                    .cloned()
+                    .unwrap_or(0)
+            }};
+        }
+
+        let button_offset_x = get_ivar!("button_offset_x");
+        let button_offset_y = get_ivar!("button_offset_y");
+
+        let shadow_offset_x = get_ivar!("shadow_offset_x");
+        let shadow_offset_y = get_ivar!("shadow_offset_y");
+
+        const BUTTONS: &[(&str, u32, u32)] = &[
+            ("b_new_game", 325, 80),
+            ("b_load_game", 320, 120),
+            ("b_training", 315, 160),
+            ("b_options", 310, 200),
+            ("b_intro", 305, 240),
+            ("b_multiplayer", 300, 280),
+            ("b_exit", 295, 320),
+        ];
+
+        for (id, x, y) in BUTTONS {
+            world.spawn((
+                ecs::Widget {
+                    position: glam::UVec2::new(*x, *y),
+                    size: glam::UVec2::new(100, 100),
+                },
+                // ecs::WidgetRenderer { texture: todo!() },
+            ));
+        }
     }
 }
 

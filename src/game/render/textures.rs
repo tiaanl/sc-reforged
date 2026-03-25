@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use crate::{
     engine::{
+        assets::AssetError,
         renderer::RenderContext,
         storage::{Handle, StorageMap},
     },
@@ -31,15 +32,35 @@ impl Textures {
         self.textures.get(handle)
     }
 
-    pub fn create(&mut self, image: Handle<Image>) -> Option<Handle<Texture>> {
+    pub fn load(&mut self, path: &Path) -> Result<Handle<Texture>, AssetError> {
+        let image_handle = self.images.load(path)?;
+        // SAFETY: We can unwrap here, because the only reason
+        //         `create_from_image` can fail is if the image handle is not
+        //         found, but we just created it here, so no error is expected.
+        Ok(self.create_from_image(image_handle).unwrap())
+    }
+
+    pub fn create_from_image(&mut self, image: Handle<Image>) -> Option<Handle<Texture>> {
         if let Some(handle) = self.textures.get_handle_by_key(&image) {
             return Some(handle);
         }
 
-        let RenderContext { device, queue } = &self.render_context;
-
         let image_handle = image;
         let image = self.images.get(image)?;
+
+        let view = self.create_texture_internal(&image);
+
+        Some(self.textures.insert(
+            image_handle,
+            TextureData {
+                _image: image_handle,
+                view,
+            },
+        ))
+    }
+
+    fn create_texture_internal(&mut self, image: &Image) -> wgpu::TextureView {
+        let RenderContext { device, queue } = &self.render_context;
 
         let size = wgpu::Extent3d {
             width: image.size.x,
@@ -74,15 +95,7 @@ impl Textures {
             size,
         );
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        Some(self.textures.insert(
-            image_handle,
-            TextureData {
-                _image: image_handle,
-                view,
-            },
-        ))
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 }
 

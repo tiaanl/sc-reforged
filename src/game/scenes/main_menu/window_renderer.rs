@@ -271,7 +271,7 @@ impl WindowRenderer {
         context: &RenderContext,
         image: Handle<Image>,
     ) -> Option<Handle<Texture>> {
-        let texture_handle = self.textures.create(image)?;
+        let texture_handle = self.textures.create_from_image(image)?;
 
         let texture = self.textures.get(texture_handle).unwrap();
 
