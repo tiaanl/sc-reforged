@@ -28,8 +28,8 @@ impl Default for ColorKeyRange {
 
 #[derive(Debug)]
 pub struct SpriteFrame {
-    top_left: glam::UVec2,
-    bottom_right: glam::UVec2,
+    pub top_left: glam::UVec2,
+    pub bottom_right: glam::UVec2,
 }
 
 #[derive(Debug)]
@@ -40,6 +40,13 @@ pub struct Sprite3d {
     pub alpha: Option<f32>,
     pub color_key_range: Option<ColorKeyRange>,
     pub frames: Vec<SpriteFrame>,
+}
+
+impl Sprite3d {
+    /// Returns the frame at the given index, if it exists.
+    pub fn frame(&self, index: usize) -> Option<&SpriteFrame> {
+        self.frames.get(index)
+    }
 }
 
 pub struct Sprites {

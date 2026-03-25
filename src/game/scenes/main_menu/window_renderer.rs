@@ -154,7 +154,7 @@ impl WindowRenderer {
             bind_group_layouts: &[&viewport_bind_group_layout, &texture_bind_group_layout],
             push_constant_ranges: &[wgpu::PushConstantRange {
                 stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                range: 0..20,
+                range: 0..40,
             }],
         });
 
@@ -256,10 +256,39 @@ impl WindowRenderer {
         }
     }
 
+    /// Returns a texture handle for the full image.
     pub fn create_texture(&mut self, image: Handle<Image>) -> Option<Handle<Texture>> {
         let texture_handle = self.textures.create_from_image(image)?;
+        if !self.ensure_bind_group(texture_handle) {
+            None
+        } else {
+            Some(texture_handle)
+        }
+    }
 
-        let texture = self.textures.get(texture_handle).unwrap();
+    /// Returns a texture handle for a sub-rectangle of the given image.
+    pub fn create_texture_sub(
+        &mut self,
+        image: Handle<Image>,
+        pos: UVec2,
+        size: UVec2,
+    ) -> Option<Handle<Texture>> {
+        let texture_handle = self.textures.create_from_sub_image(image, pos, size)?;
+        if !self.ensure_bind_group(texture_handle) {
+            None
+        } else {
+            Some(texture_handle)
+        }
+    }
+
+    fn ensure_bind_group(&mut self, texture_handle: Handle<Texture>) -> bool {
+        if self.bind_groups.contains_key(&texture_handle) {
+            return true;
+        }
+
+        let Some(texture) = self.textures.get(texture_handle) else {
+            return false;
+        };
 
         let bind_group = self
             .render_context
@@ -280,8 +309,7 @@ impl WindowRenderer {
             });
 
         self.bind_groups.insert(texture_handle, bind_group);
-
-        Some(texture_handle)
+        true
     }
 
     pub fn get_texture_size(&self, handle: Handle<Texture>) -> Option<UVec2> {
@@ -334,11 +362,25 @@ impl WindowRenderer {
                     texture,
                     alpha,
                 } => {
+                    let Some(texture_data) = self.textures.get(*texture) else {
+                        continue;
+                    };
                     let Some(bind_group) = self.bind_groups.get(texture) else {
                         continue;
                     };
 
-                    let bytes = [pos.x, pos.y, size.x, size.y, *alpha];
+                    let bytes = [
+                        pos.x,
+                        pos.y,
+                        size.x,
+                        size.y,
+                        *alpha,
+                        0.0,
+                        texture_data.uv_min.x,
+                        texture_data.uv_min.y,
+                        texture_data.uv_max.x,
+                        texture_data.uv_max.y,
+                    ];
 
                     render_pass.set_push_constants(
                         wgpu::ShaderStages::VERTEX_FRAGMENT,

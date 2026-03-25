@@ -1,6 +1,6 @@
 use std::{path::Path, sync::Arc};
 
-use glam::UVec2;
+use glam::{UVec2, Vec2};
 
 use crate::{
     engine::{
@@ -13,11 +13,21 @@ use crate::{
 
 pub struct Texture;
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum TextureKey {
+    Image(Handle<Image>),
+    Area {
+        image: Handle<Image>,
+        pos: UVec2,
+        size: UVec2,
+    },
+}
+
 pub struct Textures {
     render_context: RenderContext,
     images: Arc<Images>,
 
-    textures: StorageMap<Handle<Image>, Texture, TextureData>,
+    textures: StorageMap<TextureKey, Texture, TextureData>,
 }
 
 impl Textures {
@@ -42,8 +52,10 @@ impl Textures {
         Ok(self.create_from_image(image_handle).unwrap())
     }
 
+    /// Returns a texture handle that covers the full source image.
     pub fn create_from_image(&mut self, image: Handle<Image>) -> Option<Handle<Texture>> {
-        if let Some(handle) = self.textures.get_handle_by_key(&image) {
+        let key = TextureKey::Image(image);
+        if let Some(handle) = self.textures.get_handle_by_key(&key) {
             return Some(handle);
         }
 
@@ -53,10 +65,53 @@ impl Textures {
         let view = self.create_texture_internal(&image.data);
 
         Some(self.textures.insert(
-            image_handle,
+            key,
             TextureData {
                 _image: image_handle,
                 size: image.size,
+                uv_min: Vec2::ZERO,
+                uv_max: Vec2::ONE,
+                view,
+            },
+        ))
+    }
+
+    /// Returns a texture handle for a sub-rectangle of an image.
+    pub fn create_from_sub_image(
+        &mut self,
+        image: Handle<Image>,
+        pos: UVec2,
+        size: UVec2,
+    ) -> Option<Handle<Texture>> {
+        let key = TextureKey::Area { image, pos, size };
+        if let Some(handle) = self.textures.get_handle_by_key(&key) {
+            return Some(handle);
+        }
+
+        let base_texture = self.create_from_image(image)?;
+        let image_handle = image;
+        let image = self.images.get(image)?;
+        let view = self.textures.get(base_texture)?.view.clone();
+
+        if size.x == 0 || size.y == 0 {
+            return None;
+        }
+        let bottom_right = pos.checked_add(size)?;
+        if bottom_right.x > image.size.x || bottom_right.y > image.size.y {
+            return None;
+        }
+
+        let image_size = image.size.as_vec2();
+        let uv_min = pos.as_vec2() / image_size;
+        let uv_max = bottom_right.as_vec2() / image_size;
+
+        Some(self.textures.insert(
+            key,
+            TextureData {
+                _image: image_handle,
+                size,
+                uv_min,
+                uv_max,
                 view,
             },
         ))
@@ -109,6 +164,10 @@ pub struct TextureData {
     pub _image: Handle<Image>,
     /// Size of the texture in pixels.
     pub size: UVec2,
+    /// Lower-left UV bound used when sampling this texture.
+    pub uv_min: Vec2,
+    /// Upper-right UV bound used when sampling this texture.
+    pub uv_max: Vec2,
     /// The [wgpu::TextureView] used to access this texture during rendering.
     pub view: wgpu::TextureView,
 }

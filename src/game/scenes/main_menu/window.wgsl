@@ -14,6 +14,9 @@ struct RectParams {
     pos: vec2<f32>,
     size: vec2<f32>,
     alpha: f32,
+    _padding: f32,
+    uv_min: vec2<f32>,
+    uv_max: vec2<f32>,
 }
 
 var<push_constant> rect: RectParams;
@@ -33,6 +36,7 @@ struct VertexOut {
 @vertex
 fn vertex(vertex: Vertex) -> VertexOut {
     let pixel_pos = rect.pos + vertex.pos * rect.size;
+    let uv = rect.uv_min + vertex.uv * (rect.uv_max - rect.uv_min);
 
     let ndc = vec2<f32>(
         (pixel_pos.x / viewport.size.x) * 2.0 - 1.0,
@@ -41,7 +45,7 @@ fn vertex(vertex: Vertex) -> VertexOut {
 
     return VertexOut(
         vec4<f32>(ndc, 0.0, 1.0),
-        vertex.uv,
+        uv,
         vertex.color,
     );
 }

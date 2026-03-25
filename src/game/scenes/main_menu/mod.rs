@@ -129,23 +129,55 @@ impl MainMenuScene {
         window_base: &WindowBase,
     ) {
         macro_rules! get_ivar {
-            ($name:literal) => {{
-                window_base
-                    .ivars
-                    .get("button_offset_x")
-                    .cloned()
-                    .unwrap_or(0)
-            }};
+            ($name:literal) => {{ window_base.ivars.get($name).cloned().unwrap_or(0) }};
         }
 
-        let button_offset_x = get_ivar!("button_offset_x");
-        let button_offset_y = get_ivar!("button_offset_y");
+        let _button_offset_x = get_ivar!("button_offset_x");
+        let _button_offset_y = get_ivar!("button_offset_y");
 
-        let shadow_offset_x = get_ivar!("shadow_offset_x");
-        let shadow_offset_y = get_ivar!("shadow_offset_y");
+        let _shadow_offset_x = get_ivar!("shadow_offset_x");
+        let _shadow_offset_y = get_ivar!("shadow_offset_y");
 
-        const BUTTONS: &[(&str, u32, u32, &str, u32, &str, u32, &str, u32)] = &[
-            (
+        struct ButtonData<'a> {
+            name: &'a str,
+            x: u32,
+            y: u32,
+            top_sprite: &'a str,
+            top_frame: u32,
+            unfocus_sprite: &'a str,
+            unfocus_frame: u32,
+            pressed_sprite: &'a str,
+            pressed_frame: u32,
+        }
+
+        impl<'a> ButtonData<'a> {
+            const fn new(
+                name: &'a str,
+                x: u32,
+                y: u32,
+                top_sprite: &'a str,
+                top_frame: u32,
+                unfocus_sprite: &'a str,
+                unfocus_frame: u32,
+                pressed_sprite: &'a str,
+                pressed_frame: u32,
+            ) -> Self {
+                Self {
+                    name,
+                    x,
+                    y,
+                    top_sprite,
+                    top_frame,
+                    unfocus_sprite,
+                    unfocus_frame,
+                    pressed_sprite,
+                    pressed_frame,
+                }
+            }
+        }
+
+        const BUTTONS: &[ButtonData<'static>] = &[
+            ButtonData::new(
                 "b_new_game",
                 325,
                 80,
@@ -156,7 +188,7 @@ impl MainMenuScene {
                 "interface_elements_14",
                 2,
             ),
-            (
+            ButtonData::new(
                 "b_load_game",
                 320,
                 120,
@@ -167,7 +199,7 @@ impl MainMenuScene {
                 "interface_elements_13",
                 2,
             ),
-            (
+            ButtonData::new(
                 "b_training",
                 315,
                 160,
@@ -178,7 +210,7 @@ impl MainMenuScene {
                 "interface_elements_17",
                 2,
             ),
-            (
+            ButtonData::new(
                 "b_options",
                 310,
                 200,
@@ -189,7 +221,7 @@ impl MainMenuScene {
                 "interface_elements_15",
                 2,
             ),
-            (
+            ButtonData::new(
                 "b_intro",
                 305,
                 240,
@@ -200,7 +232,7 @@ impl MainMenuScene {
                 "interface_elements_13",
                 5,
             ),
-            (
+            ButtonData::new(
                 "b_multiplayer",
                 300,
                 280,
@@ -211,7 +243,7 @@ impl MainMenuScene {
                 "interface_elements_14",
                 5,
             ),
-            (
+            ButtonData::new(
                 "b_exit",
                 295,
                 320,
@@ -224,23 +256,18 @@ impl MainMenuScene {
             ),
         ];
 
-        for (
-            _id,
-            x,
-            y,
-            top_sprite,
-            _top_frame,
-            _unfocus_sprite,
-            _unfocus_frame,
-            _pressed_sprite,
-            _pressed_frame,
-        ) in BUTTONS
-        {
-            let Some(sprite) = sprites.get_by_name(top_sprite) else {
+        for button in BUTTONS {
+            let Some(sprite) = sprites.get_by_name(button.top_sprite) else {
                 continue;
             };
 
-            let Some(texture) = renderer.create_texture(sprite.image) else {
+            let Some(frame) = sprite.frame(button.top_frame as usize) else {
+                continue;
+            };
+            let size = frame.bottom_right - frame.top_left;
+
+            let Some(texture) = renderer.create_texture_sub(sprite.image, frame.top_left, size)
+            else {
                 continue;
             };
 
@@ -249,7 +276,7 @@ impl MainMenuScene {
 
             world.spawn((
                 ecs::Widget {
-                    position: glam::UVec2::new(*x, *y),
+                    position: glam::UVec2::new(button.x, button.y),
                     size,
                 },
                 ecs::WidgetRenderer { texture },

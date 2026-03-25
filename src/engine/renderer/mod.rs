@@ -61,7 +61,7 @@ pub fn create(window: Arc<Window>) -> (surface::Surface, RenderContext) {
             max_binding_array_elements_per_shader_stage: 1024,
             max_bind_groups: 6,
             max_color_attachment_bytes_per_sample: 56,
-            max_push_constant_size: 20,
+            max_push_constant_size: 40,
             ..Default::default()
         },
         ..Default::default()
