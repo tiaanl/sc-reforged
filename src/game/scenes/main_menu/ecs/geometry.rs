@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{engine::storage::Handle, game::scenes::main_menu::window_renderer::Texture};
+use crate::{engine::storage::Handle, game::render::textures::Texture};
 
 // #[derive(Component)]
 // pub struct Geometry {}

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ahash::HashMap;
 use glam::{UVec2, Vec2};
 use wgpu::util::DeviceExt;
 
@@ -7,9 +8,12 @@ use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
         renderer::{Frame, RenderContext, SurfaceDesc},
-        storage::{Handle, StorageMap},
+        storage::Handle,
     },
-    game::assets::{image::Image, images::Images},
+    game::{
+        assets::{image::Image, images::Images},
+        render::textures::{Texture, Textures},
+    },
 };
 
 pub enum Primitive {
@@ -41,21 +45,13 @@ impl Primitives {
     }
 }
 
-pub struct Texture {
-    size: UVec2,
-    view: wgpu::TextureView,
-    bind_group: wgpu::BindGroup,
-}
-
 pub struct WindowRenderer {
-    images: Arc<Images>,
-
     render_pipeline: wgpu::RenderPipeline,
 
-    vertices: Vec<gpu::Vertex>,
+    _vertices: Vec<gpu::Vertex>,
     vertices_buffer: GrowingBuffer<gpu::Vertex>,
 
-    indices: Vec<u32>,
+    _indices: Vec<u32>,
     indices_buffer: GrowingBuffer<u32>,
 
     viewport_dirty: bool,
@@ -65,11 +61,15 @@ pub struct WindowRenderer {
 
     texture_bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
-    textures: StorageMap<Handle<Image>, Texture>,
+    bind_groups: HashMap<Handle<Texture>, wgpu::BindGroup>,
+
+    textures: Textures,
 }
 
 impl WindowRenderer {
     pub fn new(context: &RenderContext, surface: &SurfaceDesc, images: Arc<Images>) -> Self {
+        let textures = Textures::new(context.clone(), images);
+
         let viewport = gpu::Viewport {
             size: surface.size.as_vec2().to_array(),
         };
@@ -246,13 +246,11 @@ impl WindowRenderer {
         indices_buffer.write(context, &indices);
 
         Self {
-            images,
-
             render_pipeline,
 
-            vertices,
+            _vertices: vertices,
             vertices_buffer,
-            indices,
+            _indices: indices,
             indices_buffer,
 
             viewport_dirty: false,
@@ -262,7 +260,9 @@ impl WindowRenderer {
 
             texture_bind_group_layout,
             sampler,
-            textures: StorageMap::default(),
+            bind_groups: HashMap::default(),
+
+            textures,
         }
     }
 
@@ -271,53 +271,19 @@ impl WindowRenderer {
         context: &RenderContext,
         image: Handle<Image>,
     ) -> Option<Handle<Texture>> {
-        let image_handle = image;
-        let image = self.images.get(image)?;
+        let texture_handle = self.textures.create(image)?;
 
-        let size = wgpu::Extent3d {
-            width: image.size.x,
-            height: image.size.y,
-            depth_or_array_layers: 1,
-        };
-
-        let texture = context.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-
-        context.queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &image.data,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(image.size.x * 4),
-                rows_per_image: Some(image.size.y),
-            },
-            size,
-        );
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let texture = self.textures.get(texture_handle).unwrap();
 
         let bind_group = context
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(&format!("texture_bind_group")),
+                label: Some("texture_bind_group"),
                 layout: &self.texture_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&view),
+                        resource: wgpu::BindingResource::TextureView(&texture.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
@@ -326,14 +292,9 @@ impl WindowRenderer {
                 ],
             });
 
-        Some(self.textures.insert(
-            image_handle,
-            Texture {
-                size: image.size,
-                view,
-                bind_group,
-            },
-        ))
+        self.bind_groups.insert(texture_handle, bind_group);
+
+        Some(texture_handle)
     }
 
     pub fn resize(&mut self, size: UVec2) {
@@ -380,7 +341,7 @@ impl WindowRenderer {
                     texture,
                     alpha,
                 } => {
-                    let Some(texture) = self.textures.get(*texture) else {
+                    let Some(bind_group) = self.bind_groups.get(texture) else {
                         continue;
                     };
 
@@ -392,7 +353,7 @@ impl WindowRenderer {
                         bytemuck::bytes_of(&bytes),
                     );
                     render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
-                    render_pass.set_bind_group(1, &texture.bind_group, &[]);
+                    render_pass.set_bind_group(1, bind_group, &[]);
                     render_pass.draw_indexed(0..self.indices_buffer.count, 0, 0..1);
                 }
             }
