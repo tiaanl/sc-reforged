@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use glam::{UVec2, Vec2};
+use bevy_ecs::prelude::*;
 
 use crate::{
     engine::{
@@ -18,26 +18,29 @@ use crate::{
     },
 };
 
+mod ecs;
 mod render;
 
-struct BackFrame {
-    texture_id: render::TextureId,
-    alpha: f32,
-    size: [i32; 2],
-}
+#[derive(Resource)]
+struct DeltaTime(f32);
 
-struct FrameAnimation {
+#[derive(Resource)]
+struct AnimationState {
+    frames: [Entity; 5],
     current_frame: usize,
     fading_out: bool,
 }
 
+#[derive(Default, Resource)]
+struct RenderSnapshot {
+    primitives: render::Primitives,
+}
+
 pub struct MainMenuScene {
-    window_base: WindowBase,
+    world: World,
+    update_schedule: Schedule,
 
     renderer: render::WindowRenderer,
-
-    frames: Vec<BackFrame>,
-    frame_animation: FrameAnimation,
 }
 
 impl MainMenuScene {
@@ -48,6 +51,11 @@ impl MainMenuScene {
         context: &RenderContext,
         surface: &SurfaceDesc,
     ) -> Result<Self, AssetError> {
+        let mut world = World::default();
+
+        world.insert_resource(DeltaTime(0.0));
+        world.insert_resource(RenderSnapshot::default());
+
         let window_base: WindowBase = load_config(
             file_system,
             PathBuf::from("config")
@@ -57,7 +65,7 @@ impl MainMenuScene {
 
         let mut window_renderer = render::WindowRenderer::new(context, surface);
 
-        let mut frames = vec![];
+        let mut frames = [Entity::PLACEHOLDER; 5];
 
         for (i, geometry) in window_base.geometries.iter().enumerate() {
             match geometry.kind {
@@ -80,98 +88,111 @@ impl MainMenuScene {
 
                     let texture_id = window_renderer.create_texture(context, rgba);
 
-                    frames.push(BackFrame {
+                    let new_frame = world.spawn(ecs::geometry::GeometryTiled {
                         texture_id,
                         alpha: if i <= 1 { 1.0 } else { 0.0 },
-                        size: geometry.dimensions,
+                        size: glam::IVec2::from(geometry.dimensions).as_uvec2(),
                     });
+                    frames[i] = new_frame.id();
                 }
             }
         }
+
+        world.insert_resource(AnimationState {
+            frames,
+            current_frame: 0,
+            fading_out: false,
+        });
+
+        let mut update_schedule = Schedule::default();
+        update_schedule.add_systems((rotate_background_alphas, update_render_snapshot).chain());
 
         Ok(Self {
-            window_base,
+            world,
+            update_schedule,
             renderer: window_renderer,
-            frames,
-            frame_animation: FrameAnimation {
-                current_frame: 0,
-                // The original menu starts by fading out frame1 while frame2 is already visible.
-                fading_out: true,
-            },
         })
     }
+}
 
-    /// Advance the background frame cross-fade to match the original main menu timing.
-    fn update_background_frames(&mut self, delta_time: f32) {
-        if self.frames.len() < 2 {
-            return;
+impl Scene for MainMenuScene {
+    fn resize(&mut self, size: glam::UVec2) {
+        self.renderer.resize(size);
+    }
+
+    fn update(&mut self, delta_time: f32, _input: &InputState) {
+        self.world.resource_mut::<DeltaTime>().0 = delta_time;
+        self.update_schedule.run(&mut self.world);
+    }
+
+    fn render(&mut self, context: &RenderContext, frame: &mut Frame) {
+        let snapshot = self.world.resource::<RenderSnapshot>();
+        self.renderer.submit(context, frame, &snapshot.primitives);
+    }
+}
+
+fn rotate_background_alphas(
+    mut state: ResMut<AnimationState>,
+    mut geometries: Query<&mut ecs::geometry::GeometryTiled>,
+    time: Res<DeltaTime>,
+) {
+    let Ok(mut frames) = geometries.get_many_mut(state.frames) else {
+        return;
+    };
+
+    let current_frame = state.current_frame.min(frames.len().saturating_sub(1));
+    state.current_frame = current_frame;
+
+    let step = time.0.max(0.0) * MainMenuScene::FRAME_FADE_SPEED;
+    let max_fade_out_frame = frames.len().saturating_sub(2);
+
+    if state.fading_out {
+        {
+            let frame = &mut frames[current_frame];
+            frame.alpha = (frame.alpha - step).max(0.0);
         }
 
-        let current_frame = self
-            .frame_animation
-            .current_frame
-            .min(self.frames.len().saturating_sub(1));
-        self.frame_animation.current_frame = current_frame;
+        if frames[current_frame].alpha <= 0.0 {
+            if current_frame == max_fade_out_frame {
+                state.fading_out = false;
+            } else {
+                state.current_frame += 1;
 
-        let step = delta_time.max(0.0) * Self::FRAME_FADE_SPEED;
-        let max_fade_out_frame = self.frames.len().saturating_sub(2);
-
-        if self.frame_animation.fading_out {
-            {
-                let frame = &mut self.frames[current_frame];
-                frame.alpha = (frame.alpha - step).max(0.0);
-            }
-
-            if self.frames[current_frame].alpha <= 0.0 {
-                if current_frame == max_fade_out_frame {
-                    self.frame_animation.fading_out = false;
-                } else {
-                    self.frame_animation.current_frame += 1;
-
-                    if let Some(next_frame) = self.frames.get_mut(current_frame + 2) {
-                        next_frame.alpha = 1.0;
-                    }
+                if let Some(next_frame) = frames.get_mut(current_frame + 2) {
+                    next_frame.alpha = 1.0;
                 }
             }
-        } else {
-            {
-                let frame = &mut self.frames[current_frame];
-                frame.alpha = (frame.alpha + step).min(1.0);
-            }
+        }
+    } else {
+        {
+            let frame = &mut frames[current_frame];
+            frame.alpha = (frame.alpha + step).min(1.0);
+        }
 
-            if self.frames[current_frame].alpha >= 1.0 {
-                if current_frame == 0 {
-                    self.frame_animation.fading_out = true;
-                } else {
-                    self.frame_animation.current_frame -= 1;
-                    self.frames[current_frame + 1].alpha = 0.0;
-                }
+        if frames[current_frame].alpha >= 1.0 {
+            if current_frame == 0 {
+                state.fading_out = true;
+            } else {
+                state.current_frame -= 1;
+                frames[current_frame + 1].alpha = 0.0;
             }
         }
     }
 }
 
-impl Scene for MainMenuScene {
-    fn resize(&mut self, size: UVec2) {
-        self.renderer.resize(size);
-    }
+fn update_render_snapshot(
+    state: Res<AnimationState>,
+    frames: Query<&ecs::geometry::GeometryTiled>,
+    mut snapshot: ResMut<RenderSnapshot>,
+) {
+    snapshot.primitives.clear();
 
-    fn update(&mut self, delta_time: f32, _input: &InputState) {
-        self.update_background_frames(delta_time);
-    }
-
-    fn render(&mut self, context: &RenderContext, frame: &mut Frame) {
-        let mut primitives = render::Primitives::default();
-
-        for f in self.frames.iter().rev() {
-            primitives.add_rect(
-                Vec2::ZERO,
-                glam::IVec2::from(f.size).as_vec2(),
-                f.texture_id,
-                f.alpha,
-            );
-        }
-
-        self.renderer.submit(context, frame, primitives);
+    for frame in frames.iter_many(state.frames).rev() {
+        snapshot.primitives.add_rect(
+            glam::Vec2::ZERO,
+            frame.size.as_vec2(),
+            frame.texture_id,
+            frame.alpha,
+        );
     }
 }

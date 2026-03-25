@@ -23,6 +23,10 @@ pub struct Primitives {
 }
 
 impl Primitives {
+    pub fn clear(&mut self) {
+        self.primitives.clear();
+    }
+
     pub fn add_rect(&mut self, pos: Vec2, size: Vec2, texture: TextureId, alpha: f32) {
         self.primitives.push(Primitive::Rect {
             pos,
@@ -325,7 +329,7 @@ impl WindowRenderer {
         self.viewport_dirty = true;
     }
 
-    pub fn submit(&mut self, context: &RenderContext, frame: &mut Frame, primitives: Primitives) {
+    pub fn submit(&mut self, context: &RenderContext, frame: &mut Frame, primitives: &Primitives) {
         if self.viewport_dirty {
             context.queue.write_buffer(
                 &self.viewport_buffer,
