@@ -1,3 +1,4 @@
+pub mod asset_source;
 pub mod config;
 pub mod image;
 pub mod images;

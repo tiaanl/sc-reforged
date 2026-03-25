@@ -1,9 +1,15 @@
-use std::{ffi::OsString, path::PathBuf};
+use std::{
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
 
 use glam::UVec2;
 use image::ImageError;
 
-use crate::{engine::assets::AssetError, game::AssetLoadContext};
+use crate::{
+    engine::assets::AssetError,
+    game::{AssetLoadContext, assets::asset_source::AssetSource},
+};
 
 use super::Asset;
 
@@ -21,14 +27,18 @@ pub enum BlendMode {
 }
 
 pub struct Image {
+    #[allow(unused)]
+    pub source: AssetSource,
     pub size: UVec2,
+    #[allow(unused)]
     pub blend_mode: BlendMode,
     pub data: image::RgbaImage,
 }
 
 impl Image {
-    pub fn from_rgba(data: image::RgbaImage, blend_mode: BlendMode) -> Self {
+    pub fn from_rgba(source: AssetSource, data: image::RgbaImage, blend_mode: BlendMode) -> Self {
         Self {
+            source,
             size: UVec2::new(data.width(), data.height()),
             blend_mode,
             data,
@@ -42,10 +52,10 @@ impl Asset for Image {
         path: PathBuf,
         data: &[u8],
     ) -> Result<Self, AssetError> {
-        fn image_error_to_asset_error(err: ImageError, path: PathBuf) -> AssetError {
+        fn image_error_to_asset_error(err: ImageError, path: &Path) -> AssetError {
             match err {
-                ImageError::Decoding(_) => AssetError::Decode(path),
-                ImageError::IoError(error) => AssetError::from_io_error(error, &path),
+                ImageError::Decoding(_) => AssetError::Decode(path.into()),
+                ImageError::IoError(error) => AssetError::from_io_error(error, path),
                 error => AssetError::custom(path, error),
             }
         }
@@ -68,7 +78,7 @@ impl Asset for Image {
                 &mut std::io::Cursor::new(data),
                 is_color_keyd,
             )
-            .map_err(|err| image_error_to_asset_error(err, path.clone()))?;
+            .map_err(|err| image_error_to_asset_error(err, &path))?;
 
             let raw = if let Ok(data) = _context.loader.load_raw(path.with_extension("raw")) {
                 Some(
@@ -77,7 +87,7 @@ impl Asset for Image {
                         bmp.width(),
                         bmp.height(),
                     )
-                    .map_err(|err| image_error_to_asset_error(err, path))?,
+                    .map_err(|err| image_error_to_asset_error(err, &path))?,
                 )
             } else {
                 None
@@ -85,25 +95,32 @@ impl Asset for Image {
 
             if is_color_keyd {
                 Image::from_rgba(
+                    AssetSource::FileSystem(path.clone()),
                     image::DynamicImage::from(bmp).into_rgba8(),
                     BlendMode::ColorKeyed,
                 )
             } else if let Some(raw) = raw {
                 Image::from_rgba(
+                    AssetSource::FileSystem(path.clone()),
                     shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw),
                     BlendMode::Alpha,
                 )
             } else {
                 Image::from_rgba(
+                    AssetSource::FileSystem(path.clone()),
                     image::DynamicImage::from(bmp).into_rgba8(),
                     BlendMode::Opaque,
                 )
             }
         } else if ext == "jpg" || ext == "jpeg" {
             let image = image::load_from_memory_with_format(data, image::ImageFormat::Jpeg)
-                .map_err(|err| image_error_to_asset_error(err, path))?;
+                .map_err(|err| image_error_to_asset_error(err, &path))?;
 
-            Image::from_rgba(image.into_rgba8(), BlendMode::Opaque)
+            Image::from_rgba(
+                AssetSource::FileSystem(path.clone()),
+                image.into_rgba8(),
+                BlendMode::Opaque,
+            )
         } else {
             return Err(AssetError::NotSupported(path));
         })

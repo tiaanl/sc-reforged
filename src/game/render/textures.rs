@@ -76,10 +76,19 @@ impl Textures {
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        Some(self.textures.insert(image_handle, TextureData { view }))
+        Some(self.textures.insert(
+            image_handle,
+            TextureData {
+                _image: image_handle,
+                view,
+            },
+        ))
     }
 }
 
 pub struct TextureData {
+    /// The image used to create this texture.
+    pub _image: Handle<Image>,
+    /// The [wgpu::TextureView] used to access this texture during rendering.
     pub view: wgpu::TextureView,
 }

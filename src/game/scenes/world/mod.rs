@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use bevy_ecs::prelude::*;
 use glam::UVec2;
 use winit::keyboard::KeyCode;

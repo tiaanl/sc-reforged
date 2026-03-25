@@ -9,7 +9,10 @@ use crate::{
         storage::{Handle, StorageMap},
     },
     game::{
-        assets::image::{BlendMode, Image},
+        assets::{
+            asset_source::AssetSource,
+            image::{BlendMode, Image},
+        },
         file_system::FileSystem,
     },
 };
@@ -88,16 +91,19 @@ impl Images {
 
             if is_color_keyd {
                 Image::from_rgba(
+                    AssetSource::FileSystem(path.clone()),
                     image::DynamicImage::from(bmp).into_rgba8(),
                     BlendMode::ColorKeyed,
                 )
             } else if let Some(raw) = raw {
                 Image::from_rgba(
+                    AssetSource::FileSystem(path.clone()),
                     shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw),
                     BlendMode::Alpha,
                 )
             } else {
                 Image::from_rgba(
+                    AssetSource::FileSystem(path.clone()),
                     image::DynamicImage::from(bmp).into_rgba8(),
                     BlendMode::Opaque,
                 )
@@ -106,7 +112,11 @@ impl Images {
             let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
                 .map_err(|err| image_error_to_asset_error(err, &path))?;
 
-            Image::from_rgba(image.into_rgba8(), BlendMode::Opaque)
+            Image::from_rgba(
+                AssetSource::FileSystem(path.clone()),
+                image.into_rgba8(),
+                BlendMode::Opaque,
+            )
         } else {
             return Err(AssetError::NotSupported(path));
         };
