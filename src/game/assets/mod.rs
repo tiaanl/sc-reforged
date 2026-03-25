@@ -4,6 +4,7 @@ pub mod image;
 pub mod images;
 pub mod model;
 pub mod motion;
+pub mod sprites;
 
 mod asset;
 

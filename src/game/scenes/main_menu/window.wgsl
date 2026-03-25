@@ -50,5 +50,5 @@ fn vertex(vertex: Vertex) -> VertexOut {
 fn fragment(vertex: VertexOut) -> @location(0) vec4<f32> {
     let base = textureSample(t, s, vertex.uv);
     let out = base * vertex.color;
-    return vec4<f32>(out.rgb, rect.alpha);
+    return vec4<f32>(out.rgb, out.a * rect.alpha);
 }

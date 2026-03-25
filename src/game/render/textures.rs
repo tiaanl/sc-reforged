@@ -1,5 +1,7 @@
 use std::{path::Path, sync::Arc};
 
+use glam::UVec2;
+
 use crate::{
     engine::{
         assets::AssetError,
@@ -48,23 +50,26 @@ impl Textures {
         let image_handle = image;
         let image = self.images.get(image)?;
 
-        let view = self.create_texture_internal(&image);
+        let view = self.create_texture_internal(&image.data);
 
         Some(self.textures.insert(
             image_handle,
             TextureData {
                 _image: image_handle,
+                size: image.size,
                 view,
             },
         ))
     }
 
-    fn create_texture_internal(&mut self, image: &Image) -> wgpu::TextureView {
+    fn create_texture_internal(&mut self, image: &image::RgbaImage) -> wgpu::TextureView {
         let RenderContext { device, queue } = &self.render_context;
 
+        let (width, height) = (image.width(), image.height());
+
         let size = wgpu::Extent3d {
-            width: image.size.x,
-            height: image.size.y,
+            width,
+            height,
             depth_or_array_layers: 1,
         };
 
@@ -86,11 +91,11 @@ impl Textures {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &image.data,
+            image,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(image.size.x * 4),
-                rows_per_image: Some(image.size.y),
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
             },
             size,
         );
@@ -102,6 +107,8 @@ impl Textures {
 pub struct TextureData {
     /// The image used to create this texture.
     pub _image: Handle<Image>,
+    /// Size of the texture in pixels.
+    pub size: UVec2,
     /// The [wgpu::TextureView] used to access this texture during rendering.
     pub view: wgpu::TextureView,
 }

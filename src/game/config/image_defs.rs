@@ -19,34 +19,34 @@ impl From<ConfigLine> for Image {
 
 #[derive(Debug, Default)]
 pub struct ColorKey {
-    rl: u8,
-    gl: u8,
-    bl: u8,
-    rh: u8,
-    gh: u8,
-    bh: u8,
+    pub rl: f32,
+    pub gl: f32,
+    pub bl: f32,
+    pub rh: f32,
+    pub gh: f32,
+    pub bh: f32,
 }
 
 #[derive(Debug, Default)]
 pub struct SpriteFrame {
-    x1: i32,
-    y1: i32,
-    x2: i32,
-    y2: i32,
-    x_run: i32,
-    dx: i32,
+    pub x1: i32,
+    pub y1: i32,
+    pub x2: i32,
+    pub y2: i32,
+    pub x_run: i32,
+    pub dx: i32,
 }
 
 #[derive(Debug, Default)]
 pub struct Sprite3d {
-    name: String,
-    texture_name: String,
-    width: i32,
-    height: i32,
-    alpha: Option<f32>,
-    color_key_enabled: Option<bool>,
-    color_key: Option<ColorKey>,
-    frames: Vec<SpriteFrame>,
+    pub name: String,
+    pub texture_name: String,
+    pub width: i32,
+    pub height: i32,
+    pub alpha: Option<f32>,
+    pub color_key_enabled: Option<bool>,
+    pub color_key: Option<ColorKey>,
+    pub frames: Vec<SpriteFrame>,
 }
 
 impl From<ConfigLine> for Sprite3d {
@@ -65,12 +65,12 @@ impl From<ConfigLine> for Sprite3d {
         let color_key_enabled = value.maybe_param::<i32>(5).map(|i| i != 0);
         let color_key = color_key_enabled.and_then(|e| {
             e.then(|| ColorKey {
-                rl: value.param::<i32>(6) as u8,
-                gl: value.param::<i32>(7) as u8,
-                bl: value.param::<i32>(8) as u8,
-                rh: value.param::<i32>(9) as u8,
-                gh: value.param::<i32>(10) as u8,
-                bh: value.param::<i32>(11) as u8,
+                rl: value.param(6),
+                gl: value.param(7),
+                bl: value.param(8),
+                rh: value.param(9),
+                gh: value.param(10),
+                bh: value.param(11),
             })
         });
 
@@ -108,12 +108,12 @@ impl From<ConfigLine> for AnimSprite {
             None
         } else {
             Some(ColorKey {
-                rl: value.param::<i32>(6) as u8,
-                gl: value.param::<i32>(7) as u8,
-                bl: value.param::<i32>(8) as u8,
-                rh: value.param::<i32>(9) as u8,
-                gh: value.param::<i32>(10) as u8,
-                bh: value.param::<i32>(11) as u8,
+                rl: value.param(6),
+                gl: value.param(7),
+                bl: value.param(8),
+                rh: value.param(9),
+                gh: value.param(10),
+                bh: value.param(11),
             })
         };
 
@@ -129,18 +129,18 @@ impl From<ConfigLine> for AnimSprite {
 
 #[derive(Debug, Default)]
 pub struct AnimSprite3d {
-    name: String,
-    texture_name: String,
-    width: i32,
-    height: i32,
-    alpha: Option<f32>,
-    color_key_enabled: Option<bool>,
-    color_key: Option<ColorKey>,
+    pub name: String,
+    pub texture_name: String,
+    pub width: i32,
+    pub height: i32,
+    pub alpha: Option<f32>,
+    pub color_key_enabled: Option<bool>,
+    pub color_key: Option<ColorKey>,
 
-    frame_descriptor: FrameDescritor,
-    frame_order: Vec<i32>,
+    pub frame_descriptor: FrameDescritor,
+    pub frame_order: Vec<i32>,
 
-    frames: Vec<SpriteFrame>,
+    pub frames: Vec<SpriteFrame>,
 }
 
 impl From<ConfigLine> for AnimSprite3d {
@@ -156,12 +156,12 @@ impl From<ConfigLine> for AnimSprite3d {
         let color_key_enabled = value.maybe_param::<i32>(5).map(|i| i != 0);
         let color_key = color_key_enabled.and_then(|e| {
             e.then(|| ColorKey {
-                rl: value.param::<i32>(6) as u8,
-                gl: value.param::<i32>(7) as u8,
-                bl: value.param::<i32>(8) as u8,
-                rh: value.param::<i32>(9) as u8,
-                gh: value.param::<i32>(10) as u8,
-                bh: value.param::<i32>(11) as u8,
+                rl: value.param(6),
+                gl: value.param(7),
+                bl: value.param(8),
+                rh: value.param(9),
+                gh: value.param(10),
+                bh: value.param(11),
             })
         });
 
