@@ -1,18 +1,22 @@
+use std::sync::Arc;
+
 use glam::{UVec2, Vec2};
 use wgpu::util::DeviceExt;
 
-use crate::engine::{
-    growing_buffer::GrowingBuffer,
-    renderer::{Frame, RenderContext, SurfaceDesc},
+use crate::{
+    engine::{
+        growing_buffer::GrowingBuffer,
+        renderer::{Frame, RenderContext, SurfaceDesc},
+        storage::{Handle, StorageMap},
+    },
+    game::assets::{image::Image, images::Images},
 };
-
-pub type TextureId = usize;
 
 pub enum Primitive {
     Rect {
         pos: Vec2,
         size: Vec2,
-        texture: TextureId,
+        texture: Handle<Texture>,
         alpha: f32,
     },
 }
@@ -27,7 +31,7 @@ impl Primitives {
         self.primitives.clear();
     }
 
-    pub fn add_rect(&mut self, pos: Vec2, size: Vec2, texture: TextureId, alpha: f32) {
+    pub fn add_rect(&mut self, pos: Vec2, size: Vec2, texture: Handle<Texture>, alpha: f32) {
         self.primitives.push(Primitive::Rect {
             pos,
             size,
@@ -37,13 +41,15 @@ impl Primitives {
     }
 }
 
-struct Texture {
+pub struct Texture {
     size: UVec2,
     view: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
 }
 
 pub struct WindowRenderer {
+    images: Arc<Images>,
+
     render_pipeline: wgpu::RenderPipeline,
 
     vertices: Vec<gpu::Vertex>,
@@ -59,11 +65,11 @@ pub struct WindowRenderer {
 
     texture_bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
-    textures: Vec<Texture>,
+    textures: StorageMap<Handle<Image>, Texture>,
 }
 
 impl WindowRenderer {
-    pub fn new(context: &RenderContext, surface: &SurfaceDesc) -> Self {
+    pub fn new(context: &RenderContext, surface: &SurfaceDesc, images: Arc<Images>) -> Self {
         let viewport = gpu::Viewport {
             size: surface.size.as_vec2().to_array(),
         };
@@ -240,6 +246,8 @@ impl WindowRenderer {
         indices_buffer.write(context, &indices);
 
         Self {
+            images,
+
             render_pipeline,
 
             vertices,
@@ -254,14 +262,21 @@ impl WindowRenderer {
 
             texture_bind_group_layout,
             sampler,
-            textures: Vec::default(),
+            textures: StorageMap::default(),
         }
     }
 
-    pub fn create_texture(&mut self, context: &RenderContext, rgba: image::RgbaImage) -> TextureId {
+    pub fn create_texture(
+        &mut self,
+        context: &RenderContext,
+        image: Handle<Image>,
+    ) -> Option<Handle<Texture>> {
+        let image_handle = image;
+        let image = self.images.get(image)?;
+
         let size = wgpu::Extent3d {
-            width: rgba.width(),
-            height: rgba.height(),
+            width: image.size.x,
+            height: image.size.y,
             depth_or_array_layers: 1,
         };
 
@@ -283,23 +298,21 @@ impl WindowRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &rgba,
+            &image.data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(rgba.width() * 4),
-                rows_per_image: Some(rgba.height()),
+                bytes_per_row: Some(image.size.x * 4),
+                rows_per_image: Some(image.size.y),
             },
             size,
         );
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let id = self.textures.len();
-
         let bind_group = context
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(&format!("texture_bind_group_{id}")),
+                label: Some(&format!("texture_bind_group")),
                 layout: &self.texture_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
@@ -313,13 +326,14 @@ impl WindowRenderer {
                 ],
             });
 
-        self.textures.push(Texture {
-            size: UVec2::new(rgba.width(), rgba.height()),
-            view,
-            bind_group,
-        });
-
-        id
+        Some(self.textures.insert(
+            image_handle,
+            Texture {
+                size: image.size,
+                view,
+                bind_group,
+            },
+        ))
     }
 
     pub fn resize(&mut self, size: UVec2) {

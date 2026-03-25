@@ -118,7 +118,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                     surface_desc.format,
                 );
 
-                let file_system = FileSystem::new(&opts.path);
+                let file_system = Arc::new(FileSystem::new(&opts.path));
 
                 /*
                 let scene: Box<dyn Scene> = {
@@ -162,7 +162,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 // println!("campaign_defs: {:#?}", _campaign_defs);
 
                 let scene =
-                    Box::new(MainMenuScene::new(&file_system, &context, &surface_desc).unwrap());
+                    Box::new(MainMenuScene::new(file_system, &context, &surface_desc).unwrap());
 
                 tracing::info!("Application initialized!");
 

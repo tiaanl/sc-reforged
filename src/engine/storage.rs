@@ -1,7 +1,11 @@
+use std::marker::PhantomData;
+
+use ahash::HashMap;
 use bevy_ecs::component::Component;
+use generational_arena::{Arena, Index};
 
 #[derive(Component)]
-pub struct Handle<T>(generational_arena::Index, std::marker::PhantomData<T>);
+pub struct Handle<T>(Index, PhantomData<fn() -> T>);
 
 impl<T> Clone for Handle<T> {
     #[inline]
@@ -57,41 +61,80 @@ impl<T> PartialOrd for Handle<T> {
     }
 }
 
-pub struct Storage<T>(generational_arena::Arena<T>);
+pub struct Storage<T, Stored = T> {
+    arena: Arena<Stored>,
+    _marker: PhantomData<fn() -> T>,
+}
 
-impl<T> Storage<T> {
+impl<T, Stored> Storage<T, Stored> {
     #[inline]
-    pub fn get(&self, id: Handle<T>) -> Option<&T> {
-        self.0.get(id.0)
+    pub fn get(&self, id: Handle<T>) -> Option<&Stored> {
+        self.arena.get(id.0)
     }
 
     #[inline]
-    pub fn get_mut(&mut self, id: Handle<T>) -> Option<&mut T> {
-        self.0.get_mut(id.0)
+    pub fn get_mut(&mut self, id: Handle<T>) -> Option<&mut Stored> {
+        self.arena.get_mut(id.0)
     }
 
     #[inline]
-    pub fn _iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
-        self.0
-            .iter()
-            .map(|(index, value)| (Handle(index, std::marker::PhantomData), value))
-    }
-
-    #[inline]
-    pub fn _iter_mut(&mut self) -> impl Iterator<Item = (Handle<T>, &mut T)> {
-        self.0
-            .iter_mut()
-            .map(|(index, value)| (Handle(index, std::marker::PhantomData), value))
-    }
-
-    #[inline]
-    pub fn insert(&mut self, value: T) -> Handle<T> {
-        Handle(self.0.insert(value), std::marker::PhantomData)
+    pub fn insert(&mut self, value: Stored) -> Handle<T> {
+        Handle(self.arena.insert(value), PhantomData)
     }
 }
 
-impl<T> Default for Storage<T> {
+impl<T, Stored> Default for Storage<T, Stored> {
     fn default() -> Self {
-        Self(generational_arena::Arena::default())
+        Self {
+            arena: Arena::default(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+pub struct StorageMap<K, T, Stored = T> {
+    storage: Storage<T, Stored>,
+    lookup: HashMap<K, Handle<T>>,
+}
+
+impl<K, T, Stored> Default for StorageMap<K, T, Stored> {
+    fn default() -> Self {
+        Self {
+            storage: Storage::default(),
+            lookup: HashMap::default(),
+        }
+    }
+}
+
+impl<K, T, Stored> StorageMap<K, T, Stored>
+where
+    K: Eq + std::hash::Hash,
+{
+    #[inline]
+    pub fn get(&self, handle: Handle<T>) -> Option<&Stored> {
+        self.storage.get(handle)
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self, handle: Handle<T>) -> Option<&mut Stored> {
+        self.storage.get_mut(handle)
+    }
+
+    pub fn get_handle_by_key(&self, key: &K) -> Option<Handle<T>> {
+        self.lookup.get(key).cloned()
+    }
+
+    pub fn get_by_key(&self, key: &K) -> Option<&Stored> {
+        self.lookup.get(key).and_then(|h| self.storage.get(*h))
+    }
+
+    pub fn get_by_key_mut(&mut self, key: &K) -> Option<&mut Stored> {
+        self.lookup.get(key).and_then(|h| self.storage.get_mut(*h))
+    }
+
+    pub fn insert(&mut self, key: K, value: Stored) -> Handle<T> {
+        let handle = self.storage.insert(value);
+        self.lookup.insert(key, handle);
+        handle
     }
 }

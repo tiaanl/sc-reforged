@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use bevy_ecs::prelude::*;
 
@@ -10,6 +10,7 @@ use crate::{
         scene::Scene,
     },
     game::{
+        assets::images::Images,
         config::{
             load_config,
             windows::{GeometryKind, WindowBase},
@@ -19,7 +20,7 @@ use crate::{
 };
 
 mod ecs;
-mod render;
+mod window_renderer;
 
 #[derive(Resource)]
 struct DeltaTime(f32);
@@ -33,21 +34,21 @@ struct AnimationState {
 
 #[derive(Default, Resource)]
 struct RenderSnapshot {
-    primitives: render::Primitives,
+    primitives: window_renderer::Primitives,
 }
 
 pub struct MainMenuScene {
     world: World,
     update_schedule: Schedule,
 
-    renderer: render::WindowRenderer,
+    renderer: window_renderer::WindowRenderer,
 }
 
 impl MainMenuScene {
     const FRAME_FADE_SPEED: f32 = 0.4;
 
     pub fn new(
-        file_system: &FileSystem,
+        file_system: Arc<FileSystem>,
         context: &RenderContext,
         surface: &SurfaceDesc,
     ) -> Result<Self, AssetError> {
@@ -57,13 +58,16 @@ impl MainMenuScene {
         world.insert_resource(RenderSnapshot::default());
 
         let window_base: WindowBase = load_config(
-            file_system,
+            file_system.as_ref(),
             PathBuf::from("config")
                 .join("window_bases")
                 .join("main_menu.txt"),
         )?;
 
-        let mut window_renderer = render::WindowRenderer::new(context, surface);
+        let images = Arc::new(Images::new(Arc::clone(&file_system)));
+
+        let mut window_renderer =
+            window_renderer::WindowRenderer::new(context, surface, Arc::clone(&images));
 
         let mut frames = [Entity::PLACEHOLDER; 5];
 
@@ -79,17 +83,14 @@ impl MainMenuScene {
                         .join(&geometry.jpeg_name)
                         .with_extension("jpg");
 
-                    let data = file_system.load(&path)?;
-
-                    let image =
-                        image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
-                            .map_err(|err| AssetError::custom(path, format!("{err}")))?;
-                    let rgba = image.into_rgba8();
-
-                    let texture_id = window_renderer.create_texture(context, rgba);
+                    let image_handle = images.load(path)?;
+                    // TODO: We should not unwrap here.
+                    let texture = window_renderer
+                        .create_texture(context, image_handle)
+                        .unwrap();
 
                     let new_frame = world.spawn(ecs::geometry::GeometryTiled {
-                        texture_id,
+                        texture,
                         alpha: if i <= 1 { 1.0 } else { 0.0 },
                         size: glam::IVec2::from(geometry.dimensions).as_uvec2(),
                     });
@@ -191,7 +192,7 @@ fn update_render_snapshot(
         snapshot.primitives.add_rect(
             glam::Vec2::ZERO,
             frame.size.as_vec2(),
-            frame.texture_id,
+            frame.texture,
             frame.alpha,
         );
     }
