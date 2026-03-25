@@ -11,7 +11,7 @@ use crate::{
     game::{
         assets::{
             asset_source::AssetSource,
-            image::{BlendMode, Image},
+            image::{BlendMode, Image, quantize_rgb565, quantize_rgba4444},
         },
         file_system::FileSystem,
     },
@@ -96,9 +96,11 @@ impl Images {
                     BlendMode::ColorKeyed,
                 )
             } else if let Some(raw) = raw {
+                let mut rgba = shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw);
+                quantize_rgba4444(&mut rgba);
                 Image::from_rgba(
                     AssetSource::FileSystem(path.clone()),
-                    shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw),
+                    rgba,
                     BlendMode::Alpha,
                 )
             } else {
@@ -111,10 +113,12 @@ impl Images {
         } else if ext == "jpg" || ext == "jpeg" {
             let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
                 .map_err(|err| image_error_to_asset_error(err, &path))?;
+            let mut rgba = image.into_rgba8();
+            quantize_rgb565(&mut rgba);
 
             Image::from_rgba(
                 AssetSource::FileSystem(path.clone()),
-                image.into_rgba8(),
+                rgba,
                 BlendMode::Opaque,
             )
         } else {

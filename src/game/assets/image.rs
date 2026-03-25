@@ -36,6 +36,7 @@ pub struct Image {
 }
 
 impl Image {
+    /// Build an [Image] from RGBA pixel data.
     pub fn from_rgba(source: AssetSource, data: image::RgbaImage, blend_mode: BlendMode) -> Self {
         Self {
             source,
@@ -43,6 +44,28 @@ impl Image {
             blend_mode,
             data,
         }
+    }
+}
+
+/// Quantize RGBA pixels to 4 bits per channel and expand them back to 8 bits.
+pub(crate) fn quantize_rgba4444(image: &mut image::RgbaImage) {
+    for pixel in image.pixels_mut() {
+        for channel in &mut pixel.0 {
+            *channel = (*channel >> 4) * 0x11;
+        }
+    }
+}
+
+/// Quantize RGB pixels to 5:6:5 bits and expand them back to 8 bits.
+pub(crate) fn quantize_rgb565(image: &mut image::RgbaImage) {
+    for pixel in image.pixels_mut() {
+        let red = pixel.0[0] >> 3;
+        let green = pixel.0[1] >> 2;
+        let blue = pixel.0[2] >> 3;
+
+        pixel.0[0] = (red << 3) | (red >> 2);
+        pixel.0[1] = (green << 2) | (green >> 4);
+        pixel.0[2] = (blue << 3) | (blue >> 2);
     }
 }
 
@@ -100,9 +123,11 @@ impl Asset for Image {
                     BlendMode::ColorKeyed,
                 )
             } else if let Some(raw) = raw {
+                let mut rgba = shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw);
+                quantize_rgba4444(&mut rgba);
                 Image::from_rgba(
                     AssetSource::FileSystem(path.clone()),
-                    shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw),
+                    rgba,
                     BlendMode::Alpha,
                 )
             } else {
@@ -115,10 +140,12 @@ impl Asset for Image {
         } else if ext == "jpg" || ext == "jpeg" {
             let image = image::load_from_memory_with_format(data, image::ImageFormat::Jpeg)
                 .map_err(|err| image_error_to_asset_error(err, &path))?;
+            let mut rgba = image.to_rgba8();
+            quantize_rgb565(&mut rgba);
 
             Image::from_rgba(
                 AssetSource::FileSystem(path.clone()),
-                image.into_rgba8(),
+                rgba,
                 BlendMode::Opaque,
             )
         } else {
