@@ -181,7 +181,7 @@ impl From<ConfigLine> for AnimSprite3d {
 }
 
 #[derive(Debug, Default)]
-struct FrameDescritor {
+pub struct FrameDescritor {
     num_images: i32,
     num_frames: i32,
     frame_rate: i32,

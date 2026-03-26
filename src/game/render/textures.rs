@@ -1,10 +1,9 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use glam::{UVec2, Vec2};
 
 use crate::{
     engine::{
-        assets::AssetError,
         renderer::RenderContext,
         storage::{Handle, StorageMap},
     },

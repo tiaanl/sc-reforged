@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use clap::Parser;
@@ -161,8 +163,9 @@ impl ApplicationHandler<MainThreadEvent> for App {
 
                 // println!("campaign_defs: {:#?}", _campaign_defs);
 
-                let scene =
-                    Box::new(MainMenuScene::new(file_system, &context, &surface_desc).unwrap());
+                let scene = Box::new(
+                    MainMenuScene::new(file_system, context.clone(), &surface_desc).unwrap(),
+                );
 
                 tracing::info!("Application initialized!");
 
