@@ -145,37 +145,39 @@ impl MainMenuScene {
 
         let button_offset =
             glam::IVec2::new(get_ivar!("button_offset_x"), get_ivar!("button_offset_y"));
+        let shadow_offset =
+            glam::IVec2::new(get_ivar!("shadow_offset_x"), get_ivar!("shadow_offset_y"));
 
-        let _shadow_offset_x = get_ivar!("shadow_offset_x");
-        let _shadow_offset_y = get_ivar!("shadow_offset_y");
+        const BULLET_SPRITE: &str = "interface_elements_16";
+        const BULLET_FRAME: usize = 3;
 
         struct ButtonData<'a> {
             name: &'a str,
-            top_sprite: &'a str,
-            top_frame: u32,
-            unfocus_sprite: &'a str,
-            unfocus_frame: u32,
+            text_sprite: &'a str,
+            text_frame: usize,
+            shadow_sprite: &'a str,
+            shadow_frame: usize,
             pressed_sprite: &'a str,
-            pressed_frame: u32,
+            pressed_frame: usize,
         }
 
         impl<'a> ButtonData<'a> {
             #[allow(clippy::too_many_arguments)]
             const fn new(
                 name: &'a str,
-                top_sprite: &'a str,
-                top_frame: u32,
-                unfocus_sprite: &'a str,
-                unfocus_frame: u32,
+                text_sprite: &'a str,
+                text_frame: usize,
+                shadow_sprite: &'a str,
+                shadow_frame: usize,
                 pressed_sprite: &'a str,
-                pressed_frame: u32,
+                pressed_frame: usize,
             ) -> Self {
                 Self {
                     name,
-                    top_sprite,
-                    top_frame,
-                    unfocus_sprite,
-                    unfocus_frame,
+                    text_sprite,
+                    text_frame,
+                    shadow_sprite,
+                    shadow_frame,
                     pressed_sprite,
                     pressed_frame,
                 }
@@ -248,31 +250,48 @@ impl MainMenuScene {
             ),
         ];
 
-        for button in BUTTONS {
-            let Some(sprite) = sprites.get_handle_by_name(button.top_sprite) else {
-                continue;
+        let spawn_sprite =
+            |world: &mut World, position: glam::IVec2, sprite_name: &str, frame: usize| {
+                let Some(sprite) = sprites.get_handle_by_name(sprite_name) else {
+                    return;
+                };
+
+                let Some(frame_data) = sprites
+                    .get(sprite)
+                    .and_then(|sprite_data| sprite_data.frame(frame))
+                else {
+                    return;
+                };
+
+                world.spawn((
+                    ecs::Widget {
+                        position: position.as_uvec2(),
+                        size: frame_data.bottom_right - frame_data.top_left,
+                    },
+                    ecs::WidgetRenderer { sprite, frame },
+                ));
             };
 
-            let Some(frame_data) = sprites
-                .get(sprite)
-                .and_then(|sprite_data| sprite_data.frame(button.top_frame as usize))
-            else {
-                continue;
-            };
-            let size = frame_data.bottom_right - frame_data.top_left;
-            let position = window_base
+        for button in BUTTONS {
+            let base_position = window_base
                 .button_advices
                 .get(button.name)
-                .map(|button| (glam::IVec2::new(button.x, button.y) + button_offset).as_uvec2())
-                .unwrap_or(glam::UVec2::ZERO);
+                .map(|button| glam::IVec2::new(button.x, button.y))
+                .unwrap_or(glam::IVec2::ZERO);
 
-            world.spawn((
-                ecs::Widget { position, size },
-                ecs::WidgetRenderer {
-                    sprite,
-                    frame: button.top_frame as usize,
-                },
-            ));
+            spawn_sprite(
+                world,
+                base_position + shadow_offset,
+                button.shadow_sprite,
+                button.shadow_frame,
+            );
+            spawn_sprite(world, base_position, BULLET_SPRITE, BULLET_FRAME);
+            spawn_sprite(
+                world,
+                base_position + button_offset,
+                button.text_sprite,
+                button.text_frame,
+            );
         }
     }
 }
