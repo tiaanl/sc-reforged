@@ -63,109 +63,95 @@ impl Sprites {
     }
 
     #[inline]
+    /// Returns a sprite by handle.
     pub fn get(&self, handle: Handle<Sprite3d>) -> Option<&Sprite3d> {
         self.sprites.get(handle)
     }
 
+    /// Returns a sprite handle by its configured name.
+    pub fn get_handle_by_name(&self, name: &str) -> Option<Handle<Sprite3d>> {
+        self.sprites.get_handle_by_key(&String::from(name))
+    }
+
+    /// Returns a sprite by its configured name.
     pub fn get_by_name(&self, name: &str) -> Option<&Sprite3d> {
         self.sprites.get_by_key(&String::from(name))
     }
 
+    /// Loads sprite definitions from `image_defs.txt`.
     pub fn load_image_defs(&mut self, image_defs: &ImageDefs) {
-        /*
         for s in image_defs.sprite_3d.iter() {
-            let image_path = PathBuf::from("textures")
-                .join("object")
-                .join(&s.texture_name);
-
-            let image_handle = match self.images.load(&image_path) {
-                Ok(image_handle) => image_handle,
-                Err(err) => {
-                    tracing::warn!("Could not load image: {} ({})", image_path.display(), err);
-                    continue;
-                }
-            };
-
-            let image = self
-                .images
-                .get(image_handle)
-                .expect("we just loaded it successfully");
-
-            let color_key_range = if !s.color_key_enabled.unwrap_or(false) {
-                None
-            } else {
-                s.color_key.as_ref().map(|color_key| ColorKeyRange {
-                    r: color_key.rl..=color_key.rh,
-                    g: color_key.gl..=color_key.gh,
-                    b: color_key.bl..=color_key.bh,
-                })
-            };
-
-            let sprite = Sprite3d {
-                name: s.name.clone(),
-                image: image_handle,
-                size: image.size,
-                alpha: s.alpha,
-                color_key_range,
-                frames: s
-                    .frames
-                    .iter()
-                    .map(|f| SpriteFrame {
-                        top_left: glam::IVec2::new(f.x1, f.y1).as_uvec2(),
-                        bottom_right: glam::IVec2::new(f.x2, f.y2).as_uvec2(),
-                    })
-                    .collect(),
-            };
-
-            self.sprites.insert(s.name.clone(), sprite);
+            self.insert_sprite(
+                &s.name,
+                &s.texture_name,
+                s.alpha,
+                s.color_key_enabled.unwrap_or(false),
+                s.color_key.as_ref(),
+                &s.frames,
+            );
         }
-        */
 
         for s in image_defs.anim_sprite_3d.iter() {
-            let image_path = PathBuf::from("textures")
-                .join("object")
-                .join(&s.texture_name);
-
-            let image_handle = match self.images.load(&image_path) {
-                Ok(image_handle) => image_handle,
-                Err(err) => {
-                    tracing::warn!("Could not load image: {} ({})", image_path.display(), err);
-                    continue;
-                }
-            };
-
-            let image = self
-                .images
-                .get(image_handle)
-                .expect("we just loaded it successfully");
-
-            let color_key_range = if !s.color_key_enabled.unwrap_or(false) {
-                None
-            } else {
-                s.color_key.as_ref().map(|color_key| ColorKeyRange {
-                    r: color_key.rl..=color_key.rh,
-                    g: color_key.gl..=color_key.gh,
-                    b: color_key.bl..=color_key.bh,
-                })
-            };
-
-            let sprite = Sprite3d {
-                name: s.name.clone(),
-                image: image_handle,
-                size: image.size,
-                alpha: s.alpha,
-                color_key_range,
-                frames: s
-                    .frames
-                    .iter()
-                    .map(|f| SpriteFrame {
-                        top_left: glam::IVec2::new(f.x1, f.y1).as_uvec2(),
-                        bottom_right: glam::IVec2::new(f.x2, f.y2).as_uvec2(),
-                    })
-                    .collect(),
-            };
-
-            self.sprites.insert(s.name.clone(), sprite);
+            self.insert_sprite(
+                &s.name,
+                &s.texture_name,
+                s.alpha,
+                s.color_key_enabled.unwrap_or(false),
+                s.color_key.as_ref(),
+                &s.frames,
+            );
         }
+    }
+
+    fn insert_sprite(
+        &mut self,
+        name: &str,
+        texture_name: &str,
+        alpha: Option<f32>,
+        color_key_enabled: bool,
+        color_key: Option<&crate::game::config::ColorKey>,
+        frames: &[crate::game::config::SpriteFrame],
+    ) {
+        let image_path = PathBuf::from("textures").join("object").join(texture_name);
+
+        let image_handle = match self.images.load(&image_path) {
+            Ok(image_handle) => image_handle,
+            Err(err) => {
+                tracing::warn!("Could not load image: {} ({})", image_path.display(), err);
+                return;
+            }
+        };
+
+        let image = self
+            .images
+            .get(image_handle)
+            .expect("we just loaded it successfully");
+
+        let color_key_range = if !color_key_enabled {
+            None
+        } else {
+            color_key.map(|color_key| ColorKeyRange {
+                r: color_key.rl..=color_key.rh,
+                g: color_key.gl..=color_key.gh,
+                b: color_key.bl..=color_key.bh,
+            })
+        };
+
+        let sprite = Sprite3d {
+            name: name.to_owned(),
+            image: image_handle,
+            size: image.size,
+            alpha,
+            color_key_range,
+            frames: frames
+                .iter()
+                .map(|f| SpriteFrame {
+                    top_left: glam::IVec2::new(f.x1, f.y1).as_uvec2(),
+                    bottom_right: glam::IVec2::new(f.x2, f.y2).as_uvec2(),
+                })
+                .collect(),
+        };
+
+        self.sprites.insert(name.to_owned(), sprite);
     }
 }

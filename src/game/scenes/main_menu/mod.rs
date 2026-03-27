@@ -1,6 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use bevy_ecs::prelude::*;
+use glam::UVec2;
 
 use crate::{
     engine::{
@@ -16,12 +17,13 @@ use crate::{
             windows::{GeometryKind, WindowBase},
         },
         file_system::FileSystem,
-        scenes::main_menu::window_renderer::WindowRenderer,
+        render::textures::Textures,
+        scenes::main_menu::sprite_renderer::{Rect, SpriteRenderer},
     },
 };
 
 mod ecs;
-mod window_renderer;
+mod sprite_renderer;
 
 #[derive(Resource)]
 struct DeltaTime(f32);
@@ -35,14 +37,14 @@ struct AnimationState {
 
 #[derive(Default, Resource)]
 struct RenderSnapshot {
-    primitives: window_renderer::Primitives,
+    primitives: sprite_renderer::Primitives,
 }
 
 pub struct MainMenuScene {
     world: World,
     update_schedule: Schedule,
 
-    renderer: WindowRenderer,
+    renderer: SpriteRenderer,
 }
 
 impl MainMenuScene {
@@ -50,8 +52,8 @@ impl MainMenuScene {
 
     pub fn new(
         file_system: Arc<FileSystem>,
-        render_context: &RenderContext,
-        surface: &SurfaceDesc,
+        render_context: RenderContext,
+        surface_desc: &SurfaceDesc,
     ) -> Result<Self, AssetError> {
         let mut world = World::default();
 
@@ -66,17 +68,23 @@ impl MainMenuScene {
         )?;
 
         let images = Arc::new(Images::new(Arc::clone(&file_system)));
+        let textures = Arc::new(Textures::new(render_context.clone(), Arc::clone(&images)));
 
         let mut sprites = Sprites::new(Arc::clone(&images));
         let image_defs: ImageDefs =
             load_config(&file_system, PathBuf::from("config").join("image_defs.txt"))?;
 
         sprites.load_image_defs(&image_defs);
+        let sprites = Arc::new(sprites);
 
-        let mut window_renderer =
-            WindowRenderer::new(render_context.clone(), surface, Arc::clone(&images));
+        let mut sprite_renderer = SpriteRenderer::new(
+            render_context.clone(),
+            surface_desc,
+            Arc::clone(&sprites),
+            textures,
+        );
 
-        Self::spawn_buttons(&sprites, &mut window_renderer, &mut world, &window_base);
+        Self::spawn_buttons(&sprites, &mut world, &window_base);
 
         let mut frames = [Entity::PLACEHOLDER; 5];
 
@@ -94,7 +102,7 @@ impl MainMenuScene {
 
                     let image_handle = images.load(path)?;
                     // TODO: We should not unwrap here.
-                    let texture = window_renderer.create_texture(image_handle).unwrap();
+                    let texture = sprite_renderer.create_texture(image_handle).unwrap();
 
                     let new_frame = world.spawn(ecs::geometry::GeometryTiled {
                         texture,
@@ -118,16 +126,11 @@ impl MainMenuScene {
         Ok(Self {
             world,
             update_schedule,
-            renderer: window_renderer,
+            renderer: sprite_renderer,
         })
     }
 
-    fn spawn_buttons(
-        sprites: &Sprites,
-        renderer: &mut WindowRenderer,
-        world: &mut World,
-        window_base: &WindowBase,
-    ) {
+    fn spawn_buttons(sprites: &Sprites, world: &mut World, window_base: &WindowBase) {
         macro_rules! get_ivar {
             ($name:literal) => {{ window_base.ivars.get($name).cloned().unwrap_or(0) }};
         }
@@ -151,6 +154,7 @@ impl MainMenuScene {
         }
 
         impl<'a> ButtonData<'a> {
+            #[allow(clippy::too_many_arguments)]
             const fn new(
                 name: &'a str,
                 x: u32,
@@ -257,29 +261,27 @@ impl MainMenuScene {
         ];
 
         for button in BUTTONS {
-            let Some(sprite) = sprites.get_by_name(button.top_sprite) else {
+            let Some(sprite) = sprites.get_handle_by_name(button.top_sprite) else {
                 continue;
             };
 
-            let Some(frame) = sprite.frame(button.top_frame as usize) else {
-                continue;
-            };
-            let size = frame.bottom_right - frame.top_left;
-
-            let Some(texture) = renderer.create_texture_sub(sprite.image, frame.top_left, size)
+            let Some(frame_data) = sprites
+                .get(sprite)
+                .and_then(|sprite_data| sprite_data.frame(button.top_frame as usize))
             else {
                 continue;
             };
-
-            // SAFETY: Unwrap here, because we just created the texture.
-            let size = renderer.get_texture_size(texture).unwrap();
+            let size = frame_data.bottom_right - frame_data.top_left;
 
             world.spawn((
                 ecs::Widget {
                     position: glam::UVec2::new(button.x, button.y),
                     size,
                 },
-                ecs::WidgetRenderer { texture },
+                ecs::WidgetRenderer {
+                    sprite,
+                    frame: button.top_frame as usize,
+                },
             ));
         }
     }
@@ -359,20 +361,24 @@ fn update_render_snapshot(
     snapshot.primitives.clear();
 
     for frame in frames.iter_many(state.frames).rev() {
-        snapshot.primitives.add_rect(
-            glam::Vec2::ZERO,
-            frame.size.as_vec2(),
+        snapshot.primitives.add_texture(
+            Rect {
+                pos: UVec2::ZERO,
+                size: frame.size,
+            },
             frame.texture,
             frame.alpha,
         );
     }
 
     for (widget, widget_renderer) in widgets.iter() {
-        snapshot.primitives.add_rect(
-            widget.position.as_vec2(),
-            widget.size.as_vec2(),
-            widget_renderer.texture,
-            1.0,
+        snapshot.primitives.add_sprite(
+            Rect {
+                pos: widget.position,
+                size: widget.size,
+            },
+            widget_renderer.sprite,
+            widget_renderer.frame,
         )
     }
 }

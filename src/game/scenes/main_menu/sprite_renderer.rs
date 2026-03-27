@@ -11,18 +11,32 @@ use crate::{
         storage::Handle,
     },
     game::{
-        assets::{image::Image, images::Images},
+        assets::{
+            image::Image,
+            sprites::{Sprite3d, Sprites},
+        },
         render::textures::{Texture, Textures},
     },
 };
 
+// TODO: Move this to a more general place for reuse.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct Rect {
+    pub pos: UVec2,
+    pub size: UVec2,
+}
+
 #[derive(Debug)]
 pub enum Primitive {
-    Rect {
-        pos: Vec2,
-        size: Vec2,
+    Texture {
+        rect: Rect,
         texture: Handle<Texture>,
         alpha: f32,
+    },
+    Sprite {
+        rect: Rect,
+        sprite: Handle<Sprite3d>,
+        frame: usize,
     },
 }
 
@@ -32,22 +46,34 @@ pub struct Primitives {
 }
 
 impl Primitives {
+    /// Clears all queued sprite primitives.
     pub fn clear(&mut self) {
         self.primitives.clear();
     }
 
-    pub fn add_rect(&mut self, pos: Vec2, size: Vec2, texture: Handle<Texture>, alpha: f32) {
-        self.primitives.push(Primitive::Rect {
-            pos,
-            size,
+    /// Queues a draw using a full texture.
+    pub fn add_texture(&mut self, rect: Rect, texture: Handle<Texture>, alpha: f32) {
+        self.primitives.push(Primitive::Texture {
+            rect,
             texture,
             alpha,
         });
     }
+
+    /// Queues a sprite draw using a sprite handle and frame index.
+    pub fn add_sprite(&mut self, rect: Rect, sprite: Handle<Sprite3d>, frame: usize) {
+        self.primitives.push(Primitive::Sprite {
+            rect,
+            sprite,
+            frame,
+        });
+    }
 }
 
-pub struct WindowRenderer {
+pub struct SpriteRenderer {
     render_context: RenderContext,
+    sprites: Arc<Sprites>,
+    textures: Arc<Textures>,
 
     render_pipeline: wgpu::RenderPipeline,
 
@@ -67,15 +93,17 @@ pub struct WindowRenderer {
     texture_bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     bind_groups: HashMap<Handle<Texture>, wgpu::BindGroup>,
-
-    textures: Textures,
 }
 
-impl WindowRenderer {
-    pub fn new(render_context: RenderContext, surface: &SurfaceDesc, images: Arc<Images>) -> Self {
+impl SpriteRenderer {
+    /// Creates the sprite renderer and its GPU state for the main menu scene.
+    pub fn new(
+        render_context: RenderContext,
+        surface: &SurfaceDesc,
+        sprites: Arc<Sprites>,
+        textures: Arc<Textures>,
+    ) -> Self {
         let RenderContext { device, .. } = &render_context;
-
-        let textures = Textures::new(render_context.clone(), images);
 
         let viewport = gpu::Viewport {
             size: surface.size.as_vec2().to_array(),
@@ -255,6 +283,8 @@ impl WindowRenderer {
 
         Self {
             render_context,
+            sprites,
+            textures,
 
             render_pipeline,
 
@@ -272,34 +302,14 @@ impl WindowRenderer {
             texture_bind_group_layout,
             sampler,
             bind_groups: HashMap::default(),
-
-            textures,
         }
     }
 
-    /// Returns a texture handle for the full image.
+    /// Returns a texture handle for the full source image.
     pub fn create_texture(&mut self, image: Handle<Image>) -> Option<Handle<Texture>> {
         let texture_handle = self.textures.create_from_image(image)?;
-        if !self.ensure_bind_group(texture_handle) {
-            None
-        } else {
-            Some(texture_handle)
-        }
-    }
-
-    /// Returns a texture handle for a sub-rectangle of the given image.
-    pub fn create_texture_sub(
-        &mut self,
-        image: Handle<Image>,
-        pos: UVec2,
-        size: UVec2,
-    ) -> Option<Handle<Texture>> {
-        let texture_handle = self.textures.create_from_sub_image(image, pos, size)?;
-        if !self.ensure_bind_group(texture_handle) {
-            None
-        } else {
-            Some(texture_handle)
-        }
+        self.ensure_bind_group(texture_handle)
+            .then_some(texture_handle)
     }
 
     fn ensure_bind_group(&mut self, texture_handle: Handle<Texture>) -> bool {
@@ -333,12 +343,7 @@ impl WindowRenderer {
         true
     }
 
-    pub fn get_texture_size(&self, handle: Handle<Texture>) -> Option<UVec2> {
-        self.textures
-            .get(handle)
-            .map(|texture_data| texture_data.size)
-    }
-
+    /// Updates the viewport used to convert pixel coordinates into clip space.
     pub fn resize(&mut self, size: UVec2) {
         self.viewport = gpu::Viewport {
             size: size.as_vec2().to_array(),
@@ -346,6 +351,7 @@ impl WindowRenderer {
         self.viewport_dirty = true;
     }
 
+    /// Uploads queued sprite instances and issues the draw calls for the frame.
     pub fn submit(&mut self, context: &RenderContext, frame: &mut Frame, primitives: &Primitives) {
         if self.viewport_dirty {
             context.queue.write_buffer(
@@ -355,30 +361,83 @@ impl WindowRenderer {
             );
         }
 
-        let instances: Vec<_> = primitives
+        struct ResolvedPrimitive {
+            texture: Handle<Texture>,
+            instance: gpu::RectInstance,
+        }
+
+        let resolved_primitives: Vec<_> = primitives
             .primitives
             .iter()
-            .map(|primitive| match primitive {
-                Primitive::Rect {
-                    pos,
-                    size,
+            .filter_map(|primitive| match primitive {
+                Primitive::Texture {
+                    rect,
                     texture,
                     alpha,
                 } => {
-                    let (uv_min, uv_max) = self
-                        .textures
-                        .get(*texture)
-                        .map(|texture_data| (texture_data.uv_min, texture_data.uv_max))
-                        .unwrap_or((Vec2::ZERO, Vec2::ONE));
-
-                    gpu::RectInstance {
-                        pos: pos.to_array(),
-                        size: size.to_array(),
-                        alpha: *alpha,
-                        uv_min: uv_min.to_array(),
-                        uv_max: uv_max.to_array(),
+                    if !self.ensure_bind_group(*texture) {
+                        return None;
                     }
+
+                    Some(ResolvedPrimitive {
+                        texture: *texture,
+                        instance: gpu::RectInstance {
+                            pos: rect.pos.as_vec2().to_array(),
+                            size: rect.size.as_vec2().to_array(),
+                            alpha: *alpha,
+                            uv_min: Vec2::ZERO.to_array(),
+                            uv_max: Vec2::ONE.to_array(),
+                        },
+                    })
                 }
+                Primitive::Sprite {
+                    rect,
+                    sprite,
+                    frame,
+                } => {
+                    let (image, alpha, top_left, bottom_right) = {
+                        let sprite_data = self.sprites.get(*sprite)?;
+                        let sprite_frame = sprite_data.frame(*frame)?;
+                        (
+                            sprite_data.image,
+                            sprite_data.alpha.unwrap_or(1.0),
+                            sprite_frame.top_left,
+                            sprite_frame.bottom_right,
+                        )
+                    };
+
+                    let texture = self.textures.create_from_image(image)?;
+                    if !self.ensure_bind_group(texture) {
+                        return None;
+                    }
+
+                    let texture_data = self.textures.get(texture)?;
+                    let texture_size = texture_data.size.as_vec2();
+                    let uv_min = top_left.as_vec2() / texture_size;
+                    let uv_max = bottom_right.as_vec2() / texture_size;
+
+                    Some(ResolvedPrimitive {
+                        texture,
+                        instance: gpu::RectInstance {
+                            pos: rect.pos.as_vec2().to_array(),
+                            size: rect.size.as_vec2().to_array(),
+                            alpha,
+                            uv_min: uv_min.to_array(),
+                            uv_max: uv_max.to_array(),
+                        },
+                    })
+                }
+            })
+            .collect();
+
+        let instances: Vec<_> = resolved_primitives
+            .iter()
+            .map(|primitive| gpu::RectInstance {
+                pos: primitive.instance.pos,
+                size: primitive.instance.size,
+                alpha: primitive.instance.alpha,
+                uv_min: primitive.instance.uv_min,
+                uv_max: primitive.instance.uv_max,
             })
             .collect();
 
@@ -406,21 +465,17 @@ impl WindowRenderer {
         render_pass.set_index_buffer(self.indices_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
 
-        for (index, p) in primitives.primitives.iter().enumerate() {
-            match p {
-                Primitive::Rect { texture, .. } => {
-                    let Some(bind_group) = self.bind_groups.get(texture) else {
-                        continue;
-                    };
+        for (index, primitive) in resolved_primitives.iter().enumerate() {
+            let Some(bind_group) = self.bind_groups.get(&primitive.texture) else {
+                continue;
+            };
 
-                    render_pass.set_bind_group(1, bind_group, &[]);
-                    render_pass.draw_indexed(
-                        0..self.indices_buffer.count,
-                        0,
-                        index as u32..index as u32 + 1,
-                    );
-                }
-            }
+            render_pass.set_bind_group(1, bind_group, &[]);
+            render_pass.draw_indexed(
+                0..self.indices_buffer.count,
+                0,
+                index as u32..index as u32 + 1,
+            );
         }
     }
 }

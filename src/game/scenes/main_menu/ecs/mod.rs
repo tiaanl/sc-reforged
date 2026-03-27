@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{engine::storage::Handle, game::render::textures::Texture};
+use crate::{engine::storage::Handle, game::assets::sprites::Sprite3d};
 
 pub mod geometry;
 
@@ -12,5 +12,6 @@ pub struct Widget {
 
 #[derive(Component)]
 pub struct WidgetRenderer {
-    pub texture: Handle<Texture>,
+    pub sprite: Handle<Sprite3d>,
+    pub frame: usize,
 }
