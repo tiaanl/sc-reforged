@@ -60,6 +60,7 @@ impl MainMenuScene {
 
         world.insert_resource(DeltaTime(0.0));
         world.insert_resource(RenderSnapshot::default());
+        world.init_resource::<Messages<ecs::WindowMessage>>();
 
         let window_base: WindowBase = load_config(
             file_system.as_ref(),
@@ -129,7 +130,15 @@ impl MainMenuScene {
         });
 
         let mut update_schedule = Schedule::default();
-        update_schedule.add_systems((rotate_background_alphas, update_render_snapshot).chain());
+        update_schedule.add_systems(
+            (
+                update_button_hover_state,
+                animate_button_shadow,
+                rotate_background_alphas,
+                update_render_snapshot,
+            )
+                .chain(),
+        );
 
         Ok(Self {
             world,
@@ -150,127 +159,32 @@ impl MainMenuScene {
 
         const BULLET_SPRITE: &str = "interface_elements_16";
         const BULLET_FRAME: usize = 3;
+        const BASE_TEXT_ALPHA: f32 = 200.0 / 255.0;
 
-        struct ButtonData<'a> {
-            name: &'a str,
-            text_sprite: &'a str,
-            text_frame: usize,
-            shadow_sprite: &'a str,
-            shadow_frame: usize,
-            pressed_sprite: &'a str,
-            pressed_frame: usize,
-        }
+        let spawn_sprite = |world: &mut World,
+                            position: glam::IVec2,
+                            sprite_name: &str,
+                            frame: usize,
+                            alpha: f32| {
+            let sprite = sprites.get_handle_by_name(sprite_name)?;
 
-        impl<'a> ButtonData<'a> {
-            #[allow(clippy::too_many_arguments)]
-            const fn new(
-                name: &'a str,
-                text_sprite: &'a str,
-                text_frame: usize,
-                shadow_sprite: &'a str,
-                shadow_frame: usize,
-                pressed_sprite: &'a str,
-                pressed_frame: usize,
-            ) -> Self {
-                Self {
-                    name,
-                    text_sprite,
-                    text_frame,
-                    shadow_sprite,
-                    shadow_frame,
-                    pressed_sprite,
-                    pressed_frame,
-                }
-            }
-        }
+            let frame_data = sprites
+                .get(sprite)
+                .and_then(|sprite_data| sprite_data.frame(frame))?;
 
-        const BUTTONS: &[ButtonData<'static>] = &[
-            ButtonData::new(
-                "b_new_game",
-                "interface_elements_14",
-                0,
-                "interface_elements_14",
-                1,
-                "interface_elements_14",
-                2,
-            ),
-            ButtonData::new(
-                "b_load_game",
-                "interface_elements_13",
-                0,
-                "interface_elements_13",
-                1,
-                "interface_elements_13",
-                2,
-            ),
-            ButtonData::new(
-                "b_training",
-                "interface_elements_17",
-                0,
-                "interface_elements_17",
-                1,
-                "interface_elements_17",
-                2,
-            ),
-            ButtonData::new(
-                "b_options",
-                "interface_elements_15",
-                0,
-                "interface_elements_15",
-                1,
-                "interface_elements_15",
-                2,
-            ),
-            ButtonData::new(
-                "b_intro",
-                "interface_elements_13",
-                3,
-                "interface_elements_13",
-                4,
-                "interface_elements_13",
-                5,
-            ),
-            ButtonData::new(
-                "b_multiplayer",
-                "interface_elements_14",
-                3,
-                "interface_elements_14",
-                4,
-                "interface_elements_14",
-                5,
-            ),
-            ButtonData::new(
-                "b_exit",
-                "interface_elements_15",
-                3,
-                "interface_elements_15",
-                4,
-                "interface_elements_15",
-                5,
-            ),
-        ];
-
-        let spawn_sprite =
-            |world: &mut World, position: glam::IVec2, sprite_name: &str, frame: usize| {
-                let Some(sprite) = sprites.get_handle_by_name(sprite_name) else {
-                    return;
-                };
-
-                let Some(frame_data) = sprites
-                    .get(sprite)
-                    .and_then(|sprite_data| sprite_data.frame(frame))
-                else {
-                    return;
-                };
-
-                world.spawn((
+            let entity = world
+                .spawn((
                     ecs::Widget {
-                        position: position.as_uvec2(),
+                        position: position.as_vec2(),
                         size: frame_data.bottom_right - frame_data.top_left,
+                        alpha,
                     },
                     ecs::WidgetRenderer { sprite, frame },
-                ));
-            };
+                ))
+                .id();
+
+            Some((entity, frame_data.bottom_right - frame_data.top_left))
+        };
 
         for button in BUTTONS {
             let base_position = window_base
@@ -279,19 +193,40 @@ impl MainMenuScene {
                 .map(|button| glam::IVec2::new(button.x, button.y))
                 .unwrap_or(glam::IVec2::ZERO);
 
-            spawn_sprite(
+            let Some((shadow_entity, _)) = spawn_sprite(
                 world,
                 base_position + shadow_offset,
                 button.shadow_sprite,
                 button.shadow_frame,
-            );
-            spawn_sprite(world, base_position, BULLET_SPRITE, BULLET_FRAME);
-            spawn_sprite(
+                BASE_TEXT_ALPHA,
+            ) else {
+                continue;
+            };
+            let Some((_, bullet_size)) =
+                spawn_sprite(world, base_position, BULLET_SPRITE, BULLET_FRAME, 1.0)
+            else {
+                continue;
+            };
+            let Some((text_entity, text_size)) = spawn_sprite(
                 world,
                 base_position + button_offset,
                 button.text_sprite,
                 button.text_frame,
-            );
+                BASE_TEXT_ALPHA,
+            ) else {
+                continue;
+            };
+
+            world.spawn(ecs::MainMenuButton {
+                base_position,
+                size: glam::UVec2::new(bullet_size.x + text_size.x, text_size.y),
+                button_offset,
+                shadow_offset,
+                shadow_entity,
+                text_entity,
+                hover_progress_ms: 0.0,
+                hovered: false,
+            });
         }
     }
 }
@@ -301,12 +236,14 @@ impl Scene for MainMenuScene {
         self.window_renderer.resize(size);
     }
 
-    fn update(&mut self, delta_time: f32, _input: &InputState) {
+    fn update(&mut self, delta_time: f32, input: &InputState) {
         self.world.resource_mut::<DeltaTime>().0 = delta_time;
 
-        if let Some(mouse_position) = _input.mouse_position() {
+        if let Some(mouse_position) = input.mouse_position() {
             self.world
                 .write_message(ecs::WindowMessage::MouseMove(mouse_position));
+        } else {
+            self.world.write_message(ecs::WindowMessage::MouseLeave);
         }
 
         self.update_schedule.run(&mut self.world);
@@ -368,6 +305,81 @@ fn rotate_background_alphas(
     }
 }
 
+fn update_button_hover_state(
+    mut messages: MessageReader<ecs::WindowMessage>,
+    mut buttons: Query<&mut ecs::MainMenuButton>,
+) {
+    let mut mouse_position = None;
+    let mut has_input_update = false;
+
+    for message in messages.read() {
+        has_input_update = true;
+
+        match message {
+            ecs::WindowMessage::MouseMove(position) => mouse_position = Some(*position),
+            ecs::WindowMessage::MouseLeave => mouse_position = None,
+        }
+    }
+
+    if !has_input_update {
+        return;
+    }
+
+    for mut button in buttons.iter_mut() {
+        button.hovered = mouse_position.is_some_and(|mouse_position| {
+            let mouse_position = mouse_position.as_vec2();
+            let min = button.base_position.as_vec2();
+            let max = min + button.size.as_vec2();
+
+            mouse_position.x >= min.x
+                && mouse_position.y >= min.y
+                && mouse_position.x < max.x
+                && mouse_position.y < max.y
+        });
+    }
+}
+
+fn animate_button_shadow(
+    time: Res<DeltaTime>,
+    mut buttons: Query<&mut ecs::MainMenuButton>,
+    mut widgets: Query<&mut ecs::Widget>,
+) {
+    const HOVER_PROGRESS_MAX_MS: f32 = 250.0;
+    const HOVER_EXIT_RATE: f32 = 1.0 / 3.0;
+    const SHADOW_SLIDE_SCALE: f32 = 0.004;
+    const BASE_ALPHA: f32 = 200.0;
+    const TEXT_ALPHA_SCALE: f32 = 0.22;
+    const SHADOW_ALPHA_SCALE: f32 = 0.8;
+
+    let delta_ms = time.0.max(0.0) * 1000.0;
+
+    for mut button in buttons.iter_mut() {
+        if button.hovered {
+            button.hover_progress_ms =
+                (button.hover_progress_ms + delta_ms).min(HOVER_PROGRESS_MAX_MS);
+        } else {
+            button.hover_progress_ms =
+                (button.hover_progress_ms - delta_ms * HOVER_EXIT_RATE).max(0.0);
+        }
+
+        let slide_delta = (HOVER_PROGRESS_MAX_MS - button.hover_progress_ms) * SHADOW_SLIDE_SCALE;
+        let text_position = button.base_position.as_vec2() + button.button_offset.as_vec2();
+        let shadow_delta = (button.shadow_offset - button.button_offset).as_vec2() * slide_delta;
+        let text_alpha = (BASE_ALPHA + button.hover_progress_ms * TEXT_ALPHA_SCALE).round() / 255.0;
+        let shadow_alpha =
+            (BASE_ALPHA - button.hover_progress_ms * SHADOW_ALPHA_SCALE).round() / 255.0;
+
+        if let Ok(mut shadow_widget) = widgets.get_mut(button.shadow_entity) {
+            shadow_widget.position = text_position + shadow_delta;
+            shadow_widget.alpha = shadow_alpha;
+        }
+
+        if let Ok(mut text_widget) = widgets.get_mut(button.text_entity) {
+            text_widget.alpha = text_alpha;
+        }
+    }
+}
+
 fn update_render_snapshot(
     state: Res<AnimationState>,
     widgets: Query<(&ecs::Widget, &ecs::WidgetRenderer)>,
@@ -389,6 +401,106 @@ fn update_render_snapshot(
             widget.position,
             widget_renderer.sprite,
             widget_renderer.frame,
+            widget.alpha,
         )
     }
 }
+
+struct ButtonData<'a> {
+    name: &'a str,
+    text_sprite: &'a str,
+    text_frame: usize,
+    shadow_sprite: &'a str,
+    shadow_frame: usize,
+    pressed_sprite: &'a str,
+    pressed_frame: usize,
+}
+
+impl<'a> ButtonData<'a> {
+    #[allow(clippy::too_many_arguments)]
+    const fn new(
+        name: &'a str,
+        text_sprite: &'a str,
+        text_frame: usize,
+        shadow_sprite: &'a str,
+        shadow_frame: usize,
+        pressed_sprite: &'a str,
+        pressed_frame: usize,
+    ) -> Self {
+        Self {
+            name,
+            text_sprite,
+            text_frame,
+            shadow_sprite,
+            shadow_frame,
+            pressed_sprite,
+            pressed_frame,
+        }
+    }
+}
+
+const BUTTONS: &[ButtonData<'static>] = &[
+    ButtonData::new(
+        "b_new_game",
+        "interface_elements_14",
+        0,
+        "interface_elements_14",
+        1,
+        "interface_elements_14",
+        2,
+    ),
+    ButtonData::new(
+        "b_load_game",
+        "interface_elements_13",
+        0,
+        "interface_elements_13",
+        1,
+        "interface_elements_13",
+        2,
+    ),
+    ButtonData::new(
+        "b_training",
+        "interface_elements_17",
+        0,
+        "interface_elements_17",
+        1,
+        "interface_elements_17",
+        2,
+    ),
+    ButtonData::new(
+        "b_options",
+        "interface_elements_15",
+        0,
+        "interface_elements_15",
+        1,
+        "interface_elements_15",
+        2,
+    ),
+    ButtonData::new(
+        "b_intro",
+        "interface_elements_13",
+        3,
+        "interface_elements_13",
+        4,
+        "interface_elements_13",
+        5,
+    ),
+    ButtonData::new(
+        "b_multiplayer",
+        "interface_elements_14",
+        3,
+        "interface_elements_14",
+        4,
+        "interface_elements_14",
+        5,
+    ),
+    ButtonData::new(
+        "b_exit",
+        "interface_elements_15",
+        3,
+        "interface_elements_15",
+        4,
+        "interface_elements_15",
+        5,
+    ),
+];

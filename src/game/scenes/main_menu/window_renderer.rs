@@ -38,8 +38,13 @@ impl RenderItems {
     }
 
     /// Queues a sprite item.
-    pub fn render_sprite(&mut self, pos: UVec2, sprite: Handle<Sprite3d>, frame: usize) {
-        self.0.push(RenderItem::Sprite { pos, sprite, frame });
+    pub fn render_sprite(&mut self, pos: Vec2, sprite: Handle<Sprite3d>, frame: usize, alpha: f32) {
+        self.0.push(RenderItem::Sprite {
+            pos,
+            sprite,
+            frame,
+            alpha,
+        });
     }
 }
 
@@ -103,7 +108,7 @@ impl WindowRenderer {
                     };
 
                     quads.push(Quad {
-                        pos: UVec2::ZERO,
+                        pos: Vec2::ZERO,
                         size: geometry.render_size,
                         texture: geometry.texture,
                         alpha: *alpha,
@@ -111,7 +116,12 @@ impl WindowRenderer {
                         uv_max: Vec2::ONE,
                     });
                 }
-                RenderItem::Sprite { pos, sprite, frame } => {
+                RenderItem::Sprite {
+                    pos,
+                    sprite,
+                    frame,
+                    alpha,
+                } => {
                     let Some(sprite_data) = self.sprites.get(*sprite) else {
                         continue;
                     };
@@ -134,7 +144,7 @@ impl WindowRenderer {
                         pos: *pos,
                         size,
                         texture,
-                        alpha: sprite_data.alpha.unwrap_or(1.0),
+                        alpha: sprite_data.alpha.unwrap_or(1.0) * *alpha,
                         uv_min,
                         uv_max,
                     });
@@ -153,9 +163,10 @@ enum RenderItem {
         alpha: f32,
     },
     Sprite {
-        pos: UVec2,
+        pos: Vec2,
         sprite: Handle<Sprite3d>,
         frame: usize,
+        alpha: f32,
     },
 }
 

@@ -16,7 +16,7 @@ use crate::{
 /// A fully resolved textured quad ready for rendering.
 #[derive(Clone, Copy, Debug)]
 pub struct Quad {
-    pub pos: UVec2,
+    pub pos: Vec2,
     pub size: UVec2,
     pub texture: Handle<Texture>,
     pub alpha: f32,
@@ -267,7 +267,7 @@ impl QuadRenderer {
                 self.ensure_bind_group(quad.texture).then_some((
                     quad.texture,
                     gpu::RectInstance {
-                        pos: quad.pos.as_vec2().to_array(),
+                        pos: quad.pos.to_array(),
                         size: quad.size.as_vec2().to_array(),
                         alpha: quad.alpha,
                         uv_min: quad.uv_min.to_array(),
