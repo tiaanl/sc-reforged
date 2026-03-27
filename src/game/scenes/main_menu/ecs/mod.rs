@@ -15,3 +15,8 @@ pub struct WidgetRenderer {
     pub sprite: Handle<Sprite3d>,
     pub frame: usize,
 }
+
+#[derive(Message)]
+pub enum WindowMessage {
+    MouseMove(glam::UVec2),
+}

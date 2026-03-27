@@ -303,6 +303,12 @@ impl Scene for MainMenuScene {
 
     fn update(&mut self, delta_time: f32, _input: &InputState) {
         self.world.resource_mut::<DeltaTime>().0 = delta_time;
+
+        if let Some(mouse_position) = _input.mouse_position() {
+            self.world
+                .write_message(ecs::WindowMessage::MouseMove(mouse_position));
+        }
+
         self.update_schedule.run(&mut self.world);
     }
 
