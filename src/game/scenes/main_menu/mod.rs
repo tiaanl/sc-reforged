@@ -143,16 +143,14 @@ impl MainMenuScene {
             ($name:literal) => {{ window_base.ivars.get($name).cloned().unwrap_or(0) }};
         }
 
-        let _button_offset_x = get_ivar!("button_offset_x");
-        let _button_offset_y = get_ivar!("button_offset_y");
+        let button_offset =
+            glam::IVec2::new(get_ivar!("button_offset_x"), get_ivar!("button_offset_y"));
 
         let _shadow_offset_x = get_ivar!("shadow_offset_x");
         let _shadow_offset_y = get_ivar!("shadow_offset_y");
 
         struct ButtonData<'a> {
             name: &'a str,
-            x: u32,
-            y: u32,
             top_sprite: &'a str,
             top_frame: u32,
             unfocus_sprite: &'a str,
@@ -165,8 +163,6 @@ impl MainMenuScene {
             #[allow(clippy::too_many_arguments)]
             const fn new(
                 name: &'a str,
-                x: u32,
-                y: u32,
                 top_sprite: &'a str,
                 top_frame: u32,
                 unfocus_sprite: &'a str,
@@ -176,8 +172,6 @@ impl MainMenuScene {
             ) -> Self {
                 Self {
                     name,
-                    x,
-                    y,
                     top_sprite,
                     top_frame,
                     unfocus_sprite,
@@ -191,8 +185,6 @@ impl MainMenuScene {
         const BUTTONS: &[ButtonData<'static>] = &[
             ButtonData::new(
                 "b_new_game",
-                325,
-                80,
                 "interface_elements_14",
                 0,
                 "interface_elements_14",
@@ -202,8 +194,6 @@ impl MainMenuScene {
             ),
             ButtonData::new(
                 "b_load_game",
-                320,
-                120,
                 "interface_elements_13",
                 0,
                 "interface_elements_13",
@@ -213,8 +203,6 @@ impl MainMenuScene {
             ),
             ButtonData::new(
                 "b_training",
-                315,
-                160,
                 "interface_elements_17",
                 0,
                 "interface_elements_17",
@@ -224,8 +212,6 @@ impl MainMenuScene {
             ),
             ButtonData::new(
                 "b_options",
-                310,
-                200,
                 "interface_elements_15",
                 0,
                 "interface_elements_15",
@@ -235,8 +221,6 @@ impl MainMenuScene {
             ),
             ButtonData::new(
                 "b_intro",
-                305,
-                240,
                 "interface_elements_13",
                 3,
                 "interface_elements_13",
@@ -246,8 +230,6 @@ impl MainMenuScene {
             ),
             ButtonData::new(
                 "b_multiplayer",
-                300,
-                280,
                 "interface_elements_14",
                 3,
                 "interface_elements_14",
@@ -257,8 +239,6 @@ impl MainMenuScene {
             ),
             ButtonData::new(
                 "b_exit",
-                295,
-                320,
                 "interface_elements_15",
                 3,
                 "interface_elements_15",
@@ -280,12 +260,14 @@ impl MainMenuScene {
                 continue;
             };
             let size = frame_data.bottom_right - frame_data.top_left;
+            let position = window_base
+                .button_advices
+                .get(button.name)
+                .map(|button| (glam::IVec2::new(button.x, button.y) + button_offset).as_uvec2())
+                .unwrap_or(glam::UVec2::ZERO);
 
             world.spawn((
-                ecs::Widget {
-                    position: glam::UVec2::new(button.x, button.y),
-                    size,
-                },
+                ecs::Widget { position, size },
                 ecs::WidgetRenderer {
                     sprite,
                     frame: button.top_frame as usize,

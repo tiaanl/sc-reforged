@@ -4,15 +4,15 @@ use crate::game::config::parser::{ConfigLine, ConfigLines};
 
 #[derive(Debug, Default)]
 pub struct ButtonAdvice {
-    id: String,
-    x: i32,
-    y: i32,
-    dx: i32,
-    dy: i32,
-    as_3d_index: Option<i32>,
-    unpressed: Option<i32>,
-    pressed: Option<i32>,
-    middle: Option<i32>,
+    pub id: String,
+    pub x: i32,
+    pub y: i32,
+    pub dx: i32,
+    pub dy: i32,
+    pub as_3d_index: Option<i32>,
+    pub unpressed: Option<i32>,
+    pub pressed: Option<i32>,
+    pub middle: Option<i32>,
 }
 
 impl From<ConfigLine> for ButtonAdvice {
