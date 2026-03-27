@@ -8,7 +8,10 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
-        assets::image::Image,
+        assets::{
+            image::Image,
+            sprites::{Sprite3d, Sprites},
+        },
         render::textures::{Texture, Textures},
         scenes::main_menu::quad_renderer::{Quad, QuadRenderer},
     },
@@ -35,15 +38,16 @@ impl RenderItems {
     }
 
     /// Queues a sprite item.
-    pub fn render_sprite(&mut self) {
-        self.0.push(RenderItem::Sprite);
+    pub fn render_sprite(&mut self, pos: UVec2, sprite: Handle<Sprite3d>, frame: usize) {
+        self.0.push(RenderItem::Sprite { pos, sprite, frame });
     }
 }
 
 /// Renders all the components required for windows.
 pub struct WindowRenderer {
-    textures: Arc<Textures>,
     quad_renderer: QuadRenderer,
+    textures: Arc<Textures>,
+    sprites: Arc<Sprites>,
     tiled_geometries: Storage<TiledGeometry>,
 }
 
@@ -53,8 +57,10 @@ impl WindowRenderer {
         render_context: RenderContext,
         surface_desc: &SurfaceDesc,
         textures: Arc<Textures>,
+        sprites: Arc<Sprites>,
     ) -> Self {
         Self {
+            sprites,
             textures: Arc::clone(&textures),
             quad_renderer: QuadRenderer::new(render_context, surface_desc, textures),
             tiled_geometries: Storage::default(),
@@ -105,7 +111,34 @@ impl WindowRenderer {
                         uv_max: Vec2::ONE,
                     });
                 }
-                RenderItem::Sprite => {}
+                RenderItem::Sprite { pos, sprite, frame } => {
+                    let Some(sprite_data) = self.sprites.get(*sprite) else {
+                        continue;
+                    };
+                    let Some(sprite_frame) = sprite_data.frame(*frame) else {
+                        continue;
+                    };
+                    let Some(texture) = self.textures.create_from_image(sprite_data.image) else {
+                        continue;
+                    };
+                    let Some(texture_data) = self.textures.get(texture) else {
+                        continue;
+                    };
+
+                    let texture_size = texture_data.size.as_vec2();
+                    let uv_min = sprite_frame.top_left.as_vec2() / texture_size;
+                    let uv_max = sprite_frame.bottom_right.as_vec2() / texture_size;
+                    let size = sprite_frame.bottom_right - sprite_frame.top_left;
+
+                    quads.push(Quad {
+                        pos: *pos,
+                        size,
+                        texture,
+                        alpha: sprite_data.alpha.unwrap_or(1.0),
+                        uv_min,
+                        uv_max,
+                    });
+                }
             }
         }
 
@@ -119,7 +152,11 @@ enum RenderItem {
         handle: Handle<TiledGeometry>,
         alpha: f32,
     },
-    Sprite,
+    Sprite {
+        pos: UVec2,
+        sprite: Handle<Sprite3d>,
+        frame: usize,
+    },
 }
 
 pub struct TiledGeometry {

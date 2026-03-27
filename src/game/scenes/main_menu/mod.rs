@@ -17,10 +17,7 @@ use crate::{
         },
         file_system::FileSystem,
         render::textures::Textures,
-        scenes::main_menu::{
-            sprite_renderer::{Rect, SpriteRenderer},
-            window_renderer::{RenderItems, WindowRenderer},
-        },
+        scenes::main_menu::window_renderer::{RenderItems, WindowRenderer},
     },
 };
 
@@ -41,16 +38,12 @@ struct AnimationState {
 
 #[derive(Default, Resource)]
 struct RenderSnapshot {
-    primitives: sprite_renderer::Primitives,
-
     render_items: RenderItems,
 }
 
 pub struct MainMenuScene {
     world: World,
     update_schedule: Schedule,
-
-    renderer: SpriteRenderer,
 
     window_renderer: WindowRenderer,
 }
@@ -85,15 +78,12 @@ impl MainMenuScene {
         sprites.load_image_defs(&image_defs);
         let sprites = Arc::new(sprites);
 
-        let sprite_renderer = SpriteRenderer::new(
+        let mut window_renderer = WindowRenderer::new(
             render_context.clone(),
             surface_desc,
-            Arc::clone(&sprites),
             Arc::clone(&textures),
+            Arc::clone(&sprites),
         );
-
-        let mut window_renderer =
-            WindowRenderer::new(render_context.clone(), surface_desc, Arc::clone(&textures));
 
         Self::spawn_buttons(&sprites, &mut world, &window_base);
 
@@ -144,7 +134,6 @@ impl MainMenuScene {
         Ok(Self {
             world,
             update_schedule,
-            renderer: sprite_renderer,
             window_renderer,
         })
     }
@@ -308,7 +297,6 @@ impl MainMenuScene {
 
 impl Scene for MainMenuScene {
     fn resize(&mut self, size: glam::UVec2) {
-        self.renderer.resize(size);
         self.window_renderer.resize(size);
     }
 
@@ -317,11 +305,10 @@ impl Scene for MainMenuScene {
         self.update_schedule.run(&mut self.world);
     }
 
-    fn render(&mut self, context: &RenderContext, frame: &mut Frame) {
+    fn render(&mut self, _context: &RenderContext, frame: &mut Frame) {
         let snapshot = self.world.resource::<RenderSnapshot>();
         self.window_renderer
             .submit_render_items(frame, &snapshot.render_items);
-        self.renderer.submit(context, frame, &snapshot.primitives);
     }
 }
 
@@ -380,21 +367,19 @@ fn update_render_snapshot(
     frames: Query<&ecs::geometry::GeometryTiled>,
     mut snapshot: ResMut<RenderSnapshot>,
 ) {
-    snapshot.primitives.clear();
     snapshot.render_items.clear();
 
+    // Render the background geometries.
     for frame in frames.iter_many(state.frames).rev() {
         snapshot
             .render_items
             .render_tiled_geometry(frame.tiled_geometry_handle, frame.alpha);
     }
 
+    // Render the widgets.
     for (widget, widget_renderer) in widgets.iter() {
-        snapshot.primitives.add_sprite(
-            Rect {
-                pos: widget.position,
-                size: widget.size,
-            },
+        snapshot.render_items.render_sprite(
+            widget.position,
             widget_renderer.sprite,
             widget_renderer.frame,
         )
