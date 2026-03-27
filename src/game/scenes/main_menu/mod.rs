@@ -161,29 +161,33 @@ impl MainMenuScene {
         const BULLET_FRAME: usize = 3;
         const BASE_TEXT_ALPHA: f32 = 200.0 / 255.0;
 
+        let sprite_frame_size = |sprite_name: &str, frame: usize| {
+            let sprite = sprites.get_handle_by_name(sprite_name)?;
+            let frame_data = sprites
+                .get(sprite)
+                .and_then(|sprite_data| sprite_data.frame(frame))?;
+
+            Some(frame_data.bottom_right - frame_data.top_left)
+        };
+
         let spawn_sprite = |world: &mut World,
                             position: glam::IVec2,
                             sprite_name: &str,
                             frame: usize,
                             alpha: f32| {
             let sprite = sprites.get_handle_by_name(sprite_name)?;
-
-            let frame_data = sprites
-                .get(sprite)
-                .and_then(|sprite_data| sprite_data.frame(frame))?;
+            let frame_size = sprite_frame_size(sprite_name, frame)?;
 
             let entity = world
-                .spawn((
-                    ecs::Widget {
-                        position: position.as_vec2(),
-                        size: frame_data.bottom_right - frame_data.top_left,
-                        alpha,
-                    },
-                    ecs::WidgetRenderer { sprite, frame },
-                ))
+                .spawn((ecs::SpriteRender {
+                    position: position.as_vec2(),
+                    alpha,
+                    sprite,
+                    frame,
+                },))
                 .id();
 
-            Some((entity, frame_data.bottom_right - frame_data.top_left))
+            Some((entity, frame_size))
         };
 
         for button in BUTTONS {
@@ -202,9 +206,7 @@ impl MainMenuScene {
             ) else {
                 continue;
             };
-            let Some((_, bullet_size)) =
-                spawn_sprite(world, base_position, BULLET_SPRITE, BULLET_FRAME, 1.0)
-            else {
+            let Some(bullet_size) = sprite_frame_size(BULLET_SPRITE, BULLET_FRAME) else {
                 continue;
             };
             let Some((text_entity, text_size)) = spawn_sprite(
@@ -217,16 +219,20 @@ impl MainMenuScene {
                 continue;
             };
 
-            world.spawn(ecs::MainMenuButton {
-                base_position,
-                size: glam::UVec2::new(bullet_size.x + text_size.x, text_size.y),
-                button_offset,
-                shadow_offset,
-                shadow_entity,
-                text_entity,
-                hover_progress_ms: 0.0,
-                hovered: false,
-            });
+            world.spawn((
+                ecs::Widget {
+                    position: base_position.as_vec2(),
+                    size: glam::UVec2::new(bullet_size.x + text_size.x, text_size.y),
+                },
+                ecs::MainMenuButtonAnimation {
+                    button_offset,
+                    shadow_offset,
+                    shadow_entity,
+                    text_entity,
+                    hover_progress_ms: 0.0,
+                    hovered: false,
+                },
+            ));
         }
     }
 }
@@ -307,7 +313,7 @@ fn rotate_background_alphas(
 
 fn update_button_hover_state(
     mut messages: MessageReader<ecs::WindowMessage>,
-    mut buttons: Query<&mut ecs::MainMenuButton>,
+    mut buttons: Query<(&ecs::Widget, &mut ecs::MainMenuButtonAnimation)>,
 ) {
     let mut mouse_position = None;
     let mut has_input_update = false;
@@ -325,11 +331,11 @@ fn update_button_hover_state(
         return;
     }
 
-    for mut button in buttons.iter_mut() {
-        button.hovered = mouse_position.is_some_and(|mouse_position| {
+    for (widget, mut animation) in buttons.iter_mut() {
+        animation.hovered = mouse_position.is_some_and(|mouse_position| {
             let mouse_position = mouse_position.as_vec2();
-            let min = button.base_position.as_vec2();
-            let max = min + button.size.as_vec2();
+            let min = widget.position;
+            let max = min + widget.size.as_vec2();
 
             mouse_position.x >= min.x
                 && mouse_position.y >= min.y
@@ -341,8 +347,8 @@ fn update_button_hover_state(
 
 fn animate_button_shadow(
     time: Res<DeltaTime>,
-    mut buttons: Query<&mut ecs::MainMenuButton>,
-    mut widgets: Query<&mut ecs::Widget>,
+    mut buttons: Query<(&ecs::Widget, &mut ecs::MainMenuButtonAnimation)>,
+    mut renders: Query<&mut ecs::SpriteRender>,
 ) {
     const HOVER_PROGRESS_MAX_MS: f32 = 250.0;
     const HOVER_EXIT_RATE: f32 = 1.0 / 3.0;
@@ -353,36 +359,39 @@ fn animate_button_shadow(
 
     let delta_ms = time.0.max(0.0) * 1000.0;
 
-    for mut button in buttons.iter_mut() {
-        if button.hovered {
-            button.hover_progress_ms =
-                (button.hover_progress_ms + delta_ms).min(HOVER_PROGRESS_MAX_MS);
+    for (widget, mut animation) in buttons.iter_mut() {
+        if animation.hovered {
+            animation.hover_progress_ms =
+                (animation.hover_progress_ms + delta_ms).min(HOVER_PROGRESS_MAX_MS);
         } else {
-            button.hover_progress_ms =
-                (button.hover_progress_ms - delta_ms * HOVER_EXIT_RATE).max(0.0);
+            animation.hover_progress_ms =
+                (animation.hover_progress_ms - delta_ms * HOVER_EXIT_RATE).max(0.0);
         }
 
-        let slide_delta = (HOVER_PROGRESS_MAX_MS - button.hover_progress_ms) * SHADOW_SLIDE_SCALE;
-        let text_position = button.base_position.as_vec2() + button.button_offset.as_vec2();
-        let shadow_delta = (button.shadow_offset - button.button_offset).as_vec2() * slide_delta;
-        let text_alpha = (BASE_ALPHA + button.hover_progress_ms * TEXT_ALPHA_SCALE).round() / 255.0;
+        let slide_delta =
+            (HOVER_PROGRESS_MAX_MS - animation.hover_progress_ms) * SHADOW_SLIDE_SCALE;
+        let text_position = widget.position + animation.button_offset.as_vec2();
+        let shadow_delta =
+            (animation.shadow_offset - animation.button_offset).as_vec2() * slide_delta;
+        let text_alpha =
+            (BASE_ALPHA + animation.hover_progress_ms * TEXT_ALPHA_SCALE).round() / 255.0;
         let shadow_alpha =
-            (BASE_ALPHA - button.hover_progress_ms * SHADOW_ALPHA_SCALE).round() / 255.0;
+            (BASE_ALPHA - animation.hover_progress_ms * SHADOW_ALPHA_SCALE).round() / 255.0;
 
-        if let Ok(mut shadow_widget) = widgets.get_mut(button.shadow_entity) {
-            shadow_widget.position = text_position + shadow_delta;
-            shadow_widget.alpha = shadow_alpha;
+        if let Ok(mut shadow_render) = renders.get_mut(animation.shadow_entity) {
+            shadow_render.position = text_position + shadow_delta;
+            shadow_render.alpha = shadow_alpha;
         }
 
-        if let Ok(mut text_widget) = widgets.get_mut(button.text_entity) {
-            text_widget.alpha = text_alpha;
+        if let Ok(mut text_render) = renders.get_mut(animation.text_entity) {
+            text_render.alpha = text_alpha;
         }
     }
 }
 
 fn update_render_snapshot(
     state: Res<AnimationState>,
-    widgets: Query<(&ecs::Widget, &ecs::WidgetRenderer)>,
+    renders: Query<&ecs::SpriteRender>,
     frames: Query<&ecs::geometry::GeometryTiled>,
     mut snapshot: ResMut<RenderSnapshot>,
 ) {
@@ -396,12 +405,12 @@ fn update_render_snapshot(
     }
 
     // Render the widgets.
-    for (widget, widget_renderer) in widgets.iter() {
+    for render in renders.iter() {
         snapshot.render_items.render_sprite(
-            widget.position,
-            widget_renderer.sprite,
-            widget_renderer.frame,
-            widget.alpha,
+            render.position,
+            render.sprite,
+            render.frame,
+            render.alpha,
         )
     }
 }

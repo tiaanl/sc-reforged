@@ -8,19 +8,18 @@ pub mod geometry;
 pub struct Widget {
     pub position: glam::Vec2,
     pub size: glam::UVec2,
-    pub alpha: f32,
 }
 
 #[derive(Component)]
-pub struct WidgetRenderer {
+pub struct SpriteRender {
+    pub position: glam::Vec2,
+    pub alpha: f32,
     pub sprite: Handle<Sprite3d>,
     pub frame: usize,
 }
 
 #[derive(Component)]
-pub struct MainMenuButton {
-    pub base_position: glam::IVec2,
-    pub size: glam::UVec2,
+pub struct MainMenuButtonAnimation {
     pub button_offset: glam::IVec2,
     pub shadow_offset: glam::IVec2,
     pub shadow_entity: Entity,
