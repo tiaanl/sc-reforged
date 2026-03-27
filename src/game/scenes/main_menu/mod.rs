@@ -1,7 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
 use bevy_ecs::prelude::*;
-use glam::UVec2;
 
 use crate::{
     engine::{
@@ -18,12 +17,17 @@ use crate::{
         },
         file_system::FileSystem,
         render::textures::Textures,
-        scenes::main_menu::sprite_renderer::{Rect, SpriteRenderer},
+        scenes::main_menu::{
+            sprite_renderer::{Rect, SpriteRenderer},
+            window_renderer::{RenderItems, WindowRenderer},
+        },
     },
 };
 
 mod ecs;
+mod quad_renderer;
 mod sprite_renderer;
+mod window_renderer;
 
 #[derive(Resource)]
 struct DeltaTime(f32);
@@ -38,6 +42,8 @@ struct AnimationState {
 #[derive(Default, Resource)]
 struct RenderSnapshot {
     primitives: sprite_renderer::Primitives,
+
+    render_items: RenderItems,
 }
 
 pub struct MainMenuScene {
@@ -45,6 +51,8 @@ pub struct MainMenuScene {
     update_schedule: Schedule,
 
     renderer: SpriteRenderer,
+
+    window_renderer: WindowRenderer,
 }
 
 impl MainMenuScene {
@@ -77,12 +85,15 @@ impl MainMenuScene {
         sprites.load_image_defs(&image_defs);
         let sprites = Arc::new(sprites);
 
-        let mut sprite_renderer = SpriteRenderer::new(
+        let sprite_renderer = SpriteRenderer::new(
             render_context.clone(),
             surface_desc,
             Arc::clone(&sprites),
-            textures,
+            Arc::clone(&textures),
         );
+
+        let mut window_renderer =
+            WindowRenderer::new(render_context.clone(), surface_desc, Arc::clone(&textures));
 
         Self::spawn_buttons(&sprites, &mut world, &window_base);
 
@@ -100,12 +111,19 @@ impl MainMenuScene {
                         .join(&geometry.jpeg_name)
                         .with_extension("jpg");
 
-                    let image_handle = images.load(path)?;
-                    // TODO: We should not unwrap here.
-                    let texture = sprite_renderer.create_texture(image_handle).unwrap();
+                    let image = images.load(path)?;
+
+                    let Some(tiled_geometry_handle) = window_renderer.create_tiled_geometry(
+                        image,
+                        glam::IVec2::from(geometry.dimensions).as_uvec2(),
+                        glam::IVec2::from(geometry.chunk_dimensions).as_uvec2(),
+                    ) else {
+                        tracing::warn!("Could not create tiled geometry from image");
+                        continue;
+                    };
 
                     let new_frame = world.spawn(ecs::geometry::GeometryTiled {
-                        texture,
+                        tiled_geometry_handle,
                         alpha: if i <= 1 { 1.0 } else { 0.0 },
                         size: glam::IVec2::from(geometry.dimensions).as_uvec2(),
                     });
@@ -127,6 +145,7 @@ impl MainMenuScene {
             world,
             update_schedule,
             renderer: sprite_renderer,
+            window_renderer,
         })
     }
 
@@ -290,6 +309,7 @@ impl MainMenuScene {
 impl Scene for MainMenuScene {
     fn resize(&mut self, size: glam::UVec2) {
         self.renderer.resize(size);
+        self.window_renderer.resize(size);
     }
 
     fn update(&mut self, delta_time: f32, _input: &InputState) {
@@ -299,6 +319,8 @@ impl Scene for MainMenuScene {
 
     fn render(&mut self, context: &RenderContext, frame: &mut Frame) {
         let snapshot = self.world.resource::<RenderSnapshot>();
+        self.window_renderer
+            .submit_render_items(frame, &snapshot.render_items);
         self.renderer.submit(context, frame, &snapshot.primitives);
     }
 }
@@ -359,16 +381,12 @@ fn update_render_snapshot(
     mut snapshot: ResMut<RenderSnapshot>,
 ) {
     snapshot.primitives.clear();
+    snapshot.render_items.clear();
 
     for frame in frames.iter_many(state.frames).rev() {
-        snapshot.primitives.add_texture(
-            Rect {
-                pos: UVec2::ZERO,
-                size: frame.size,
-            },
-            frame.texture,
-            frame.alpha,
-        );
+        snapshot
+            .render_items
+            .render_tiled_geometry(frame.tiled_geometry_handle, frame.alpha);
     }
 
     for (widget, widget_renderer) in widgets.iter() {
