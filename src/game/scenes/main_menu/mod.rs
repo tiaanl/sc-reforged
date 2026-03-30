@@ -61,6 +61,7 @@ impl MainMenuScene {
         world.insert_resource(DeltaTime(0.0));
         world.insert_resource(RenderSnapshot::default());
         world.init_resource::<Messages<ecs::WindowMessage>>();
+        world.init_resource::<Messages<ecs::WidgetMessage>>();
 
         let window_base: WindowBase = load_config(
             file_system.as_ref(),
@@ -132,7 +133,7 @@ impl MainMenuScene {
         let mut update_schedule = Schedule::default();
         update_schedule.add_systems(
             (
-                update_button_hover_state,
+                update_button_state,
                 animate_button_shadow,
                 rotate_background_alphas,
                 update_render_snapshot,
@@ -246,6 +247,8 @@ impl Scene for MainMenuScene {
         let message = match *event {
             InputEvent::MouseMove(position) => ecs::WindowMessage::MouseMove(position),
             InputEvent::MouseLeave => ecs::WindowMessage::MouseLeave,
+            InputEvent::MouseDown(button) => ecs::WindowMessage::MouseDown(button),
+            InputEvent::MouseUp(button) => ecs::WindowMessage::MouseUp(button),
             _ => return,
         };
         self.world.write_message(message);
@@ -312,19 +315,32 @@ fn rotate_background_alphas(
     }
 }
 
-fn update_button_hover_state(
-    mut messages: MessageReader<ecs::WindowMessage>,
-    mut buttons: Query<(&ecs::Widget, &mut ecs::Button)>,
+fn hit_test(widget: &ecs::Widget, point: glam::UVec2) -> bool {
+    let point = point.as_vec2();
+    let min = widget.position;
+    let max = min + widget.size.as_vec2();
+
+    point.x >= min.x && point.y >= min.y && point.x < max.x && point.y < max.y
+}
+
+fn update_button_state(
+    mut window_messages: MessageReader<ecs::WindowMessage>,
+    mut buttons: Query<(Entity, &ecs::Widget, &mut ecs::Button)>,
+    mut widget_messages: MessageWriter<ecs::WidgetMessage>,
 ) {
     let mut mouse_position = None;
+    let mut mouse_downs = Vec::new();
+    let mut mouse_ups = Vec::new();
     let mut has_input_update = false;
 
-    for message in messages.read() {
+    for message in window_messages.read() {
         has_input_update = true;
 
         match message {
             ecs::WindowMessage::MouseMove(position) => mouse_position = Some(*position),
             ecs::WindowMessage::MouseLeave => mouse_position = None,
+            ecs::WindowMessage::MouseDown(button) => mouse_downs.push(*button),
+            ecs::WindowMessage::MouseUp(button) => mouse_ups.push(*button),
         }
     }
 
@@ -332,17 +348,26 @@ fn update_button_hover_state(
         return;
     }
 
-    for (widget, mut button) in buttons.iter_mut() {
-        button.hovered = mouse_position.is_some_and(|mouse_position| {
-            let mouse_position = mouse_position.as_vec2();
-            let min = widget.position;
-            let max = min + widget.size.as_vec2();
+    for (entity, widget, mut button) in buttons.iter_mut() {
+        let now_hovered = mouse_position.is_some_and(|pos| hit_test(widget, pos));
+        let was_hovered = button.hovered;
+        button.hovered = now_hovered;
 
-            mouse_position.x >= min.x
-                && mouse_position.y >= min.y
-                && mouse_position.x < max.x
-                && mouse_position.y < max.y
-        });
+        if now_hovered && !was_hovered {
+            widget_messages.write(ecs::WidgetMessage::Enter(entity));
+        } else if !now_hovered && was_hovered {
+            widget_messages.write(ecs::WidgetMessage::Exit(entity));
+        }
+
+        if now_hovered {
+            for &mouse_button in &mouse_downs {
+                widget_messages.write(ecs::WidgetMessage::MouseDown(entity, mouse_button));
+            }
+
+            for &mouse_button in &mouse_ups {
+                widget_messages.write(ecs::WidgetMessage::MouseUp(entity, mouse_button));
+            }
+        }
     }
 }
 
