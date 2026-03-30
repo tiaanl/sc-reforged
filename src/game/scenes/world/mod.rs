@@ -7,7 +7,7 @@ use winit::keyboard::KeyCode;
 use crate::{
     engine::{
         assets::AssetError,
-        input::InputState,
+        input::{InputEvent, InputState},
         renderer::{Frame, RenderContext},
         scene::Scene,
         shader_cache::ShaderCache,
@@ -149,7 +149,11 @@ impl Scene for WorldScene {
         }
     }
 
-    fn update(&mut self, delta_time: f32, input: &InputState) {
+    fn input_event(&mut self, event: &InputEvent) {
+        self.sim_world.resource_mut::<InputState>().apply(event);
+    }
+
+    fn update(&mut self, delta_time: f32) {
         let frame_time = &mut self.fps_history[self.fps_history_cursor];
         let run_simulation = if self.simulation_paused {
             if self.pending_simulation_steps > 0 {
@@ -185,23 +189,22 @@ impl Scene for WorldScene {
                 control.run_update = run_simulation;
             }
 
-            {
-                let mut res = self.sim_world.resource_mut::<InputState>();
-                *res = input.clone();
-            }
-
             let start = std::time::Instant::now();
             self.systems.update(&mut self.sim_world);
             frame_time.update = (std::time::Instant::now() - start).as_secs_f64();
         }
 
-        if input.key_just_pressed(KeyCode::Backquote) {
-            self.game_mode = if self.in_editor() {
-                GameMode::Game
-            } else {
-                GameMode::Editor
+        {
+            let input = self.sim_world.resource::<InputState>();
+            if input.key_just_pressed(KeyCode::Backquote) {
+                self.game_mode = if self.in_editor() {
+                    GameMode::Game
+                } else {
+                    GameMode::Editor
+                }
             }
         }
+
     }
 
     fn render(&mut self, context: &RenderContext, frame: &mut Frame) {

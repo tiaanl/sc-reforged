@@ -3,6 +3,7 @@ use glam::Vec3;
 
 use crate::{
     engine::{
+        input::InputState,
         renderer::{Frame, RenderContext},
         shader_cache::ShaderCache,
         transform::Transform,
@@ -103,7 +104,7 @@ impl Systems {
 
             let mut schedule = Schedule::default();
 
-            schedule.configure_sets((Start, Input, Update).chain());
+            schedule.configure_sets((Start, Input, Update, End).chain());
             schedule.configure_sets(Update.run_if(should_run_simulation_update));
 
             // Start
@@ -145,6 +146,9 @@ impl Systems {
                     .in_set(Update)
                     .chain(),
             );
+
+            // End
+            schedule.add_systems(reset_input_state.in_set(End));
 
             schedule
         };
@@ -211,6 +215,10 @@ impl Systems {
         self.world_renderer
             .queue(bindings, frame, &render_targets.geometry_buffer, snapshot);
     }
+}
+
+fn reset_input_state(mut input: ResMut<InputState>) {
+    input.reset_per_frame();
 }
 
 fn should_run_simulation_update(control: Res<SimulationControl>) -> bool {

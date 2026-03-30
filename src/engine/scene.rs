@@ -2,7 +2,7 @@ use glam::UVec2;
 
 use crate::engine::renderer::{Frame, RenderContext};
 
-use super::input::InputState;
+use super::input::InputEvent;
 
 /// Trait defining a scene with callbacks for each stage of the render pipeline.
 /// Scenes are sent across threads when switching via the `EventLoopProxy`, so they must be `Send`.
@@ -10,8 +10,11 @@ pub trait Scene {
     /// Handle a window surface resize to the given `size`.
     fn resize(&mut self, size: UVec2);
 
-    /// Advance the scene by `delta_time` seconds using the current input state.
-    fn update(&mut self, delta_time: f32, input: &InputState);
+    /// Handle a single input event. Called once per event, potentially multiple times per frame.
+    fn input_event(&mut self, event: &InputEvent);
+
+    /// Advance the scene by `delta_time` seconds from the previous frame.
+    fn update(&mut self, delta_time: f32);
 
     /// Render the scene into the provided frame.
     fn render(&mut self, renderer: &RenderContext, frame: &mut Frame);

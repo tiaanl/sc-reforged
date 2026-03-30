@@ -13,6 +13,7 @@ pub enum UpdateSet {
     Start,
     Input,
     Update,
+    End,
 }
 
 #[derive(Component)]

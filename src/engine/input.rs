@@ -3,12 +3,69 @@ use std::collections::HashSet;
 use bevy_ecs::prelude::*;
 use glam::{IVec2, UVec2};
 use winit::{
+    dpi::PhysicalPosition,
     event::{ElementState, MouseScrollDelta, WindowEvent},
     keyboard::PhysicalKey,
 };
 
 pub use winit::event::MouseButton;
 pub use winit::keyboard::KeyCode;
+
+/// A high-level input event derived from winit window events.
+#[derive(Clone, Debug)]
+pub enum InputEvent {
+    MouseMove(UVec2),
+    MouseLeave,
+    MouseDown(MouseButton),
+    MouseUp(MouseButton),
+    KeyDown(KeyCode),
+    KeyUp(KeyCode),
+    MouseWheel(f32),
+}
+
+/// Converts a winit `WindowEvent` into an `InputEvent`, if applicable.
+pub fn translate_window_event(event: &WindowEvent) -> Option<InputEvent> {
+    match event {
+        WindowEvent::KeyboardInput { event, .. } if !event.repeat => {
+            let PhysicalKey::Code(key) = event.physical_key else {
+                return None;
+            };
+            if event.state == ElementState::Pressed {
+                Some(InputEvent::KeyDown(key))
+            } else {
+                Some(InputEvent::KeyUp(key))
+            }
+        }
+
+        WindowEvent::CursorMoved {
+            position: PhysicalPosition { x, y },
+            ..
+        } => Some(InputEvent::MouseMove(UVec2::new(
+            x.round() as u32,
+            y.round() as u32,
+        ))),
+
+        WindowEvent::CursorLeft { .. } => Some(InputEvent::MouseLeave),
+
+        WindowEvent::MouseWheel { delta, .. } => {
+            let delta = match delta {
+                MouseScrollDelta::LineDelta(_, y) => *y,
+                MouseScrollDelta::PixelDelta(PhysicalPosition { y, .. }) => *y as f32,
+            };
+            Some(InputEvent::MouseWheel(delta))
+        }
+
+        WindowEvent::MouseInput { state, button, .. } => {
+            if state.is_pressed() {
+                Some(InputEvent::MouseDown(*button))
+            } else {
+                Some(InputEvent::MouseUp(*button))
+            }
+        }
+
+        _ => None,
+    }
+}
 
 #[derive(Clone, Default, Resource)]
 pub struct InputState {
@@ -29,61 +86,43 @@ pub struct InputState {
 }
 
 impl InputState {
-    pub(crate) fn handle_window_event(&mut self, event: WindowEvent) {
-        match event {
-            WindowEvent::KeyboardInput { ref event, .. } if !event.repeat => {
-                if let PhysicalKey::Code(key) = event.physical_key {
-                    if event.state == ElementState::Pressed {
-                        self.key_pressed.insert(key);
-                        self.key_just_pressed.insert(key);
-                    } else {
-                        self.key_pressed.remove(&key);
-                    }
-                }
+    /// Apply a single input event, updating the accumulated state.
+    pub fn apply(&mut self, event: &InputEvent) {
+        match *event {
+            InputEvent::KeyDown(key) => {
+                self.key_pressed.insert(key);
+                self.key_just_pressed.insert(key);
             }
-
-            WindowEvent::CursorMoved {
-                position: winit::dpi::PhysicalPosition { x, y },
-                ..
-            } => {
+            InputEvent::KeyUp(key) => {
+                self.key_pressed.remove(&key);
+            }
+            InputEvent::MouseMove(position) => {
                 self.last_mouse_position = self.mouse_position;
-                let current = UVec2::new(x.round() as u32, y.round() as u32);
-
                 if let Some(last) = self.last_mouse_position {
-                    self.mouse_delta = Some(last.as_ivec2() - current.as_ivec2());
+                    self.mouse_delta = Some(last.as_ivec2() - position.as_ivec2());
                 }
-
-                self.mouse_position = Some(current);
+                self.mouse_position = Some(position);
             }
-
-            WindowEvent::CursorLeft { .. } => self.mouse_position = None,
-
-            WindowEvent::MouseWheel { delta, .. } => {
-                let delta = match delta {
-                    MouseScrollDelta::LineDelta(_, y) => y,
-                    MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition { y, .. }) => {
-                        y as f32
-                    }
-                };
+            InputEvent::MouseLeave => {
+                self.mouse_position = None;
+            }
+            InputEvent::MouseWheel(delta) => {
                 self.wheel_delta = delta;
             }
-
-            WindowEvent::MouseInput { state, button, .. } => {
-                if state.is_pressed() {
-                    self.mouse_pressed.insert(button);
-                    self.mouse_just_pressed.insert(button);
-                } else {
-                    self.mouse_pressed.remove(&button);
-                    self.mouse_just_released.insert(button);
-                }
+            InputEvent::MouseDown(button) => {
+                self.mouse_pressed.insert(button);
+                self.mouse_just_pressed.insert(button);
             }
-
-            _ => {}
+            InputEvent::MouseUp(button) => {
+                self.mouse_pressed.remove(&button);
+                self.mouse_just_released.insert(button);
+            }
         }
     }
 
-    /// Reset data being tracked per frame.
-    pub(crate) fn reset_current_frame(&mut self) {
+    /// Reset per-frame transient state (e.g. "just pressed", "just released", deltas).
+    /// Call once per frame after all systems have read the input.
+    pub fn reset_per_frame(&mut self) {
         self.key_just_pressed.clear();
         self.mouse_just_pressed.clear();
         self.mouse_just_released.clear();

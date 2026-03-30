@@ -13,7 +13,7 @@ use winit::{
 
 use crate::{
     engine::{
-        input::InputState,
+        input,
         renderer::{Frame, RenderContext, Surface, SurfaceDesc},
         scene::Scene,
         threads::main::{MainThreadEvent, MainThreadReceiver},
@@ -49,8 +49,6 @@ enum App {
         surface: Surface,
         /// Our main [RenderContext] holding the device and queue.
         context: RenderContext,
-        /// The current input state of the engine.
-        input: InputState,
         /// The index of the current frame being rendered.
         frame_index: u64,
         /// The instant that the last frame started to render.
@@ -176,7 +174,6 @@ impl ApplicationHandler<MainThreadEvent> for App {
                     context,
                     #[cfg(feature = "egui")]
                     egui_integration,
-                    input: InputState::default(),
                     frame_index: 0,
                     last_frame_time: Instant::now(),
                     scene,
@@ -207,7 +204,6 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 surface,
                 surface_desc,
                 context,
-                input,
                 frame_index,
                 last_frame_time,
                 #[cfg(feature = "egui")]
@@ -259,7 +255,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
 
                         {
                             let delta_time = last_frame_duration.as_secs_f32();
-                            scene.update(delta_time, input);
+                            scene.update(delta_time);
                         }
 
                         {
@@ -281,10 +277,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                                 size: surface.size(),
                             };
 
-                            {
-                                scene.render(context, &mut frame);
-                                input.reset_current_frame();
-                            }
+                            scene.render(context, &mut frame);
 
                             // Render egui if it requires a repaint.
                             #[cfg(feature = "egui")]
@@ -318,7 +311,9 @@ impl ApplicationHandler<MainThreadEvent> for App {
                     _ => {}
                 }
 
-                input.handle_window_event(event);
+                if let Some(input_event) = input::translate_window_event(&event) {
+                    scene.input_event(&input_event);
+                }
             }
         }
     }

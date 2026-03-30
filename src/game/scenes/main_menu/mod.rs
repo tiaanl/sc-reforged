@@ -5,7 +5,7 @@ use bevy_ecs::prelude::*;
 use crate::{
     engine::{
         assets::AssetError,
-        input::InputState,
+        input::InputEvent,
         renderer::{Frame, RenderContext, SurfaceDesc},
         scene::Scene,
     },
@@ -242,16 +242,17 @@ impl Scene for MainMenuScene {
         self.window_renderer.resize(size);
     }
 
-    fn update(&mut self, delta_time: f32, input: &InputState) {
+    fn input_event(&mut self, event: &InputEvent) {
+        let message = match *event {
+            InputEvent::MouseMove(position) => ecs::WindowMessage::MouseMove(position),
+            InputEvent::MouseLeave => ecs::WindowMessage::MouseLeave,
+            _ => return,
+        };
+        self.world.write_message(message);
+    }
+
+    fn update(&mut self, delta_time: f32) {
         self.world.resource_mut::<DeltaTime>().0 = delta_time;
-
-        if let Some(mouse_position) = input.mouse_position() {
-            self.world
-                .write_message(ecs::WindowMessage::MouseMove(mouse_position));
-        } else {
-            self.world.write_message(ecs::WindowMessage::MouseLeave);
-        }
-
         self.update_schedule.run(&mut self.world);
     }
 
