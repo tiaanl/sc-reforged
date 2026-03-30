@@ -18,6 +18,11 @@ pub struct SpriteRender {
     pub frame: usize,
 }
 
+#[derive(Component, Default)]
+pub struct Button {
+    pub hovered: bool,
+}
+
 #[derive(Component)]
 pub struct MainMenuButtonAnimation {
     pub button_offset: glam::IVec2,
@@ -25,7 +30,6 @@ pub struct MainMenuButtonAnimation {
     pub shadow_entity: Entity,
     pub text_entity: Entity,
     pub hover_progress_ms: f32,
-    pub hovered: bool,
 }
 
 #[derive(Message)]

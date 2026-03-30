@@ -224,13 +224,13 @@ impl MainMenuScene {
                     position: base_position.as_vec2(),
                     size: glam::UVec2::new(bullet_size.x + text_size.x, text_size.y),
                 },
+                ecs::Button::default(),
                 ecs::MainMenuButtonAnimation {
                     button_offset,
                     shadow_offset,
                     shadow_entity,
                     text_entity,
                     hover_progress_ms: 0.0,
-                    hovered: false,
                 },
             ));
         }
@@ -313,7 +313,7 @@ fn rotate_background_alphas(
 
 fn update_button_hover_state(
     mut messages: MessageReader<ecs::WindowMessage>,
-    mut buttons: Query<(&ecs::Widget, &mut ecs::MainMenuButtonAnimation)>,
+    mut buttons: Query<(&ecs::Widget, &mut ecs::Button)>,
 ) {
     let mut mouse_position = None;
     let mut has_input_update = false;
@@ -331,8 +331,8 @@ fn update_button_hover_state(
         return;
     }
 
-    for (widget, mut animation) in buttons.iter_mut() {
-        animation.hovered = mouse_position.is_some_and(|mouse_position| {
+    for (widget, mut button) in buttons.iter_mut() {
+        button.hovered = mouse_position.is_some_and(|mouse_position| {
             let mouse_position = mouse_position.as_vec2();
             let min = widget.position;
             let max = min + widget.size.as_vec2();
@@ -347,7 +347,7 @@ fn update_button_hover_state(
 
 fn animate_button_shadow(
     time: Res<DeltaTime>,
-    mut buttons: Query<(&ecs::Widget, &mut ecs::MainMenuButtonAnimation)>,
+    mut buttons: Query<(&ecs::Widget, &ecs::Button, &mut ecs::MainMenuButtonAnimation)>,
     mut renders: Query<&mut ecs::SpriteRender>,
 ) {
     const HOVER_PROGRESS_MAX_MS: f32 = 250.0;
@@ -359,8 +359,8 @@ fn animate_button_shadow(
 
     let delta_ms = time.0.max(0.0) * 1000.0;
 
-    for (widget, mut animation) in buttons.iter_mut() {
-        if animation.hovered {
+    for (widget, button, mut animation) in buttons.iter_mut() {
+        if button.hovered {
             animation.hover_progress_ms =
                 (animation.hover_progress_ms + delta_ms).min(HOVER_PROGRESS_MAX_MS);
         } else {
