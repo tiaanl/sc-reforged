@@ -24,6 +24,7 @@ pub struct SpriteRender {
 #[derive(Component, Default)]
 pub struct Button {
     pub hovered: bool,
+    pub pressed: bool,
 }
 
 #[derive(Component)]
@@ -32,6 +33,7 @@ pub struct MainMenuButtonAnimation {
     pub shadow_offset: glam::IVec2,
     pub shadow_entity: Entity,
     pub text_entity: Entity,
+    pub pressed_entity: Entity,
     pub hover_progress_ms: f32,
 }
 

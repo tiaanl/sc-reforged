@@ -133,7 +133,8 @@ impl MainMenuScene {
         let mut update_schedule = Schedule::default();
         update_schedule.add_systems(
             (
-                update_button_state,
+                emit_widget_messages,
+                apply_widget_messages,
                 animate_button_shadow,
                 rotate_background_alphas,
                 update_render_snapshot,
@@ -219,6 +220,15 @@ impl MainMenuScene {
             ) else {
                 continue;
             };
+            let Some((pressed_entity, _)) = spawn_sprite(
+                world,
+                base_position + button_offset,
+                button.pressed_sprite,
+                button.pressed_frame,
+                0.0,
+            ) else {
+                continue;
+            };
 
             world.spawn((
                 ecs::Widget {
@@ -231,6 +241,7 @@ impl MainMenuScene {
                     shadow_offset,
                     shadow_entity,
                     text_entity,
+                    pressed_entity,
                     hover_progress_ms: 0.0,
                 },
             ));
@@ -323,12 +334,12 @@ fn hit_test(widget: &ecs::Widget, point: glam::UVec2) -> bool {
     point.x >= min.x && point.y >= min.y && point.x < max.x && point.y < max.y
 }
 
-fn update_button_state(
+fn emit_widget_messages(
     mut window_messages: MessageReader<ecs::WindowMessage>,
-    mut buttons: Query<(Entity, &ecs::Widget, &mut ecs::Button)>,
+    widgets: Query<(Entity, &ecs::Widget)>,
     mut widget_messages: MessageWriter<ecs::WidgetMessage>,
+    mut last_mouse_position: Local<Option<glam::UVec2>>,
 ) {
-    let mut mouse_position = None;
     let mut mouse_downs = Vec::new();
     let mut mouse_ups = Vec::new();
     let mut has_input_update = false;
@@ -337,8 +348,30 @@ fn update_button_state(
         has_input_update = true;
 
         match message {
-            ecs::WindowMessage::MouseMove(position) => mouse_position = Some(*position),
-            ecs::WindowMessage::MouseLeave => mouse_position = None,
+            ecs::WindowMessage::MouseMove(position) => {
+                let previous = *last_mouse_position;
+                *last_mouse_position = Some(*position);
+
+                for (entity, widget) in widgets.iter() {
+                    let was_over = previous.is_some_and(|pos| hit_test(widget, pos));
+                    let now_over = hit_test(widget, *position);
+
+                    if now_over && !was_over {
+                        widget_messages.write(ecs::WidgetMessage::Enter(entity));
+                    } else if !now_over && was_over {
+                        widget_messages.write(ecs::WidgetMessage::Exit(entity));
+                    }
+                }
+            }
+            ecs::WindowMessage::MouseLeave => {
+                if let Some(previous) = last_mouse_position.take() {
+                    for (entity, widget) in widgets.iter() {
+                        if hit_test(widget, previous) {
+                            widget_messages.write(ecs::WidgetMessage::Exit(entity));
+                        }
+                    }
+                }
+            }
             ecs::WindowMessage::MouseDown(button) => mouse_downs.push(*button),
             ecs::WindowMessage::MouseUp(button) => mouse_ups.push(*button),
         }
@@ -348,24 +381,46 @@ fn update_button_state(
         return;
     }
 
-    for (entity, widget, mut button) in buttons.iter_mut() {
-        let now_hovered = mouse_position.is_some_and(|pos| hit_test(widget, pos));
-        let was_hovered = button.hovered;
-        button.hovered = now_hovered;
-
-        if now_hovered && !was_hovered {
-            widget_messages.write(ecs::WidgetMessage::Enter(entity));
-        } else if !now_hovered && was_hovered {
-            widget_messages.write(ecs::WidgetMessage::Exit(entity));
-        }
-
-        if now_hovered {
-            for &mouse_button in &mouse_downs {
-                widget_messages.write(ecs::WidgetMessage::MouseDown(entity, mouse_button));
+    if let Some(position) = *last_mouse_position {
+        for (entity, widget) in widgets.iter() {
+            if hit_test(widget, position) {
+                for &mouse_button in &mouse_downs {
+                    widget_messages.write(ecs::WidgetMessage::MouseDown(entity, mouse_button));
+                }
+                for &mouse_button in &mouse_ups {
+                    widget_messages.write(ecs::WidgetMessage::MouseUp(entity, mouse_button));
+                }
             }
+        }
+    }
+}
 
-            for &mouse_button in &mouse_ups {
-                widget_messages.write(ecs::WidgetMessage::MouseUp(entity, mouse_button));
+fn apply_widget_messages(
+    mut events: MessageReader<ecs::WidgetMessage>,
+    mut buttons: Query<&mut ecs::Button>,
+) {
+    for event in events.read() {
+        match event {
+            ecs::WidgetMessage::Enter(entity) => {
+                if let Ok(mut button) = buttons.get_mut(*entity) {
+                    button.hovered = true;
+                }
+            }
+            ecs::WidgetMessage::Exit(entity) => {
+                if let Ok(mut button) = buttons.get_mut(*entity) {
+                    button.hovered = false;
+                    button.pressed = false;
+                }
+            }
+            ecs::WidgetMessage::MouseDown(entity, _) => {
+                if let Ok(mut button) = buttons.get_mut(*entity) {
+                    button.pressed = true;
+                }
+            }
+            ecs::WidgetMessage::MouseUp(entity, _) => {
+                if let Ok(mut button) = buttons.get_mut(*entity) {
+                    button.pressed = false;
+                }
             }
         }
     }
@@ -410,7 +465,12 @@ fn animate_button_shadow(
         }
 
         if let Ok(mut text_render) = renders.get_mut(animation.text_entity) {
-            text_render.alpha = text_alpha;
+            text_render.alpha = if button.pressed { 0.0 } else { text_alpha };
+        }
+
+        if let Ok(mut pressed_render) = renders.get_mut(animation.pressed_entity) {
+            pressed_render.position = text_position;
+            pressed_render.alpha = if button.pressed { text_alpha } else { 0.0 };
         }
     }
 }
