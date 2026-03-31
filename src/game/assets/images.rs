@@ -110,6 +110,32 @@ impl Images {
                     BlendMode::Opaque,
                 )
             }
+        } else if ext == "raw" {
+            // Standalone .raw files are headerless grayscale (one byte per pixel),
+            // used as alpha-mapped textures (e.g. fonts). The original engine
+            // (FUN_0048acd0) determines dimensions from the file size using a
+            // hardcoded lookup: 256→16x16, 1024→32x32, 4096→64x64, 16384→128x128,
+            // 65536→256x256. We generalize this to any square power-of-two size.
+            let pixel_count = data.len();
+            let side = (pixel_count as f64).sqrt() as u32;
+            if (side * side) as usize != pixel_count || !side.is_power_of_two() {
+                return Err(AssetError::Decode(path));
+            }
+
+            let raw = shadow_company_tools::images::load_raw_file(
+                &mut std::io::Cursor::new(data),
+                side,
+                side,
+            )
+            .map_err(|err| image_error_to_asset_error(err, &path))?;
+
+            let mut rgba = image::RgbaImage::new(side, side);
+            for (dest, alpha) in rgba.pixels_mut().zip(raw.pixels()) {
+                dest.0 = [255, 255, 255, alpha.0[0]];
+            }
+            quantize_rgba4444(&mut rgba);
+
+            Image::from_rgba(AssetSource::FileSystem(path.clone()), rgba, BlendMode::Alpha)
         } else if ext == "jpg" || ext == "jpeg" {
             let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
                 .map_err(|err| image_error_to_asset_error(err, &path))?;
