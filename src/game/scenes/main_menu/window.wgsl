@@ -20,8 +20,9 @@ struct Instance {
     @location(3) pos: vec2<f32>,
     @location(4) size: vec2<f32>,
     @location(5) alpha: f32,
-    @location(6) uv_min: vec2<f32>,
-    @location(7) uv_max: vec2<f32>,
+    @location(6) color: vec4<f32>,
+    @location(7) uv_min: vec2<f32>,
+    @location(8) uv_max: vec2<f32>,
 }
 
 struct VertexOut {
@@ -44,7 +45,7 @@ fn vertex(vertex: Vertex, instance: Instance) -> VertexOut {
     return VertexOut(
         vec4<f32>(ndc, 0.0, 1.0),
         uv,
-        vertex.color,
+        vertex.color * instance.color,
         instance.alpha,
     );
 }
