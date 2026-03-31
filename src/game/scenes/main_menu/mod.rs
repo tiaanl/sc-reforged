@@ -88,7 +88,7 @@ impl MainMenuScene {
         );
 
         Self::spawn_buttons(&sprites, &mut world, &window_base);
-        Self::spawn_version_label(&mut world);
+        Self::spawn_version_label(&window_renderer, &mut world);
 
         let mut frames = [Entity::PLACEHOLDER; 5];
 
@@ -249,17 +249,20 @@ impl MainMenuScene {
         }
     }
 
-    fn spawn_version_label(world: &mut World) {
+    fn spawn_version_label(window_renderer: &WindowRenderer, world: &mut World) {
         // The original engine positions "v1.31" at (635 - text_width, 475 - text_height)
         // in 640x480 mode, placing it in the bottom-right corner. The text is rendered
         // with font_12_point and a golden amber color override (0xffd3a333).
         let version_text = "v1.31";
-        let position = glam::Vec2::new(607.0, 462.0);
+        let font = Font::TwelvePoint;
+        let text_width = window_renderer.measure_text_width(version_text, font);
+        let text_height = window_renderer.measure_text_height(version_text, font);
+        let position = glam::Vec2::new(635.0 - text_width, 475.0 - text_height);
 
         world.spawn(ecs::TextRender {
             position,
             text: version_text.to_owned(),
-            font: Font::TwelvePoint,
+            font,
             color: Some(glam::Vec4::new(
                 0xd3 as f32 / 255.0,
                 0xa3 as f32 / 255.0,

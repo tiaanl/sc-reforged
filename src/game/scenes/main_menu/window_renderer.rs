@@ -140,6 +140,58 @@ impl WindowRenderer {
         }))
     }
 
+    /// Measures the pixel width of a text string in the given font, matching
+    /// the original engine's `Calculate_Text_Width` logic.
+    pub fn measure_text_width(&self, text: &str, font: Font) -> f32 {
+        let Some(handle) = self.sprites.get_handle_by_name(font.sprite_name()) else {
+            return 0.0;
+        };
+        let Some(font_sprite) = self.sprites.get(handle) else {
+            return 0.0;
+        };
+
+        let letter_spacing = font.letter_spacing();
+        let mut width = 0.0_f32;
+
+        for byte in text.bytes() {
+            if let Some(glyph) = font_sprite.frame(byte as usize) {
+                let glyph_width = glyph.bottom_right.x as f32 - glyph.top_left.x as f32;
+                width += glyph_width + letter_spacing;
+            }
+
+            if byte == b' ' {
+                width += 4.0;
+            } else if byte == b'\t' {
+                width += 12.0;
+            }
+        }
+
+        width
+    }
+
+    /// Measures the pixel height of a text string in the given font, matching
+    /// the original engine's `Calculate_Text_Height` logic. Returns the
+    /// tallest glyph height found in the string.
+    pub fn measure_text_height(&self, text: &str, font: Font) -> f32 {
+        let Some(handle) = self.sprites.get_handle_by_name(font.sprite_name()) else {
+            return 0.0;
+        };
+        let Some(font_sprite) = self.sprites.get(handle) else {
+            return 0.0;
+        };
+
+        let mut height = 0.0_f32;
+
+        for byte in text.bytes() {
+            if let Some(glyph) = font_sprite.frame(byte as usize) {
+                let glyph_height = glyph.bottom_right.y as f32 - glyph.top_left.y as f32;
+                height = height.max(glyph_height);
+            }
+        }
+
+        height
+    }
+
     /// Queues a resize for the window.
     pub fn resize(&mut self, size: UVec2) {
         self.quad_renderer.resize(size);
