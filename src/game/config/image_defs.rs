@@ -33,8 +33,6 @@ pub struct SpriteFrame {
     pub y1: i32,
     pub x2: i32,
     pub y2: i32,
-    pub x_run: i32,
-    pub dx: i32,
 }
 
 #[derive(Debug, Default)]
@@ -257,35 +255,54 @@ impl From<ConfigLines> for ImageDefs {
                         }
                     };
 
-                    let sprite_frame = match s {
-                        "SPRITEFRAME" => SpriteFrame {
-                            x1: line.param(0),
-                            y1: line.param(1),
-                            x2: line.param(2),
-                            y2: line.param(3),
-                            x_run: 0,
-                            dx: 0,
-                        },
-                        "SPRITEFRAME_XRUN" => SpriteFrame {
-                            x1: line.param(0),
-                            y1: line.param(1),
-                            x2: line.param(2),
-                            y2: line.param(3),
-                            x_run: line.param(4),
-                            dx: 0,
-                        },
-                        "SPRITEFRAME_DXRUN" => SpriteFrame {
-                            x1: line.param(0),
-                            y1: line.param(1),
-                            x2: line.param(2),
-                            y2: line.param(3),
-                            x_run: line.param(4),
-                            dx: line.param(5),
-                        },
+                    match s {
+                        "SPRITEFRAME" => {
+                            frames.push(SpriteFrame {
+                                x1: line.param(0),
+                                y1: line.param(1),
+                                x2: line.param(2),
+                                y2: line.param(3),
+                            });
+                        }
+                        // SPRITEFRAME_XRUN <X1> <Y1> <DX> <DY> <NUM_FRAMES>
+                        // Generates NUM_FRAMES uniform frames tiled along the x-axis.
+                        "SPRITEFRAME_XRUN" => {
+                            let x1: i32 = line.param(0);
+                            let y1: i32 = line.param(1);
+                            let dx: i32 = line.param(2);
+                            let dy: i32 = line.param(3);
+                            let count: i32 = line.param(4);
+                            for i in 0..count {
+                                frames.push(SpriteFrame {
+                                    x1: x1 + i * dx,
+                                    y1,
+                                    x2: x1 + i * dx + dx,
+                                    y2: y1 + dy,
+                                });
+                            }
+                        }
+                        // SPRITEFRAME_DXRUN <X1> <Y1> <SEP_DX> <DY> <NUM_FRAMES> <DX0> <DX1> ...
+                        // Generates NUM_FRAMES variable-width frames. SEP_DX is the gap
+                        // between glyphs, and trailing params are per-frame widths.
+                        "SPRITEFRAME_DXRUN" => {
+                            let y1: i32 = line.param(1);
+                            let sep: i32 = line.param(2);
+                            let dy: i32 = line.param(3);
+                            let count: i32 = line.param(4);
+                            let mut x = line.param::<i32>(0);
+                            for i in 0..count as usize {
+                                let width: i32 = line.param(5 + i);
+                                frames.push(SpriteFrame {
+                                    x1: x,
+                                    y1,
+                                    x2: x + width,
+                                    y2: y1 + dy,
+                                });
+                                x += width + sep;
+                            }
+                        }
                         _ => unreachable!("already checked"),
-                    };
-
-                    frames.push(sprite_frame);
+                    }
                 }
 
                 "FRAMEDESCRIPTOR" => match state {
