@@ -17,7 +17,7 @@ use crate::{
         },
         file_system::FileSystem,
         render::textures::Textures,
-        scenes::main_menu::window_renderer::{RenderItems, WindowRenderer},
+        scenes::main_menu::window_renderer::{Font, RenderItems, WindowRenderer},
     },
 };
 
@@ -88,6 +88,7 @@ impl MainMenuScene {
         );
 
         Self::spawn_buttons(&sprites, &mut world, &window_base);
+        Self::spawn_version_label(&mut world);
 
         let mut frames = [Entity::PLACEHOLDER; 5];
 
@@ -246,6 +247,26 @@ impl MainMenuScene {
                 },
             ));
         }
+    }
+
+    fn spawn_version_label(world: &mut World) {
+        // The original engine positions "v1.31" at (635 - text_width, 475 - text_height)
+        // in 640x480 mode, placing it in the bottom-right corner. The text is rendered
+        // with font_12_point and a golden amber color override (0xffd3a333).
+        let version_text = "v1.31";
+        let position = glam::Vec2::new(607.0, 462.0);
+
+        world.spawn(ecs::TextRender {
+            position,
+            text: version_text.to_owned(),
+            font: Font::TwelvePoint,
+            color: Some(glam::Vec4::new(
+                0xd3 as f32 / 255.0,
+                0xa3 as f32 / 255.0,
+                0x33 as f32 / 255.0,
+                1.0,
+            )),
+        });
     }
 }
 
@@ -477,7 +498,8 @@ fn animate_button_shadow(
 
 fn update_render_snapshot(
     state: Res<AnimationState>,
-    renders: Query<&ecs::SpriteRender>,
+    sprite_renders: Query<&ecs::SpriteRender>,
+    text_renders: Query<&ecs::TextRender>,
     frames: Query<&ecs::geometry::GeometryTiled>,
     mut snapshot: ResMut<RenderSnapshot>,
 ) {
@@ -490,14 +512,21 @@ fn update_render_snapshot(
             .render_tiled_geometry(frame.tiled_geometry_handle, frame.alpha);
     }
 
-    // Render the widgets.
-    for render in renders.iter() {
+    // Render the sprite widgets.
+    for render in sprite_renders.iter() {
         snapshot.render_items.render_sprite(
             render.position,
             render.sprite,
             render.frame,
             render.alpha,
         )
+    }
+
+    // Render the text widgets.
+    for render in text_renders.iter() {
+        snapshot
+            .render_items
+            .render_text(render.position, &render.text, render.font, render.color);
     }
 }
 

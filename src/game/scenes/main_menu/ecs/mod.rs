@@ -1,8 +1,9 @@
 use bevy_ecs::prelude::*;
+use glam::Vec4;
 
 use crate::{
     engine::{input::MouseButton, storage::Handle},
-    game::assets::sprites::Sprite3d,
+    game::{assets::sprites::Sprite3d, scenes::main_menu::window_renderer::Font},
 };
 
 pub mod geometry;
@@ -19,6 +20,14 @@ pub struct SpriteRender {
     pub alpha: f32,
     pub sprite: Handle<Sprite3d>,
     pub frame: usize,
+}
+
+#[derive(Component)]
+pub struct TextRender {
+    pub position: glam::Vec2,
+    pub text: String,
+    pub font: Font,
+    pub color: Option<Vec4>,
 }
 
 #[derive(Component, Default)]
