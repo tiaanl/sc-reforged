@@ -17,14 +17,17 @@ use crate::{
         },
         file_system::FileSystem,
         render::textures::Textures,
-        scenes::main_menu::window_renderer::{Font, RenderItems, WindowRenderer},
+        windows::{
+            ecs::{
+                WidgetMessage, WindowMessage,
+                geometry::GeometryTiled,
+                render::{SpriteRender, TextRender},
+                widgets::{Button, Widget},
+            },
+            window_renderer::{Font, RenderItems, WindowRenderer},
+        },
     },
 };
-
-mod ecs;
-mod quad_renderer;
-mod sprite_renderer;
-mod window_renderer;
 
 #[derive(Resource)]
 struct DeltaTime(f32);
@@ -39,6 +42,16 @@ struct AnimationState {
 #[derive(Default, Resource)]
 struct RenderSnapshot {
     render_items: RenderItems,
+}
+
+#[derive(Component)]
+pub struct MainMenuButtonAnimation {
+    pub button_offset: glam::IVec2,
+    pub shadow_offset: glam::IVec2,
+    pub shadow_entity: Entity,
+    pub text_entity: Entity,
+    pub pressed_entity: Entity,
+    pub hover_progress_ms: f32,
 }
 
 pub struct MainMenuScene {
@@ -60,8 +73,8 @@ impl MainMenuScene {
 
         world.insert_resource(DeltaTime(0.0));
         world.insert_resource(RenderSnapshot::default());
-        world.init_resource::<Messages<ecs::WindowMessage>>();
-        world.init_resource::<Messages<ecs::WidgetMessage>>();
+        world.init_resource::<Messages<WindowMessage>>();
+        world.init_resource::<Messages<WidgetMessage>>();
 
         let window_base: WindowBase = load_config(
             file_system.as_ref(),
@@ -115,7 +128,7 @@ impl MainMenuScene {
                         continue;
                     };
 
-                    let new_frame = world.spawn(ecs::geometry::GeometryTiled {
+                    let new_frame = world.spawn(GeometryTiled {
                         tiled_geometry_handle,
                         alpha: if i <= 1 { 1.0 } else { 0.0 },
                         size: glam::IVec2::from(geometry.dimensions).as_uvec2(),
@@ -182,7 +195,7 @@ impl MainMenuScene {
             let frame_size = sprite_frame_size(sprite_name, frame)?;
 
             let entity = world
-                .spawn((ecs::SpriteRender {
+                .spawn((SpriteRender {
                     position: position.as_vec2(),
                     alpha,
                     sprite,
@@ -232,12 +245,12 @@ impl MainMenuScene {
             };
 
             world.spawn((
-                ecs::Widget {
+                Widget {
                     position: base_position.as_vec2(),
                     size: glam::UVec2::new(bullet_size.x + text_size.x, text_size.y),
                 },
-                ecs::Button::default(),
-                ecs::MainMenuButtonAnimation {
+                Button::default(),
+                MainMenuButtonAnimation {
                     button_offset,
                     shadow_offset,
                     shadow_entity,
@@ -259,7 +272,7 @@ impl MainMenuScene {
         let text_height = window_renderer.measure_text_height(version_text, font);
         let position = glam::Vec2::new(635.0 - text_width, 475.0 - text_height);
 
-        world.spawn(ecs::TextRender {
+        world.spawn(TextRender {
             position,
             text: version_text.to_owned(),
             font,
@@ -280,10 +293,10 @@ impl Scene for MainMenuScene {
 
     fn input_event(&mut self, event: &InputEvent) {
         let message = match *event {
-            InputEvent::MouseMove(position) => ecs::WindowMessage::MouseMove(position),
-            InputEvent::MouseLeave => ecs::WindowMessage::MouseLeave,
-            InputEvent::MouseDown(button) => ecs::WindowMessage::MouseDown(button),
-            InputEvent::MouseUp(button) => ecs::WindowMessage::MouseUp(button),
+            InputEvent::MouseMove(position) => WindowMessage::MouseMove(position),
+            InputEvent::MouseLeave => WindowMessage::MouseLeave,
+            InputEvent::MouseDown(button) => WindowMessage::MouseDown(button),
+            InputEvent::MouseUp(button) => WindowMessage::MouseUp(button),
             _ => return,
         };
         self.world.write_message(message);
@@ -303,7 +316,7 @@ impl Scene for MainMenuScene {
 
 fn rotate_background_alphas(
     mut state: ResMut<AnimationState>,
-    mut geometries: Query<&mut ecs::geometry::GeometryTiled>,
+    mut geometries: Query<&mut GeometryTiled>,
     time: Res<DeltaTime>,
 ) {
     let Ok(mut frames) = geometries.get_many_mut(state.frames) else {
@@ -350,7 +363,7 @@ fn rotate_background_alphas(
     }
 }
 
-fn hit_test(widget: &ecs::Widget, point: glam::UVec2) -> bool {
+fn hit_test(widget: &Widget, point: glam::UVec2) -> bool {
     let point = point.as_vec2();
     let min = widget.position;
     let max = min + widget.size.as_vec2();
@@ -359,9 +372,9 @@ fn hit_test(widget: &ecs::Widget, point: glam::UVec2) -> bool {
 }
 
 fn emit_widget_messages(
-    mut window_messages: MessageReader<ecs::WindowMessage>,
-    widgets: Query<(Entity, &ecs::Widget)>,
-    mut widget_messages: MessageWriter<ecs::WidgetMessage>,
+    mut window_messages: MessageReader<WindowMessage>,
+    widgets: Query<(Entity, &Widget)>,
+    mut widget_messages: MessageWriter<WidgetMessage>,
     mut last_mouse_position: Local<Option<glam::UVec2>>,
 ) {
     let mut mouse_downs = Vec::new();
@@ -372,7 +385,7 @@ fn emit_widget_messages(
         has_input_update = true;
 
         match message {
-            ecs::WindowMessage::MouseMove(position) => {
+            WindowMessage::MouseMove(position) => {
                 let previous = *last_mouse_position;
                 *last_mouse_position = Some(*position);
 
@@ -381,23 +394,23 @@ fn emit_widget_messages(
                     let now_over = hit_test(widget, *position);
 
                     if now_over && !was_over {
-                        widget_messages.write(ecs::WidgetMessage::Enter(entity));
+                        widget_messages.write(WidgetMessage::Enter(entity));
                     } else if !now_over && was_over {
-                        widget_messages.write(ecs::WidgetMessage::Exit(entity));
+                        widget_messages.write(WidgetMessage::Exit(entity));
                     }
                 }
             }
-            ecs::WindowMessage::MouseLeave => {
+            WindowMessage::MouseLeave => {
                 if let Some(previous) = last_mouse_position.take() {
                     for (entity, widget) in widgets.iter() {
                         if hit_test(widget, previous) {
-                            widget_messages.write(ecs::WidgetMessage::Exit(entity));
+                            widget_messages.write(WidgetMessage::Exit(entity));
                         }
                     }
                 }
             }
-            ecs::WindowMessage::MouseDown(button) => mouse_downs.push(*button),
-            ecs::WindowMessage::MouseUp(button) => mouse_ups.push(*button),
+            WindowMessage::MouseDown(button) => mouse_downs.push(*button),
+            WindowMessage::MouseUp(button) => mouse_ups.push(*button),
         }
     }
 
@@ -409,10 +422,10 @@ fn emit_widget_messages(
         for (entity, widget) in widgets.iter() {
             if hit_test(widget, position) {
                 for &mouse_button in &mouse_downs {
-                    widget_messages.write(ecs::WidgetMessage::MouseDown(entity, mouse_button));
+                    widget_messages.write(WidgetMessage::MouseDown(entity, mouse_button));
                 }
                 for &mouse_button in &mouse_ups {
-                    widget_messages.write(ecs::WidgetMessage::MouseUp(entity, mouse_button));
+                    widget_messages.write(WidgetMessage::MouseUp(entity, mouse_button));
                 }
             }
         }
@@ -420,28 +433,28 @@ fn emit_widget_messages(
 }
 
 fn apply_widget_messages(
-    mut events: MessageReader<ecs::WidgetMessage>,
-    mut buttons: Query<&mut ecs::Button>,
+    mut events: MessageReader<WidgetMessage>,
+    mut buttons: Query<&mut Button>,
 ) {
     for event in events.read() {
         match event {
-            ecs::WidgetMessage::Enter(entity) => {
+            WidgetMessage::Enter(entity) => {
                 if let Ok(mut button) = buttons.get_mut(*entity) {
                     button.hovered = true;
                 }
             }
-            ecs::WidgetMessage::Exit(entity) => {
+            WidgetMessage::Exit(entity) => {
                 if let Ok(mut button) = buttons.get_mut(*entity) {
                     button.hovered = false;
                     button.pressed = false;
                 }
             }
-            ecs::WidgetMessage::MouseDown(entity, _) => {
+            WidgetMessage::MouseDown(entity, _) => {
                 if let Ok(mut button) = buttons.get_mut(*entity) {
                     button.pressed = true;
                 }
             }
-            ecs::WidgetMessage::MouseUp(entity, _) => {
+            WidgetMessage::MouseUp(entity, _) => {
                 if let Ok(mut button) = buttons.get_mut(*entity) {
                     button.pressed = false;
                 }
@@ -452,8 +465,8 @@ fn apply_widget_messages(
 
 fn animate_button_shadow(
     time: Res<DeltaTime>,
-    mut buttons: Query<(&ecs::Widget, &ecs::Button, &mut ecs::MainMenuButtonAnimation)>,
-    mut renders: Query<&mut ecs::SpriteRender>,
+    mut buttons: Query<(&Widget, &Button, &mut MainMenuButtonAnimation)>,
+    mut renders: Query<&mut SpriteRender>,
 ) {
     const HOVER_PROGRESS_MAX_MS: f32 = 250.0;
     const HOVER_EXIT_RATE: f32 = 1.0 / 3.0;
@@ -501,9 +514,9 @@ fn animate_button_shadow(
 
 fn update_render_snapshot(
     state: Res<AnimationState>,
-    sprite_renders: Query<&ecs::SpriteRender>,
-    text_renders: Query<&ecs::TextRender>,
-    frames: Query<&ecs::geometry::GeometryTiled>,
+    sprite_renders: Query<&SpriteRender>,
+    text_renders: Query<&TextRender>,
+    frames: Query<&GeometryTiled>,
     mut snapshot: ResMut<RenderSnapshot>,
 ) {
     snapshot.render_items.clear();

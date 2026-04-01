@@ -13,7 +13,7 @@ use crate::{
             sprites::{Sprite3d, Sprites},
         },
         render::textures::{Texture, Textures},
-        scenes::main_menu::quad_renderer::{Quad, QuadRenderer},
+        windows::quad_renderer::{Quad, QuadRenderer},
     },
 };
 

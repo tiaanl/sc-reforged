@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{engine::storage::Handle, game::scenes::main_menu::window_renderer::TiledGeometry};
+use crate::{engine::storage::Handle, game::windows::window_renderer::TiledGeometry};
 
 // #[derive(Component)]
 // pub struct Geometry {}
