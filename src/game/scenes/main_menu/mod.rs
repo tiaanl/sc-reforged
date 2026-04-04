@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use bevy_ecs::prelude::*;
+use bevy_ecs::{prelude::*, world::CommandQueue};
 
 use crate::{
     engine::{
@@ -19,12 +19,14 @@ use crate::{
         render::textures::Textures,
         windows::{
             ecs::{
-                WidgetMessage, WindowMessage,
+                WidgetMessage, WindowMessage, ZIndex,
                 geometry::GeometryTiled,
                 render::{SpriteRender, TextRender},
+                spawn_window,
                 widgets::{Button, Widget},
+                window::{Window, WindowManager, update_window_render_items},
             },
-            window_renderer::{Font, RenderItems, WindowRenderer},
+            window_renderer::{Font, WindowRenderItems, WindowRenderer},
         },
     },
 };
@@ -41,7 +43,7 @@ struct AnimationState {
 
 #[derive(Default, Resource)]
 struct RenderSnapshot {
-    render_items: RenderItems,
+    render_items: WindowRenderItems,
 }
 
 #[derive(Component)]
@@ -73,6 +75,18 @@ impl MainMenuScene {
 
         world.insert_resource(DeltaTime(0.0));
         world.insert_resource(RenderSnapshot::default());
+        world.init_resource::<WindowManager>();
+        world.add_observer(
+            |event: On<Add, Window>, mut window_manager: ResMut<WindowManager>| {
+                window_manager.push(event.entity);
+            },
+        );
+        world.add_observer(
+            |event: On<Remove, Window>, mut window_manager: ResMut<WindowManager>| {
+                window_manager.remove(event.entity);
+            },
+        );
+
         world.init_resource::<Messages<WindowMessage>>();
         world.init_resource::<Messages<WidgetMessage>>();
 
@@ -100,10 +114,21 @@ impl MainMenuScene {
             Arc::clone(&sprites),
         );
 
-        Self::spawn_buttons(&sprites, &mut world, &window_base);
+        let mut queue = CommandQueue::default();
+
+        let window_entity = spawn_window(Commands::new(&mut queue, &world));
+
+        Self::spawn_buttons(
+            Commands::new(&mut queue, &world),
+            window_entity,
+            &sprites,
+            &window_base,
+        );
         Self::spawn_version_label(&window_renderer, &mut world);
 
         let mut frames = [Entity::PLACEHOLDER; 5];
+
+        let mut commands = Commands::new(&mut queue, &world);
 
         for (i, geometry) in window_base.geometries.iter().enumerate() {
             match geometry.kind {
@@ -128,11 +153,16 @@ impl MainMenuScene {
                         continue;
                     };
 
-                    let new_frame = world.spawn(GeometryTiled {
-                        tiled_geometry_handle,
-                        alpha: if i <= 1 { 1.0 } else { 0.0 },
-                        size: glam::IVec2::from(geometry.dimensions).as_uvec2(),
-                    });
+                    let new_frame = commands.spawn((
+                        GeometryTiled {
+                            tiled_geometry_handle,
+                            alpha: if i <= 1 { 1.0 } else { 0.0 },
+                            size: glam::IVec2::from(geometry.dimensions).as_uvec2(),
+                        },
+                        // Sort the frames in reverse order.
+                        ZIndex(-(i as i32)),
+                        ChildOf(window_entity),
+                    ));
                     frames[i] = new_frame.id();
                 }
             }
@@ -144,6 +174,8 @@ impl MainMenuScene {
             fading_out: false,
         });
 
+        queue.apply(&mut world);
+
         let mut update_schedule = Schedule::default();
         update_schedule.add_systems(
             (
@@ -152,6 +184,7 @@ impl MainMenuScene {
                 animate_button_shadow,
                 rotate_background_alphas,
                 update_render_snapshot,
+                update_window_render_items,
             )
                 .chain(),
         );
@@ -163,7 +196,12 @@ impl MainMenuScene {
         })
     }
 
-    fn spawn_buttons(sprites: &Sprites, world: &mut World, window_base: &WindowBase) {
+    fn spawn_buttons(
+        mut commands: Commands,
+        window_entity: Entity,
+        sprites: &Sprites,
+        window_base: &WindowBase,
+    ) {
         macro_rules! get_ivar {
             ($name:literal) => {{ window_base.ivars.get($name).cloned().unwrap_or(0) }};
         }
@@ -186,7 +224,7 @@ impl MainMenuScene {
             Some(frame_data.bottom_right - frame_data.top_left)
         };
 
-        let spawn_sprite = |world: &mut World,
+        let spawn_sprite = |commands: &mut Commands,
                             position: glam::IVec2,
                             sprite_name: &str,
                             frame: usize,
@@ -194,13 +232,16 @@ impl MainMenuScene {
             let sprite = sprites.get_handle_by_name(sprite_name)?;
             let frame_size = sprite_frame_size(sprite_name, frame)?;
 
-            let entity = world
-                .spawn((SpriteRender {
-                    position: position.as_vec2(),
-                    alpha,
-                    sprite,
-                    frame,
-                },))
+            let entity = commands
+                .spawn((
+                    SpriteRender {
+                        position: position.as_vec2(),
+                        alpha,
+                        sprite,
+                        frame,
+                    },
+                    ChildOf(window_entity),
+                ))
                 .id();
 
             Some((entity, frame_size))
@@ -214,7 +255,7 @@ impl MainMenuScene {
                 .unwrap_or(glam::IVec2::ZERO);
 
             let Some((shadow_entity, _)) = spawn_sprite(
-                world,
+                &mut commands,
                 base_position + shadow_offset,
                 button.shadow_sprite,
                 button.shadow_frame,
@@ -226,7 +267,7 @@ impl MainMenuScene {
                 continue;
             };
             let Some((text_entity, text_size)) = spawn_sprite(
-                world,
+                &mut commands,
                 base_position + button_offset,
                 button.text_sprite,
                 button.text_frame,
@@ -235,7 +276,7 @@ impl MainMenuScene {
                 continue;
             };
             let Some((pressed_entity, _)) = spawn_sprite(
-                world,
+                &mut commands,
                 base_position + button_offset,
                 button.pressed_sprite,
                 button.pressed_frame,
@@ -244,7 +285,7 @@ impl MainMenuScene {
                 continue;
             };
 
-            world.spawn((
+            commands.spawn((
                 Widget {
                     position: base_position.as_vec2(),
                     size: glam::UVec2::new(bullet_size.x + text_size.x, text_size.y),
@@ -308,9 +349,13 @@ impl Scene for MainMenuScene {
     }
 
     fn render(&mut self, _context: &RenderContext, frame: &mut Frame) {
-        let snapshot = self.world.resource::<RenderSnapshot>();
-        self.window_renderer
-            .submit_render_items(frame, &snapshot.render_items);
+        let window_manager = self.world.resource::<WindowManager>();
+        for window in window_manager.windows.iter() {
+            if let Some(window_render_items) = self.world.get::<WindowRenderItems>(*window) {
+                self.window_renderer
+                    .submit_render_items(frame, window_render_items);
+            }
+        }
     }
 }
 

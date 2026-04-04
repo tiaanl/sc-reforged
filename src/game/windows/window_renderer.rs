@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use bevy_ecs::prelude::*;
 use glam::{UVec2, Vec2, Vec4};
 
 use crate::{
@@ -58,10 +59,10 @@ impl Font {
 }
 
 /// A list of render items that make up the window.
-#[derive(Default)]
-pub struct RenderItems(Vec<RenderItem>);
+#[derive(Component, Default)]
+pub struct WindowRenderItems(Vec<WindowRenderItem>);
 
-impl RenderItems {
+impl WindowRenderItems {
     /// Clears all queued window render items.
     pub fn clear(&mut self) {
         self.0.clear();
@@ -69,17 +70,18 @@ impl RenderItems {
 
     /// Queues a non-tiled geometry item.
     pub fn render_geometry(&mut self) {
-        self.0.push(RenderItem::Geometry);
+        self.0.push(WindowRenderItem::Geometry);
     }
 
     /// Queues a tiled geometry item with the given alpha.
     pub fn render_tiled_geometry(&mut self, handle: Handle<TiledGeometry>, alpha: f32) {
-        self.0.push(RenderItem::TiledGeometry { handle, alpha });
+        self.0
+            .push(WindowRenderItem::TiledGeometry { handle, alpha });
     }
 
     /// Queues a sprite item.
     pub fn render_sprite(&mut self, pos: Vec2, sprite: Handle<Sprite3d>, frame: usize, alpha: f32) {
-        self.0.push(RenderItem::Sprite {
+        self.0.push(WindowRenderItem::Sprite {
             pos,
             sprite,
             frame,
@@ -89,7 +91,7 @@ impl RenderItems {
 
     /// Queues a text string. Uses the font's default color unless overridden.
     pub fn render_text(&mut self, pos: Vec2, text: &str, font: Font, color: Option<Vec4>) {
-        self.0.push(RenderItem::Text {
+        self.0.push(WindowRenderItem::Text {
             pos,
             text: text.to_owned(),
             font,
@@ -198,13 +200,13 @@ impl WindowRenderer {
     }
 
     /// Resolves window render items into quads and submits them for drawing.
-    pub fn submit_render_items(&mut self, frame: &mut Frame, items: &RenderItems) {
+    pub fn submit_render_items(&mut self, frame: &mut Frame, items: &WindowRenderItems) {
         let mut quads = Vec::new();
 
         for item in items.0.iter() {
             match item {
-                RenderItem::Geometry => {}
-                RenderItem::TiledGeometry { handle, alpha } => {
+                WindowRenderItem::Geometry => {}
+                WindowRenderItem::TiledGeometry { handle, alpha } => {
                     let Some(geometry) = self.tiled_geometries.get(*handle) else {
                         continue;
                     };
@@ -219,7 +221,7 @@ impl WindowRenderer {
                         uv_max: Vec2::ONE,
                     });
                 }
-                RenderItem::Sprite {
+                WindowRenderItem::Sprite {
                     pos,
                     sprite,
                     frame,
@@ -253,7 +255,7 @@ impl WindowRenderer {
                         uv_max,
                     });
                 }
-                RenderItem::Text {
+                WindowRenderItem::Text {
                     pos,
                     text,
                     font,
@@ -320,7 +322,7 @@ impl WindowRenderer {
     }
 }
 
-enum RenderItem {
+enum WindowRenderItem {
     Geometry,
     TiledGeometry {
         handle: Handle<TiledGeometry>,
