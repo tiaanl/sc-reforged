@@ -163,6 +163,26 @@ impl Images {
         Ok(handle)
     }
 
+    /// Insert an image or return the existing handle if that key has already
+    /// exists.
+    pub fn insert(&self, key: impl Into<String>, image: Image) -> Handle<Image> {
+        let key = key.into();
+
+        {
+            let storage = self.storage.read().unwrap();
+            if let Some(handle) = storage.get_handle_by_key(&key) {
+                return handle;
+            }
+        }
+
+        let mut storage = self.storage.write().unwrap();
+        if let Some(handle) = storage.get_handle_by_key(&key) {
+            return handle;
+        }
+
+        storage.insert(key, Arc::new(image))
+    }
+
     fn path_to_key(path: &Path) -> String {
         path.to_string_lossy().to_ascii_lowercase()
     }

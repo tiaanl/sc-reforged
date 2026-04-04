@@ -1,4 +1,5 @@
 use bevy_ecs::prelude::*;
+use glam::Vec4;
 
 use crate::game::windows::{
     ecs::{ZIndex, geometry::GeometryTiled, rect::Rect, render::SpriteRender},
@@ -36,29 +37,45 @@ impl WindowManager {
     }
 }
 
+/// Rebuilds each window's queued render items from its descendant geometry and
+/// sprite components. Windows without tiled geometry fall back to a simple
+/// border-only chrome item.
 pub fn update_window_render_items(
-    mut windows: Query<(&Window, &mut WindowRenderItems, &Children)>,
+    mut windows: Query<(Entity, &Rect, &mut WindowRenderItems), With<Window>>,
+    hierarchy: Query<&Children>,
     tiled_geometry: Query<(&GeometryTiled, Option<&ZIndex>)>,
     sprites: Query<&SpriteRender>,
+    mut descendants: Local<Vec<Entity>>,
 ) {
-    for (_window, mut window_render_items, children) in windows.iter_mut() {
+    for (window, rect, mut window_render_items) in windows.iter_mut() {
         // Clear out old renders.
         window_render_items.clear();
+        descendants.clear();
+        descendants.extend(hierarchy.iter_descendants::<Children>(window));
 
         // Tiled Geometry
-        {
-            let mut tiled_geometries = tiled_geometry
-                .iter_many(children)
-                .map(|(tiled_geometry, z_index)| {
-                    let z_index = z_index.map(|i| i.0).unwrap_or(0);
+        let mut tiled_geometries = descendants
+            .iter()
+            .filter_map(|&entity| {
+                tiled_geometry
+                    .get(entity)
+                    .ok()
+                    .map(|(tiled_geometry, z_index)| {
+                        let z_index = z_index.map(|i| i.0).unwrap_or(0);
 
-                    (
-                        z_index,
-                        tiled_geometry.tiled_geometry_handle,
-                        tiled_geometry.alpha,
-                    )
-                })
-                .collect::<Vec<_>>();
+                        (
+                            z_index,
+                            tiled_geometry.tiled_geometry_handle,
+                            tiled_geometry.alpha,
+                        )
+                    })
+            })
+            .collect::<Vec<_>>();
+
+        if tiled_geometries.is_empty() {
+            // Render a default window background.
+            window_render_items.render_border(rect.position, rect.size, 2, Vec4::ONE);
+        } else {
             tiled_geometries.sort_by_key(|(z_index, _, _)| *z_index);
 
             tiled_geometries
@@ -69,13 +86,15 @@ pub fn update_window_render_items(
         }
 
         // Widgets
-        for sprite_render in sprites.iter_many(children) {
-            window_render_items.render_sprite(
-                sprite_render.position,
-                sprite_render.sprite,
-                sprite_render.frame,
-                sprite_render.alpha,
-            );
+        for &entity in &descendants {
+            if let Ok(sprite_render) = sprites.get(entity) {
+                window_render_items.render_sprite(
+                    sprite_render.position,
+                    sprite_render.sprite,
+                    sprite_render.frame,
+                    sprite_render.alpha,
+                );
+            }
         }
     }
 }

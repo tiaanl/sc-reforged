@@ -358,13 +358,20 @@ impl Scene for MainMenuScene {
     }
 
     fn render(&mut self, _context: &RenderContext, frame: &mut Frame) {
-        let window_manager = self.world.resource::<WindowManager>();
-        for window in window_manager.windows.iter() {
-            if let Some(window_render_items) = self.world.get::<WindowRenderItems>(*window) {
-                self.window_renderer
-                    .submit_render_items(frame, window_render_items);
+        let windows = self.world.resource::<WindowManager>().windows.clone();
+        let mut render_items = std::mem::take(
+            &mut self.world.resource_mut::<RenderSnapshot>().render_items,
+        );
+        render_items.clear();
+
+        for window in windows {
+            if let Some(window_render_items) = self.world.get::<WindowRenderItems>(window) {
+                render_items.extend_from(window_render_items);
             }
         }
+
+        self.window_renderer.submit_render_items(frame, &render_items);
+        self.world.resource_mut::<RenderSnapshot>().render_items = render_items;
     }
 }
 

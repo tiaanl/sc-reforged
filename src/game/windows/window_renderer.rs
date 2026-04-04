@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
-use glam::{UVec2, Vec2, Vec4};
+use glam::{IVec2, UVec2, Vec2, Vec4};
 
 use crate::{
     engine::{
@@ -10,7 +10,8 @@ use crate::{
     },
     game::{
         assets::{
-            image::Image,
+            asset_source::AssetSource,
+            image::{BlendMode, Image},
             sprites::{Sprite3d, Sprites},
         },
         render::textures::{Texture, Textures},
@@ -59,13 +60,18 @@ impl Font {
 }
 
 /// A list of render items that make up the window.
-#[derive(Component, Default)]
+#[derive(Clone, Component, Default)]
 pub struct WindowRenderItems(Vec<WindowRenderItem>);
 
 impl WindowRenderItems {
     /// Clears all queued window render items.
     pub fn clear(&mut self) {
         self.0.clear();
+    }
+
+    /// Appends another list of window render items, preserving their order.
+    pub fn extend_from(&mut self, other: &Self) {
+        self.0.extend(other.0.iter().cloned());
     }
 
     /// Queues a non-tiled geometry item.
@@ -77,6 +83,16 @@ impl WindowRenderItems {
     pub fn render_tiled_geometry(&mut self, handle: Handle<TiledGeometry>, alpha: f32) {
         self.0
             .push(WindowRenderItem::TiledGeometry { handle, alpha });
+    }
+
+    /// Queues a solid-color border drawn inside the target rectangle.
+    pub fn render_border(&mut self, pos: IVec2, size: UVec2, thickness: u32, color: Vec4) {
+        self.0.push(WindowRenderItem::Border {
+            pos,
+            size,
+            thickness,
+            color,
+        });
     }
 
     /// Queues a sprite item.
@@ -106,6 +122,7 @@ pub struct WindowRenderer {
     textures: Arc<Textures>,
     sprites: Arc<Sprites>,
     tiled_geometries: Storage<TiledGeometry>,
+    solid_white_texture: Handle<Texture>,
 }
 
 impl WindowRenderer {
@@ -116,11 +133,24 @@ impl WindowRenderer {
         textures: Arc<Textures>,
         sprites: Arc<Sprites>,
     ) -> Self {
+        let white_image = textures.images().insert(
+            "window_renderer_solid_white",
+            Image::from_rgba(
+                AssetSource::Generated,
+                image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 255, 255, 255])),
+                BlendMode::Opaque,
+            ),
+        );
+        let solid_white_texture = textures
+            .create_from_image(white_image)
+            .expect("generated solid white texture should be valid");
+
         Self {
             sprites,
             textures: Arc::clone(&textures),
             quad_renderer: QuadRenderer::new(render_context, surface_desc, textures),
             tiled_geometries: Storage::default(),
+            solid_white_texture,
         }
     }
 
@@ -221,6 +251,19 @@ impl WindowRenderer {
                         uv_max: Vec2::ONE,
                     });
                 }
+                WindowRenderItem::Border {
+                    pos,
+                    size,
+                    thickness,
+                    color,
+                } => push_border_quads(
+                    &mut quads,
+                    self.solid_white_texture,
+                    *pos,
+                    *size,
+                    *thickness,
+                    *color,
+                ),
                 WindowRenderItem::Sprite {
                     pos,
                     sprite,
@@ -322,11 +365,18 @@ impl WindowRenderer {
     }
 }
 
+#[derive(Clone)]
 enum WindowRenderItem {
     Geometry,
     TiledGeometry {
         handle: Handle<TiledGeometry>,
         alpha: f32,
+    },
+    Border {
+        pos: IVec2,
+        size: UVec2,
+        thickness: u32,
+        color: Vec4,
     },
     Sprite {
         pos: Vec2,
@@ -350,4 +400,83 @@ pub struct TiledGeometry {
     _dimensions: UVec2,
     // Same as dimensions.
     _chunk_dimensions: UVec2,
+}
+
+fn push_border_quads(
+    quads: &mut Vec<Quad>,
+    texture: Handle<Texture>,
+    pos: IVec2,
+    size: UVec2,
+    thickness: u32,
+    color: Vec4,
+) {
+    if thickness == 0 || size.x == 0 || size.y == 0 {
+        return;
+    }
+
+    let horizontal_thickness = thickness.min(size.y);
+    let vertical_thickness = thickness.min(size.x);
+    let inner_height = size
+        .y
+        .saturating_sub(horizontal_thickness.saturating_mul(2));
+
+    push_solid_rect(
+        quads,
+        texture,
+        pos,
+        UVec2::new(size.x, horizontal_thickness),
+        color,
+    );
+    push_solid_rect(
+        quads,
+        texture,
+        IVec2::new(
+            pos.x,
+            pos.y + size.y.saturating_sub(horizontal_thickness) as i32,
+        ),
+        UVec2::new(size.x, horizontal_thickness),
+        color,
+    );
+
+    if inner_height > 0 {
+        push_solid_rect(
+            quads,
+            texture,
+            IVec2::new(pos.x, pos.y + horizontal_thickness as i32),
+            UVec2::new(vertical_thickness, inner_height),
+            color,
+        );
+        push_solid_rect(
+            quads,
+            texture,
+            IVec2::new(
+                pos.x + size.x.saturating_sub(vertical_thickness) as i32,
+                pos.y + horizontal_thickness as i32,
+            ),
+            UVec2::new(vertical_thickness, inner_height),
+            color,
+        );
+    }
+}
+
+fn push_solid_rect(
+    quads: &mut Vec<Quad>,
+    texture: Handle<Texture>,
+    pos: IVec2,
+    size: UVec2,
+    color: Vec4,
+) {
+    if size.x == 0 || size.y == 0 {
+        return;
+    }
+
+    quads.push(Quad {
+        pos: pos.as_vec2(),
+        size,
+        texture,
+        alpha: color.w,
+        color: [color.x, color.y, color.z, 1.0],
+        uv_min: Vec2::ZERO,
+        uv_max: Vec2::ONE,
+    });
 }
