@@ -135,7 +135,11 @@ impl Images {
             }
             quantize_rgba4444(&mut rgba);
 
-            Image::from_rgba(AssetSource::FileSystem(path.clone()), rgba, BlendMode::Alpha)
+            Image::from_rgba(
+                AssetSource::FileSystem(path.clone()),
+                rgba,
+                BlendMode::Alpha,
+            )
         } else if ext == "jpg" || ext == "jpeg" {
             let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
                 .map_err(|err| image_error_to_asset_error(err, &path))?;

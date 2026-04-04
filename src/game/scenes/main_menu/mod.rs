@@ -1,6 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use bevy_ecs::{prelude::*, world::CommandQueue};
+use glam::{IVec2, UVec2};
 
 use crate::{
     engine::{
@@ -20,10 +21,12 @@ use crate::{
         windows::{
             ecs::{
                 WidgetMessage, WindowMessage, ZIndex,
+                button::{Button, update_buttons},
                 geometry::GeometryTiled,
+                rect::{GlobalRect, Rect, update_global_rects},
                 render::{SpriteRender, TextRender},
-                spawn_window,
-                widgets::{Button, Widget},
+                ui_action::{UiAction, handle_ui_actions},
+                widgets::Widget,
                 window::{Window, WindowManager, update_window_render_items},
             },
             window_renderer::{Font, WindowRenderItems, WindowRenderer},
@@ -89,6 +92,7 @@ impl MainMenuScene {
 
         world.init_resource::<Messages<WindowMessage>>();
         world.init_resource::<Messages<WidgetMessage>>();
+        world.init_resource::<Messages<UiAction>>();
 
         let window_base: WindowBase = load_config(
             file_system.as_ref(),
@@ -115,16 +119,13 @@ impl MainMenuScene {
         );
 
         let mut queue = CommandQueue::default();
+        let mut commands = Commands::new(&mut queue, &world);
 
-        let window_entity = spawn_window(Commands::new(&mut queue, &world));
+        let window_entity = commands.spawn((Rect::default(), Window)).id();
 
-        Self::spawn_buttons(
-            Commands::new(&mut queue, &world),
-            window_entity,
-            &sprites,
-            &window_base,
-        );
-        Self::spawn_version_label(&window_renderer, &mut world);
+        Self::spawn_buttons(&mut commands, window_entity, &sprites, &window_base);
+
+        Self::spawn_version_label(&mut commands, &window_renderer);
 
         let mut frames = [Entity::PLACEHOLDER; 5];
 
@@ -179,11 +180,14 @@ impl MainMenuScene {
         let mut update_schedule = Schedule::default();
         update_schedule.add_systems(
             (
+                // If any UiAction messages were emitted on the previous frame,
+                // handle them first.
+                handle_ui_actions,
+                update_global_rects,
                 emit_widget_messages,
-                apply_widget_messages,
+                update_buttons,
                 animate_button_shadow,
                 rotate_background_alphas,
-                update_render_snapshot,
                 update_window_render_items,
             )
                 .chain(),
@@ -197,7 +201,7 @@ impl MainMenuScene {
     }
 
     fn spawn_buttons(
-        mut commands: Commands,
+        commands: &mut Commands,
         window_entity: Entity,
         sprites: &Sprites,
         window_base: &WindowBase,
@@ -248,15 +252,15 @@ impl MainMenuScene {
         };
 
         for button in BUTTONS {
-            let base_position = window_base
+            let position = window_base
                 .button_advices
                 .get(button.name)
                 .map(|button| glam::IVec2::new(button.x, button.y))
                 .unwrap_or(glam::IVec2::ZERO);
 
             let Some((shadow_entity, _)) = spawn_sprite(
-                &mut commands,
-                base_position + shadow_offset,
+                commands,
+                position + shadow_offset,
                 button.shadow_sprite,
                 button.shadow_frame,
                 BASE_TEXT_ALPHA,
@@ -267,8 +271,8 @@ impl MainMenuScene {
                 continue;
             };
             let Some((text_entity, text_size)) = spawn_sprite(
-                &mut commands,
-                base_position + button_offset,
+                commands,
+                position + button_offset,
                 button.text_sprite,
                 button.text_frame,
                 BASE_TEXT_ALPHA,
@@ -276,8 +280,8 @@ impl MainMenuScene {
                 continue;
             };
             let Some((pressed_entity, _)) = spawn_sprite(
-                &mut commands,
-                base_position + button_offset,
+                commands,
+                position + button_offset,
                 button.pressed_sprite,
                 button.pressed_frame,
                 0.0,
@@ -286,11 +290,16 @@ impl MainMenuScene {
             };
 
             commands.spawn((
-                Widget {
-                    position: base_position.as_vec2(),
-                    size: glam::UVec2::new(bullet_size.x + text_size.x, text_size.y),
+                Rect {
+                    position,
+                    size: text_size + UVec2::new(bullet_size.x, 0),
                 },
-                Button::default(),
+                Widget,
+                Button::new(if button.name == "b_exit" {
+                    UiAction::ShowExitConfirmation
+                } else {
+                    UiAction::Exit
+                }),
                 MainMenuButtonAnimation {
                     button_offset,
                     shadow_offset,
@@ -303,7 +312,7 @@ impl MainMenuScene {
         }
     }
 
-    fn spawn_version_label(window_renderer: &WindowRenderer, world: &mut World) {
+    fn spawn_version_label(commands: &mut Commands, window_renderer: &WindowRenderer) {
         // The original engine positions "v1.31" at (635 - text_width, 475 - text_height)
         // in 640x480 mode, placing it in the bottom-right corner. The text is rendered
         // with font_12_point and a golden amber color override (0xffd3a333).
@@ -313,7 +322,7 @@ impl MainMenuScene {
         let text_height = window_renderer.measure_text_height(version_text, font);
         let position = glam::Vec2::new(635.0 - text_width, 475.0 - text_height);
 
-        world.spawn(TextRender {
+        commands.spawn(TextRender {
             position,
             text: version_text.to_owned(),
             font,
@@ -408,17 +417,14 @@ fn rotate_background_alphas(
     }
 }
 
-fn hit_test(widget: &Widget, point: glam::UVec2) -> bool {
-    let point = point.as_vec2();
-    let min = widget.position;
-    let max = min + widget.size.as_vec2();
-
-    point.x >= min.x && point.y >= min.y && point.x < max.x && point.y < max.y
+#[inline]
+fn hit_test(rect: &GlobalRect, point: IVec2) -> bool {
+    point.x >= rect.min.x && point.y >= rect.min.y && point.x < rect.max.x && point.y < rect.max.y
 }
 
 fn emit_widget_messages(
     mut window_messages: MessageReader<WindowMessage>,
-    widgets: Query<(Entity, &Widget)>,
+    widgets: Query<(Entity, &GlobalRect), With<Widget>>,
     mut widget_messages: MessageWriter<WidgetMessage>,
     mut last_mouse_position: Local<Option<glam::UVec2>>,
 ) {
@@ -431,12 +437,12 @@ fn emit_widget_messages(
 
         match message {
             WindowMessage::MouseMove(position) => {
-                let previous = *last_mouse_position;
+                let previous = last_mouse_position.map(|p| p.as_ivec2());
                 *last_mouse_position = Some(*position);
 
-                for (entity, widget) in widgets.iter() {
-                    let was_over = previous.is_some_and(|pos| hit_test(widget, pos));
-                    let now_over = hit_test(widget, *position);
+                for (entity, rect) in widgets.iter() {
+                    let was_over = previous.is_some_and(|pos| hit_test(rect, pos));
+                    let now_over = hit_test(rect, position.as_ivec2());
 
                     if now_over && !was_over {
                         widget_messages.write(WidgetMessage::Enter(entity));
@@ -447,8 +453,8 @@ fn emit_widget_messages(
             }
             WindowMessage::MouseLeave => {
                 if let Some(previous) = last_mouse_position.take() {
-                    for (entity, widget) in widgets.iter() {
-                        if hit_test(widget, previous) {
+                    for (entity, rect) in widgets.iter() {
+                        if hit_test(rect, previous.as_ivec2()) {
                             widget_messages.write(WidgetMessage::Exit(entity));
                         }
                     }
@@ -464,8 +470,8 @@ fn emit_widget_messages(
     }
 
     if let Some(position) = *last_mouse_position {
-        for (entity, widget) in widgets.iter() {
-            if hit_test(widget, position) {
+        for (entity, rect) in widgets.iter() {
+            if hit_test(rect, position.as_ivec2()) {
                 for &mouse_button in &mouse_downs {
                     widget_messages.write(WidgetMessage::MouseDown(entity, mouse_button));
                 }
@@ -477,40 +483,9 @@ fn emit_widget_messages(
     }
 }
 
-fn apply_widget_messages(
-    mut events: MessageReader<WidgetMessage>,
-    mut buttons: Query<&mut Button>,
-) {
-    for event in events.read() {
-        match event {
-            WidgetMessage::Enter(entity) => {
-                if let Ok(mut button) = buttons.get_mut(*entity) {
-                    button.hovered = true;
-                }
-            }
-            WidgetMessage::Exit(entity) => {
-                if let Ok(mut button) = buttons.get_mut(*entity) {
-                    button.hovered = false;
-                    button.pressed = false;
-                }
-            }
-            WidgetMessage::MouseDown(entity, _) => {
-                if let Ok(mut button) = buttons.get_mut(*entity) {
-                    button.pressed = true;
-                }
-            }
-            WidgetMessage::MouseUp(entity, _) => {
-                if let Ok(mut button) = buttons.get_mut(*entity) {
-                    button.pressed = false;
-                }
-            }
-        }
-    }
-}
-
 fn animate_button_shadow(
     time: Res<DeltaTime>,
-    mut buttons: Query<(&Widget, &Button, &mut MainMenuButtonAnimation)>,
+    mut buttons: Query<(&GlobalRect, &Button, &mut MainMenuButtonAnimation), With<Widget>>,
     mut renders: Query<&mut SpriteRender>,
 ) {
     const HOVER_PROGRESS_MAX_MS: f32 = 250.0;
@@ -522,7 +497,7 @@ fn animate_button_shadow(
 
     let delta_ms = time.0.max(0.0) * 1000.0;
 
-    for (widget, button, mut animation) in buttons.iter_mut() {
+    for (rect, button, mut animation) in buttons.iter_mut() {
         if button.hovered {
             animation.hover_progress_ms =
                 (animation.hover_progress_ms + delta_ms).min(HOVER_PROGRESS_MAX_MS);
@@ -533,7 +508,7 @@ fn animate_button_shadow(
 
         let slide_delta =
             (HOVER_PROGRESS_MAX_MS - animation.hover_progress_ms) * SHADOW_SLIDE_SCALE;
-        let text_position = widget.position + animation.button_offset.as_vec2();
+        let text_position = rect.min + animation.button_offset;
         let shadow_delta =
             (animation.shadow_offset - animation.button_offset).as_vec2() * slide_delta;
         let text_alpha =
@@ -542,7 +517,7 @@ fn animate_button_shadow(
             (BASE_ALPHA - animation.hover_progress_ms * SHADOW_ALPHA_SCALE).round() / 255.0;
 
         if let Ok(mut shadow_render) = renders.get_mut(animation.shadow_entity) {
-            shadow_render.position = text_position + shadow_delta;
+            shadow_render.position = text_position.as_vec2() + shadow_delta;
             shadow_render.alpha = shadow_alpha;
         }
 
@@ -551,43 +526,9 @@ fn animate_button_shadow(
         }
 
         if let Ok(mut pressed_render) = renders.get_mut(animation.pressed_entity) {
-            pressed_render.position = text_position;
+            pressed_render.position = text_position.as_vec2();
             pressed_render.alpha = if button.pressed { text_alpha } else { 0.0 };
         }
-    }
-}
-
-fn update_render_snapshot(
-    state: Res<AnimationState>,
-    sprite_renders: Query<&SpriteRender>,
-    text_renders: Query<&TextRender>,
-    frames: Query<&GeometryTiled>,
-    mut snapshot: ResMut<RenderSnapshot>,
-) {
-    snapshot.render_items.clear();
-
-    // Render the background geometries.
-    for frame in frames.iter_many(state.frames).rev() {
-        snapshot
-            .render_items
-            .render_tiled_geometry(frame.tiled_geometry_handle, frame.alpha);
-    }
-
-    // Render the sprite widgets.
-    for render in sprite_renders.iter() {
-        snapshot.render_items.render_sprite(
-            render.position,
-            render.sprite,
-            render.frame,
-            render.alpha,
-        )
-    }
-
-    // Render the text widgets.
-    for render in text_renders.iter() {
-        snapshot
-            .render_items
-            .render_text(render.position, &render.text, render.font, render.color);
     }
 }
 

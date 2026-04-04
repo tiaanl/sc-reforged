@@ -2,8 +2,11 @@ use bevy_ecs::prelude::*;
 
 use crate::engine::input::MouseButton;
 
+pub mod button;
 pub mod geometry;
+pub mod rect;
 pub mod render;
+pub mod ui_action;
 pub mod widgets;
 pub mod window;
 
@@ -24,18 +27,5 @@ pub enum WidgetMessage {
     MouseUp(Entity, MouseButton),
 }
 
-#[derive(Bundle)]
-pub struct WindowBundle {
-    window: window::Window,
-}
-
 #[derive(Component, Default)]
 pub struct ZIndex(pub i32);
-
-pub fn spawn_window(mut commands: Commands) -> Entity {
-    commands
-        .spawn(WindowBundle {
-            window: window::Window,
-        })
-        .id()
-}

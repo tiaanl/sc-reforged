@@ -204,7 +204,6 @@ impl Scene for WorldScene {
                 }
             }
         }
-
     }
 
     fn render(&mut self, context: &RenderContext, frame: &mut Frame) {

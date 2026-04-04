@@ -1,11 +1,12 @@
 use bevy_ecs::prelude::*;
 
 use crate::game::windows::{
-    ecs::{ZIndex, geometry::GeometryTiled, render::SpriteRender, widgets::Widget},
+    ecs::{ZIndex, geometry::GeometryTiled, rect::Rect, render::SpriteRender},
     window_renderer::WindowRenderItems,
 };
 
-#[derive(Component)]
+#[derive(Component, Default)]
+#[require(Rect)]
 #[require(WindowRenderItems)]
 pub struct Window;
 
@@ -38,7 +39,7 @@ impl WindowManager {
 pub fn update_window_render_items(
     mut windows: Query<(&Window, &mut WindowRenderItems, &Children)>,
     tiled_geometry: Query<(&GeometryTiled, Option<&ZIndex>)>,
-    widgets: Query<(&Widget, &SpriteRender)>,
+    sprites: Query<&SpriteRender>,
 ) {
     for (_window, mut window_render_items, children) in windows.iter_mut() {
         // Clear out old renders.
@@ -68,7 +69,7 @@ pub fn update_window_render_items(
         }
 
         // Widgets
-        for (_widget, sprite_render) in widgets.iter_many(children) {
+        for sprite_render in sprites.iter_many(children) {
             window_render_items.render_sprite(
                 sprite_render.position,
                 sprite_render.sprite,
