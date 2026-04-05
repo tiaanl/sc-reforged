@@ -359,9 +359,8 @@ impl Scene for MainMenuScene {
 
     fn render(&mut self, _context: &RenderContext, frame: &mut Frame) {
         let windows = self.world.resource::<WindowManager>().windows.clone();
-        let mut render_items = std::mem::take(
-            &mut self.world.resource_mut::<RenderSnapshot>().render_items,
-        );
+        let mut render_items =
+            std::mem::take(&mut self.world.resource_mut::<RenderSnapshot>().render_items);
         render_items.clear();
 
         for window in windows {
@@ -370,7 +369,8 @@ impl Scene for MainMenuScene {
             }
         }
 
-        self.window_renderer.submit_render_items(frame, &render_items);
+        self.window_renderer
+            .submit_render_items(frame, &render_items);
         self.world.resource_mut::<RenderSnapshot>().render_items = render_items;
     }
 }
