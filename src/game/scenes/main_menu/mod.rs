@@ -13,7 +13,9 @@ use crate::{
     game::{
         assets::{images::Images, sprites::Sprites},
         config::{
-            ImageDefs, load_config,
+            ImageDefs,
+            configs::Configs,
+            load_config,
             windows::{GeometryKind, WindowBase},
         },
         file_system::FileSystem,
@@ -89,6 +91,8 @@ impl MainMenuScene {
                 window_manager.remove(event.entity);
             },
         );
+
+        world.insert_resource(Configs::new(Arc::clone(&file_system)));
 
         world.init_resource::<Messages<WindowMessage>>();
         world.init_resource::<Messages<WidgetMessage>>();

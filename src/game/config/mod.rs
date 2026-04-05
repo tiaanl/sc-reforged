@@ -9,6 +9,7 @@ use crate::{
 
 mod campaign;
 mod character_profiles;
+pub mod configs;
 pub mod help_window_defs;
 mod image_defs;
 mod model_lods;
