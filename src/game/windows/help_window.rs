@@ -1,9 +1,12 @@
 use bevy_ecs::prelude::*;
 use glam::{IVec2, UVec2};
 
-use crate::game::windows::ecs::{rect::Rect, window::Window};
+use crate::game::{
+    config::help_window_defs::HelpDef,
+    windows::ecs::{rect::Rect, window::Window},
+};
 
-pub fn spawn_help_window(commands: &mut Commands) {
+pub fn spawn_help_window(commands: &mut Commands, _help_def: &HelpDef) {
     tracing::info!("Spawning help window");
     commands.spawn((
         Window,

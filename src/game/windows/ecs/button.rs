@@ -53,7 +53,7 @@ pub fn update_buttons(
                     button.pressed = false;
 
                     if was_pressed && button.hovered {
-                        ui_actions.write(button.ui_action);
+                        ui_actions.write(button.ui_action.clone());
                     }
                 }
             }

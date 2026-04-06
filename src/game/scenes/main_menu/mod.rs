@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{borrow::Cow, path::PathBuf, sync::Arc};
 
 use bevy_ecs::{prelude::*, world::CommandQueue};
 use glam::{IVec2, UVec2};
@@ -300,7 +300,7 @@ impl MainMenuScene {
                 },
                 Widget,
                 Button::new(if button.name == "b_exit" {
-                    UiAction::ShowExitConfirmation
+                    UiAction::ShowHelpWindow(Cow::Borrowed("conf_exit_game"))
                 } else {
                     UiAction::Exit
                 }),
