@@ -29,7 +29,9 @@ use crate::{
                 render::{SpriteRender, TextRender},
                 ui_action::{UiAction, handle_ui_actions},
                 widgets::Widget,
-                window::{Window, WindowManager, update_window_render_items},
+                window::{
+                    Window, WindowManager, spawn_window_geometries, update_window_render_items,
+                },
             },
             window_renderer::{Font, WindowRenderItems, WindowRenderer},
         },
@@ -125,53 +127,38 @@ impl MainMenuScene {
         let mut queue = CommandQueue::default();
         let mut commands = Commands::new(&mut queue, &world);
 
-        let window_entity = commands.spawn((Rect::default(), Window)).id();
+        let window_entity =
+            crate::game::windows::ecs::window::spawn_window(&mut commands, Rect::UI).id();
 
         Self::spawn_buttons(&mut commands, window_entity, &sprites, &window_base);
 
         Self::spawn_version_label(&mut commands, &window_renderer);
 
-        let mut frames = [Entity::PLACEHOLDER; 5];
+        //let mut frames = [Entity::PLACEHOLDER; 5];
 
         let mut commands = Commands::new(&mut queue, &world);
 
-        for (i, geometry) in window_base.geometries.iter().enumerate() {
-            match geometry.kind {
-                GeometryKind::Normal(_) => {
-                    tracing::warn!("Only tiled geometry supported for main menu background frames");
-                    continue;
+        let frames = {
+            let frames = spawn_window_geometries(
+                &mut commands,
+                &mut window_renderer,
+                &images,
+                window_entity,
+                &window_base.geometries,
+            )?;
+
+            let frames =
+                std::array::from_fn(|i| frames.get(i).copied().unwrap_or(Entity::PLACEHOLDER));
+
+            // Set the first 2 frames alpht to 1 and the rest to 0.
+            frames.iter().enumerate().for_each(|(i, entity)| {
+                if let Some(mut geometry) = world.get_mut::<GeometryTiled>(*entity) {
+                    geometry.alpha = if i <= 1 { 1.0 } else { 0.0 };
                 }
-                GeometryKind::Tiled(ref geometry) => {
-                    let path = PathBuf::from("textures")
-                        .join("interface")
-                        .join(&geometry.jpeg_name)
-                        .with_extension("jpg");
+            });
 
-                    let image = images.load(path)?;
-
-                    let Some(tiled_geometry_handle) = window_renderer.create_tiled_geometry(
-                        image,
-                        glam::IVec2::from(geometry.dimensions).as_uvec2(),
-                        glam::IVec2::from(geometry.chunk_dimensions).as_uvec2(),
-                    ) else {
-                        tracing::warn!("Could not create tiled geometry from image");
-                        continue;
-                    };
-
-                    let new_frame = commands.spawn((
-                        GeometryTiled {
-                            tiled_geometry_handle,
-                            alpha: if i <= 1 { 1.0 } else { 0.0 },
-                            size: glam::IVec2::from(geometry.dimensions).as_uvec2(),
-                        },
-                        // Sort the frames in reverse order.
-                        ZIndex(-(i as i32)),
-                        ChildOf(window_entity),
-                    ));
-                    frames[i] = new_frame.id();
-                }
-            }
-        }
+            frames
+        };
 
         world.insert_resource(AnimationState {
             frames,

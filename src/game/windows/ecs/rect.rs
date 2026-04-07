@@ -8,6 +8,14 @@ pub struct Rect {
     pub size: UVec2,
 }
 
+impl Rect {
+    pub const UI: Rect = Rect::new(IVec2::ZERO, UVec2::new(640, 480));
+
+    pub const fn new(position: IVec2, size: UVec2) -> Self {
+        Self { position, size }
+    }
+}
+
 #[derive(Component, Default)]
 pub struct GlobalRect {
     pub min: IVec2,
@@ -62,25 +70,16 @@ mod tests {
         let mut world = World::new();
 
         let grandchild = world
-            .spawn(Rect {
-                position: IVec2::new(-2, 7),
-                size: UVec2::new(4, 6),
-            })
+            .spawn(Rect::new(IVec2::new(-2, 7), UVec2::new(4, 6)))
             .id();
 
         let child = world
-            .spawn(Rect {
-                position: IVec2::new(5, -3),
-                size: UVec2::new(10, 10),
-            })
+            .spawn(Rect::new(IVec2::new(5, -3), UVec2::new(10, 10)))
             .add_child(grandchild)
             .id();
 
         let root = world
-            .spawn(Rect {
-                position: IVec2::new(10, 20),
-                size: UVec2::new(100, 50),
-            })
+            .spawn(Rect::new(IVec2::new(10, 20), UVec2::new(100, 50)))
             .add_child(child)
             .id();
 

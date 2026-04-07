@@ -105,7 +105,7 @@ pub struct GeometryNormal {
 
 #[derive(Debug, Default)]
 pub struct GeometryTiled {
-    pub jpeg_name: String,
+    pub jpg_name: String,
     pub dimensions: [i32; 2],
     pub chunk_dimensions: [i32; 2],
 }
@@ -221,7 +221,7 @@ impl From<ConfigLines> for WindowBase {
                     }
 
                     "GEOMETRY_JPG_NAME" => {
-                        geometry.jpeg_name = line.param(0);
+                        geometry.jpg_name = line.param(0);
                     }
 
                     "GEOMETRY_JPG_DIMENSIONS" => {

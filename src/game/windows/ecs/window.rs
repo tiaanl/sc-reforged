@@ -1,9 +1,18 @@
-use bevy_ecs::prelude::*;
-use glam::Vec4;
+use std::path::PathBuf;
 
-use crate::game::windows::{
-    ecs::{ZIndex, geometry::GeometryTiled, rect::Rect, render::SpriteRender},
-    window_renderer::WindowRenderItems,
+use bevy_ecs::prelude::*;
+use glam::{IVec2, Vec4};
+
+use crate::{
+    engine::assets::AssetError,
+    game::{
+        assets::images::Images,
+        config::windows::Geometry,
+        windows::{
+            ecs::{ZIndex, geometry::GeometryTiled, rect::Rect, render::SpriteRender},
+            window_renderer::{WindowRenderItems, WindowRenderer},
+        },
+    },
 };
 
 #[derive(Component, Default)]
@@ -97,4 +106,65 @@ pub fn update_window_render_items(
             }
         }
     }
+}
+
+pub fn spawn_window<'a>(commands: &'a mut Commands, rect: Rect) -> EntityCommands<'a> {
+    commands.spawn((Window, rect))
+}
+
+pub fn spawn_window_geometries(
+    commands: &mut Commands,
+    window_renderer: &mut WindowRenderer,
+    images: &Images,
+    window_entity: Entity,
+    geometries: &[Geometry],
+) -> Result<Vec<Entity>, AssetError> {
+    use crate::game::config::windows::GeometryKind;
+    use crate::game::windows::ecs::geometry::GeometryTiled;
+
+    let mut result = Vec::with_capacity(geometries.len());
+
+    for (i, geometry) in geometries.iter().enumerate() {
+        match geometry.kind {
+            GeometryKind::Normal(ref _geometry_normal) => todo!(),
+            GeometryKind::Tiled(ref tiled) => {
+                let path = PathBuf::from("textures")
+                    .join("interface")
+                    .join(&tiled.jpg_name)
+                    .with_extension("jpg");
+
+                let image_handle = images.load(&path)?;
+                let image = images.get(image_handle).expect("just created");
+
+                let tiled_geometry_handle = window_renderer
+                    .create_tiled_geometry(
+                        image_handle,
+                        IVec2::from(tiled.dimensions).as_uvec2(),
+                        IVec2::from(tiled.chunk_dimensions).as_uvec2(),
+                    )
+                    .ok_or(AssetError::FileNotFound(path))?;
+
+                let z_index = -(i as i32);
+
+                let geometry_entity = commands
+                    .spawn((
+                        GeometryTiled {
+                            tiled_geometry_handle,
+                            alpha: 1.0,
+                            size: image.size,
+                        },
+                        ZIndex(z_index),
+                        ChildOf(window_entity),
+                    ))
+                    .id();
+
+                result.push((z_index, geometry_entity));
+            }
+        }
+    }
+
+    // Sort the results according to z_index.
+    result.sort_by_key(|e| e.0);
+
+    Ok(result.iter().map(|e| e.1).collect())
 }
