@@ -12,17 +12,12 @@ use crate::{
     },
     game::{
         assets::{images::Images, sprites::Sprites},
-        config::{
-            ImageDefs,
-            configs::Configs,
-            load_config,
-            windows::{GeometryKind, WindowBase},
-        },
+        config::{ImageDefs, configs::Configs, load_config, windows::WindowBase},
         file_system::FileSystem,
         render::textures::Textures,
         windows::{
             ecs::{
-                WidgetMessage, WindowMessage, ZIndex,
+                WidgetMessage, WindowMessage,
                 button::{Button, update_buttons},
                 geometry::GeometryTiled,
                 rect::{GlobalRect, Rect, update_global_rects},
