@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use glam::{IVec2, UVec2, Vec4};
-
 use crate::{
     engine::{
         assets::AssetError,
@@ -11,10 +9,7 @@ use crate::{
     },
     game::{
         file_system::FileSystem,
-        ui::{
-            render::window_renderer::WindowRenderItems,
-            windows::{window::Window, window_manager::WindowManager},
-        },
+        ui::windows::{main_menu::MainMenuWindow, window_manager::WindowManager},
     },
 };
 
@@ -23,8 +18,6 @@ pub struct MainMenuScene {
 }
 
 impl MainMenuScene {
-    const FRAME_FADE_SPEED: f32 = 0.4;
-
     pub fn new(
         file_system: Arc<FileSystem>,
         render_context: RenderContext,
@@ -33,24 +26,11 @@ impl MainMenuScene {
         let mut window_manager = WindowManager::new(file_system, render_context, surface_desc)?;
 
         // Create the main menu.
-
-        #[derive(Default)]
-        struct MainMenuWindow {}
-
-        impl Window for MainMenuWindow {
-            fn render(&mut self, render_items: &mut WindowRenderItems) {
-                render_items.render_border(
-                    IVec2::new(10, 10),
-                    UVec2::new(100, 100),
-                    2,
-                    Vec4::new(1.0, 0.0, 0.0, 1.0),
-                );
-            }
+        {
+            let window_base = window_manager.get_window_base("main_menu")?;
+            let window = Box::new(MainMenuWindow::new(&window_base));
+            window_manager.push(window);
         }
-
-        let main_menu_window = Box::new(MainMenuWindow::default());
-
-        window_manager.push(main_menu_window);
 
         Ok(Self { window_manager })
     }

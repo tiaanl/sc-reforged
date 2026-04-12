@@ -1,4 +1,9 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+
+use ahash::HashMap;
 
 use crate::{
     engine::{
@@ -7,7 +12,7 @@ use crate::{
     },
     game::{
         assets::{images::Images, sprites::Sprites},
-        config::{ImageDefs, load_config},
+        config::{ImageDefs, load_config, windows::WindowBase},
         file_system::FileSystem,
         render::textures::Textures,
         ui::render::window_renderer::{WindowRenderItems, WindowRenderer},
@@ -17,10 +22,14 @@ use crate::{
 use super::window::Window;
 
 pub struct WindowManager {
+    file_system: Arc<FileSystem>,
+
+    window_bases: Mutex<HashMap<String, Arc<WindowBase>>>,
+
     window_renderer: WindowRenderer,
     window_render_items_cache: WindowRenderItems,
 
-    pub windows: Vec<Box<dyn Window>>,
+    windows: Vec<Box<dyn Window>>,
 }
 
 impl WindowManager {
@@ -49,10 +58,36 @@ impl WindowManager {
         };
 
         Ok(Self {
+            file_system,
+
+            window_bases: Mutex::new(HashMap::default()),
+
             window_renderer,
             window_render_items_cache: WindowRenderItems::default(),
+
             windows: Vec::default(),
         })
+    }
+
+    pub fn get_window_base(&self, name: &str) -> Result<Arc<WindowBase>, AssetError> {
+        if let Some(def) = self.window_bases.lock().unwrap().get(name).cloned() {
+            return Ok(def);
+        }
+
+        let path = PathBuf::from("config")
+            .join("window_bases")
+            .join(name)
+            .with_extension("txt");
+
+        let loaded: Arc<WindowBase> = Arc::new(load_config(self.file_system.as_ref(), path)?);
+
+        let mut defs = self.window_bases.lock().unwrap();
+        let def = defs
+            .entry(name.to_string())
+            .or_insert_with(|| Arc::clone(&loaded))
+            .clone();
+
+        Ok(def)
     }
 
     /// Push a new window to the top of the stack.
