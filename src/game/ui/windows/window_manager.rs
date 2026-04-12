@@ -11,8 +11,8 @@ use crate::{
         renderer::{Frame, RenderContext, SurfaceDesc},
     },
     game::{
-        assets::{images::Images, sprites::Sprites},
-        config::{ImageDefs, load_config, windows::WindowBase},
+        assets::sprites::Sprites,
+        config::{load_config, windows::WindowBase},
         file_system::FileSystem,
         render::textures::Textures,
         ui::render::window_renderer::{WindowRenderItems, WindowRenderer},
@@ -37,25 +37,11 @@ impl WindowManager {
         file_system: Arc<FileSystem>,
         render_context: RenderContext,
         surface_desc: &SurfaceDesc,
+        textures: Arc<Textures>,
+        sprites: Arc<Sprites>,
     ) -> Result<Self, AssetError> {
-        let window_renderer = {
-            let images = Arc::new(Images::new(Arc::clone(&file_system)));
-            let textures = Arc::new(Textures::new(render_context.clone(), Arc::clone(&images)));
-
-            let mut sprites = Sprites::new(Arc::clone(&images));
-            let image_defs: ImageDefs =
-                load_config(&file_system, PathBuf::from("config").join("image_defs.txt"))?;
-
-            sprites.load_image_defs(&image_defs);
-            let sprites = Arc::new(sprites);
-
-            WindowRenderer::new(
-                render_context.clone(),
-                surface_desc,
-                Arc::clone(&textures),
-                Arc::clone(&sprites),
-            )
-        };
+        let window_renderer =
+            WindowRenderer::new(render_context.clone(), surface_desc, textures, sprites);
 
         Ok(Self {
             file_system,

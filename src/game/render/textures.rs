@@ -38,6 +38,12 @@ impl Textures {
         textures.get(handle).cloned()
     }
 
+    /// Return the size of the given texture handle.
+    pub fn size(&self, handle: Handle<Texture>) -> Option<UVec2> {
+        let textures = self.textures.read().unwrap();
+        textures.get(handle).map(|t| t.size)
+    }
+
     /// Returns a texture handle that covers the full source image.
     pub fn create_from_image(&self, image: Handle<Image>) -> Option<Handle<Texture>> {
         {

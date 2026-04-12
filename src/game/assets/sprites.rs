@@ -3,8 +3,8 @@ use std::{ops::RangeInclusive, path::PathBuf, sync::Arc};
 use crate::{
     engine::storage::{Handle, StorageMap},
     game::{
-        assets::{image::Image, images::Images},
         config::ImageDefs,
+        render::textures::{Texture, Textures},
     },
 };
 
@@ -35,7 +35,7 @@ pub struct SpriteFrame {
 #[derive(Debug)]
 pub struct Sprite3d {
     pub name: String,
-    pub image: Handle<Image>,
+    pub texture: Handle<Texture>,
     pub size: glam::UVec2,
     pub alpha: Option<f32>,
     pub color_key_range: Option<ColorKeyRange>,
@@ -50,14 +50,14 @@ impl Sprite3d {
 }
 
 pub struct Sprites {
-    images: Arc<Images>,
+    textures: Arc<Textures>,
     sprites: StorageMap<String, Sprite3d>,
 }
 
 impl Sprites {
-    pub fn new(images: Arc<Images>) -> Self {
+    pub fn new(textures: Arc<Textures>) -> Self {
         Self {
-            images,
+            textures,
             sprites: StorageMap::default(),
         }
     }
@@ -114,7 +114,7 @@ impl Sprites {
     ) {
         let image_path = PathBuf::from("textures").join("object").join(texture_name);
 
-        let image_handle = match self.images.load(&image_path) {
+        let image_handle = match self.textures.images().load(&image_path) {
             Ok(image_handle) => image_handle,
             Err(err) => {
                 tracing::warn!("Could not load image: {} ({})", image_path.display(), err);
@@ -122,10 +122,21 @@ impl Sprites {
             }
         };
 
-        let image = self
-            .images
-            .get(image_handle)
-            .expect("we just loaded it successfully");
+        let texture_handle = match self.textures.create_from_image(image_handle) {
+            Some(handle) => handle,
+            None => {
+                tracing::warn!(
+                    "Could not create texture from image: {}",
+                    image_path.display(),
+                );
+                return;
+            }
+        };
+
+        let Some(size) = self.textures.size(texture_handle) else {
+            tracing::warn!("Invalid image size: {}", image_path.display());
+            return;
+        };
 
         let color_key_range = if !color_key_enabled {
             None
@@ -139,8 +150,8 @@ impl Sprites {
 
         let sprite = Sprite3d {
             name: name.to_owned(),
-            image: image_handle,
-            size: image.size,
+            texture: texture_handle,
+            size,
             alpha,
             color_key_range,
             frames: frames

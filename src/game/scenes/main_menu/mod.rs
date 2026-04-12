@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     engine::{
@@ -8,8 +8,11 @@ use crate::{
         scene::Scene,
     },
     game::{
+        assets::{images::Images, sprites::Sprites},
+        config::{ImageDefs, load_config},
         file_system::FileSystem,
-        ui::windows::{main_menu::MainMenuWindow, window_manager::WindowManager},
+        render::textures::Textures,
+        ui::windows::{help::HelpWindow, main_menu::MainMenuWindow, window_manager::WindowManager},
     },
 };
 
@@ -23,13 +26,27 @@ impl MainMenuScene {
         render_context: RenderContext,
         surface_desc: &SurfaceDesc,
     ) -> Result<Self, AssetError> {
-        let mut window_manager = WindowManager::new(file_system, render_context, surface_desc)?;
+        let images = Arc::new(Images::new(Arc::clone(&file_system)));
+        let textures = Arc::new(Textures::new(render_context.clone(), Arc::clone(&images)));
+        let sprites = {
+            let mut sprites = Sprites::new(Arc::clone(&textures));
+            let image_defs: ImageDefs =
+                load_config(&file_system, PathBuf::from("config").join("image_defs.txt"))?;
+
+            sprites.load_image_defs(&image_defs);
+
+            Arc::new(sprites)
+        };
+
+        let mut window_manager =
+            WindowManager::new(file_system, render_context, surface_desc, textures, sprites)?;
 
         // Create the main menu.
         {
             let window_base = window_manager.get_window_base("main_menu")?;
-            let window = Box::new(MainMenuWindow::new(&window_base));
-            window_manager.push(window);
+            window_manager.push(Box::new(MainMenuWindow::new(&window_base)));
+
+            window_manager.push(Box::new(HelpWindow::new()));
         }
 
         Ok(Self { window_manager })

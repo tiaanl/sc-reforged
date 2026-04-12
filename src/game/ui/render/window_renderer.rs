@@ -276,14 +276,11 @@ impl WindowRenderer {
                     let Some(sprite_frame) = sprite_data.frame(*frame) else {
                         continue;
                     };
-                    let Some(texture) = self.textures.create_from_image(sprite_data.image) else {
-                        continue;
-                    };
-                    let Some(texture_data) = self.textures.get(texture) else {
+                    let Some(texture) = self.textures.get(sprite_data.texture) else {
                         continue;
                     };
 
-                    let texture_size = texture_data.size.as_vec2();
+                    let texture_size = texture.size.as_vec2();
                     let uv_min = sprite_frame.top_left.as_vec2() / texture_size;
                     let uv_max = sprite_frame.bottom_right.as_vec2() / texture_size;
                     let size = sprite_frame.bottom_right - sprite_frame.top_left;
@@ -291,7 +288,7 @@ impl WindowRenderer {
                     quads.push(Quad {
                         pos: *pos,
                         size,
-                        texture,
+                        texture: sprite_data.texture,
                         alpha: sprite_data.alpha.unwrap_or(1.0) * *alpha,
                         color: [1.0, 1.0, 1.0, 1.0],
                         uv_min,
@@ -312,10 +309,7 @@ impl WindowRenderer {
                     let Some(font_sprite) = self.sprites.get(font_sprite_handle) else {
                         continue;
                     };
-                    let Some(texture) = self.textures.create_from_image(font_sprite.image) else {
-                        continue;
-                    };
-                    let Some(texture_data) = self.textures.get(texture) else {
+                    let Some(texture_data) = self.textures.get(font_sprite.texture) else {
                         continue;
                     };
 
@@ -340,7 +334,7 @@ impl WindowRenderer {
                             quads.push(Quad {
                                 pos: Vec2::new(x, pos.y),
                                 size: glyph_size,
-                                texture,
+                                texture: font_sprite.texture,
                                 alpha,
                                 color: color.to_array(),
                                 uv_min,
