@@ -20,10 +20,13 @@ pub struct HelpWindow {
 
 impl HelpWindow {
     pub fn new(help_def: &HelpDef, window_renderer: &WindowRenderer) -> Self {
-        let mut widgets = Widgets::default();
+        let size = help_def.dimensions.unwrap_or(UVec2::new(380, 180));
 
-        let pos = IVec2::ONE * 30;
-        let size = UVec2::new(640 - 30 * 2, 480 - 30 * 2);
+        let pos = help_def
+            .position
+            .unwrap_or(IVec2::new(640, 480) / 2 - size.as_ivec2() / 2);
+
+        let mut widgets = Widgets::default();
 
         widgets.add(Box::new(TextButtonWidget::new(
             IVec2::new(20, 20),

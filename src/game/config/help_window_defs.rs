@@ -36,7 +36,7 @@ pub struct HelpPointer {
     pub destination: IVec2,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct HelpDef {
     pub id: String,
     pub is_tip: bool,
@@ -45,32 +45,12 @@ pub struct HelpDef {
     pub do_not_pause_game: bool,
     pub tutorial_id: Option<i32>,
     pub tutorial_next: Option<String>,
-    pub position: HelpPosition,
-    pub dimensions: UVec2,
+    pub position: Option<IVec2>,
+    pub dimensions: Option<UVec2>,
     pub body_lines: Vec<String>,
     pub pointer: Option<HelpPointer>,
     pub confirmation_text_1: Option<String>,
     pub confirmation_text_2: Option<String>,
-}
-
-impl Default for HelpDef {
-    fn default() -> Self {
-        Self {
-            id: String::default(),
-            is_tip: false,
-            is_context: false,
-            is_confirmation: false,
-            do_not_pause_game: false,
-            tutorial_id: None,
-            tutorial_next: None,
-            position: HelpPosition::Centered,
-            dimensions: UVec2::new(380, 180),
-            body_lines: Vec::default(),
-            pointer: None,
-            confirmation_text_1: None,
-            confirmation_text_2: None,
-        }
-    }
 }
 
 #[derive(Debug, Default)]
@@ -154,15 +134,15 @@ impl From<ConfigLines> for HelpWindowDefs {
                 }
                 "HELP_POS" => {
                     state.with_help_def(|help_def| {
-                        help_def.position =
-                            HelpPosition::Absolute(IVec2::new(line.param(0), line.param(1)))
+                        help_def.position = Some(IVec2::new(line.param(0), line.param(1)))
                     });
                 }
                 "HELP_DIMS" => {
                     state.with_help_def(|help_def| {
                         let width: i32 = line.param(0);
                         let height: i32 = line.param(1);
-                        help_def.dimensions = UVec2::new(width.max(0) as u32, height.max(0) as u32);
+                        help_def.dimensions =
+                            Some(UVec2::new(width.max(0) as u32, height.max(0) as u32));
                     });
                 }
                 "HELP_BODY" => {
