@@ -97,7 +97,7 @@ impl WindowManager {
         self.window_render_items_cache.clear();
 
         for window in self.windows.iter_mut() {
-            window.render(&mut self.window_render_items_cache);
+            window.render(&self.window_renderer, &mut self.window_render_items_cache);
         }
 
         self.window_renderer

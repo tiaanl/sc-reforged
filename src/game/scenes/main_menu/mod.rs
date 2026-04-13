@@ -51,10 +51,7 @@ impl MainMenuScene {
             window_manager.push(Box::new(MainMenuWindow::new(&window_base)));
 
             if let Some(help_def) = help_window_defs.get("conf_exit_game") {
-                window_manager.push(Box::new(HelpWindow::new(
-                    help_def,
-                    window_manager.window_renderer(),
-                )));
+                window_manager.push(Box::new(HelpWindow::new(help_def)));
             }
         }
 

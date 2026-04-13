@@ -1,6 +1,9 @@
 use glam::{IVec2, UVec2, Vec4};
 
-use crate::game::{config::windows::WindowBase, ui::render::window_renderer::WindowRenderItems};
+use crate::game::{
+    config::windows::WindowBase,
+    ui::render::window_renderer::{WindowRenderItems, WindowRenderer},
+};
 
 use super::window::Window;
 
@@ -13,7 +16,7 @@ impl MainMenuWindow {
 }
 
 impl Window for MainMenuWindow {
-    fn render(&mut self, render_items: &mut WindowRenderItems) {
+    fn render(&mut self, _window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems) {
         render_items.render_border(
             IVec2::new(10, 10),
             UVec2::new(100, 100),

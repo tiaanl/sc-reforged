@@ -19,7 +19,7 @@ pub struct HelpWindow {
 }
 
 impl HelpWindow {
-    pub fn new(help_def: &HelpDef, window_renderer: &WindowRenderer) -> Self {
+    pub fn new(help_def: &HelpDef) -> Self {
         let size = help_def.dimensions.unwrap_or(UVec2::new(380, 180));
 
         let pos = help_def
@@ -28,19 +28,29 @@ impl HelpWindow {
 
         let mut widgets = Widgets::default();
 
-        widgets.add(Box::new(TextButtonWidget::new(
-            IVec2::new(20, 20),
-            UVec2::new(100, 30),
-            "Ok",
-            window_renderer,
-        )));
+        if help_def.is_confirmation {
+            let button_width = (size.x as i32 - 64) / 3;
 
-        widgets.add(Box::new(TextButtonWidget::new(
-            IVec2::new(20, 60),
-            UVec2::new(100, 30),
-            "Cancel",
-            window_renderer,
-        )));
+            let mut button = Box::new(TextButtonWidget::new(
+                IVec2::new(button_width + 32, size.y as i32 - 36),
+                UVec2::new(button_width as u32, 20),
+                help_def.confirmation_text_1.as_ref().unwrap(),
+            ));
+            button.font = Font::TwelvePoint;
+            button.custom_color = Some(Vec4::new(25.0 / 255.0, 1.0, 25.0 / 255.0, 1.0)); // 0xff19ff19
+
+            widgets.add(button);
+
+            let mut button = Box::new(TextButtonWidget::new(
+                IVec2::new(button_width * 2 + 48, size.y as i32 - 36),
+                UVec2::new(button_width as u32, 20),
+                help_def.confirmation_text_2.as_ref().unwrap(),
+            ));
+            button.font = Font::TwelvePoint;
+            button.custom_color = Some(Vec4::new(25.0 / 255.0, 1.0, 25.0 / 255.0, 1.0)); // 0xff19ff19
+
+            widgets.add(button);
+        }
 
         Self {
             pos,
@@ -52,7 +62,7 @@ impl HelpWindow {
 }
 
 impl Window for HelpWindow {
-    fn render(&mut self, render_items: &mut WindowRenderItems) {
+    fn render(&mut self, window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems) {
         if self.should_pause_game {
             // Render modal background.
             // Render_Solid_Rect(0,0,g_renderer->m_screen_width,g_renderer->m_screen_height,0x50000000);
@@ -93,6 +103,6 @@ impl Window for HelpWindow {
 
         // TODO: Render pointer.
 
-        self.widgets.render(render_items);
+        self.widgets.render(self.pos, window_renderer, render_items);
     }
 }

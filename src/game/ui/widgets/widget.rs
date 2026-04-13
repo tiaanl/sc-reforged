@@ -1,7 +1,14 @@
-use crate::game::ui::render::window_renderer::WindowRenderItems;
+use glam::IVec2;
+
+use crate::game::ui::render::window_renderer::{WindowRenderItems, WindowRenderer};
 
 pub trait Widget {
-    fn render(&self, window_render_items: &mut WindowRenderItems);
+    fn render(
+        &self,
+        origin: IVec2,
+        window_renderer: &WindowRenderer,
+        window_render_items: &mut WindowRenderItems,
+    );
 }
 
 #[derive(Default)]
@@ -14,9 +21,14 @@ impl Widgets {
         self.widgets.push(widget);
     }
 
-    pub fn render(&self, window_render_items: &mut WindowRenderItems) {
+    pub fn render(
+        &self,
+        origin: IVec2,
+        window_renderer: &WindowRenderer,
+        window_render_items: &mut WindowRenderItems,
+    ) {
         for widget in self.widgets.iter() {
-            widget.render(window_render_items);
+            widget.render(origin, window_renderer, window_render_items);
         }
     }
 }

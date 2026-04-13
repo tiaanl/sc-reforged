@@ -1,4 +1,4 @@
-use crate::game::ui::render::window_renderer::WindowRenderItems;
+use crate::game::ui::render::window_renderer::{WindowRenderItems, WindowRenderer};
 
 pub trait Window {
     /// Called to update the window state given the time in seconds since the last frame was drawn
@@ -8,5 +8,5 @@ pub trait Window {
     }
 
     /// Called for each window so they can append items to the `render_items` to be rendered.
-    fn render(&mut self, render_items: &mut WindowRenderItems);
+    fn render(&mut self, window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems);
 }
