@@ -42,10 +42,10 @@ impl Font {
     }
 
     /// Per-character letter spacing adjustment matching the original engine.
-    fn letter_spacing(self) -> f32 {
+    fn letter_spacing(self) -> i32 {
         match self {
-            Font::TwelvePoint => -2.0,
-            _ => 0.0,
+            Font::TwelvePoint => -2,
+            _ => 0,
         }
     }
 
@@ -96,7 +96,13 @@ impl WindowRenderItems {
     }
 
     /// Queues a sprite item.
-    pub fn render_sprite(&mut self, pos: Vec2, sprite: Handle<Sprite3d>, frame: usize, alpha: f32) {
+    pub fn render_sprite(
+        &mut self,
+        pos: IVec2,
+        sprite: Handle<Sprite3d>,
+        frame: usize,
+        alpha: f32,
+    ) {
         self.0.push(WindowRenderItem::Sprite {
             pos,
             sprite,
@@ -106,7 +112,7 @@ impl WindowRenderItems {
     }
 
     /// Queues a text string. Uses the font's default color unless overridden.
-    pub fn render_text(&mut self, pos: Vec2, text: &str, font: Font, color: Option<Vec4>) {
+    pub fn render_text(&mut self, pos: IVec2, text: &str, font: Font, color: Option<Vec4>) {
         self.0.push(WindowRenderItem::Text {
             pos,
             text: text.to_owned(),
@@ -174,27 +180,27 @@ impl WindowRenderer {
 
     /// Measures the pixel width of a text string in the given font, matching
     /// the original engine's `Calculate_Text_Width` logic.
-    pub fn measure_text_width(&self, text: &str, font: Font) -> f32 {
+    pub fn measure_text_width(&self, text: &str, font: Font) -> u32 {
         let Some(handle) = self.sprites.get_handle_by_name(font.sprite_name()) else {
-            return 0.0;
+            return 0;
         };
         let Some(font_sprite) = self.sprites.get(handle) else {
-            return 0.0;
+            return 0;
         };
 
         let letter_spacing = font.letter_spacing();
-        let mut width = 0.0_f32;
+        let mut width = 0;
 
         for byte in text.bytes() {
             if let Some(glyph) = font_sprite.frame(byte as usize) {
-                let glyph_width = glyph.bottom_right.x as f32 - glyph.top_left.x as f32;
-                width += glyph_width + letter_spacing;
+                let glyph_width = glyph.bottom_right.x - glyph.top_left.x;
+                width += (glyph_width as i32 + letter_spacing) as u32;
             }
 
             if byte == b' ' {
-                width += 4.0;
+                width = (width as f32 * 4.0).round() as u32;
             } else if byte == b'\t' {
-                width += 12.0;
+                width = (width as f32 * 12.0).round() as u32;
             }
         }
 
@@ -204,19 +210,19 @@ impl WindowRenderer {
     /// Measures the pixel height of a text string in the given font, matching
     /// the original engine's `Calculate_Text_Height` logic. Returns the
     /// tallest glyph height found in the string.
-    pub fn measure_text_height(&self, text: &str, font: Font) -> f32 {
+    pub fn measure_text_height(&self, text: &str, font: Font) -> u32 {
         let Some(handle) = self.sprites.get_handle_by_name(font.sprite_name()) else {
-            return 0.0;
+            return 0;
         };
         let Some(font_sprite) = self.sprites.get(handle) else {
-            return 0.0;
+            return 0;
         };
 
-        let mut height = 0.0_f32;
+        let mut height = 0;
 
         for byte in text.bytes() {
             if let Some(glyph) = font_sprite.frame(byte as usize) {
-                let glyph_height = glyph.bottom_right.y as f32 - glyph.top_left.y as f32;
+                let glyph_height = glyph.bottom_right.y - glyph.top_left.y;
                 height = height.max(glyph_height);
             }
         }
@@ -286,7 +292,7 @@ impl WindowRenderer {
                     let size = sprite_frame.bottom_right - sprite_frame.top_left;
 
                     quads.push(Quad {
-                        pos: *pos,
+                        pos: pos.as_vec2(),
                         size,
                         texture: sprite_data.texture,
                         alpha: sprite_data.alpha.unwrap_or(1.0) * *alpha,
@@ -332,7 +338,7 @@ impl WindowRenderer {
                             let uv_max = glyph_frame.bottom_right.as_vec2() / texture_size;
 
                             quads.push(Quad {
-                                pos: Vec2::new(x, pos.y),
+                                pos: IVec2::new(x, pos.y).as_vec2(),
                                 size: glyph_size,
                                 texture: font_sprite.texture,
                                 alpha,
@@ -342,13 +348,13 @@ impl WindowRenderer {
                             });
                         }
 
-                        x += glyph_size.x as f32 + letter_spacing;
+                        x += glyph_size.x as i32 + letter_spacing;
 
                         // Extra spacing for space and tab, matching the original engine.
                         if byte == b' ' {
-                            x += 4.0;
+                            x += 4;
                         } else if byte == b'\t' {
-                            x += 12.0;
+                            x += 12;
                         }
                     }
                 }
@@ -373,13 +379,13 @@ enum WindowRenderItem {
         color: Vec4,
     },
     Sprite {
-        pos: Vec2,
+        pos: IVec2,
         sprite: Handle<Sprite3d>,
         frame: usize,
         alpha: f32,
     },
     Text {
-        pos: Vec2,
+        pos: IVec2,
         text: String,
         font: Font,
         color: Vec4,

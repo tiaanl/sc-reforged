@@ -12,7 +12,7 @@ use crate::{
         config::{ImageDefs, load_config},
         file_system::FileSystem,
         render::textures::Textures,
-        ui::windows::{help::HelpWindow, main_menu::MainMenuWindow, window_manager::WindowManager},
+        ui::windows::{main_menu::MainMenuWindow, window_manager::WindowManager},
     },
 };
 
@@ -41,12 +41,9 @@ impl MainMenuScene {
         let mut window_manager =
             WindowManager::new(file_system, render_context, surface_desc, textures, sprites)?;
 
-        // Create the main menu.
         {
             let window_base = window_manager.get_window_base("main_menu")?;
             window_manager.push(Box::new(MainMenuWindow::new(&window_base)));
-
-            window_manager.push(Box::new(HelpWindow::new()));
         }
 
         Ok(Self { window_manager })
