@@ -1,7 +1,7 @@
 use crate::game::ui::render::window_renderer::WindowRenderItems;
 
 pub trait Widget {
-    fn render(&mut self, window_render_items: &mut WindowRenderItems);
+    fn render(&self, window_render_items: &mut WindowRenderItems);
 }
 
 #[derive(Default)]
@@ -14,7 +14,9 @@ impl Widgets {
         self.widgets.push(widget);
     }
 
-    pub fn render(&self, _window_render_items: &mut WindowRenderItems) {
-        //
+    pub fn render(&self, window_render_items: &mut WindowRenderItems) {
+        for widget in self.widgets.iter() {
+            widget.render(window_render_items);
+        }
     }
 }

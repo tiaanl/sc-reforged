@@ -85,6 +85,11 @@ impl WindowRenderItems {
             .push(WindowRenderItem::TiledGeometry { handle, alpha });
     }
 
+    pub fn render_solid_rect(&mut self, pos: IVec2, size: UVec2, color: Vec4) {
+        self.0
+            .push(WindowRenderItem::SolidRect { pos, size, color });
+    }
+
     /// Queues a solid-color border drawn inside the target rectangle.
     pub fn render_border(&mut self, pos: IVec2, size: UVec2, thickness: u32, color: Vec4) {
         self.0.push(WindowRenderItem::Border {
@@ -257,6 +262,9 @@ impl WindowRenderer {
                         uv_max: Vec2::ONE,
                     });
                 }
+                WindowRenderItem::SolidRect { .. } => {
+                    // TODO: Render solid rect.
+                }
                 WindowRenderItem::Border {
                     pos,
                     size,
@@ -371,6 +379,11 @@ enum WindowRenderItem {
     TiledGeometry {
         handle: Handle<TiledGeometry>,
         alpha: f32,
+    },
+    SolidRect {
+        pos: IVec2,
+        size: UVec2,
+        color: Vec4,
     },
     Border {
         pos: IVec2,

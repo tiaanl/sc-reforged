@@ -22,10 +22,7 @@ impl TextButtonWidget {
     ) -> Self {
         let text = text.into();
 
-        let width = window_renderer.measure_text_width(&text, Font::FifteenPoint);
-        let height = window_renderer.measure_text_height(&text, Font::FifteenPoint);
-
-        let text_offset = (size + UVec2::new(width, height)).as_ivec2() / 2;
+        let text_offset = Self::calculate_text_offset(&text, size, window_renderer);
 
         Self {
             pos,
@@ -35,10 +32,22 @@ impl TextButtonWidget {
             text_offset,
         }
     }
+
+    pub fn set_text(&mut self, text: impl Into<String>, window_renderer: &WindowRenderer) {
+        self.text = text.into();
+        self.text_offset = Self::calculate_text_offset(&self.text, self.size, window_renderer);
+    }
+
+    fn calculate_text_offset(text: &str, size: UVec2, window_renderer: &WindowRenderer) -> IVec2 {
+        let width = window_renderer.measure_text_width(text, Font::FifteenPoint) as i32;
+        let height = window_renderer.measure_text_height(text, Font::FifteenPoint) as i32;
+
+        (size.as_ivec2() / 2) - IVec2::new(width, height) / 2
+    }
 }
 
 impl Widget for TextButtonWidget {
-    fn render(&mut self, window_render_items: &mut WindowRenderItems) {
+    fn render(&self, window_render_items: &mut WindowRenderItems) {
         window_render_items.render_border(self.pos, self.size, 1, Vec4::ONE);
         window_render_items.render_text(
             self.pos + self.text_offset,

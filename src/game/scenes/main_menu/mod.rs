@@ -9,10 +9,10 @@ use crate::{
     },
     game::{
         assets::{images::Images, sprites::Sprites},
-        config::{ImageDefs, load_config},
+        config::{ImageDefs, help_window_defs::HelpWindowDefs, load_config},
         file_system::FileSystem,
         render::textures::Textures,
-        ui::windows::{main_menu::MainMenuWindow, window_manager::WindowManager},
+        ui::windows::{help::HelpWindow, main_menu::MainMenuWindow, window_manager::WindowManager},
     },
 };
 
@@ -38,12 +38,24 @@ impl MainMenuScene {
             Arc::new(sprites)
         };
 
+        let help_window_defs: HelpWindowDefs = load_config(
+            &file_system,
+            PathBuf::from("config").join("help_window_defs.txt"),
+        )?;
+
         let mut window_manager =
             WindowManager::new(file_system, render_context, surface_desc, textures, sprites)?;
 
         {
             let window_base = window_manager.get_window_base("main_menu")?;
             window_manager.push(Box::new(MainMenuWindow::new(&window_base)));
+
+            if let Some(help_def) = help_window_defs.get("conf_exit_game") {
+                window_manager.push(Box::new(HelpWindow::new(
+                    help_def,
+                    window_manager.window_renderer(),
+                )));
+            }
         }
 
         Ok(Self { window_manager })

@@ -55,6 +55,10 @@ impl WindowManager {
         })
     }
 
+    pub fn window_renderer(&self) -> &WindowRenderer {
+        &self.window_renderer
+    }
+
     pub fn get_window_base(&self, name: &str) -> Result<Arc<WindowBase>, AssetError> {
         if let Some(def) = self.window_bases.lock().unwrap().get(name).cloned() {
             return Ok(def);
