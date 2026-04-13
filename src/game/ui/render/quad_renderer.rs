@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ahash::HashMap;
-use glam::{UVec2, Vec2};
+use glam::{IVec2, UVec2, Vec2, Vec4};
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -16,11 +16,11 @@ use crate::{
 /// A fully resolved textured quad ready for rendering.
 #[derive(Clone, Copy, Debug)]
 pub struct Quad {
-    pub pos: Vec2,
+    pub pos: IVec2,
     pub size: UVec2,
     pub texture: Handle<Texture>,
     pub alpha: f32,
-    pub color: [f32; 4],
+    pub color: Vec4,
     pub uv_min: Vec2,
     pub uv_max: Vec2,
 }
@@ -269,10 +269,10 @@ impl QuadRenderer {
                 self.ensure_bind_group(quad.texture).then_some((
                     quad.texture,
                     gpu::RectInstance {
-                        pos: quad.pos.to_array(),
+                        pos: quad.pos.as_vec2().to_array(),
                         size: quad.size.as_vec2().to_array(),
                         alpha: quad.alpha,
-                        color: quad.color,
+                        color: quad.color.to_array(),
                         uv_min: quad.uv_min.to_array(),
                         uv_max: quad.uv_max.to_array(),
                     },
@@ -296,7 +296,12 @@ impl QuadRenderer {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
                         store: wgpu::StoreOp::Store,
                     },
                 })],

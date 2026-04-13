@@ -253,17 +253,25 @@ impl WindowRenderer {
                     };
 
                     quads.push(Quad {
-                        pos: Vec2::ZERO,
+                        pos: IVec2::ZERO,
                         size: geometry.render_size,
                         texture: geometry.texture,
                         alpha: *alpha,
-                        color: [1.0, 1.0, 1.0, 1.0],
+                        color: Vec4::ONE,
                         uv_min: Vec2::ZERO,
                         uv_max: Vec2::ONE,
                     });
                 }
-                WindowRenderItem::SolidRect { .. } => {
-                    // TODO: Render solid rect.
+                WindowRenderItem::SolidRect { pos, size, color } => {
+                    quads.push(Quad {
+                        pos: *pos,
+                        size: *size,
+                        texture: self.solid_white_texture,
+                        alpha: color.w,
+                        color: color.truncate().extend(1.0),
+                        uv_min: Vec2::ZERO,
+                        uv_max: Vec2::ONE,
+                    });
                 }
                 WindowRenderItem::Border {
                     pos,
@@ -300,11 +308,11 @@ impl WindowRenderer {
                     let size = sprite_frame.bottom_right - sprite_frame.top_left;
 
                     quads.push(Quad {
-                        pos: pos.as_vec2(),
+                        pos: *pos,
                         size,
                         texture: sprite_data.texture,
                         alpha: sprite_data.alpha.unwrap_or(1.0) * *alpha,
-                        color: [1.0, 1.0, 1.0, 1.0],
+                        color: Vec4::ONE,
                         uv_min,
                         uv_max,
                     });
@@ -346,11 +354,11 @@ impl WindowRenderer {
                             let uv_max = glyph_frame.bottom_right.as_vec2() / texture_size;
 
                             quads.push(Quad {
-                                pos: IVec2::new(x, pos.y).as_vec2(),
+                                pos: IVec2::new(x, pos.y),
                                 size: glyph_size,
                                 texture: font_sprite.texture,
                                 alpha,
-                                color: color.to_array(),
+                                color: *color,
                                 uv_min,
                                 uv_max,
                             });
@@ -484,11 +492,11 @@ fn push_solid_rect(
     }
 
     quads.push(Quad {
-        pos: pos.as_vec2(),
+        pos,
         size,
         texture,
         alpha: color.w,
-        color: [color.x, color.y, color.z, 1.0],
+        color: color.truncate().extend(1.0),
         uv_min: Vec2::ZERO,
         uv_max: Vec2::ONE,
     });
