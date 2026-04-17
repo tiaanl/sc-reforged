@@ -14,6 +14,7 @@ use crate::{
             sprites::{Sprite3d, Sprites},
         },
         render::textures::{Texture, Textures},
+        ui::Rect,
     },
 };
 
@@ -85,16 +86,14 @@ impl WindowRenderItems {
             .push(WindowRenderItem::TiledGeometry { handle, alpha });
     }
 
-    pub fn render_solid_rect(&mut self, pos: IVec2, size: UVec2, color: Vec4) {
-        self.0
-            .push(WindowRenderItem::SolidRect { pos, size, color });
+    pub fn render_solid_rect(&mut self, rect: Rect, color: Vec4) {
+        self.0.push(WindowRenderItem::SolidRect { rect, color });
     }
 
     /// Queues a solid-color border drawn inside the target rectangle.
-    pub fn render_border(&mut self, pos: IVec2, size: UVec2, thickness: u32, color: Vec4) {
+    pub fn render_border(&mut self, rect: Rect, thickness: i32, color: Vec4) {
         self.0.push(WindowRenderItem::Border {
-            pos,
-            size,
+            rect,
             thickness,
             color,
         });
@@ -117,10 +116,10 @@ impl WindowRenderItems {
     }
 
     /// Queues a text string. Uses the font's default color unless overridden.
-    pub fn render_text(&mut self, pos: IVec2, text: &str, font: Font, color: Option<Vec4>) {
+    pub fn render_text(&mut self, pos: IVec2, text: &[u8], font: Font, color: Option<Vec4>) {
         self.0.push(WindowRenderItem::Text {
             pos,
-            text: text.to_owned(),
+            text: text.to_vec(),
             font,
             color: color.unwrap_or(font.default_color()),
         });
@@ -169,10 +168,10 @@ impl WindowRenderer {
     pub fn create_tiled_geometry(
         &mut self,
         image: Handle<Image>,
-        dimensions: UVec2,
-        chunk_dimensions: UVec2,
+        dimensions: IVec2,
+        chunk_dimensions: IVec2,
     ) -> Option<Handle<TiledGeometry>> {
-        let render_size = self.textures.images().get(image)?.size;
+        let render_size = self.textures.images().get(image)?.size.as_ivec2();
         let texture = self.textures.create_from_image(image)?;
 
         Some(self.tiled_geometries.insert(TiledGeometry {
@@ -185,7 +184,7 @@ impl WindowRenderer {
 
     /// Measures the pixel width of a text string in the given font, matching
     /// the original engine's `Calculate_Text_Width` logic.
-    pub fn measure_text_width(&self, text: &[u8], font: Font) -> u32 {
+    pub fn measure_text_width(&self, text: &[u8], font: Font) -> i32 {
         let Some(handle) = self.sprites.get_handle_by_name(font.sprite_name()) else {
             return 0;
         };
@@ -199,7 +198,7 @@ impl WindowRenderer {
         for &byte in text {
             if let Some(glyph) = font_sprite.frame(byte as usize) {
                 let glyph_width = glyph.bottom_right.x - glyph.top_left.x;
-                width += glyph_width as i32 + letter_spacing;
+                width += glyph_width + letter_spacing;
             }
 
             if byte == b' ' {
@@ -209,13 +208,13 @@ impl WindowRenderer {
             }
         }
 
-        width as u32
+        width
     }
 
     /// Measures the pixel height of a text string in the given font, matching
     /// the original engine's `Calculate_Text_Height` logic. Returns the
     /// tallest glyph height found in the string.
-    pub fn measure_text_height(&self, text: &[u8], font: Font) -> u32 {
+    pub fn measure_text_height(&self, text: &[u8], font: Font) -> i32 {
         let Some(handle) = self.sprites.get_handle_by_name(font.sprite_name()) else {
             return 0;
         };
@@ -253,8 +252,7 @@ impl WindowRenderer {
                     };
 
                     quads.push(Quad {
-                        pos: IVec2::ZERO,
-                        size: geometry.render_size,
+                        rect: Rect::new(IVec2::ZERO, geometry.render_size),
                         texture: geometry.texture,
                         alpha: *alpha,
                         color: Vec4::ONE,
@@ -262,10 +260,9 @@ impl WindowRenderer {
                         uv_max: Vec2::ONE,
                     });
                 }
-                WindowRenderItem::SolidRect { pos, size, color } => {
+                WindowRenderItem::SolidRect { rect, color } => {
                     quads.push(Quad {
-                        pos: *pos,
-                        size: *size,
+                        rect: *rect,
                         texture: self.solid_white_texture,
                         alpha: color.w,
                         color: color.truncate().extend(1.0),
@@ -274,15 +271,13 @@ impl WindowRenderer {
                     });
                 }
                 WindowRenderItem::Border {
-                    pos,
-                    size,
+                    rect,
                     thickness,
                     color,
                 } => push_border_quads(
                     &mut quads,
                     self.solid_white_texture,
-                    *pos,
-                    *size,
+                    *rect,
                     *thickness,
                     *color,
                 ),
@@ -308,8 +303,7 @@ impl WindowRenderer {
                     let size = sprite_frame.bottom_right - sprite_frame.top_left;
 
                     quads.push(Quad {
-                        pos: *pos,
-                        size,
+                        rect: Rect::new(*pos, size),
                         texture: sprite_data.texture,
                         alpha: sprite_data.alpha.unwrap_or(1.0) * *alpha,
                         color: Vec4::ONE,
@@ -340,8 +334,8 @@ impl WindowRenderer {
                     let letter_spacing = font.letter_spacing();
                     let mut x = pos.x;
 
-                    for byte in text.bytes() {
-                        let frame_index = byte as usize;
+                    for byte in text {
+                        let frame_index = *byte as usize;
                         let Some(glyph_frame) = font_sprite.frame(frame_index) else {
                             continue;
                         };
@@ -354,8 +348,7 @@ impl WindowRenderer {
                             let uv_max = glyph_frame.bottom_right.as_vec2() / texture_size;
 
                             quads.push(Quad {
-                                pos: IVec2::new(x, pos.y),
-                                size: glyph_size,
+                                rect: Rect::new(IVec2::new(x, pos.y), glyph_size),
                                 texture: font_sprite.texture,
                                 alpha,
                                 color: *color,
@@ -364,12 +357,12 @@ impl WindowRenderer {
                             });
                         }
 
-                        x += glyph_size.x as i32 + letter_spacing;
+                        x += glyph_size.x + letter_spacing;
 
                         // Extra spacing for space and tab, matching the original engine.
-                        if byte == b' ' {
+                        if *byte == b' ' {
                             x += 4;
-                        } else if byte == b'\t' {
+                        } else if *byte == b'\t' {
                             x += 12;
                         }
                     }
@@ -389,14 +382,12 @@ enum WindowRenderItem {
         alpha: f32,
     },
     SolidRect {
-        pos: IVec2,
-        size: UVec2,
+        rect: Rect,
         color: Vec4,
     },
     Border {
-        pos: IVec2,
-        size: UVec2,
-        thickness: u32,
+        rect: Rect,
+        thickness: i32,
         color: Vec4,
     },
     Sprite {
@@ -407,7 +398,7 @@ enum WindowRenderItem {
     },
     Text {
         pos: IVec2,
-        text: String,
+        text: Vec<u8>,
         font: Font,
         color: Vec4,
     },
@@ -415,47 +406,48 @@ enum WindowRenderItem {
 
 pub struct TiledGeometry {
     texture: Handle<Texture>,
-    render_size: UVec2,
+    render_size: IVec2,
     // We store dimensions, because it came from the window base, but we don't
     // use it for rendering.
-    _dimensions: UVec2,
+    _dimensions: IVec2,
     // Same as dimensions.
-    _chunk_dimensions: UVec2,
+    _chunk_dimensions: IVec2,
 }
 
 fn push_border_quads(
     quads: &mut Vec<Quad>,
     texture: Handle<Texture>,
-    pos: IVec2,
-    size: UVec2,
-    thickness: u32,
+    rect: Rect,
+    thickness: i32,
     color: Vec4,
 ) {
-    if thickness == 0 || size.x == 0 || size.y == 0 {
+    if thickness == 0 || rect.size.x == 0 || rect.size.y == 0 {
         return;
     }
 
-    let horizontal_thickness = thickness.min(size.y);
-    let vertical_thickness = thickness.min(size.x);
-    let inner_height = size
+    let horizontal_thickness = thickness.min(rect.size.y);
+    let vertical_thickness = thickness.min(rect.size.x);
+    let inner_height = rect
+        .size
         .y
         .saturating_sub(horizontal_thickness.saturating_mul(2));
 
     push_solid_rect(
         quads,
         texture,
-        pos,
-        UVec2::new(size.x, horizontal_thickness),
+        Rect::new(rect.position, IVec2::new(rect.size.x, horizontal_thickness)),
         color,
     );
     push_solid_rect(
         quads,
         texture,
-        IVec2::new(
-            pos.x,
-            pos.y + size.y.saturating_sub(horizontal_thickness) as i32,
+        Rect::new(
+            IVec2::new(
+                rect.position.x,
+                rect.position.y + rect.size.y.saturating_sub(horizontal_thickness),
+            ),
+            IVec2::new(rect.size.x, horizontal_thickness),
         ),
-        UVec2::new(size.x, horizontal_thickness),
         color,
     );
 
@@ -463,37 +455,34 @@ fn push_border_quads(
         push_solid_rect(
             quads,
             texture,
-            IVec2::new(pos.x, pos.y + horizontal_thickness as i32),
-            UVec2::new(vertical_thickness, inner_height),
+            Rect::new(
+                IVec2::new(rect.position.x, rect.position.y + horizontal_thickness),
+                IVec2::new(vertical_thickness, inner_height),
+            ),
             color,
         );
         push_solid_rect(
             quads,
             texture,
-            IVec2::new(
-                pos.x + size.x.saturating_sub(vertical_thickness) as i32,
-                pos.y + horizontal_thickness as i32,
+            Rect::new(
+                IVec2::new(
+                    rect.position.x + rect.size.x.saturating_sub(vertical_thickness),
+                    rect.position.y + horizontal_thickness,
+                ),
+                IVec2::new(vertical_thickness, inner_height),
             ),
-            UVec2::new(vertical_thickness, inner_height),
             color,
         );
     }
 }
 
-fn push_solid_rect(
-    quads: &mut Vec<Quad>,
-    texture: Handle<Texture>,
-    pos: IVec2,
-    size: UVec2,
-    color: Vec4,
-) {
-    if size.x == 0 || size.y == 0 {
+fn push_solid_rect(quads: &mut Vec<Quad>, texture: Handle<Texture>, rect: Rect, color: Vec4) {
+    if rect.size.x == 0 || rect.size.y == 0 {
         return;
     }
 
     quads.push(Quad {
-        pos,
-        size,
+        rect,
         texture,
         alpha: color.w,
         color: color.truncate().extend(1.0),

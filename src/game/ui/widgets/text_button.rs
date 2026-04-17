@@ -1,13 +1,13 @@
-use glam::{IVec2, UVec2, Vec4};
+use glam::{IVec2, Vec4};
 
 use crate::game::ui::{
+    Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
     widgets::widget::Widget,
 };
 
 pub struct TextButtonWidget {
-    pos: IVec2,
-    size: UVec2,
+    rect: Rect,
 
     pub text: String,
     pub font: Font,
@@ -15,10 +15,9 @@ pub struct TextButtonWidget {
 }
 
 impl TextButtonWidget {
-    pub fn new(pos: IVec2, size: UVec2, text: impl Into<String>) -> Self {
+    pub fn new(rect: Rect, text: impl Into<String>) -> Self {
         Self {
-            pos,
-            size,
+            rect,
             text: text.into(),
 
             font: Font::Default,
@@ -28,14 +27,14 @@ impl TextButtonWidget {
 
     fn calculate_text_offset(
         text: &str,
-        size: UVec2,
+        size: IVec2,
         font: Font,
         window_renderer: &WindowRenderer,
     ) -> IVec2 {
-        let width = window_renderer.measure_text_width(text.as_bytes(), font) as i32;
-        let height = window_renderer.measure_text_height(text.as_bytes(), font) as i32;
+        let width = window_renderer.measure_text_width(text.as_bytes(), font);
+        let height = window_renderer.measure_text_height(text.as_bytes(), font);
 
-        (size.as_ivec2() / 2) - IVec2::new(width, height) / 2
+        (size / 2) - IVec2::new(width, height) / 2
     }
 }
 
@@ -51,19 +50,18 @@ impl Widget for TextButtonWidget {
         } else {
             self.font.default_color()
         };
-        window_render_items.render_border(origin + self.pos, self.size, 1, color);
+        window_render_items.render_border(self.rect.offset(origin), 1, color);
 
         let text_offset = {
-            let width = window_renderer.measure_text_width(self.text.as_bytes(), self.font) as i32;
-            let height =
-                window_renderer.measure_text_height(self.text.as_bytes(), self.font) as i32;
+            let width = window_renderer.measure_text_width(self.text.as_bytes(), self.font);
+            let height = window_renderer.measure_text_height(self.text.as_bytes(), self.font);
 
-            (self.size.as_ivec2() / 2) - IVec2::new(width, height) / 2
+            (self.rect.size / 2) - IVec2::new(width, height) / 2
         };
 
         window_render_items.render_text(
-            origin + self.pos + text_offset,
-            &self.text,
+            origin + self.rect.position + text_offset,
+            self.text.as_bytes(),
             self.font,
             self.custom_color,
         );

@@ -1,20 +1,22 @@
 use std::{cell::RefCell, rc::Rc};
 
-use glam::{IVec2, UVec2, Vec4};
+use glam::{IVec2, Vec4};
 
-use crate::game::ui::render::window_renderer::{Font, WindowRenderItems, WindowRenderer};
+use crate::game::ui::{
+    Rect,
+    render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
+};
 
 use super::widget::Widget;
 
 pub trait ListBoxItem {
-    fn desired_size(&self) -> UVec2;
-    fn layout(&mut self, pos: IVec2, size: UVec2);
+    fn desired_size(&self) -> IVec2;
+    fn layout(&mut self, rect: Rect);
     fn render(&self, window_render_items: &mut WindowRenderItems);
 }
 
 pub struct TextListBoxItem {
-    pub pos: IVec2,
-    pub size: UVec2,
+    pub rect: Rect,
     pub font: Font,
     pub text: String,
 }
@@ -31,8 +33,7 @@ impl TextListBoxItem {
         let height = window_renderer.measure_text_height(text.as_bytes(), font);
 
         Self {
-            pos: IVec2::ZERO,
-            size: UVec2::new(width, height),
+            rect: Rect::new(IVec2::ZERO, IVec2::new(width, height)),
             font,
             text,
         }
@@ -40,44 +41,41 @@ impl TextListBoxItem {
 }
 
 impl ListBoxItem for TextListBoxItem {
-    fn desired_size(&self) -> UVec2 {
-        self.size
+    fn desired_size(&self) -> IVec2 {
+        self.rect.size
     }
 
-    fn layout(&mut self, pos: IVec2, size: UVec2) {
-        self.pos = pos;
-        self.size = size;
+    fn layout(&mut self, rect: Rect) {
+        self.rect = rect;
     }
 
     fn render(&self, window_render_items: &mut WindowRenderItems) {
         // TODO: The quit-confirmation help body uses explicit custom text
         // coloring. Thread that through the item instead of relying on the
         // font default color here.
-        window_render_items.render_text(self.pos, &self.text, self.font, None);
+        window_render_items.render_text(self.rect.position, self.text.as_bytes(), self.font, None);
     }
 }
 
 pub struct ListBoxWidget {
-    pos: IVec2,
-    size: UVec2,
+    rect: Rect,
 
     items: Vec<Rc<RefCell<dyn ListBoxItem>>>,
     scroll_offset: IVec2,
-    content_size: UVec2,
+    content_size: IVec2,
 
     render_panel_background: bool,
     draw_border: bool,
 }
 
 impl ListBoxWidget {
-    pub fn new(pos: IVec2, size: UVec2) -> Self {
+    pub fn new(rect: Rect) -> Self {
         Self {
-            pos,
-            size,
+            rect,
 
             items: Vec::default(),
             scroll_offset: IVec2::ZERO,
-            content_size: UVec2::ZERO,
+            content_size: IVec2::ZERO,
 
             render_panel_background: false,
             draw_border: false,
@@ -88,9 +86,9 @@ impl ListBoxWidget {
         self.items.push(widget);
     }
 
-    fn layout_items(&mut self, origin: IVec2) -> UVec2 {
+    fn layout_items(&mut self, origin: IVec2) -> IVec2 {
         let mut current = origin;
-        let mut content_size = UVec2::ZERO;
+        let mut content_size = IVec2::ZERO;
 
         // TODO: Lay items out in content space, then apply `scroll_offset`
         // during rendering. The original widget keeps content extents separate
@@ -98,9 +96,9 @@ impl ListBoxWidget {
         for item in self.items.iter_mut() {
             let mut item_ref = item.borrow_mut();
             let item_size = item_ref.desired_size();
-            item_ref.layout(current, item_size);
+            item_ref.layout(Rect::new(current, item_size));
 
-            current.y += item_size.y as i32;
+            current.y += item_size.y;
 
             content_size.x = content_size.x.max(item_size.x);
             content_size.y += item_size.y;
@@ -126,16 +124,15 @@ impl Widget for ListBoxWidget {
         _window_renderer: &WindowRenderer,
         window_render_items: &mut WindowRenderItems,
     ) {
-        let pos = origin + self.pos;
-        let size = self.size;
+        let rect = self.rect.offset(origin);
 
         // TODO: Honor `render_panel_background` and `draw_border` like the
         // original list box instead of always drawing this debug border. The
         // help window body list should render with its panel background
         // disabled and without a hardcoded red outline.
-        window_render_items.render_border(pos, size, 1, Vec4::new(1.0, 0.0, 0.0, 1.0));
+        window_render_items.render_border(rect, 1, Vec4::new(1.0, 0.0, 0.0, 1.0));
 
-        self.layout_items(pos);
+        self.layout_items(rect.position);
         self.render_items(window_render_items);
     }
 }

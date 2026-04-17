@@ -1,5 +1,7 @@
 use std::{ops::RangeInclusive, path::PathBuf, sync::Arc};
 
+use glam::IVec2;
+
 use crate::{
     engine::storage::{Handle, StorageMap},
     game::{
@@ -28,8 +30,8 @@ impl Default for ColorKeyRange {
 
 #[derive(Debug)]
 pub struct SpriteFrame {
-    pub top_left: glam::UVec2,
-    pub bottom_right: glam::UVec2,
+    pub top_left: IVec2,
+    pub bottom_right: IVec2,
 }
 
 #[derive(Debug)]
@@ -157,8 +159,8 @@ impl Sprites {
             frames: frames
                 .iter()
                 .map(|f| SpriteFrame {
-                    top_left: glam::IVec2::new(f.x1, f.y1).as_uvec2(),
-                    bottom_right: glam::IVec2::new(f.x2, f.y2).as_uvec2(),
+                    top_left: IVec2::new(f.x1, f.y1),
+                    bottom_right: IVec2::new(f.x2, f.y2),
                 })
                 .collect(),
         };

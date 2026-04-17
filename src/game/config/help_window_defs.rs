@@ -46,7 +46,7 @@ pub struct HelpDef {
     pub tutorial_id: Option<i32>,
     pub tutorial_next: Option<String>,
     pub position: Option<IVec2>,
-    pub dimensions: Option<UVec2>,
+    pub dimensions: Option<IVec2>,
     pub body_lines: Vec<String>,
     pub pointer: Option<HelpPointer>,
     pub confirmation_text_1: Option<String>,
@@ -141,8 +141,7 @@ impl From<ConfigLines> for HelpWindowDefs {
                     state.with_help_def(|help_def| {
                         let width: i32 = line.param(0);
                         let height: i32 = line.param(1);
-                        help_def.dimensions =
-                            Some(UVec2::new(width.max(0) as u32, height.max(0) as u32));
+                        help_def.dimensions = Some(IVec2::new(width.max(0), height.max(0)));
                     });
                 }
                 "HELP_BODY" => {
