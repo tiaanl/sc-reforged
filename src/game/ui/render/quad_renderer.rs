@@ -11,25 +11,88 @@ use crate::{
         storage::Handle,
     },
     game::{
+        assets::{
+            asset_source::AssetSource,
+            image::{BlendMode, Image},
+        },
         render::textures::{Texture, Textures},
         ui::Rect,
     },
 };
 
+#[derive(Clone, Copy, Debug)]
+pub enum QuadKind {
+    Solid,
+    Texture {
+        texture: Handle<Texture>,
+    },
+    SubTexture {
+        texture: Handle<Texture>,
+        uv_min: Vec2,
+        uv_max: Vec2,
+    },
+}
+
 /// A fully resolved textured quad ready for rendering.
 #[derive(Clone, Copy, Debug)]
 pub struct Quad {
     pub rect: Rect,
-    pub texture: Handle<Texture>,
-    pub alpha: f32,
     pub color: Vec4,
-    pub uv_min: Vec2,
-    pub uv_max: Vec2,
+    pub clip_rect: Option<Rect>,
+    pub kind: QuadKind,
+}
+
+impl Quad {
+    pub fn solid(rect: Rect) -> Self {
+        Self {
+            rect,
+            ..Default::default()
+        }
+    }
+
+    pub fn texture(rect: Rect, texture: Handle<Texture>) -> Self {
+        Self {
+            rect,
+            kind: QuadKind::Texture { texture },
+            ..Default::default()
+        }
+    }
+
+    pub fn sub_texture(rect: Rect, texture: Handle<Texture>, uv_min: Vec2, uv_max: Vec2) -> Self {
+        Self {
+            rect,
+            kind: QuadKind::SubTexture {
+                texture,
+                uv_min,
+                uv_max,
+            },
+            ..Default::default()
+        }
+    }
+
+    #[must_use]
+    pub fn with_color(mut self, color: Vec4) -> Self {
+        self.color = color;
+        self
+    }
+}
+
+impl Default for Quad {
+    fn default() -> Self {
+        Self {
+            rect: Rect::default(),
+            color: Vec4::ONE,
+            clip_rect: None,
+            kind: QuadKind::Solid,
+        }
+    }
 }
 
 pub struct QuadRenderer {
     render_context: RenderContext,
     textures: Arc<Textures>,
+
+    solid_white_texture: Handle<Texture>,
 
     render_pipeline: wgpu::RenderPipeline,
 
@@ -159,10 +222,9 @@ impl QuadRenderer {
                         attributes: &wgpu::vertex_attr_array![
                             3 => Float32x2,
                             4 => Float32x2,
-                            5 => Float32,
-                            6 => Float32x4,
+                            5 => Float32x4,
+                            6 => Float32x2,
                             7 => Float32x2,
-                            8 => Float32x2,
                         ],
                     },
                 ],
@@ -232,9 +294,22 @@ impl QuadRenderer {
             "quad_renderer_instances",
         );
 
+        let white_image = textures.images().insert(
+            "solid_white",
+            Image::from_rgba(
+                AssetSource::Generated,
+                image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 255, 255, 255])),
+                BlendMode::Opaque,
+            ),
+        );
+        let solid_white_texture = textures
+            .create_from_image(white_image)
+            .expect("generated solid white texture should be valid");
+
         Self {
             render_context,
             textures,
+            solid_white_texture,
             render_pipeline,
             vertices_buffer,
             indices_buffer,
@@ -268,15 +343,26 @@ impl QuadRenderer {
         let drawable_quads: Vec<_> = quads
             .iter()
             .filter_map(|quad| {
-                self.ensure_bind_group(quad.texture).then_some((
-                    quad.texture,
+                let texture = match quad.kind {
+                    QuadKind::Solid => self.solid_white_texture,
+                    QuadKind::Texture { texture } | QuadKind::SubTexture { texture, .. } => texture,
+                };
+
+                let (uv_min, uv_max) =
+                    if let QuadKind::SubTexture { uv_min, uv_max, .. } = quad.kind {
+                        (uv_min, uv_max)
+                    } else {
+                        (Vec2::ZERO, Vec2::ONE)
+                    };
+
+                self.ensure_bind_group(texture).then_some((
+                    texture,
                     gpu::RectInstance {
                         pos: quad.rect.position.as_vec2().to_array(),
                         size: quad.rect.size.as_vec2().to_array(),
-                        alpha: quad.alpha,
                         color: quad.color.to_array(),
-                        uv_min: quad.uv_min.to_array(),
-                        uv_max: quad.uv_max.to_array(),
+                        uv_min: uv_min.to_array(),
+                        uv_max: uv_max.to_array(),
                     },
                 ))
             })
@@ -395,7 +481,6 @@ pub mod gpu {
     pub struct RectInstance {
         pub pos: [f32; 2],
         pub size: [f32; 2],
-        pub alpha: f32,
         pub color: [f32; 4],
         pub uv_min: [f32; 2],
         pub uv_max: [f32; 2],

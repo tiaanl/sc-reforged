@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use glam::{IVec2, UVec2, Vec2, Vec4};
+use glam::{IVec2, UVec2, Vec4};
 
 use crate::{
     engine::{
@@ -251,36 +251,22 @@ impl WindowRenderer {
                         continue;
                     };
 
-                    quads.push(Quad {
-                        rect: Rect::new(IVec2::ZERO, geometry.render_size),
-                        texture: geometry.texture,
-                        alpha: *alpha,
-                        color: Vec4::ONE,
-                        uv_min: Vec2::ZERO,
-                        uv_max: Vec2::ONE,
-                    });
+                    quads.push(
+                        Quad::texture(
+                            Rect::new(IVec2::ZERO, geometry.render_size),
+                            geometry.texture,
+                        )
+                        .with_color(Vec4::ONE.with_z(*alpha)),
+                    );
                 }
                 WindowRenderItem::SolidRect { rect, color } => {
-                    quads.push(Quad {
-                        rect: *rect,
-                        texture: self.solid_white_texture,
-                        alpha: color.w,
-                        color: color.truncate().extend(1.0),
-                        uv_min: Vec2::ZERO,
-                        uv_max: Vec2::ONE,
-                    });
+                    quads.push(Quad::solid(*rect).with_color(*color));
                 }
                 WindowRenderItem::Border {
                     rect,
                     thickness,
                     color,
-                } => push_border_quads(
-                    &mut quads,
-                    self.solid_white_texture,
-                    *rect,
-                    *thickness,
-                    *color,
-                ),
+                } => push_border_quads(&mut quads, *rect, *thickness, *color),
                 WindowRenderItem::Sprite {
                     pos,
                     sprite,
@@ -302,14 +288,17 @@ impl WindowRenderer {
                     let uv_max = sprite_frame.bottom_right.as_vec2() / texture_size;
                     let size = sprite_frame.bottom_right - sprite_frame.top_left;
 
-                    quads.push(Quad {
-                        rect: Rect::new(*pos, size),
-                        texture: sprite_data.texture,
-                        alpha: sprite_data.alpha.unwrap_or(1.0) * *alpha,
-                        color: Vec4::ONE,
-                        uv_min,
-                        uv_max,
-                    });
+                    let color = Vec4::ONE.with_z(sprite_data.alpha.unwrap_or(*alpha));
+
+                    quads.push(
+                        Quad::sub_texture(
+                            Rect::new(*pos, size),
+                            sprite_data.texture,
+                            uv_min,
+                            uv_max,
+                        )
+                        .with_color(color),
+                    );
                 }
                 WindowRenderItem::Text {
                     pos,
@@ -347,14 +336,17 @@ impl WindowRenderer {
                             let uv_min = glyph_frame.top_left.as_vec2() / texture_size;
                             let uv_max = glyph_frame.bottom_right.as_vec2() / texture_size;
 
-                            quads.push(Quad {
-                                rect: Rect::new(IVec2::new(x, pos.y), glyph_size),
-                                texture: font_sprite.texture,
-                                alpha,
-                                color: *color,
-                                uv_min,
-                                uv_max,
-                            });
+                            let color = color.with_z(color.z * alpha);
+
+                            quads.push(
+                                Quad::sub_texture(
+                                    Rect::new(IVec2::new(x, pos.y), glyph_size),
+                                    font_sprite.texture,
+                                    uv_min,
+                                    uv_max,
+                                )
+                                .with_color(color),
+                            );
                         }
 
                         x += glyph_size.x + letter_spacing;
@@ -414,13 +406,7 @@ pub struct TiledGeometry {
     _chunk_dimensions: IVec2,
 }
 
-fn push_border_quads(
-    quads: &mut Vec<Quad>,
-    texture: Handle<Texture>,
-    rect: Rect,
-    thickness: i32,
-    color: Vec4,
-) {
+fn push_border_quads(quads: &mut Vec<Quad>, rect: Rect, thickness: i32, color: Vec4) {
     if thickness == 0 || rect.size.x == 0 || rect.size.y == 0 {
         return;
     }
@@ -434,13 +420,11 @@ fn push_border_quads(
 
     push_solid_rect(
         quads,
-        texture,
         Rect::new(rect.position, IVec2::new(rect.size.x, horizontal_thickness)),
         color,
     );
     push_solid_rect(
         quads,
-        texture,
         Rect::new(
             IVec2::new(
                 rect.position.x,
@@ -454,7 +438,6 @@ fn push_border_quads(
     if inner_height > 0 {
         push_solid_rect(
             quads,
-            texture,
             Rect::new(
                 IVec2::new(rect.position.x, rect.position.y + horizontal_thickness),
                 IVec2::new(vertical_thickness, inner_height),
@@ -463,7 +446,6 @@ fn push_border_quads(
         );
         push_solid_rect(
             quads,
-            texture,
             Rect::new(
                 IVec2::new(
                     rect.position.x + rect.size.x.saturating_sub(vertical_thickness),
@@ -476,17 +458,10 @@ fn push_border_quads(
     }
 }
 
-fn push_solid_rect(quads: &mut Vec<Quad>, texture: Handle<Texture>, rect: Rect, color: Vec4) {
+fn push_solid_rect(quads: &mut Vec<Quad>, rect: Rect, color: Vec4) {
     if rect.size.x == 0 || rect.size.y == 0 {
         return;
     }
 
-    quads.push(Quad {
-        rect,
-        texture,
-        alpha: color.w,
-        color: color.truncate().extend(1.0),
-        uv_min: Vec2::ZERO,
-        uv_max: Vec2::ONE,
-    });
+    quads.push(Quad::solid(rect).with_color(color));
 }
