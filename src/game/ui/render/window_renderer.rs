@@ -185,7 +185,7 @@ impl WindowRenderer {
 
     /// Measures the pixel width of a text string in the given font, matching
     /// the original engine's `Calculate_Text_Width` logic.
-    pub fn measure_text_width(&self, text: &str, font: Font) -> u32 {
+    pub fn measure_text_width(&self, text: &[u8], font: Font) -> u32 {
         let Some(handle) = self.sprites.get_handle_by_name(font.sprite_name()) else {
             return 0;
         };
@@ -196,26 +196,26 @@ impl WindowRenderer {
         let letter_spacing = font.letter_spacing();
         let mut width = 0;
 
-        for byte in text.bytes() {
+        for &byte in text {
             if let Some(glyph) = font_sprite.frame(byte as usize) {
                 let glyph_width = glyph.bottom_right.x - glyph.top_left.x;
-                width += (glyph_width as i32 + letter_spacing) as u32;
+                width += glyph_width as i32 + letter_spacing;
             }
 
             if byte == b' ' {
-                width = (width as f32 * 4.0).round() as u32;
+                width = (width as f32 * 4.0).round() as i32;
             } else if byte == b'\t' {
-                width = (width as f32 * 12.0).round() as u32;
+                width = (width as f32 * 12.0).round() as i32;
             }
         }
 
-        width
+        width as u32
     }
 
     /// Measures the pixel height of a text string in the given font, matching
     /// the original engine's `Calculate_Text_Height` logic. Returns the
     /// tallest glyph height found in the string.
-    pub fn measure_text_height(&self, text: &str, font: Font) -> u32 {
+    pub fn measure_text_height(&self, text: &[u8], font: Font) -> u32 {
         let Some(handle) = self.sprites.get_handle_by_name(font.sprite_name()) else {
             return 0;
         };
@@ -225,7 +225,7 @@ impl WindowRenderer {
 
         let mut height = 0;
 
-        for byte in text.bytes() {
+        for &byte in text {
             if let Some(glyph) = font_sprite.frame(byte as usize) {
                 let glyph_height = glyph.bottom_right.y - glyph.top_left.y;
                 height = height.max(glyph_height);

@@ -20,7 +20,7 @@
                 }
             },
             "args": [
-                "c:\\games\\shadow_company\\data"
+                "d:\\games\\shadow_company\\data"
             ],
             "cwd": "${workspaceFolder}"
         },

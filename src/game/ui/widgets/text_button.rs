@@ -32,8 +32,8 @@ impl TextButtonWidget {
         font: Font,
         window_renderer: &WindowRenderer,
     ) -> IVec2 {
-        let width = window_renderer.measure_text_width(text, font) as i32;
-        let height = window_renderer.measure_text_height(text, font) as i32;
+        let width = window_renderer.measure_text_width(text.as_bytes(), font) as i32;
+        let height = window_renderer.measure_text_height(text.as_bytes(), font) as i32;
 
         (size.as_ivec2() / 2) - IVec2::new(width, height) / 2
     }
@@ -41,7 +41,7 @@ impl TextButtonWidget {
 
 impl Widget for TextButtonWidget {
     fn render(
-        &self,
+        &mut self,
         origin: IVec2,
         window_renderer: &WindowRenderer,
         window_render_items: &mut WindowRenderItems,
@@ -54,8 +54,9 @@ impl Widget for TextButtonWidget {
         window_render_items.render_border(origin + self.pos, self.size, 1, color);
 
         let text_offset = {
-            let width = window_renderer.measure_text_width(&self.text, self.font) as i32;
-            let height = window_renderer.measure_text_height(&self.text, self.font) as i32;
+            let width = window_renderer.measure_text_width(self.text.as_bytes(), self.font) as i32;
+            let height =
+                window_renderer.measure_text_height(self.text.as_bytes(), self.font) as i32;
 
             (self.size.as_ivec2() / 2) - IVec2::new(width, height) / 2
         };
