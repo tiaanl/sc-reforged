@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ahash::HashMap;
-use glam::{UVec2, Vec2, Vec4};
+use glam::{IVec2, UVec2, Vec2, Vec4};
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -73,6 +73,12 @@ impl Quad {
     #[must_use]
     pub fn with_color(mut self, color: Vec4) -> Self {
         self.color = color;
+        self
+    }
+
+    #[must_use]
+    pub fn with_clip_rect(mut self, clip_rect: Rect) -> Self {
+        self.clip_rect = Some(clip_rect);
         self
     }
 }
@@ -357,6 +363,7 @@ impl QuadRenderer {
 
                 self.ensure_bind_group(texture).then_some((
                     texture,
+                    quad.clip_rect,
                     gpu::RectInstance {
                         pos: quad.rect.position.as_vec2().to_array(),
                         size: quad.rect.size.as_vec2().to_array(),
@@ -370,7 +377,7 @@ impl QuadRenderer {
 
         let instances: Vec<_> = drawable_quads
             .iter()
-            .map(|(_, instance)| *instance)
+            .map(|(_, _, instance)| *instance)
             .collect();
         self.instances_buffer
             .write(&self.render_context, &instances);
@@ -402,10 +409,29 @@ impl QuadRenderer {
         render_pass.set_index_buffer(self.indices_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
 
-        for (index, (texture, _)) in drawable_quads.iter().enumerate() {
+        for (index, (texture, clip_rect, _)) in drawable_quads.iter().enumerate() {
             let Some(bind_group) = self.bind_groups.get(texture) else {
                 continue;
             };
+
+            if let Some(clip_rect) = clip_rect {
+                let clip_min = clip_rect.position.max(IVec2::ZERO);
+                let clip_max = (clip_rect.position + clip_rect.size).min(frame.size.as_ivec2());
+                let clip_size = clip_max - clip_min;
+
+                if clip_size.x <= 0 || clip_size.y <= 0 {
+                    continue;
+                }
+
+                render_pass.set_scissor_rect(
+                    clip_min.x as u32,
+                    clip_min.y as u32,
+                    clip_size.x as u32,
+                    clip_size.y as u32,
+                );
+            } else {
+                render_pass.set_scissor_rect(0, 0, frame.size.x, frame.size.y);
+            }
 
             render_pass.set_bind_group(1, bind_group, &[]);
             render_pass.draw_indexed(

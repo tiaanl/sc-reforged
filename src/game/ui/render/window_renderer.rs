@@ -9,8 +9,7 @@ use crate::{
     },
     game::{
         assets::{
-            asset_source::AssetSource,
-            image::{BlendMode, Image},
+            image::Image,
             sprites::{Sprite3d, Sprites},
         },
         render::textures::{Texture, Textures},
@@ -75,6 +74,16 @@ impl WindowRenderItems {
         self.0.extend(other.0.iter().cloned());
     }
 
+    /// Set a clip rect for subsequent items.
+    pub fn push_clip_rect(&mut self, clip_rect: Rect) {
+        self.0.push(WindowRenderItem::PushClipRect { clip_rect });
+    }
+
+    /// Clear any set clip rects.
+    pub fn pop_clip_rect(&mut self) {
+        self.0.push(WindowRenderItem::ClearClipRect);
+    }
+
     /// Queues a non-tiled geometry item.
     pub fn render_geometry(&mut self) {
         self.0.push(WindowRenderItem::Geometry);
@@ -132,7 +141,6 @@ pub struct WindowRenderer {
     textures: Arc<Textures>,
     sprites: Arc<Sprites>,
     tiled_geometries: Storage<TiledGeometry>,
-    solid_white_texture: Handle<Texture>,
 }
 
 impl WindowRenderer {
@@ -143,24 +151,11 @@ impl WindowRenderer {
         textures: Arc<Textures>,
         sprites: Arc<Sprites>,
     ) -> Self {
-        let white_image = textures.images().insert(
-            "window_renderer_solid_white",
-            Image::from_rgba(
-                AssetSource::Generated,
-                image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 255, 255, 255])),
-                BlendMode::Opaque,
-            ),
-        );
-        let solid_white_texture = textures
-            .create_from_image(white_image)
-            .expect("generated solid white texture should be valid");
-
         Self {
             sprites,
             textures: Arc::clone(&textures),
             quad_renderer: QuadRenderer::new(render_context, surface_desc, textures),
             tiled_geometries: Storage::default(),
-            solid_white_texture,
         }
     }
 
@@ -243,30 +238,56 @@ impl WindowRenderer {
     pub fn submit_render_items(&mut self, frame: &mut Frame, items: &WindowRenderItems) {
         let mut quads = Vec::new();
 
+        let mut clip_stack: Vec<Rect> = Vec::default();
+
         for item in items.0.iter() {
             match item {
+                WindowRenderItem::PushClipRect { clip_rect } => {
+                    // Push the intersection of the top clip rect or if the
+                    // stack is empty, just the specified one.
+                    let rect = clip_stack
+                        .last()
+                        .cloned()
+                        .map(|rect| rect.intersection(*clip_rect))
+                        .unwrap_or(*clip_rect);
+
+                    clip_stack.push(rect);
+                }
+                WindowRenderItem::ClearClipRect => {
+                    let _ = clip_stack.pop();
+                }
                 WindowRenderItem::Geometry => {}
                 WindowRenderItem::TiledGeometry { handle, alpha } => {
                     let Some(geometry) = self.tiled_geometries.get(*handle) else {
                         continue;
                     };
 
-                    quads.push(
-                        Quad::texture(
-                            Rect::new(IVec2::ZERO, geometry.render_size),
-                            geometry.texture,
-                        )
-                        .with_color(Vec4::ONE.with_z(*alpha)),
-                    );
+                    let mut quad = Quad::texture(
+                        Rect::new(IVec2::ZERO, geometry.render_size),
+                        geometry.texture,
+                    )
+                    .with_color(Vec4::ONE.with_z(*alpha));
+                    quad.clip_rect = clip_stack.last().cloned();
+
+                    quads.push(quad);
                 }
                 WindowRenderItem::SolidRect { rect, color } => {
-                    quads.push(Quad::solid(*rect).with_color(*color));
+                    let mut quad = Quad::solid(*rect).with_color(*color);
+                    quad.clip_rect = clip_stack.last().cloned();
+
+                    quads.push(quad);
                 }
                 WindowRenderItem::Border {
                     rect,
                     thickness,
                     color,
-                } => push_border_quads(&mut quads, *rect, *thickness, *color),
+                } => push_border_quads(
+                    &mut quads,
+                    *rect,
+                    *thickness,
+                    *color,
+                    clip_stack.last().cloned(),
+                ),
                 WindowRenderItem::Sprite {
                     pos,
                     sprite,
@@ -290,15 +311,16 @@ impl WindowRenderer {
 
                     let color = Vec4::ONE.with_z(sprite_data.alpha.unwrap_or(*alpha));
 
-                    quads.push(
-                        Quad::sub_texture(
-                            Rect::new(*pos, size),
-                            sprite_data.texture,
-                            uv_min,
-                            uv_max,
-                        )
-                        .with_color(color),
-                    );
+                    let mut quad = Quad::sub_texture(
+                        Rect::new(*pos, size),
+                        sprite_data.texture,
+                        uv_min,
+                        uv_max,
+                    )
+                    .with_color(color);
+                    quad.clip_rect = clip_stack.last().cloned();
+
+                    quads.push(quad);
                 }
                 WindowRenderItem::Text {
                     pos,
@@ -338,15 +360,16 @@ impl WindowRenderer {
 
                             let color = color.with_z(color.z * alpha);
 
-                            quads.push(
-                                Quad::sub_texture(
-                                    Rect::new(IVec2::new(x, pos.y), glyph_size),
-                                    font_sprite.texture,
-                                    uv_min,
-                                    uv_max,
-                                )
-                                .with_color(color),
-                            );
+                            let mut quad = Quad::sub_texture(
+                                Rect::new(IVec2::new(x, pos.y), glyph_size),
+                                font_sprite.texture,
+                                uv_min,
+                                uv_max,
+                            )
+                            .with_color(color);
+                            quad.clip_rect = clip_stack.last().cloned();
+
+                            quads.push(quad);
                         }
 
                         x += glyph_size.x + letter_spacing;
@@ -369,6 +392,10 @@ impl WindowRenderer {
 #[derive(Clone)]
 enum WindowRenderItem {
     Geometry,
+    PushClipRect {
+        clip_rect: Rect,
+    },
+    ClearClipRect,
     TiledGeometry {
         handle: Handle<TiledGeometry>,
         alpha: f32,
@@ -406,7 +433,13 @@ pub struct TiledGeometry {
     _chunk_dimensions: IVec2,
 }
 
-fn push_border_quads(quads: &mut Vec<Quad>, rect: Rect, thickness: i32, color: Vec4) {
+fn push_border_quads(
+    quads: &mut Vec<Quad>,
+    rect: Rect,
+    thickness: i32,
+    color: Vec4,
+    clip_rect: Option<Rect>,
+) {
     if thickness == 0 || rect.size.x == 0 || rect.size.y == 0 {
         return;
     }
@@ -422,6 +455,7 @@ fn push_border_quads(quads: &mut Vec<Quad>, rect: Rect, thickness: i32, color: V
         quads,
         Rect::new(rect.position, IVec2::new(rect.size.x, horizontal_thickness)),
         color,
+        clip_rect,
     );
     push_solid_rect(
         quads,
@@ -433,6 +467,7 @@ fn push_border_quads(quads: &mut Vec<Quad>, rect: Rect, thickness: i32, color: V
             IVec2::new(rect.size.x, horizontal_thickness),
         ),
         color,
+        clip_rect,
     );
 
     if inner_height > 0 {
@@ -443,6 +478,7 @@ fn push_border_quads(quads: &mut Vec<Quad>, rect: Rect, thickness: i32, color: V
                 IVec2::new(vertical_thickness, inner_height),
             ),
             color,
+            clip_rect,
         );
         push_solid_rect(
             quads,
@@ -454,14 +490,18 @@ fn push_border_quads(quads: &mut Vec<Quad>, rect: Rect, thickness: i32, color: V
                 IVec2::new(vertical_thickness, inner_height),
             ),
             color,
+            clip_rect,
         );
     }
 }
 
-fn push_solid_rect(quads: &mut Vec<Quad>, rect: Rect, color: Vec4) {
+fn push_solid_rect(quads: &mut Vec<Quad>, rect: Rect, color: Vec4, clip_rect: Option<Rect>) {
     if rect.size.x == 0 || rect.size.y == 0 {
         return;
     }
 
-    quads.push(Quad::solid(rect).with_color(color));
+    let mut quad = Quad::solid(rect).with_color(color);
+    quad.clip_rect = clip_rect;
+
+    quads.push(quad);
 }

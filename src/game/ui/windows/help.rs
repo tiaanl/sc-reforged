@@ -43,8 +43,8 @@ impl HelpWindow {
             size - IVec2::new(32, 68),
         )));
         // TODO: Match the original help-body list-box configuration here:
-        // no panel background, no forced debug border, and row layout/styling
-        // that matches the dedicated text list-box item class.
+        // it should be a plain clipped container for body rows, with no panel
+        // background and no extra border beyond the surrounding help window.
 
         for line in help_def.body_lines.iter() {
             let list_item = Rc::new(RefCell::new(TextListBoxItem::new(
@@ -129,7 +129,9 @@ impl Window for HelpWindow {
         render_items.render_solid_rect(self.rect, Vec4::new(0.0, 0.0, 0.0, 80.0 / 255.0));
 
         // TODO: Replace this placeholder with the actual help-window title and
-        // only draw elements that exist in the original confirmation window.
+        // title placement from the original help window. The quit-confirmation
+        // dialog should not keep this temporary text once the body list and
+        // title rendering are in place.
         render_items.render_text(
             glam::IVec2::new(20, 20),
             b"Hello, World!",
@@ -137,7 +139,9 @@ impl Window for HelpWindow {
             None,
         );
 
-        // TODO: Render pointer.
+        // TODO: Render the help pointer only for defs that specify one. The
+        // quit-confirmation dialog likely does not need this, but other help
+        // windows do.
 
         self.widgets
             .render(self.rect.position, window_renderer, render_items);

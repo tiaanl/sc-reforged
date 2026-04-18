@@ -26,9 +26,8 @@ impl TextListBoxItem {
         let text = text.into();
 
         // TODO: For help-window body rows, match the original item behavior:
-        // use the dedicated text list-box item styling, a fixed 15 px row
-        // height, and the custom green text color instead of measuring the row
-        // purely from the font metrics.
+        // keep the measured text width, but use the dedicated list-box text row
+        // styling with a fixed 15 px row height and explicit help-text color.
         let width = window_renderer.measure_text_width(text.as_bytes(), font);
         let height = window_renderer.measure_text_height(text.as_bytes(), font);
 
@@ -50,9 +49,9 @@ impl ListBoxItem for TextListBoxItem {
     }
 
     fn render(&self, window_render_items: &mut WindowRenderItems) {
-        // TODO: The quit-confirmation help body uses explicit custom text
-        // coloring. Thread that through the item instead of relying on the
-        // font default color here.
+        // TODO: The quit-confirmation help body uses explicit custom green text
+        // color (0xff19ff19). Store that on the item and pass it through here
+        // instead of relying on the font default color.
         window_render_items.render_text(self.rect.position, self.text.as_bytes(), self.font, None);
     }
 }
@@ -61,8 +60,6 @@ pub struct ListBoxWidget {
     rect: Rect,
 
     items: Vec<Rc<RefCell<dyn ListBoxItem>>>,
-    scroll_offset: IVec2,
-    content_size: IVec2,
 
     render_panel_background: bool,
     draw_border: bool,
@@ -74,8 +71,6 @@ impl ListBoxWidget {
             rect,
 
             items: Vec::default(),
-            scroll_offset: IVec2::ZERO,
-            content_size: IVec2::ZERO,
 
             render_panel_background: false,
             draw_border: false,
@@ -90,9 +85,9 @@ impl ListBoxWidget {
         let mut current = origin;
         let mut content_size = IVec2::ZERO;
 
-        // TODO: Lay items out in content space, then apply `scroll_offset`
-        // during rendering. The original widget keeps content extents separate
-        // from the visible viewport and scrolls/clips the item positions.
+        // TODO: This vertical stacking is enough for the quit-confirmation
+        // help window. If another help window needs more body lines than fit in
+        // the viewport, preserve this content size and reintroduce scrolling.
         for item in self.items.iter_mut() {
             let mut item_ref = item.borrow_mut();
             let item_size = item_ref.desired_size();
@@ -108,9 +103,8 @@ impl ListBoxWidget {
     }
 
     fn render_items(&self, window_render_items: &mut WindowRenderItems) {
-        // TODO: Cull or clip items against the list-box viewport before
-        // rendering. Right now every row is drawn even when it should be
-        // outside the help window body area.
+        // TODO: Clipping keeps the quit-confirmation body correct already. Add
+        // explicit culling later if longer help text makes this path expensive.
         for item in self.items.iter() {
             item.borrow().render(window_render_items);
         }
@@ -127,12 +121,14 @@ impl Widget for ListBoxWidget {
         let rect = self.rect.offset(origin);
 
         // TODO: Honor `render_panel_background` and `draw_border` like the
-        // original list box instead of always drawing this debug border. The
-        // help window body list should render with its panel background
-        // disabled and without a hardcoded red outline.
+        // original list box instead of always drawing this debug border. For
+        // the quit-confirmation help window, this list box should render with
+        // no panel background and no extra frame of its own.
         window_render_items.render_border(rect, 1, Vec4::new(1.0, 0.0, 0.0, 1.0));
 
         self.layout_items(rect.position);
+        window_render_items.push_clip_rect(rect);
         self.render_items(window_render_items);
+        window_render_items.pop_clip_rect();
     }
 }

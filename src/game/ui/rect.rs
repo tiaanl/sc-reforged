@@ -58,4 +58,16 @@ impl Rect {
             size: self.size + size,
         }
     }
+
+    #[must_use]
+    pub fn intersection(self, other: Self) -> Self {
+        let min = self.position.max(other.position);
+        let max = (self.position + self.size).min(other.position + other.size);
+        let size = (max - min).max(IVec2::ZERO);
+
+        Self {
+            position: min,
+            size,
+        }
+    }
 }
