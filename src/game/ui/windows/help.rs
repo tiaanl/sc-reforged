@@ -19,20 +19,17 @@ use super::window::Window;
 pub struct HelpWindow {
     rect: Rect,
     widgets: Widgets,
-
+    // TODO: Keep the original help window state here once we match it more
+    // closely. The Ghidra render path uses fields like the source help def and
+    // a per-window render frame count for first-frame special-casing.
     should_pause_game: bool,
 }
 
 impl HelpWindow {
-    pub fn new(help_def: &HelpDef) -> Self {
+    /// Creates a help window from the specified help definition.
+    pub fn new(help_def: &HelpDef, surface_size: IVec2) -> Self {
         let size = help_def.dimensions.unwrap_or(IVec2::new(380, 180));
-
-        // TODO: Center against the current render surface size instead of the
-        // hardcoded 640x480 fallback so the help window follows the original
-        // positioning logic at whatever resolution the renderer is using.
-        let pos = help_def
-            .position
-            .unwrap_or(IVec2::new(640, 480) / 2 - size / 2);
+        let pos = help_def.position.unwrap_or(surface_size / 2 - size / 2);
 
         let mut widgets = Widgets::default();
 
@@ -104,6 +101,10 @@ impl Window for HelpWindow {
         true
     }
 
+    fn is_always_on_top(&self) -> bool {
+        true
+    }
+
     fn wants_input(&self) -> bool {
         true
     }
@@ -121,21 +122,31 @@ impl Window for HelpWindow {
     }
 
     fn on_primary_mouse_down(&mut self, _mouse: IVec2) -> EventResult {
+        // TODO: Match the original help window input path by forwarding into
+        // child widgets and consuming clicks while the modal dialog is open.
         EventResult::Ignore
     }
 
     fn on_secondary_mouse_down(&mut self, _mouse: IVec2) -> EventResult {
+        // TODO: Confirm whether right-click should be ignored or routed to the
+        // child widgets for help-window button handling.
         EventResult::Ignore
     }
 
     fn render(&mut self, window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems) {
+        // TODO: The original help window render has first-frame special
+        // handling. It does not draw the translucent fills until
+        // `m_render_frame_count != 0`, and it increments that counter at the
+        // end of each frame.
+        //
+        // TODO: The original also pauses the game from this render path when
+        // `m_pause_game` is true. Mirror that once game pause state is wired
+        // into the immediate-mode UI path.
         if self.should_pause_game {
             // Render modal background.
             // Render_Solid_Rect(0,0,g_renderer->m_screen_width,g_renderer->m_screen_height,0x50000000);
-            // TODO: Use the current render surface dimensions here instead of
-            // the fixed 640x480 backdrop.
             render_items.render_solid_rect(
-                Rect::from_size(IVec2::new(640, 480)),
+                Rect::from_size(window_renderer.surface_size().as_ivec2()),
                 Vec4::new(0.0, 0.0, 0.0, 80.0 / 255.0),
             );
 
@@ -158,17 +169,6 @@ impl Window for HelpWindow {
         // Render the background for the window.
         // Render_Solid_Rect(left,top,width,height,0x50000000);
         render_items.render_solid_rect(self.rect, Vec4::new(0.0, 0.0, 0.0, 80.0 / 255.0));
-
-        // TODO: Replace this placeholder with the actual help-window title and
-        // title placement from the original help window. The quit-confirmation
-        // dialog should not keep this temporary text once the body list and
-        // title rendering are in place.
-        render_items.render_text(
-            glam::IVec2::new(20, 20),
-            b"Hello, World!",
-            Font::FifteenPoint,
-            None,
-        );
 
         // TODO: Render the help pointer only for defs that specify one. The
         // quit-confirmation dialog likely does not need this, but other help

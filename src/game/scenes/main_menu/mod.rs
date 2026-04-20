@@ -51,7 +51,8 @@ impl MainMenuScene {
             window_manager.push(Box::new(MainMenuWindow::new(&window_base)));
 
             if let Some(help_def) = help_window_defs.get("conf_exit_game") {
-                window_manager.push(Box::new(HelpWindow::new(help_def)));
+                let surface_size = window_manager.window_renderer().surface_size().as_ivec2();
+                window_manager.push(Box::new(HelpWindow::new(help_def, surface_size)));
             }
         }
 

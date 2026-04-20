@@ -141,6 +141,7 @@ pub struct WindowRenderer {
     textures: Arc<Textures>,
     sprites: Arc<Sprites>,
     tiled_geometries: Storage<TiledGeometry>,
+    surface_size: UVec2,
 }
 
 impl WindowRenderer {
@@ -156,6 +157,7 @@ impl WindowRenderer {
             textures: Arc::clone(&textures),
             quad_renderer: QuadRenderer::new(render_context, surface_desc, textures),
             tiled_geometries: Storage::default(),
+            surface_size: surface_desc.size,
         }
     }
 
@@ -229,8 +231,14 @@ impl WindowRenderer {
         height
     }
 
+    /// Returns the current render surface size in pixels.
+    pub fn surface_size(&self) -> UVec2 {
+        self.surface_size
+    }
+
     /// Queues a resize for the window.
     pub fn resize(&mut self, size: UVec2) {
+        self.surface_size = size;
         self.quad_renderer.resize(size);
     }
 
