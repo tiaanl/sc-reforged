@@ -70,4 +70,9 @@ impl Rect {
             size,
         }
     }
+
+    #[must_use]
+    pub fn bottom_right(&self) -> IVec2 {
+        self.position + self.size
+    }
 }

@@ -47,9 +47,14 @@ impl Widget for TextButtonWidget {
         EventResult::Ignore
     }
 
+    fn on_mouse_wheel(&mut self, _wheel_steps: i32) -> EventResult {
+        EventResult::Ignore
+    }
+
     fn render(
         &mut self,
         origin: IVec2,
+        _delta_time_ms: i32,
         window_renderer: &WindowRenderer,
         window_render_items: &mut WindowRenderItems,
     ) {

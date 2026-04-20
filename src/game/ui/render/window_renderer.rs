@@ -197,9 +197,9 @@ impl WindowRenderer {
             }
 
             if byte == b' ' {
-                width = (width as f32 * 4.0).round() as i32;
+                width += 4;
             } else if byte == b'\t' {
-                width = (width as f32 * 12.0).round() as i32;
+                width += 12;
             }
         }
 

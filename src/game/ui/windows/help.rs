@@ -142,7 +142,13 @@ impl Window for HelpWindow {
         // quit-confirmation dialog likely does not need this, but other help
         // windows do.
 
-        self.widgets
-            .render(self.rect.position, window_renderer, render_items);
+        const DELTA_TIME_MS: i32 = 10;
+
+        self.widgets.render(
+            self.rect.position,
+            DELTA_TIME_MS,
+            window_renderer,
+            render_items,
+        );
     }
 }

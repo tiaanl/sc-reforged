@@ -31,8 +31,13 @@ impl ListBoxItem {
         }
     }
 
-    fn height(&self) -> i32 {
-        15
+    fn desired_size(&self, window_renderer: &WindowRenderer) -> IVec2 {
+        match self.kind {
+            ListBoxItemKind::Text { font, ref text, .. } => IVec2::new(
+                window_renderer.measure_text_width(text.as_bytes(), font),
+                self.height,
+            ),
+        }
     }
 
     fn render(&self, rect: Rect, window_render_items: &mut WindowRenderItems) {
@@ -53,6 +58,11 @@ pub struct ListBoxWidget {
     items: Vec<ListBoxItem>,
 
     scroll_offset: IVec2,
+    pending_scroll_delta: i32,
+    scroll_step_accumulator: i32,
+
+    /// Calculated during a layout/render pass.
+    content_size: i32,
 
     pub render_panel_background: bool,
     pub force_flat_background: bool,
@@ -184,10 +194,41 @@ impl Widget for ListBoxWidget {
         todo!()
     }
 
+    fn on_mouse_wheel(&mut self, wheel_steps: i32) -> EventResult {
+        if self.mouse_wheel_disabled || self.items.is_empty() {
+            return EventResult::Ignore;
+        }
+
+        let item_height = self.items.first().map(|item| item.height).unwrap_or(0);
+
+        let mut target_scroll =
+            self.scroll_offset.y + self.pending_scroll_delta + item_height * wheel_steps;
+
+        let max_scroll = (self.content_size + self.rect.size.y) - self.rect.bottom_right().y;
+
+        if target_scroll > max_scroll {
+            target_scroll = max_scroll;
+        }
+
+        if target_scroll < 0 {
+            target_scroll = 0;
+        }
+
+        if self.snap_scroll_to_item_extent {
+            self.scroll_offset.y = target_scroll;
+            // self.sync_scrollbar_position();
+        } else {
+            self.pending_scroll_delta = target_scroll - self.scroll_offset.y;
+        }
+
+        EventResult::Handled
+    }
+
     fn render(
         &mut self,
         origin: IVec2,
-        _window_renderer: &WindowRenderer,
+        delta_time_ms: i32,
+        window_renderer: &WindowRenderer,
         window_render_items: &mut WindowRenderItems,
     ) {
         let rect = self.rect.offset(origin);
@@ -205,97 +246,74 @@ impl Widget for ListBoxWidget {
         }
 
         // 2. Enable clipping for normal scrolling mode.
-        if self.snap_scroll_to_item_extent {
+        if !self.snap_scroll_to_item_extent {
             window_render_items.push_clip_rect(rect);
         }
 
-        /*
         // 3. Smoothly consume any pending scroll delta.
-        //
-        // Scroll speed is frame-time based: roughly 1 pixel per 8 ms,
-        // clamped so it never overshoots the remaining pending amount.
-        if (m_pending_scroll_delta != 0) {
-            int accumulator = m_scroll_step_accumulator + g_event_processor.m_frame_delta_ms;
-            int step = signed_divide_by_8(accumulator);   // keeps sign correct
-            m_scroll_step_accumulator = accumulator - step * 8;
+        if self.pending_scroll_delta != 0 {
+            let accumulator = self.scroll_step_accumulator + delta_time_ms;
+            let mut step = accumulator / 8;
+            self.scroll_step_accumulator = accumulator - step * 8;
 
-            if (m_pending_scroll_delta < 0) {
+            if self.pending_scroll_delta < 0 {
                 step = -step;
-                if (step < m_pending_scroll_delta) {
-                    step = m_pending_scroll_delta;
+                if step < self.pending_scroll_delta {
+                    step = self.pending_scroll_delta;
                 }
-            } else {
-                if (m_pending_scroll_delta < step) {
-                    step = m_pending_scroll_delta;
-                }
+            } else if self.pending_scroll_delta < step {
+                step = self.pending_scroll_delta;
             }
 
-            m_scroll_offset_y += step;
-            m_pending_scroll_delta -= step;
-            Sync_Scrollbar_Position();
+            self.scroll_offset.y += step;
+            self.pending_scroll_delta -= step;
+            // self.sync_scrollbar_position();
         }
-        */
 
-        /*
         // 4. Walk the items and render the ones that are visible.
-        int item_x = 0;
-        int item_y = 0;
+        let mut item_offset = IVec2::ZERO;
+        let scroll_offset = self.scroll_offset;
+        let viewport_size = rect.size;
 
-        bool vertical = !m_is_horizontal;
-        int advance_x_per_item = m_is_horizontal ? 1 : 0;
-        int advance_y_per_item = vertical ? 1 : 0;
+        self.content_size = 0;
 
-        for (node = m_items.m_tail; node != NULL; node = node->prev) {
-            List_Box_Item *item = node->item;
+        for item in self.items.iter() {
+            let item_size = item.desired_size(window_renderer);
 
-            int scroll_x = m_scroll_offset_x;
-            int scroll_y = m_scroll_offset_y;
+            let stop_now;
+            let item_is_visible;
 
-            bool stop_now;
-            bool item_is_visible;
+            if !self.snap_scroll_to_item_extent {
+                stop_now = item_offset.x > scroll_offset.x + viewport_size.x
+                    || item_offset.y > scroll_offset.y + viewport_size.y;
 
-            if (!m_snap_scroll_to_item_extent) {
-                // Normal mode:
-                // render if the item intersects the viewport at all.
-                stop_now =
-                    (item_x > scroll_x + width) ||
-                    (item_y > scroll_y + height);
-
-                item_is_visible =
-                    (scroll_x <= item_x + item->width) &&
-                    (scroll_y <= item_y + item->height);
+                item_is_visible = scroll_offset.x <= item_offset.x + item_size.x
+                    && scroll_offset.y <= item_offset.y + item_size.y;
             } else {
-                // Snap-to-item mode:
-                // only render if the whole item origin is inside the viewport,
-                // and stop once the next full item would extend beyond it.
-                stop_now =
-                    (item_x + item->width > scroll_x + width) ||
-                    (item_y + item->height > scroll_y + height);
+                stop_now = item_offset.x + item_size.x > scroll_offset.x + viewport_size.x
+                    || item_offset.y + item_size.y > scroll_offset.y + viewport_size.y;
 
                 item_is_visible =
-                    (scroll_x <= item_x) &&
-                    (scroll_y <= item_y);
+                    scroll_offset.x <= item_offset.x && scroll_offset.y <= item_offset.y;
             }
 
-            if (stop_now) {
+            if stop_now {
                 break;
             }
 
-            if (item_is_visible) {
-                int draw_x = x + item_x - scroll_x;
-                int draw_y = y + item_y - scroll_y;
-
-                if (!m_is_horizontal) {
-                    item->Render_Vertical(draw_x, draw_y, width);
-                } else {
-                    item->Render_Horizontal(draw_x, draw_y, height);
-                }
+            if item_is_visible {
+                let draw_position = rect.position + item_offset - scroll_offset;
+                item.render(Rect::new(draw_position, item_size), window_render_items);
             }
 
-            item_x += advance_x_per_item * item->width;
-            item_y += advance_y_per_item * item->height;
+            if self.horizontal {
+                item_offset.x += item_size.x;
+                self.content_size = item_offset.x;
+            } else {
+                item_offset.y += item_size.y;
+                self.content_size = item_offset.y;
+            }
         }
-        */
 
         // 5. Restore renderer state if we enabled clipping.
         if !self.snap_scroll_to_item_extent {
