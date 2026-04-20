@@ -5,11 +5,14 @@ use glam::{IVec2, Vec4};
 use crate::game::ui::{
     Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
+    widgets::widget::EventResult,
 };
 
 use super::widget::Widget;
 
 pub trait ListBoxItem {
+    fn height(&self) -> i32;
+
     fn desired_size(&self) -> IVec2;
     fn layout(&mut self, rect: Rect);
     fn render(&self, window_render_items: &mut WindowRenderItems);
@@ -40,6 +43,10 @@ impl TextListBoxItem {
 }
 
 impl ListBoxItem for TextListBoxItem {
+    fn height(&self) -> i32 {
+        15
+    }
+
     fn desired_size(&self) -> IVec2 {
         self.rect.size
     }
@@ -61,6 +68,8 @@ pub struct ListBoxWidget {
     rect: Rect,
 
     items: Vec<Rc<RefCell<dyn ListBoxItem>>>,
+
+    scroll_offset: IVec2,
 
     pub render_panel_background: bool,
     pub force_flat_background: bool,
@@ -122,6 +131,105 @@ impl ListBoxWidget {
 }
 
 impl Widget for ListBoxWidget {
+    fn on_primary_mouse_down(&mut self, _mouse_position: IVec2) -> EventResult {
+        /*
+        int item_top = 0;
+        int local_y = (mouse_y - widget.rect.top) + m_scroll_offset_y;
+
+        if (m_input_disabled) {
+            return EVENT_HANDLED;
+        }
+
+        // Do not allow this list box to begin a new drag while another drag is active.
+        if (g_window_manager.drag_items.count != 0) {
+            return EVENT_HANDLED;
+        }
+
+        // Iterate items from the visual start of the list.
+        m_item_iter = m_item_tail;
+        if (m_item_tail == NULL) {
+            return EVENT_HANDLED;
+        }
+
+        while (m_item_iter != NULL) {
+            List_Box_Item *item = m_item_iter->item;
+
+            // item->height is the field Ghidra still shows as piVar8[3]
+            if (item_top < local_y && local_y <= item_top + item->height) {
+                break;
+            }
+
+            item_top += item->height;
+            m_item_iter = m_item_iter->prev;
+        }
+
+        if (m_item_iter == NULL) {
+            return EVENT_HANDLED;
+        }
+
+        List_Box_Item *clicked_item = m_item_iter->item;
+
+        // Update selection if the clicked item is different.
+        if (clicked_item != m_selected_item) {
+            if (m_selected_item != NULL) {
+                m_selected_item->is_selected = false;
+            }
+
+            m_selected_item = clicked_item;
+            clicked_item->is_selected = true;
+
+            if (m_selection_changed_callback != NULL) {
+                m_selection_changed_callback(m_selection_changed_context);
+            }
+        }
+
+        // Fire the generic "item pressed" callback even if selection did not change.
+        if (m_item_pressed_callback != NULL) {
+            m_item_pressed_callback(m_item_pressed_context);
+        }
+
+        // If the selected item supports dragging, begin a drag operation.
+        if (m_selected_item != NULL &&
+            m_selected_item->can_begin_drag &&
+            g_window_manager.drag_items.count == 0)
+        {
+            m_selected_item->drag_reset_on_start = false;
+
+            g_window_manager.drag_items.push_back(m_selected_item);
+
+            g_window_manager.m_drag_width =
+                widget.rect.right - widget.rect.left;
+
+            g_window_manager.m_drag_offset_x =
+                mouse_x - widget.rect.left;
+
+            g_window_manager.m_drag_offset_y =
+                local_y - item_top;
+        }
+
+        // Optionally dispatch the clicked item's own press handler.
+        if (clicked_item != NULL && m_dispatch_item_press_handler) {
+            clicked_item->On_Primary_Mouse_Down();
+        }
+
+        return EVENT_HANDLED;
+        */
+
+        todo!()
+    }
+
+    fn on_primary_mouse_up(&mut self, _mouse_position: IVec2) -> EventResult {
+        /*
+        if (m_selected_item != NULL && !m_input_disabled) {
+            m_selected_item->On_Primary_Mouse_Up();
+        }
+
+        return EVENT_HANDLED;
+        */
+
+        todo!()
+    }
+
     fn render(
         &mut self,
         origin: IVec2,

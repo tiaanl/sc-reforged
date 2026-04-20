@@ -3,7 +3,7 @@ use glam::{IVec2, Vec4};
 use crate::game::ui::{
     Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
-    widgets::widget::Widget,
+    widgets::widget::{EventResult, Widget},
 };
 
 pub struct TextButtonWidget {
@@ -39,6 +39,14 @@ impl TextButtonWidget {
 }
 
 impl Widget for TextButtonWidget {
+    fn on_primary_mouse_down(&mut self, _mouse_position: IVec2) -> EventResult {
+        EventResult::Ignore
+    }
+
+    fn on_primary_mouse_up(&mut self, _mouse_position: IVec2) -> EventResult {
+        EventResult::Ignore
+    }
+
     fn render(
         &mut self,
         origin: IVec2,
