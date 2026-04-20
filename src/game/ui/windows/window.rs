@@ -1,6 +1,64 @@
-use crate::game::ui::render::window_renderer::{WindowRenderItems, WindowRenderer};
+use glam::IVec2;
+
+use crate::game::ui::{
+    EventResult, Rect,
+    render::window_renderer::{WindowRenderItems, WindowRenderer},
+};
 
 pub trait Window {
+    /// Return true if the window is modal and should exclusively receive input.
+    fn is_modal(&self) -> bool {
+        false
+    }
+
+    /// Return true if the window should stay above normal windows.
+    fn is_always_on_top(&self) -> bool {
+        false
+    }
+
+    /// Return true if the window is visible.
+    fn is_visible(&self) -> bool;
+
+    /// Return true if the window can receive input events.
+    fn wants_input(&self) -> bool;
+
+    /// Return true if the local coordinates are within the bounds of the
+    /// window.
+    fn hit_test(&self, position: IVec2) -> bool;
+
+    /// Return the [Rect] of the window.
+    fn rect(&self) -> Rect;
+
+    /// Handle a primary mouse down event.
+    fn on_primary_mouse_down(&mut self, mouse: IVec2) -> EventResult {
+        let _ = mouse;
+        EventResult::Ignore
+    }
+
+    /// Handle a secondary mouse down event.
+    fn on_secondary_mouse_down(&mut self, mouse: IVec2) -> EventResult {
+        let _ = mouse;
+        EventResult::Ignore
+    }
+
+    /// Handle a primary mouse up event.
+    fn on_primary_mouse_up(&mut self, mouse: IVec2) -> EventResult {
+        let _ = mouse;
+        EventResult::Ignore
+    }
+
+    /// Handle a secondary mouse up event.
+    fn on_secondary_mouse_up(&mut self, mouse: IVec2) -> EventResult {
+        let _ = mouse;
+        EventResult::Ignore
+    }
+
+    /// Handle a mouse wheel event.
+    fn on_mouse_wheel(&mut self, wheel_steps: i32) -> EventResult {
+        let _ = wheel_steps;
+        EventResult::Ignore
+    }
+
     /// Called to update the window state given the time in seconds since the last frame was drawn
     /// in `delta_time`.
     fn update(&mut self, delta_time: f32) {

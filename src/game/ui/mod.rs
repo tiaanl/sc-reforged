@@ -18,3 +18,9 @@ pub fn u32_to_color(value: u32) -> Vec4 {
         (value >> 24 & 0xFF) as f32 / MAX,
     )
 }
+
+#[derive(Debug)]
+pub enum EventResult {
+    Ignore,
+    Handled,
+}

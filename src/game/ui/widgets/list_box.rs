@@ -1,9 +1,8 @@
 use glam::{IVec2, Vec4};
 
 use crate::game::ui::{
-    Rect,
+    EventResult, Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
-    widgets::widget::EventResult,
 };
 
 use super::widget::Widget;

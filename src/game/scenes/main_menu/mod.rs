@@ -64,7 +64,9 @@ impl Scene for MainMenuScene {
         self.window_manager.resize(size);
     }
 
-    fn input_event(&mut self, _event: &InputEvent) {}
+    fn input_event(&mut self, event: &InputEvent) {
+        self.window_manager.input_event(event);
+    }
 
     fn update(&mut self, delta_time: f32) {
         self.window_manager.update(delta_time);

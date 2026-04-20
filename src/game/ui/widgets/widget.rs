@@ -1,12 +1,9 @@
 use glam::IVec2;
 
-use crate::game::ui::render::window_renderer::{WindowRenderItems, WindowRenderer};
-
-pub enum EventResult {
-    Ignore,
-    Unknown,
-    Handled,
-}
+use crate::game::ui::{
+    EventResult,
+    render::window_renderer::{WindowRenderItems, WindowRenderer},
+};
 
 pub trait Widget {
     fn on_primary_mouse_down(&mut self, mouse_position: IVec2) -> EventResult;
