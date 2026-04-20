@@ -56,24 +56,34 @@ impl ListBoxItem for TextListBoxItem {
     }
 }
 
+#[derive(Default)]
 pub struct ListBoxWidget {
     rect: Rect,
 
     items: Vec<Rc<RefCell<dyn ListBoxItem>>>,
 
-    render_panel_background: bool,
-    draw_border: bool,
+    pub render_panel_background: bool,
+    pub force_flat_background: bool,
+    pub draw_border: bool,
+    pub snap_scroll_to_item_extent: bool,
+    pub input_disabled: bool,
+    pub mouse_wheel_disabled: bool,
+    pub horizontal: bool,
 }
 
 impl ListBoxWidget {
-    pub fn new(rect: Rect) -> Self {
+    pub fn horizontal(rect: Rect) -> Self {
         Self {
             rect,
+            horizontal: true,
+            ..Default::default()
+        }
+    }
 
-            items: Vec::default(),
-
-            render_panel_background: false,
-            draw_border: false,
+    pub fn vertical(rect: Rect) -> Self {
+        Self {
+            rect,
+            ..Default::default()
         }
     }
 
@@ -120,15 +130,114 @@ impl Widget for ListBoxWidget {
     ) {
         let rect = self.rect.offset(origin);
 
-        // TODO: Honor `render_panel_background` and `draw_border` like the
-        // original list box instead of always drawing this debug border. For
-        // the quit-confirmation help window, this list box should render with
-        // no panel background and no extra frame of its own.
-        window_render_items.render_border(rect, 1, Vec4::new(1.0, 0.0, 0.0, 1.0));
+        // 1. Draw list-box chrome.
+        if self.render_panel_background && !self.force_flat_background {
+            // Render_Panel_Pressed(x, y, width, height, g_interface_textures.m_window_motif_texture, 3, 0);
+            // window_render_items.render_panel_pressed(rect);
+        } else if self.draw_border {
+            window_render_items.render_border(
+                rect.offset(IVec2::NEG_ONE).grow(IVec2::ONE * 2),
+                1,
+                Vec4::new(153.0 / 255.0, 63.0 / 255.0, 38.0 / 255.0, 1.0),
+            );
+        }
 
-        self.layout_items(rect.position);
-        window_render_items.push_clip_rect(rect);
-        self.render_items(window_render_items);
-        window_render_items.pop_clip_rect();
+        // 2. Enable clipping for normal scrolling mode.
+        if self.snap_scroll_to_item_extent {
+            window_render_items.push_clip_rect(rect);
+        }
+
+        /*
+        // 3. Smoothly consume any pending scroll delta.
+        //
+        // Scroll speed is frame-time based: roughly 1 pixel per 8 ms,
+        // clamped so it never overshoots the remaining pending amount.
+        if (m_pending_scroll_delta != 0) {
+            int accumulator = m_scroll_step_accumulator + g_event_processor.m_frame_delta_ms;
+            int step = signed_divide_by_8(accumulator);   // keeps sign correct
+            m_scroll_step_accumulator = accumulator - step * 8;
+
+            if (m_pending_scroll_delta < 0) {
+                step = -step;
+                if (step < m_pending_scroll_delta) {
+                    step = m_pending_scroll_delta;
+                }
+            } else {
+                if (m_pending_scroll_delta < step) {
+                    step = m_pending_scroll_delta;
+                }
+            }
+
+            m_scroll_offset_y += step;
+            m_pending_scroll_delta -= step;
+            Sync_Scrollbar_Position();
+        }
+        */
+
+        /*
+        // 4. Walk the items and render the ones that are visible.
+        int item_x = 0;
+        int item_y = 0;
+
+        bool vertical = !m_is_horizontal;
+        int advance_x_per_item = m_is_horizontal ? 1 : 0;
+        int advance_y_per_item = vertical ? 1 : 0;
+
+        for (node = m_items.m_tail; node != NULL; node = node->prev) {
+            List_Box_Item *item = node->item;
+
+            int scroll_x = m_scroll_offset_x;
+            int scroll_y = m_scroll_offset_y;
+
+            bool stop_now;
+            bool item_is_visible;
+
+            if (!m_snap_scroll_to_item_extent) {
+                // Normal mode:
+                // render if the item intersects the viewport at all.
+                stop_now =
+                    (item_x > scroll_x + width) ||
+                    (item_y > scroll_y + height);
+
+                item_is_visible =
+                    (scroll_x <= item_x + item->width) &&
+                    (scroll_y <= item_y + item->height);
+            } else {
+                // Snap-to-item mode:
+                // only render if the whole item origin is inside the viewport,
+                // and stop once the next full item would extend beyond it.
+                stop_now =
+                    (item_x + item->width > scroll_x + width) ||
+                    (item_y + item->height > scroll_y + height);
+
+                item_is_visible =
+                    (scroll_x <= item_x) &&
+                    (scroll_y <= item_y);
+            }
+
+            if (stop_now) {
+                break;
+            }
+
+            if (item_is_visible) {
+                int draw_x = x + item_x - scroll_x;
+                int draw_y = y + item_y - scroll_y;
+
+                if (!m_is_horizontal) {
+                    item->Render_Vertical(draw_x, draw_y, width);
+                } else {
+                    item->Render_Horizontal(draw_x, draw_y, height);
+                }
+            }
+
+            item_x += advance_x_per_item * item->width;
+            item_y += advance_y_per_item * item->height;
+        }
+        */
+
+        // 5. Restore renderer state if we enabled clipping.
+        if !self.snap_scroll_to_item_extent {
+            window_render_items.pop_clip_rect();
+        }
     }
 }

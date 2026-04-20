@@ -38,7 +38,7 @@ impl HelpWindow {
         let mut widgets = Widgets::default();
 
         // List box widget to hold the help text body lines.
-        let mut list_box = Box::new(ListBoxWidget::new(Rect::new(
+        let mut list_box = Box::new(ListBoxWidget::vertical(Rect::new(
             IVec2::splat(16),
             size - IVec2::new(32, 68),
         )));
