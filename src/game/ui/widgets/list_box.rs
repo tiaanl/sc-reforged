@@ -94,6 +94,10 @@ impl ListBoxWidget {
 }
 
 impl Widget for ListBoxWidget {
+    fn rect(&self) -> Rect {
+        self.rect
+    }
+
     fn on_primary_mouse_down(&mut self, _mouse_position: IVec2) -> EventResult {
         /*
         int item_top = 0;

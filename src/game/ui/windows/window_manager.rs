@@ -285,7 +285,10 @@ impl WindowManager {
             return;
         };
 
-        let _ = self.windows[window_index].as_mut().on_mouse_wheel(delta);
+        let window = self.windows[window_index].as_mut();
+        let local = mouse - window.rect().position;
+
+        let _ = window.on_mouse_wheel(local, delta);
 
         // TODO: Route wheel input to the captured or hovered window once the
         // manager tracks those states explicitly.

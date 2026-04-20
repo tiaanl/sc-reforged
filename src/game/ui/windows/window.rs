@@ -22,7 +22,7 @@ pub trait Window {
     /// Return true if the window can receive input events.
     fn wants_input(&self) -> bool;
 
-    /// Return true if the local coordinates are within the bounds of the
+    /// Return true if the global coordinates are within the bounds of the
     /// window.
     fn hit_test(&self, position: IVec2) -> bool;
 
@@ -53,8 +53,9 @@ pub trait Window {
         EventResult::Ignore
     }
 
-    /// Handle a mouse wheel event.
-    fn on_mouse_wheel(&mut self, wheel_steps: i32) -> EventResult {
+    /// Handle a mouse wheel event in window-local coordinates.
+    fn on_mouse_wheel(&mut self, mouse: IVec2, wheel_steps: i32) -> EventResult {
+        let _ = mouse;
         let _ = wheel_steps;
         EventResult::Ignore
     }

@@ -39,6 +39,10 @@ impl TextButtonWidget {
 }
 
 impl Widget for TextButtonWidget {
+    fn rect(&self) -> Rect {
+        self.rect
+    }
+
     fn on_primary_mouse_down(&mut self, _mouse_position: IVec2) -> EventResult {
         EventResult::Ignore
     }
