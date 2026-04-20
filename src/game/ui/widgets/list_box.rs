@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use glam::{IVec2, Vec4};
 
 use crate::game::ui::{
@@ -10,56 +8,41 @@ use crate::game::ui::{
 
 use super::widget::Widget;
 
-pub trait ListBoxItem {
-    fn height(&self) -> i32;
-
-    fn desired_size(&self) -> IVec2;
-    fn layout(&mut self, rect: Rect);
-    fn render(&self, window_render_items: &mut WindowRenderItems);
+pub enum ListBoxItemKind {
+    Text {
+        font: Font,
+        text: String,
+        color: Option<Vec4>,
+    },
 }
 
-pub struct TextListBoxItem {
-    pub rect: Rect,
-    pub font: Font,
-    pub text: String,
+pub struct ListBoxItem {
+    height: i32,
+    kind: ListBoxItemKind,
 }
 
-impl TextListBoxItem {
-    pub fn new(text: impl Into<String>, font: Font, window_renderer: &WindowRenderer) -> Self {
+impl ListBoxItem {
+    pub fn text(text: impl Into<String>, font: Font, color: Option<Vec4>) -> Self {
         let text = text.into();
 
-        // TODO: For help-window body rows, match the original item behavior:
-        // keep the measured text width, but use the dedicated list-box text row
-        // styling with a fixed 15 px row height and explicit help-text color.
-        let width = window_renderer.measure_text_width(text.as_bytes(), font);
-        let height = window_renderer.measure_text_height(text.as_bytes(), font);
-
         Self {
-            rect: Rect::new(IVec2::ZERO, IVec2::new(width, height)),
-            font,
-            text,
+            height: 15,
+            kind: ListBoxItemKind::Text { font, text, color },
         }
     }
-}
 
-impl ListBoxItem for TextListBoxItem {
     fn height(&self) -> i32 {
         15
     }
 
-    fn desired_size(&self) -> IVec2 {
-        self.rect.size
-    }
-
-    fn layout(&mut self, rect: Rect) {
-        self.rect = rect;
-    }
-
-    fn render(&self, window_render_items: &mut WindowRenderItems) {
-        // TODO: The quit-confirmation help body uses explicit custom green text
-        // color (0xff19ff19). Store that on the item and pass it through here
-        // instead of relying on the font default color.
-        window_render_items.render_text(self.rect.position, self.text.as_bytes(), self.font, None);
+    fn render(&self, rect: Rect, window_render_items: &mut WindowRenderItems) {
+        match self.kind {
+            ListBoxItemKind::Text {
+                font,
+                ref text,
+                color,
+            } => window_render_items.render_text(rect.position, text.as_bytes(), font, color),
+        }
     }
 }
 
@@ -67,7 +50,7 @@ impl ListBoxItem for TextListBoxItem {
 pub struct ListBoxWidget {
     rect: Rect,
 
-    items: Vec<Rc<RefCell<dyn ListBoxItem>>>,
+    items: Vec<ListBoxItem>,
 
     scroll_offset: IVec2,
 
@@ -96,37 +79,8 @@ impl ListBoxWidget {
         }
     }
 
-    pub fn add_item(&mut self, widget: Rc<RefCell<dyn ListBoxItem>>) {
-        self.items.push(widget);
-    }
-
-    fn layout_items(&mut self, origin: IVec2) -> IVec2 {
-        let mut current = origin;
-        let mut content_size = IVec2::ZERO;
-
-        // TODO: This vertical stacking is enough for the quit-confirmation
-        // help window. If another help window needs more body lines than fit in
-        // the viewport, preserve this content size and reintroduce scrolling.
-        for item in self.items.iter_mut() {
-            let mut item_ref = item.borrow_mut();
-            let item_size = item_ref.desired_size();
-            item_ref.layout(Rect::new(current, item_size));
-
-            current.y += item_size.y;
-
-            content_size.x = content_size.x.max(item_size.x);
-            content_size.y += item_size.y;
-        }
-
-        content_size
-    }
-
-    fn render_items(&self, window_render_items: &mut WindowRenderItems) {
-        // TODO: Clipping keeps the quit-confirmation body correct already. Add
-        // explicit culling later if longer help text makes this path expensive.
-        for item in self.items.iter() {
-            item.borrow().render(window_render_items);
-        }
+    pub fn add_item(&mut self, item: ListBoxItem) {
+        self.items.push(item);
     }
 }
 

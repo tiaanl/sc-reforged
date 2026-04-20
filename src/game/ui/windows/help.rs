@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use glam::{IVec2, Vec4};
 
 use crate::game::{
@@ -7,8 +5,9 @@ use crate::game::{
     ui::{
         Rect,
         render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
+        u32_to_color,
         widgets::{
-            list_box::{ListBoxWidget, TextListBoxItem},
+            list_box::{ListBoxItem, ListBoxWidget},
             text_button::TextButtonWidget,
             widget::Widgets,
         },
@@ -25,7 +24,7 @@ pub struct HelpWindow {
 }
 
 impl HelpWindow {
-    pub fn new(help_def: &HelpDef, window_renderer: &WindowRenderer) -> Self {
+    pub fn new(help_def: &HelpDef) -> Self {
         let size = help_def.dimensions.unwrap_or(IVec2::new(380, 180));
 
         // TODO: Center against the current render surface size instead of the
@@ -47,11 +46,11 @@ impl HelpWindow {
         // background and no extra border beyond the surrounding help window.
 
         for line in help_def.body_lines.iter() {
-            let list_item = Rc::new(RefCell::new(TextListBoxItem::new(
+            let list_item = ListBoxItem::text(
                 line.clone(),
                 Font::TwelvePoint,
-                window_renderer,
-            )));
+                Some(u32_to_color(0xff19ff19)),
+            );
             list_box.add_item(list_item);
         }
 
