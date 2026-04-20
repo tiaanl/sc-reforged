@@ -38,13 +38,7 @@ impl Widgets {
     pub fn on_primary_mouse_down(&mut self, mouse_position: IVec2) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
             let rect = widget.rect();
-            let bottom_right = rect.bottom_right();
-
-            if mouse_position.x < rect.position.x
-                || mouse_position.y < rect.position.y
-                || mouse_position.x >= bottom_right.x
-                || mouse_position.y >= bottom_right.y
-            {
+            if !rect.contains(mouse_position) {
                 continue;
             }
 
@@ -63,13 +57,22 @@ impl Widgets {
     pub fn on_primary_mouse_up(&mut self, mouse_position: IVec2) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
             let rect = widget.rect();
-            let bottom_right = rect.bottom_right();
+            if !rect.contains(mouse_position) {
+                continue;
+            }
 
-            if mouse_position.x < rect.position.x
-                || mouse_position.y < rect.position.y
-                || mouse_position.x >= bottom_right.x
-                || mouse_position.y >= bottom_right.y
-            {
+            let result = widget.on_primary_mouse_up(mouse_position);
+
+            if matches!(result, EventResult::Handled) {
+                return result;
+            }
+        }
+
+        // Give the remaining widgets a chance to clear any pressed state even
+        // when the cursor was released outside their bounds.
+        for widget in self.widgets.iter_mut().rev() {
+            let rect = widget.rect();
+            if rect.contains(mouse_position) {
                 continue;
             }
 
@@ -88,13 +91,7 @@ impl Widgets {
     pub fn on_mouse_wheel(&mut self, mouse_position: IVec2, wheel_steps: i32) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
             let rect = widget.rect();
-            let bottom_right = rect.bottom_right();
-
-            if mouse_position.x < rect.position.x
-                || mouse_position.y < rect.position.y
-                || mouse_position.x >= bottom_right.x
-                || mouse_position.y >= bottom_right.y
-            {
+            if !rect.contains(mouse_position) {
                 continue;
             }
 

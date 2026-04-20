@@ -75,4 +75,15 @@ impl Rect {
     pub fn bottom_right(&self) -> IVec2 {
         self.position + self.size
     }
+
+    /// Returns true if the point lies inside the rectangle.
+    #[must_use]
+    pub fn contains(&self, point: IVec2) -> bool {
+        let bottom_right = self.bottom_right();
+
+        point.x >= self.position.x
+            && point.y >= self.position.y
+            && point.x < bottom_right.x
+            && point.y < bottom_right.y
+    }
 }
