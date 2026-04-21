@@ -92,7 +92,7 @@ impl Widget for TextButtonWidget {
         let color = if let Some(custom_color) = self.custom_color {
             custom_color
         } else {
-            self.font.default_color()
+            self.font.primary_color()
         };
         window_render_items.render_border(self.rect.offset(origin), 1, color);
 

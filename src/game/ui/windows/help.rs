@@ -1,4 +1,4 @@
-use glam::{IVec2, Vec4};
+use glam::IVec2;
 
 use crate::game::{
     config::help_window_defs::HelpDef,
@@ -67,7 +67,7 @@ impl HelpWindow {
                 help_def.confirmation_text_1.as_ref().unwrap(),
             ));
             button.font = Font::TwelvePoint;
-            button.custom_color = Some(Vec4::new(25.0 / 255.0, 1.0, 25.0 / 255.0, 1.0)); // 0xff19ff19
+            button.custom_color = Some(u32_to_color(0xff19ff19));
 
             widgets.add(button);
 
@@ -79,7 +79,7 @@ impl HelpWindow {
                 help_def.confirmation_text_2.as_ref().unwrap(),
             ));
             button.font = Font::TwelvePoint;
-            button.custom_color = Some(Vec4::new(25.0 / 255.0, 1.0, 25.0 / 255.0, 1.0)); // 0xff19ff19
+            button.custom_color = Some(u32_to_color(0xff19ff19));
 
             widgets.add(button);
         }
@@ -153,14 +153,14 @@ impl Window for HelpWindow {
             // Render_Solid_Rect(0,0,g_renderer->m_screen_width,g_renderer->m_screen_height,0x50000000);
             render_items.render_solid_rect(
                 Rect::from_size(window_renderer.surface_size().as_ivec2()),
-                Vec4::new(0.0, 0.0, 0.0, 80.0 / 255.0),
+                u32_to_color(0x50000000),
             );
 
             // Render an inner dark rect.
             // Render_Solid_Rect(left + 16,top + 16,width + -32,height + -68,0x80000000);
             render_items.render_solid_rect(
                 self.rect.offset(IVec2::splat(16)).grow(-IVec2::new(32, 68)),
-                Vec4::new(0.0, 0.0, 0.0, 128.0 / 255.0),
+                u32_to_color(0x80000000),
             );
         }
 
@@ -169,12 +169,12 @@ impl Window for HelpWindow {
         render_items.render_border(
             self.rect.offset(-IVec2::ONE).grow(IVec2::splat(2)),
             1,
-            Vec4::new(25.0 / 255.0, 1.0, 25.0 / 255.0, 1.0),
+            u32_to_color(0xff19ff19),
         );
 
         // Render the background for the window.
         // Render_Solid_Rect(left,top,width,height,0x50000000);
-        render_items.render_solid_rect(self.rect, Vec4::new(0.0, 0.0, 0.0, 80.0 / 255.0));
+        render_items.render_solid_rect(self.rect, u32_to_color(0x50000000));
 
         // TODO: Render the help pointer only for defs that specify one. The
         // quit-confirmation dialog likely does not need this, but other help

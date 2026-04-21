@@ -8,8 +8,8 @@ use glam::Vec4;
 pub use rect::Rect;
 
 #[inline]
-pub fn u32_to_color(value: u32) -> Vec4 {
-    const MAX: f32 = i8::MAX as f32;
+pub const fn u32_to_color(value: u32) -> Vec4 {
+    const MAX: f32 = u8::MAX as f32;
 
     Vec4::new(
         (value & 0xFF) as f32 / MAX,

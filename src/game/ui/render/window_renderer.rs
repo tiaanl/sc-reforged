@@ -13,7 +13,7 @@ use crate::{
             sprites::{Sprite3d, Sprites},
         },
         render::textures::{Texture, Textures},
-        ui::Rect,
+        ui::{Rect, u32_to_color},
     },
 };
 
@@ -49,13 +49,20 @@ impl Font {
         }
     }
 
-    /// The font's default primary color (RGBA) as defined in the original engine.
-    pub fn default_color(self) -> Vec4 {
-        match self {
-            Font::Default | Font::Small => Vec4::new(1.0, 1.0, 1.0, 1.0),
-            Font::Clock => Vec4::new(0.098, 1.0, 0.098, 1.0),
-            Font::TwelvePoint | Font::FifteenPoint => Vec4::new(0.298, 0.6, 1.0, 1.0),
-        }
+    /// The font's default primary color (RGBA).
+    #[inline]
+    pub const fn primary_color(&self) -> Vec4 {
+        u32_to_color(match self {
+            Font::Default | Font::Small => 0xffffffff,
+            Font::Clock => 0xff19ff19,
+            Font::TwelvePoint | Font::FifteenPoint => 0xff4c99ff,
+        })
+    }
+
+    /// The font's default secondary color (RGBA).
+    #[inline]
+    pub const fn secondary_color(self) -> Vec4 {
+        u32_to_color(0xffffffff)
     }
 }
 
@@ -130,7 +137,7 @@ impl WindowRenderItems {
             pos,
             text: text.to_vec(),
             font,
-            color: color.unwrap_or(font.default_color()),
+            color: color.unwrap_or(font.primary_color()),
         });
     }
 }

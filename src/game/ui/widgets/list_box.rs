@@ -3,6 +3,7 @@ use glam::{IVec2, Vec4};
 use crate::game::ui::{
     EventResult, Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
+    u32_to_color,
 };
 
 use super::widget::Widget;
@@ -242,9 +243,9 @@ impl Widget for ListBoxWidget {
             // window_render_items.render_panel_pressed(rect);
         } else if self.draw_border {
             window_render_items.render_border(
-                rect.offset(IVec2::NEG_ONE).grow(IVec2::ONE * 2),
+                rect.offset(IVec2::NEG_ONE),
                 1,
-                Vec4::new(153.0 / 255.0, 63.0 / 255.0, 38.0 / 255.0, 1.0),
+                u32_to_color(0xff263f99),
             );
         }
 
