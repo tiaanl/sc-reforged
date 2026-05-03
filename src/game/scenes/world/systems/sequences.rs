@@ -4,9 +4,9 @@ use glam::Vec4;
 use crate::{
     engine::{storage::Handle, transform::Transform},
     game::{
-        AssetReader,
         assets::model::Model,
         scenes::world::sim_world::{
+            GameAssets,
             ecs::GizmoVertices,
             sequences::{
                 MotionController, MotionSequencer, Pose, generate_pose, generate_pose_at_key_frame,
@@ -20,11 +20,11 @@ use super::Time;
 /// Advance all motion controllers for the current frame.
 pub fn update_motion_controllers(
     mut motion_controllers: Query<(&mut MotionController, &mut Transform)>,
-    assets: Res<AssetReader>,
+    assets: Res<GameAssets>,
     time: Res<Time>,
 ) {
     for (mut motion_controller, mut transform) in motion_controllers.iter_mut() {
-        motion_controller.update(time.delta_time, &assets);
+        motion_controller.update(time.delta_time, &assets.motions);
 
         // Once the motion has been calculated, adjust the transform of the
         // entity by the `root_motion` from the [MotionController].
@@ -36,11 +36,11 @@ pub fn update_motion_controllers(
 /// Build a full pose for each animated entity from the currently active motion.
 pub fn update_poses(
     mut poses: Query<(&MotionController, &Handle<Model>, &mut Pose)>,
-    assets: Res<AssetReader>,
+    assets: Res<GameAssets>,
     motion_sequencer: Res<MotionSequencer>,
 ) {
     for (motion_controller, model_handle, mut pose) in poses.iter_mut() {
-        let Some(model) = assets.get_model(*model_handle) else {
+        let Some(model) = assets.models.get(*model_handle) else {
             continue;
         };
         let skeleton = &model.skeleton;
@@ -76,14 +76,14 @@ pub fn update_poses(
         let root_translation_override =
             motion_sequencer.default_cog_position(motion_controller.transition_check_state());
 
-        let Some(motion) = assets.get_motion(motion_info.motion) else {
+        let Some(motion) = assets.motions.get(motion_info.motion) else {
             continue;
         };
 
         *pose = if let Some(terminal_frame_index) = terminal_frame_index {
             generate_pose_at_key_frame(
                 skeleton,
-                motion,
+                &motion,
                 terminal_frame_index,
                 root_translation_override,
                 Some(&pose),
@@ -91,7 +91,7 @@ pub fn update_poses(
         } else {
             generate_pose(
                 skeleton,
-                motion,
+                &motion,
                 sample_time,
                 motion_info.looping,
                 root_translation_override,

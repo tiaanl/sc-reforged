@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ahash::HashMap;
 use glam::Mat4;
 
@@ -10,8 +12,7 @@ use crate::{
         storage::Handle,
     },
     game::{
-        AssetReader,
-        assets::model::Model,
+        assets::{images::Images, model::Model, models::Models},
         scenes::world::{
             extract::RenderSnapshot,
             render::{
@@ -46,6 +47,9 @@ struct Batch {
 }
 
 pub struct ModelRenderPipeline {
+    images: Arc<Images>,
+    asset_models: Arc<Models>,
+
     textures: RenderTextures,
     models: RenderModels,
 
@@ -75,6 +79,8 @@ impl ModelRenderPipeline {
         context: &RenderContext,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
+        images: Arc<Images>,
+        asset_models: Arc<Models>,
     ) -> Self {
         let device = &context.device;
 
@@ -237,6 +243,9 @@ impl ModelRenderPipeline {
         });
 
         Self {
+            images,
+            asset_models,
+
             textures,
             models,
 
@@ -259,7 +268,6 @@ impl ModelRenderPipeline {
 
     pub fn get_or_create_render_model(
         &mut self,
-        assets: &AssetReader,
         context: &RenderContext,
         model_handle: Handle<Model>,
     ) -> Result<Handle<RenderModel>, AssetError> {
@@ -267,9 +275,13 @@ impl ModelRenderPipeline {
             return Ok(*render_model_handle);
         }
 
-        let render_model_handle =
-            self.models
-                .add(assets, context, &mut self.textures, model_handle)?;
+        let render_model_handle = self.models.add(
+            &self.images,
+            &self.asset_models,
+            context,
+            &mut self.textures,
+            model_handle,
+        )?;
 
         // Cache the new handle.
         self.model_to_render_model
@@ -287,7 +299,6 @@ impl ModelRenderPipeline {
 impl RenderPipeline for ModelRenderPipeline {
     fn prepare(
         &mut self,
-        assets: &AssetReader,
         context: &RenderContext,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
@@ -297,7 +308,7 @@ impl RenderPipeline for ModelRenderPipeline {
             tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
 
             for &model_handle in models_to_prepare {
-                if let Err(err) = self.get_or_create_render_model(assets, context, model_handle) {
+                if let Err(err) = self.get_or_create_render_model(context, model_handle) {
                     tracing::warn!("Could not prepare model! ({err})");
                 }
             }

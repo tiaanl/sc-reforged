@@ -1,5 +1,7 @@
 #![allow(unused)]
 
+use std::sync::Arc;
+
 use bevy_ecs::prelude::*;
 use glam::UVec2;
 use winit::keyboard::KeyCode;
@@ -13,14 +15,15 @@ use crate::{
         shader_cache::ShaderCache,
     },
     game::{
-        AssetLoader, AssetReader,
-        assets::config::campaign_def::CampaignDef,
+        assets::{
+            config::campaign_def::CampaignDef, images::Images, models::Models, motions::Motions,
+        },
         file_system::FileSystem,
         scenes::world::{
             extract::RenderSnapshot,
             game_mode::GameMode,
             render::{RenderBindings, RenderLayouts, RenderTargets},
-            sim_world::{Camera, ecs::Viewport, init_sim_world},
+            sim_world::{Camera, GameAssets, ecs::Viewport, init_sim_world},
             systems::{SimulationControl, Time},
         },
     },
@@ -71,7 +74,7 @@ pub struct WorldScene {
 
 impl WorldScene {
     pub fn new(
-        file_system: &FileSystem,
+        file_system: Arc<FileSystem>,
         context: &RenderContext,
         surface_size: UVec2,
         surface_format: wgpu::TextureFormat,
@@ -82,11 +85,23 @@ impl WorldScene {
         let fps_history = vec![FrameTime::default(); 100];
         let fps_history_cursor = 0;
 
-        let assets = AssetLoader::new(file_system)?;
+        let images = Arc::new(Images::new(Arc::clone(&file_system)));
+        let models = Arc::new(Models::new(Arc::clone(&file_system), Arc::clone(&images))?);
+        let motions = Arc::new(Motions::new(Arc::clone(&file_system)));
+        let assets = GameAssets {
+            images: Arc::clone(&images),
+            models: Arc::clone(&models),
+            motions: Arc::clone(&motions),
+        };
 
         let mut sim_world = World::default();
 
-        init_sim_world(file_system, &mut sim_world, assets, &campaign_def)?;
+        init_sim_world(
+            Arc::clone(&file_system),
+            &mut sim_world,
+            assets,
+            &campaign_def,
+        )?;
 
         let render_targets = RenderTargets::new(context, surface_size, surface_format);
 
@@ -97,6 +112,8 @@ impl WorldScene {
         let bindings = RenderBindings::new(context, &mut layouts);
 
         let systems = systems::Systems::new(
+            Arc::clone(&images),
+            Arc::clone(&models),
             context,
             &render_targets,
             &mut layouts,
@@ -233,9 +250,8 @@ impl Scene for WorldScene {
 
                 let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
-                let assets = self.sim_world.resource::<AssetReader>();
                 self.systems
-                    .prepare(assets, &mut self.bindings, context, render_snapshot);
+                    .prepare(&mut self.bindings, context, render_snapshot);
                 frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
             }
 
@@ -481,8 +497,11 @@ impl Scene for WorldScene {
                                     "Transition check state: {:?}",
                                     mc.transition_check_state()
                                 ));
-                                let assets = self.sim_world.resource::<AssetReader>();
-                                ui.label(format!("Current state: {:?}", mc.current_state(assets)));
+                                let assets = self.sim_world.resource::<GameAssets>();
+                                ui.label(format!(
+                                    "Current state: {:?}",
+                                    mc.current_state(&assets.motions)
+                                ));
                             }
                         }
 
@@ -523,11 +542,12 @@ impl Scene for WorldScene {
                             .sim_world
                             .get::<sim_world::sequences::MotionController>(selected_entity)
                         {
-                            let assets = self.sim_world.resource::<AssetReader>();
+                            let assets = self.sim_world.resource::<GameAssets>();
                             mc.pending.iter().for_each(|context| {
-                                let motion_name = assets
-                                    .get_motion(context.motion_info.motion)
-                                    .map(|motion| motion.name.as_str())
+                                let motion = assets.motions.get(context.motion_info.motion);
+                                let motion_name = motion
+                                    .as_ref()
+                                    .map(|m| m.name.as_str())
                                     .unwrap_or("<missing motion>");
                                 ui.label(format!(
                                     "{} ({:.02})",

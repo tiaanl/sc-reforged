@@ -4,14 +4,11 @@ use crate::{
         renderer::{Frame, RenderContext},
         shader_cache::{ShaderCache, ShaderSource},
     },
-    game::{
-        AssetReader,
-        scenes::world::{
-            extract::RenderSnapshot,
-            render::{
-                RenderBindings, RenderLayouts, per_frame::PerFrame, render_layouts::RenderLayout,
-                render_pipeline::RenderPipeline, ui_render_pipeline, uniform_buffer::UniformBuffer,
-            },
+    game::scenes::world::{
+        extract::RenderSnapshot,
+        render::{
+            RenderBindings, RenderLayouts, per_frame::PerFrame, render_layouts::RenderLayout,
+            render_pipeline::RenderPipeline, ui_render_pipeline, uniform_buffer::UniformBuffer,
         },
     },
 };
@@ -150,7 +147,6 @@ impl UiRenderPipeline {
 impl RenderPipeline for UiRenderPipeline {
     fn prepare(
         &mut self,
-        _assets: &AssetReader,
         context: &RenderContext,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,

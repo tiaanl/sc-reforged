@@ -9,9 +9,9 @@ use crate::{
         renderer::RenderContext,
         storage::{Handle, Storage},
     },
-    game::{
-        AssetReader,
-        assets::image::{BlendMode, Image},
+    game::assets::{
+        image::{BlendMode, Image},
+        images::Images,
     },
 };
 
@@ -157,7 +157,7 @@ impl RenderTextures {
 
     pub fn get_or_create(
         &mut self,
-        assets: &AssetReader,
+        images: &Images,
         context: &RenderContext,
         image_handle: Handle<Image>,
     ) -> Handle<RenderTexture> {
@@ -165,13 +165,13 @@ impl RenderTextures {
             return *render_texture;
         };
 
-        let image = assets
-            .get_image(image_handle)
+        let image = images
+            .get(image_handle)
             .expect("Adding image that doesn't exist!");
 
         let bucket_index = Self::calculate_bucket_index(image.size);
         let bucket = &mut self.buckets[bucket_index];
-        let layer = bucket.insert(context, image);
+        let layer = bucket.insert(context, &image);
 
         // Write the texture data into the buffer.
         let texture_data_index = {

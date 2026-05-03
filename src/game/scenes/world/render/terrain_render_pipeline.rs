@@ -7,7 +7,7 @@ use crate::{
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::{
-        AssetReader,
+        assets::images::Images,
         scenes::world::{
             extract::{RenderSnapshot, TerrainChunk},
             render::{
@@ -47,7 +47,7 @@ pub struct TerrainRenderPipeline {
 
 impl TerrainRenderPipeline {
     pub fn new(
-        assets: &AssetReader,
+        images: &Images,
         context: &RenderContext,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
@@ -104,13 +104,13 @@ impl TerrainRenderPipeline {
         };
 
         let terrain_texture = {
-            let image = assets.get_image(terrain.terrain_texture).unwrap();
+            let image = images.get(terrain.terrain_texture).unwrap();
             Self::create_texture(context, "terrain_texture", &image.data)
         };
 
         let strata_texture = {
-            let image = assets
-                .get_image(terrain.strata_texture)
+            let image = images
+                .get(terrain.strata_texture)
                 .expect("Could not load strate texture.");
             Self::create_texture(context, "strata", &image.data)
         };
@@ -408,7 +408,6 @@ impl TerrainRenderPipeline {
 impl RenderPipeline for TerrainRenderPipeline {
     fn prepare(
         &mut self,
-        _assets: &AssetReader,
         context: &RenderContext,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,

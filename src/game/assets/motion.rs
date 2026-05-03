@@ -3,10 +3,6 @@ use glam::{Quat, Vec3};
 use shadow_company_tools::bmf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use crate::{engine::assets::AssetError, game::AssetLoadContext};
-
-use super::Asset;
-
 bitflags! {
     /// Per-motion behavior flags used by sequencer/runtime systems.
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -65,7 +61,7 @@ pub struct Motion {
     pub to_state: State,
     /// Raw keyframes as loaded from the motion asset.
     pub key_frames: Vec<bmf::KeyFrame>,
-    flags: AtomicU32,
+    pub(super) flags: AtomicU32,
 }
 
 /// A sampled per-bone update produced from keyframe interpolation/apply rules.
@@ -281,43 +277,6 @@ impl Motion {
     #[inline]
     pub fn has_flags(&self, flags: MotionFlags) -> bool {
         self.flags().contains(flags)
-    }
-}
-
-impl Asset for Motion {
-    fn from_memory(
-        _context: &mut AssetLoadContext,
-        path: std::path::PathBuf,
-        data: &[u8],
-    ) -> Result<Self, AssetError> {
-        const MOTION_HEADER_RUNTIME_TICKS_OFFSET: usize = 0x9c;
-
-        fn read_u32_le_at(data: &[u8], offset: usize) -> Option<u32> {
-            let bytes = data.get(offset..offset + 4)?;
-            Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
-        }
-
-        let bmf = bmf::Motion::read(&mut std::io::Cursor::new(data))
-            .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
-
-        // The original runtime uses the serialized field at header offset 0x9c
-        // for per-frame timing when activating motions.
-        let runtime_ticks_per_frame =
-            read_u32_le_at(data, MOTION_HEADER_RUNTIME_TICKS_OFFSET).unwrap_or(bmf.ticks_per_frame);
-
-        let key_frames = bmf.key_frames;
-        let motion = Motion {
-            name: bmf.name,
-            frame_count: bmf.key_frame_count,
-            last_frame: bmf.last_frame,
-            base_ticks_per_frame: runtime_ticks_per_frame.max(1),
-            from_state: State::from_motion_state_id(bmf.from_state),
-            to_state: State::from_motion_state_id(bmf.to_state),
-            key_frames,
-            flags: AtomicU32::new(MotionFlags::empty().bits()),
-        };
-
-        Ok(motion)
     }
 }
 

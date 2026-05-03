@@ -140,7 +140,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
 
                     Box::new(
                         WorldScene::new(
-                            &file_system,
+                            Arc::clone(&file_system),
                             &context,
                             surface.size(),
                             surface.format(),

@@ -9,10 +9,7 @@ use crate::{
         renderer::RenderContext,
         storage::{Handle, Storage},
     },
-    game::{
-        AssetReader,
-        assets::{image::BlendMode, model::Model},
-    },
+    game::assets::{image::BlendMode, images::Images, model::Model, models::Models},
 };
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -131,13 +128,14 @@ impl RenderModels {
 
     pub fn add(
         &mut self,
-        assets: &AssetReader,
+        images: &Images,
+        models: &Models,
         context: &RenderContext,
         render_textures: &mut RenderTextures,
         model_handle: Handle<Model>,
     ) -> Result<Handle<RenderModel>, AssetError> {
-        let model = assets
-            .get_model(model_handle)
+        let model = models
+            .get(model_handle)
             .expect("Model should have been loaded byt his time.");
 
         let mut opaque_mesh = IndexedMesh::default();
@@ -156,7 +154,7 @@ impl RenderModels {
             .collect();
 
         for mesh in model.meshes.iter() {
-            let texture_handle = render_textures.get_or_create(assets, context, mesh.image);
+            let texture_handle = render_textures.get_or_create(images, context, mesh.image);
             let texture = render_textures.get(texture_handle).unwrap();
 
             let indexed_mesh = match texture.blend_mode {

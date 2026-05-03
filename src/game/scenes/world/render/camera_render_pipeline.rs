@@ -36,7 +36,6 @@ pub struct CameraRenderPipeline;
 impl RenderPipeline for CameraRenderPipeline {
     fn prepare(
         &mut self,
-        _assets: &crate::game::AssetReader,
         context: &crate::engine::renderer::RenderContext,
         bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,

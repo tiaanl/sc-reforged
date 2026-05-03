@@ -1,6 +1,9 @@
 #![allow(unused)]
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use ahash::HashSet;
 use bevy_ecs::prelude::*;
@@ -9,8 +12,9 @@ use glam::{IVec2, Quat, Vec2, Vec3};
 use crate::{
     engine::{assets::AssetError, input::InputState, transform::Transform},
     game::{
-        AssetLoader,
-        assets::config::campaign_def::CampaignDef,
+        assets::{
+            config::campaign_def::CampaignDef, images::Images, models::Models, motions::Motions,
+        },
         config::{CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
         file_system::FileSystem,
         scenes::world::{
@@ -66,15 +70,28 @@ pub struct SimWorldState {
     pub ui: Ui,
 }
 
+/// Asset containers shared with the ECS world. Each container is internally
+/// thread-safe and may be cloned cheaply.
+#[derive(Clone, Resource)]
+pub struct GameAssets {
+    pub images: Arc<Images>,
+    pub models: Arc<Models>,
+    pub motions: Arc<Motions>,
+}
+
 pub fn init_sim_world(
-    file_system: &FileSystem,
+    file_system: Arc<FileSystem>,
     world: &mut World,
-    assets: AssetLoader,
+    assets: GameAssets,
     campaign_def: &CampaignDef,
 ) -> Result<(), AssetError> {
-    let mut assets = assets;
-
-    let campaign = assets.load_campaign(&campaign_def.base_name)?;
+    let campaign = load_config::<crate::game::config::Campaign>(
+        &file_system,
+        PathBuf::from("campaign")
+            .join(&campaign_def.base_name)
+            .join(&campaign_def.base_name)
+            .with_extension("txt"),
+    )?;
 
     world.init_resource::<Time>();
     world.init_resource::<SimulationControl>();
@@ -96,7 +113,8 @@ pub fn init_sim_world(
         let mut motion_sequencer = MotionSequencer::default();
 
         motion_sequencer.load_motion_sequencer_defs(
-            &mut assets,
+            &file_system,
+            &assets.motions,
             PathBuf::from("config").join("mot_sequencer_defs.txt"),
         )?;
 
@@ -169,9 +187,9 @@ pub fn init_sim_world(
         FreeCameraController::new(1000.0, 0.2),
     ));
 
-    init_terrain(file_system, world, &mut assets, campaign_def)?;
+    init_terrain(&file_system, world, &assets, campaign_def)?;
 
-    init_objects(file_system, world, &mut assets, campaign)?;
+    init_objects(&file_system, world, &assets, campaign)?;
 
     let ui = Ui::new();
 
@@ -185,9 +203,7 @@ pub fn init_sim_world(
 
     world.init_resource::<Viewport>();
 
-    // When we're done loading assets, convert it into a reader and insert it
-    // into the ECS.
-    world.insert_resource(assets.into_reader());
+    world.insert_resource(assets);
 
     Ok(())
 }
@@ -195,7 +211,7 @@ pub fn init_sim_world(
 fn init_terrain(
     file_system: &FileSystem,
     world: &mut World,
-    assets: &mut AssetLoader,
+    assets: &GameAssets,
     campaign_def: &CampaignDef,
 ) -> Result<(), AssetError> {
     let terrain = {
@@ -259,14 +275,12 @@ fn init_terrain(
             let path = PathBuf::from("trnhigh")
                 .join(&terrain_mapping.texture_map_base_name)
                 .with_extension("jpg");
-            let (handle, _) = assets.get_or_load_image(path)?;
-            handle
+            assets.images.load(path)?
         };
 
         let strata_texture = {
             let path = PathBuf::from("textures").join("shared").join("strata.bmp");
-            let (handle, _) = assets.get_or_load_image(path)?;
-            handle
+            assets.images.load(path)?
         };
 
         Terrain::new(height_map, terrain_texture, strata_texture)
@@ -278,7 +292,7 @@ fn init_terrain(
 fn init_objects(
     file_system: &FileSystem,
     world: &mut World,
-    assets: &mut AssetLoader,
+    assets: &GameAssets,
     campaign: crate::game::config::Campaign,
 ) -> Result<(), AssetError> {
     world.insert_resource(StaticBvh::new(8));
@@ -318,7 +332,7 @@ fn init_objects(
 
             let _ = match object_spawner.spawn(
                 world,
-                assets,
+                &assets.models,
                 &object.title,
                 &object.name,
                 object_type,

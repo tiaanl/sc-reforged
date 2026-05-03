@@ -3,12 +3,9 @@ use crate::{
         renderer::{Frame, RenderContext},
         shader_cache::{ShaderCache, ShaderSource},
     },
-    game::{
-        AssetReader,
-        scenes::world::{
-            extract::RenderSnapshot,
-            render::{GeometryBuffer, RenderPipeline, RenderTargets},
-        },
+    game::scenes::world::{
+        extract::RenderSnapshot,
+        render::{GeometryBuffer, RenderPipeline, RenderTargets},
     },
 };
 
@@ -69,7 +66,6 @@ impl Compositor {
 impl RenderPipeline for Compositor {
     fn prepare(
         &mut self,
-        _assets: &AssetReader,
         _context: &RenderContext,
         _bindings: &mut RenderBindings,
         _snapshot: &RenderSnapshot,

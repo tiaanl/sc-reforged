@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bevy_ecs::prelude::*;
 use glam::Vec3;
 
@@ -9,7 +11,7 @@ use crate::{
         transform::Transform,
     },
     game::{
-        AssetReader,
+        assets::{images::Images, models::Models},
         math::BoundingBox,
         scenes::world::{
             extract,
@@ -92,6 +94,8 @@ pub struct Systems {
 
 impl Systems {
     pub fn new(
+        images: Arc<Images>,
+        models: Arc<Models>,
         context: &RenderContext,
         render_targets: &RenderTargets,
         layouts: &mut RenderLayouts,
@@ -155,8 +159,6 @@ impl Systems {
 
         let extract_schedule = extract::create_extract_schedule();
 
-        let assets = sim_world.resource::<AssetReader>();
-
         Self {
             sim_time: 0.0,
 
@@ -164,7 +166,8 @@ impl Systems {
             extract_schedule,
 
             world_renderer: WorldRenderer::new(
-                assets,
+                images,
+                models,
                 context,
                 render_targets,
                 layouts,
@@ -191,13 +194,12 @@ impl Systems {
 
     pub fn prepare(
         &mut self,
-        assets: &AssetReader,
         bindings: &mut RenderBindings,
         context: &RenderContext,
         render_snapshot: &RenderSnapshot,
     ) {
         self.world_renderer
-            .prepare(assets, context, bindings, render_snapshot);
+            .prepare(context, bindings, render_snapshot);
     }
 
     pub fn queue(

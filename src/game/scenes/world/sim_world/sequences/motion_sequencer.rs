@@ -7,9 +7,12 @@ use glam::Vec3;
 use crate::{
     engine::assets::AssetError,
     game::{
-        AssetLoader,
-        assets::motion::{MotionFlags, State},
+        assets::{
+            motion::{MotionFlags, State},
+            motions::Motions,
+        },
         config::parser::ConfigLines,
+        file_system::FileSystem,
         hash,
     },
 };
@@ -194,20 +197,17 @@ enum ParseState {
 impl MotionSequencer {
     pub fn load_motion_sequencer_defs(
         &mut self,
-        assets: &mut AssetLoader,
+        file_system: &FileSystem,
+        motions: &Motions,
         path: impl AsRef<Path>,
     ) -> Result<(), AssetError> {
-        let data = assets.load_raw(path.as_ref())?;
+        let data = file_system.load(path.as_ref())?;
         let text = String::from_utf8_lossy(&data);
         let config_lines = ConfigLines::parse(&text);
-        self.parse(config_lines, assets)
+        self.parse(config_lines, motions)
     }
 
-    fn parse(
-        &mut self,
-        config_lines: ConfigLines,
-        assets: &mut AssetLoader,
-    ) -> Result<(), AssetError> {
+    fn parse(&mut self, config_lines: ConfigLines, motions: &Motions) -> Result<(), AssetError> {
         let mut parse_state = ParseState::None;
 
         fn state_from_str(str: &str) -> Option<State> {
@@ -226,7 +226,7 @@ impl MotionSequencer {
             match line.key.as_str() {
                 "BEGIN_TRANSITION_SEQ" => {
                     let current = std::mem::replace(&mut parse_state, ParseState::None);
-                    self.commit_parse_state(assets, current);
+                    self.commit_parse_state(motions, current);
 
                     let begin_state_name = line.string(0);
                     let end_state_name = line.string(1);
@@ -260,13 +260,21 @@ impl MotionSequencer {
                         tracing::warn!("No sequence available to set MOTION.");
                         continue;
                     }
-                    ParseState::TransitionSequence { motions, .. }
-                    | ParseState::Sequence { motions, .. } => {
+                    ParseState::TransitionSequence {
+                        motions: sequence_motions,
+                        ..
+                    }
+                    | ParseState::Sequence {
+                        motions: sequence_motions,
+                        ..
+                    } => {
                         let motion_name = line.string(0);
 
-                        let Ok((motion_handle, motion)) = assets.get_or_load_motion(&motion_name)
-                        else {
+                        let Ok(motion_handle) = motions.load(&motion_name) else {
                             // Skip this motion info if the motion fails to load.
+                            continue;
+                        };
+                        let Some(motion) = motions.get(motion_handle) else {
                             continue;
                         };
 
@@ -292,7 +300,7 @@ impl MotionSequencer {
 
                         let base_ticks_per_frame = motion.base_ticks_per_frame.max(1);
 
-                        motions.push(Arc::new(MotionInfo {
+                        sequence_motions.push(Arc::new(MotionInfo {
                             hash: hash(motion.name.as_str()),
                             repeat_count,
                             looping,
@@ -311,7 +319,7 @@ impl MotionSequencer {
                     let current = std::mem::replace(&mut parse_state, ParseState::None);
                     match current {
                         ParseState::None => tracing::warn!("No sequence to end."),
-                        other => self.commit_parse_state(assets, other),
+                        other => self.commit_parse_state(motions, other),
                     }
                 }
 
@@ -333,7 +341,7 @@ impl MotionSequencer {
 
                 "BEGIN_SEQUENCE" => {
                     let current = std::mem::replace(&mut parse_state, ParseState::None);
-                    self.commit_parse_state(assets, current);
+                    self.commit_parse_state(motions, current);
 
                     let name = line.string(0);
                     parse_state = ParseState::Sequence {
@@ -355,7 +363,7 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    if let Some(motion) = assets.get_motion_by_key_mut(motion_name) {
+                    if let Some(motion) = motions.get_by_key(&motion_name) {
                         motion.add_flags(MotionFlags::Z_IND_MOTION);
                     } else {
                         tracing::warn!("DECLARE_Z_IND_MOTION missing motion.");
@@ -370,7 +378,7 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    if let Some(motion) = assets.get_motion_by_key_mut(motion_name) {
+                    if let Some(motion) = motions.get_by_key(&motion_name) {
                         motion.add_flags(MotionFlags::SPED_MOTION);
                     } else {
                         tracing::warn!("SPED_MOTION missing motion.");
@@ -385,7 +393,7 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    if let Some(motion) = assets.get_motion_by_key_mut(motion_name) {
+                    if let Some(motion) = motions.get_by_key(&motion_name) {
                         motion.add_flags(MotionFlags::SKIP_LAST_FRAME);
                     } else {
                         tracing::warn!("SKIP_LAST_FRAME missing motion.");
@@ -400,7 +408,7 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    if let Some(motion) = assets.get_motion_by_key_mut(motion_name) {
+                    if let Some(motion) = motions.get_by_key(&motion_name) {
                         motion.add_flags(MotionFlags::NO_LVE_MOTION);
                     } else {
                         tracing::warn!("NO_LVE_MOTION missing motion.");
@@ -420,12 +428,12 @@ impl MotionSequencer {
             }
         }
 
-        self.commit_parse_state(assets, parse_state);
+        self.commit_parse_state(motions, parse_state);
 
         Ok(())
     }
 
-    fn commit_parse_state(&mut self, assets: &mut AssetLoader, parse_state: ParseState) {
+    fn commit_parse_state(&mut self, motions: &Motions, parse_state: ParseState) {
         match parse_state {
             ParseState::None => {}
             ParseState::TransitionSequence {
@@ -445,16 +453,19 @@ impl MotionSequencer {
                     }),
                 );
             }
-            ParseState::Sequence { name, motions } => {
-                let begin_state = motions
+            ParseState::Sequence {
+                name,
+                motions: sequence_motions,
+            } => {
+                let begin_state = sequence_motions
                     .first()
-                    .and_then(|motion_info| assets.get_motion(motion_info.motion))
+                    .and_then(|motion_info| motions.get(motion_info.motion))
                     .map(|motion| motion.from_state);
 
                 let (begin_state, end_state) = if let Some(begin_state) = begin_state {
-                    let end_state = motions
+                    let end_state = sequence_motions
                         .last()
-                        .and_then(|motion_info| assets.get_motion(motion_info.motion))
+                        .and_then(|motion_info| motions.get(motion_info.motion))
                         .map(|motion| motion.to_state)
                         .unwrap_or(begin_state);
 
@@ -472,7 +483,7 @@ impl MotionSequencer {
                         name,
                         begin_state,
                         end_state,
-                        motions,
+                        motions: sequence_motions,
                     }),
                 );
             }

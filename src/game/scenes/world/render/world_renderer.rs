@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use crate::{
     engine::{
         renderer::{Frame, RenderContext},
         shader_cache::ShaderCache,
     },
     game::{
-        AssetReader,
+        assets::{images::Images, models::Models},
         scenes::world::{
             extract::RenderSnapshot,
             render::{
@@ -28,7 +30,8 @@ pub struct WorldRenderer {
 
 impl WorldRenderer {
     pub fn new(
-        assets: &AssetReader,
+        images: Arc<Images>,
+        models: Arc<Models>,
         context: &RenderContext,
         render_targets: &RenderTargets,
         layouts: &mut RenderLayouts,
@@ -42,14 +45,20 @@ impl WorldRenderer {
 
         pipelines.push(CameraRenderPipeline);
         pipelines.push(TerrainRenderPipeline::new(
-            assets,
+            &images,
             context,
             layouts,
             shader_cache,
             sim_world,
         ));
 
-        pipelines.push(ModelRenderPipeline::new(context, layouts, shader_cache));
+        pipelines.push(ModelRenderPipeline::new(
+            context,
+            layouts,
+            shader_cache,
+            Arc::clone(&images),
+            Arc::clone(&models),
+        ));
         pipelines.push(UiRenderPipeline::new(
             context,
             render_targets.surface_format,
@@ -71,12 +80,11 @@ impl WorldRenderer {
 impl RenderPipeline for WorldRenderer {
     fn prepare(
         &mut self,
-        assets: &AssetReader,
         context: &RenderContext,
         bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
-        self.pipelines.prepare(assets, context, bindings, snapshot);
+        self.pipelines.prepare(context, bindings, snapshot);
     }
 
     fn queue(

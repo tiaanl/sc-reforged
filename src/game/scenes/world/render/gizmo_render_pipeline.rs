@@ -5,15 +5,12 @@ use crate::{
         renderer::{Frame, RenderContext},
         shader_cache::{ShaderCache, ShaderSource},
     },
-    game::{
-        AssetReader,
-        scenes::world::{
-            extract::RenderSnapshot,
-            render::{
-                GeometryBuffer, RenderBindings, RenderLayouts,
-                camera_render_pipeline::CameraEnvironmentLayout, per_frame::PerFrame,
-                render_pipeline::RenderPipeline,
-            },
+    game::scenes::world::{
+        extract::RenderSnapshot,
+        render::{
+            GeometryBuffer, RenderBindings, RenderLayouts,
+            camera_render_pipeline::CameraEnvironmentLayout, per_frame::PerFrame,
+            render_pipeline::RenderPipeline,
         },
     },
 };
@@ -96,7 +93,6 @@ impl GizmoRenderPipeline {
 impl RenderPipeline for GizmoRenderPipeline {
     fn prepare(
         &mut self,
-        _assets: &AssetReader,
         context: &RenderContext,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
