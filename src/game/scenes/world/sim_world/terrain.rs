@@ -51,8 +51,8 @@ impl Terrain {
         strata_texture: Handle<Image>,
     ) -> Self {
         let chunk_dim = UVec2::new(
-            height_map.size.x.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
-            height_map.size.y.next_multiple_of(Self::CELLS_PER_CHUNK) / Self::CELLS_PER_CHUNK,
+            height_map.size.x.div_ceil(Self::CELLS_PER_CHUNK),
+            height_map.size.y.div_ceil(Self::CELLS_PER_CHUNK),
         );
 
         let min_max = Self::build_chunk_min_max(&height_map, chunk_dim);
