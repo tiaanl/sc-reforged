@@ -15,12 +15,12 @@ pub use winit::keyboard::KeyCode;
 #[derive(Clone, Debug)]
 pub enum InputEvent {
     MouseMove(UVec2),
-    MouseLeave,
     MouseDown(MouseButton),
+    MouseWheel(f32),
     MouseUp(MouseButton),
+    MouseLeave,
     KeyDown(KeyCode),
     KeyUp(KeyCode),
-    MouseWheel(f32),
 }
 
 /// Converts a winit `WindowEvent` into an `InputEvent`, if applicable.

@@ -20,7 +20,7 @@ use crate::{
     },
     game::{
         assets::config::campaign_def::CampaignDefs, config::load_config, file_system::FileSystem,
-        scenes::main_menu::MainMenuScene,
+        scenes::world::WorldScene,
     },
 };
 
@@ -120,7 +120,6 @@ impl ApplicationHandler<MainThreadEvent> for App {
 
                 let file_system = Arc::new(FileSystem::new(&opts.path));
 
-                /*
                 let scene: Box<dyn Scene> = {
                     let campaign_name = opts
                         .campaign_name
@@ -134,16 +133,15 @@ impl ApplicationHandler<MainThreadEvent> for App {
                     .unwrap();
 
                     let campaign_def = campaign_defs
-                        .campaigns
+                        .campaign_defs
                         .iter()
                         .find(|c| c.base_name == campaign_name)
-                        .cloned()
                         .unwrap();
 
                     Box::new(
                         WorldScene::new(
                             &file_system,
-                            &renderer,
+                            &context,
                             surface.size(),
                             surface.format(),
                             campaign_def,
@@ -151,19 +149,10 @@ impl ApplicationHandler<MainThreadEvent> for App {
                         .unwrap(),
                     )
                 };
-                */
 
-                let _campaign_defs: CampaignDefs = load_config(
-                    &file_system,
-                    PathBuf::from("config").join("campaign_defs.txt"),
-                )
-                .unwrap();
-
-                // println!("campaign_defs: {:#?}", _campaign_defs);
-
-                let scene = Box::new(
-                    MainMenuScene::new(file_system, context.clone(), &surface_desc).unwrap(),
-                );
+                // let scene = Box::new(
+                //     MainMenuScene::new(file_system, context.clone(), &surface_desc).unwrap(),
+                // );
 
                 tracing::info!("Application initialized!");
 

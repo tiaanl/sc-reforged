@@ -231,7 +231,7 @@ impl Default for CampaignDef {
 #[derive(Debug, Default)]
 pub struct CampaignDefs {
     /// Stored in a [Vec] to preserve the order.
-    campaign_defs: Vec<CampaignDef>,
+    pub campaign_defs: Vec<CampaignDef>,
 }
 
 impl From<ConfigLines> for CampaignDefs {

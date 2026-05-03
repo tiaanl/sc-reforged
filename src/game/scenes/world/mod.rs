@@ -75,7 +75,7 @@ impl WorldScene {
         context: &RenderContext,
         surface_size: UVec2,
         surface_format: wgpu::TextureFormat,
-        campaign_def: CampaignDef,
+        campaign_def: &CampaignDef,
     ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
 
