@@ -30,17 +30,11 @@ pub struct SpawnInfo {
 #[derive(Resource)]
 pub struct Spawner {
     character_profiles: CharacterProfiles,
-
-    /// Keep a list of handles to try and load.
-    models_to_prepare: Vec<Handle<Model>>,
 }
 
 impl Spawner {
     pub fn new(character_profiles: CharacterProfiles) -> Self {
-        Self {
-            character_profiles,
-            models_to_prepare: Vec::default(),
-        }
+        Self { character_profiles }
     }
 
     pub fn spawn(
@@ -159,8 +153,6 @@ impl Spawner {
             ),
             model,
         );
-
-        self.models_to_prepare.push(model_handle);
 
         let entity = world.spawn_empty().id();
 

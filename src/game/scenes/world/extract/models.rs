@@ -14,19 +14,6 @@ use crate::{
     },
 };
 
-pub fn extract_models_to_prepare(
-    mut snapshot: ResMut<RenderSnapshot>,
-    models_to_prepare: Query<&Handle<Model>, Added<Handle<Model>>>,
-) {
-    snapshot.models.models_to_prepare.clear();
-
-    {
-        models_to_prepare.iter().for_each(|&model_handle| {
-            snapshot.models.models_to_prepare.push(model_handle);
-        });
-    }
-}
-
 pub fn extract_model_snapshot(
     mut snapshot: ResMut<RenderSnapshot>,
     models: Query<(Entity, &Transform, &Handle<Model>, Option<&Pose>)>,

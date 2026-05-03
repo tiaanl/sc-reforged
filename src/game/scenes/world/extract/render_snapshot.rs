@@ -61,8 +61,6 @@ pub struct TerrainChunk {
 
 #[derive(Default)]
 pub struct Models {
-    /// A list of any new models that needs to be prepared before rendering.
-    pub models_to_prepare: Vec<Handle<Model>>,
     /// A list of models to render.
     pub models: Vec<ModelToRender>,
 }

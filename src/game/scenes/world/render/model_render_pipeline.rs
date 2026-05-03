@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use ahash::HashMap;
-use glam::Mat4;
 
 use crate::{
     engine::{
@@ -34,13 +33,6 @@ bitflags::bitflags! {
     }
 }
 
-pub struct RenderModelToRender {
-    pub model: Handle<Model>,
-    pub transform: Mat4,
-    pub first_node_index: u32,
-    pub flags: ModelRenderFlags,
-}
-
 struct Batch {
     model: Handle<Model>,
     range: std::ops::Range<u32>,
@@ -66,11 +58,15 @@ pub struct ModelRenderPipeline {
     /// Pipeline used for `BlendMode::Alpha` meshes.
     alpha_pipeline: wgpu::RenderPipeline,
 
-    /// Local cache for render models to render.
-    render_models_cache: Vec<RenderModelToRender>,
+    /// Sorted indices into `snapshot.models.models`, grouping instances by
+    /// `Handle<Model>` so they can be drawn as contiguous batches.
+    sorted_indices_cache: Vec<usize>,
 
-    /// Local cache where model instance data is built from the snapshot.
+    /// Per-instance data uploaded to the GPU each frame.
     model_instances_cache: Vec<gpu::ModelInstanceData>,
+    /// Parallel array to `model_instances_cache` holding the model handle for
+    /// each instance — used to compute batch ranges after the fill pass.
+    instance_models_cache: Vec<Handle<Model>>,
     model_instances: PerFrame<GrowingBuffer<gpu::ModelInstanceData>>,
 
     /// Local cache where custom Pose data is stored per frame.
@@ -315,9 +311,10 @@ impl ModelRenderPipeline {
             keyed_pipeline,
             alpha_pipeline,
 
-            render_models_cache: Vec::default(),
+            sorted_indices_cache: Vec::default(),
 
             model_instances_cache: Vec::default(),
+            instance_models_cache: Vec::default(),
             model_instances,
 
             poses_bind_group_layout,
@@ -391,60 +388,73 @@ impl RenderPipeline for ModelRenderPipeline {
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
-        if !snapshot.models.models_to_prepare.is_empty() {
-            let models_to_prepare = &snapshot.models.models_to_prepare;
-            tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
+        let snapshot_models = &snapshot.models.models;
 
-            for &model_handle in models_to_prepare {
-                self.ensure_render_model(context, model_handle);
-            }
-        }
-
-        // TODO: Don't copy all the models to render data here.
-        let mut models = snapshot.models.models.clone();
-
-        models.sort_unstable_by(|a, b| a.model.cmp(&b.model));
+        // Sort by model handle so instances of the same model end up contiguous.
+        // We sort indices into the snapshot rather than cloning the snapshot itself.
+        self.sorted_indices_cache.clear();
+        self.sorted_indices_cache.extend(0..snapshot_models.len());
+        self.sorted_indices_cache
+            .sort_unstable_by_key(|&i| snapshot_models[i].model);
 
         self.poses_cache.clear();
-        self.render_models_cache.clear();
+        self.model_instances_cache.clear();
+        self.instance_models_cache.clear();
 
-        // Build an intermediate list of render models to render with some of the details resolved.
-        for model_to_render in models.iter() {
-            if !self.models.contains(model_to_render.model) {
-                continue;
-            }
+        // Walk the sorted snapshot, lazily preparing each new model's GPU data
+        // on first sight, and emitting per-instance data inline.
+        for i in 0..self.sorted_indices_cache.len() {
+            let idx = self.sorted_indices_cache[i];
+            let m = &snapshot_models[idx];
+
+            self.ensure_render_model(context, m.model);
 
             let mut flags = ModelRenderFlags::empty();
-            flags.set(ModelRenderFlags::HIGHLIGHTED, model_to_render.highlighted);
+            flags.set(ModelRenderFlags::HIGHLIGHTED, m.highlighted);
 
-            let first_node_index = if let Some(ref pose) = model_to_render.pose {
-                let first_node = self.poses_cache.len() as u32;
-
-                pose.bones.iter().for_each(|bone| {
+            let first_node_index = if let Some(ref pose) = m.pose {
+                let first = self.poses_cache.len() as u32;
+                for bone in pose.bones.iter() {
                     self.poses_cache.push(gpu::Bone {
                         transform: bone.to_cols_array_2d(),
                     });
-                });
-
+                }
                 flags.set(ModelRenderFlags::CUSTOM_POSE, true);
-
-                first_node
+                first
             } else {
-                // Each model owns its own nodes buffer; default-pose draws always
-                // start at index 0.
+                // Default-pose draws read from the per-model nodes buffer, which
+                // always starts at index 0.
                 0
             };
 
-            self.render_models_cache.push(RenderModelToRender {
-                model: model_to_render.model,
-                transform: model_to_render.transform,
+            self.model_instances_cache.push(gpu::ModelInstanceData {
+                transform: m.transform.to_cols_array_2d(),
                 first_node_index,
-                flags,
+                flags: flags.bits(),
+                _pad: Default::default(),
             });
+            self.instance_models_cache.push(m.model);
         }
 
+        // Compute batches by walking the (sorted) parallel `instance_models_cache`.
+        self.batches.clear();
+        let instances_count = self.instance_models_cache.len();
+        let mut start = 0;
+        while start < instances_count {
+            let model = self.instance_models_cache[start];
+            let mut end = start + 1;
+            while end < instances_count && self.instance_models_cache[end] == model {
+                end += 1;
+            }
+            self.batches.push(Batch {
+                model,
+                range: start as u32..end as u32,
+            });
+            start = end;
+        }
+
+        // Upload custom poses; rebuild the bind group if the buffer was reallocated.
         {
-            // Write all the custom poses to the GPU.
             let (buffer, bind_group) = self.poses.advance();
 
             if buffer.write(context, self.poses_cache.as_slice()) {
@@ -461,39 +471,7 @@ impl RenderPipeline for ModelRenderPipeline {
             }
         }
 
-        self.model_instances_cache.clear();
-
-        for model_to_render in self.render_models_cache.iter() {
-            self.model_instances_cache.push(gpu::ModelInstanceData {
-                transform: model_to_render.transform.to_cols_array_2d(),
-                first_node_index: model_to_render.first_node_index,
-                flags: model_to_render.flags.bits(),
-                _pad: Default::default(),
-            })
-        }
-
-        self.batches.clear();
-        let mut start_index: usize = 0;
-
-        let instances_count = self.render_models_cache.len();
-        while start_index < instances_count {
-            let model = self.render_models_cache[start_index].model;
-
-            let mut end_index = start_index + 1;
-            while end_index < instances_count
-                && self.render_models_cache[end_index].model == model
-            {
-                end_index += 1;
-            }
-
-            self.batches.push(Batch {
-                model,
-                range: start_index as u32..end_index as u32,
-            });
-            start_index = end_index;
-        }
-
-        // Upload the instances to the GPU.
+        // Upload instances.
         let model_instances = self.model_instances.advance();
         model_instances.write(context, self.model_instances_cache.as_slice());
     }

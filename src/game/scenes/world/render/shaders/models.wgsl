@@ -9,13 +9,11 @@ var<uniform> u_camera_env: CameraEnv;
 @group(1) @binding(0) var u_texture: texture_2d<f32>;
 @group(1) @binding(1) var u_sampler: sampler;
 
-struct Node {
-    transform: mat4x4<f32>,
-    parent_index: u32,
-}
+// Default-pose, precomposed bone transforms; one entry per bone in the model.
+@group(2) @binding(0) var<storage, read> u_nodes: array<mat4x4<f32>>;
 
-@group(2) @binding(0) var<storage, read> u_nodes: array<Node>;
-
+// Custom-pose composed bone transforms, packed contiguously across all custom-pose
+// instances; `first_node_index` selects this instance's slice.
 @group(3) @binding(0) var<storage, read> u_custom_nodes: array<mat4x4<f32>>;
 
 struct VertexInput {
@@ -42,28 +40,6 @@ struct VertexOutput {
     @location(3) flags: u32,
 }
 
-const NODE_SENTINEL: u32 = 0xFFFFFFFFu;
-
-fn get_node_transform(first_index: u32, index: u32) -> mat4x4<f32> {
-    var transform = mat4x4<f32>(
-        vec4<f32>(1.0, 0.0, 0.0, 0.0),
-        vec4<f32>(0.0, 1.0, 0.0, 0.0),
-        vec4<f32>(0.0, 0.0, 1.0, 0.0),
-        vec4<f32>(0.0, 0.0, 0.0, 1.0),
-    );
-    var current = first_index + index;
-    loop {
-        let node = u_nodes[current];
-        transform = node.transform * transform;
-        if node.parent_index == NODE_SENTINEL {
-            break;
-        }
-        current = first_index + node.parent_index;
-    }
-
-    return transform;
-}
-
 @vertex
 fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     var local_matrix: mat4x4<f32>;
@@ -71,10 +47,7 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     if (instance.flags & FLAGS_CUSTOM_POSE) != 0 {
         local_matrix = u_custom_nodes[instance.first_node_index + vertex.node_index];
     } else {
-        local_matrix = get_node_transform(
-            instance.first_node_index,
-            vertex.node_index,
-        );
+        local_matrix = u_nodes[vertex.node_index];
     }
 
     let model_matrix = mat4x4<f32>(

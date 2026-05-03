@@ -4,22 +4,12 @@ use ahash::HashMap;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    engine::{
-        mesh::IndexedMesh, renderer::RenderContext, storage::Handle,
-    },
+    engine::{mesh::IndexedMesh, renderer::RenderContext, storage::Handle},
     game::{
         assets::{image::BlendMode, model::Model, models::Models},
         render::textures::{Texture, Textures},
     },
 };
-
-#[derive(Clone, Copy, bytemuck::NoUninit)]
-#[repr(C)]
-pub struct RenderNode {
-    transform: [[f32; 4]; 4],
-    parent_index: u32,
-    _pad: [u32; 3],
-}
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
 #[repr(C)]
@@ -94,15 +84,11 @@ impl RenderModels {
             .get(model_handle)
             .expect("Model should have been loaded by this time.");
 
-        let nodes: Vec<RenderNode> = model
-            .skeleton
-            .bones
-            .iter()
-            .map(|bone| RenderNode {
-                transform: bone.transform.to_mat4().to_cols_array_2d(),
-                parent_index: bone.parent,
-                _pad: Default::default(),
-            })
+        // Precompose each bone's local-to-model transform on the CPU so the
+        // vertex shader can do a single buffer lookup instead of walking the
+        // parent chain per vertex.
+        let nodes: Vec<[[f32; 4]; 4]> = (0..model.skeleton.bones.len() as u32)
+            .map(|i| model.skeleton.local_transform(i).to_cols_array_2d())
             .collect();
 
         // Build the per-model vertex and index buffers by concatenating all
