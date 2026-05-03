@@ -7,7 +7,10 @@ use crate::{
         renderer::RenderContext,
         storage::{Handle, StorageMap},
     },
-    game::assets::{image::Image, images::Images},
+    game::assets::{
+        image::{BlendMode, Image},
+        images::Images,
+    },
 };
 
 pub struct Texture;
@@ -65,6 +68,7 @@ impl Textures {
                 Arc::new(TextureData {
                     _image: image_handle,
                     size: image.size,
+                    blend_mode: image.blend_mode,
                     view,
                 }),
             )
@@ -120,6 +124,8 @@ pub struct TextureData {
     pub _image: Handle<Image>,
     /// Size of the full texture in pixels.
     pub size: UVec2,
+    /// Blend mode inherited from the source image.
+    pub blend_mode: BlendMode,
     /// The [wgpu::TextureView] used to access this texture during rendering.
     pub view: wgpu::TextureView,
 }

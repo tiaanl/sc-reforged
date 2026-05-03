@@ -2,21 +2,12 @@
 
 const FLAGS_HIGHLIGHTED: u32 = 1 << 0;
 const FLAGS_CUSTOM_POSE: u32 = 1 << 1;
-const COLOR_KEYED: u32 = 1 << 0;
 
 @group(0) @binding(0)
 var<uniform> u_camera_env: CameraEnv;
 
-struct TextureData {
-    bucket: u32,
-    layer: u32,
-    flags: u32,
-    _pad: u32,
-}
-
-@group(1) @binding(0) var u_texture_buckets: binding_array<texture_2d_array<f32>>;
-@group(1) @binding(1) var<storage, read> u_texture_data: array<TextureData>;
-@group(1) @binding(2) var u_texture_sampler: sampler;
+@group(1) @binding(0) var u_texture: texture_2d<f32>;
+@group(1) @binding(1) var u_sampler: sampler;
 
 struct Node {
     transform: mat4x4<f32>,
@@ -32,16 +23,15 @@ struct VertexInput {
     @location(1) normal: vec3<f32>,
     @location(2) tex_coord: vec2<f32>,
     @location(3) node_index: u32,
-    @location(4) texture_data_index: u32,
 }
 
 struct InstanceInput {
-    @location(5) model_mat_0: vec4<f32>,
-    @location(6) model_mat_1: vec4<f32>,
-    @location(7) model_mat_2: vec4<f32>,
-    @location(8) model_mat_3: vec4<f32>,
-    @location(9) first_node_index: u32,
-    @location(10) flags: u32,
+    @location(4) model_mat_0: vec4<f32>,
+    @location(5) model_mat_1: vec4<f32>,
+    @location(6) model_mat_2: vec4<f32>,
+    @location(7) model_mat_3: vec4<f32>,
+    @location(8) first_node_index: u32,
+    @location(9) flags: u32,
 }
 
 struct VertexOutput {
@@ -49,8 +39,7 @@ struct VertexOutput {
     @location(0) world_position: vec3<f32>,
     @location(1) world_normal: vec3<f32>,
     @location(2) tex_coord: vec2<f32>,
-    @location(3) texture_data_index: u32,
-    @location(4) flags: u32,
+    @location(3) flags: u32,
 }
 
 const NODE_SENTINEL: u32 = 0xFFFFFFFFu;
@@ -104,7 +93,6 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     let world_position = model_matrix * vec4<f32>(vertex.position, 1.0);
     let world_normal = normalize(normal_matrix * vertex.normal.xyz);
     let tex_coord = vertex.tex_coord;
-    let texture_data_index = vertex.texture_data_index;
 
     let clip_position = u_camera_env.proj_view * world_position;
 
@@ -113,63 +101,63 @@ fn vertex_main(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
         world_position.xyz,
         world_normal,
         tex_coord,
-        texture_data_index,
         instance.flags,
     );
 }
 
-@fragment
-fn fragment_opaque(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffer {
-    let texture_data = u_texture_data[vertex.texture_data_index];
-    let texture = u_texture_buckets[texture_data.bucket];
-    let base_color = textureSample(texture, u_texture_sampler, vertex.tex_coord, texture_data.layer);
-
-    // Handle color keyed textures.
-    if (texture_data.flags & COLOR_KEYED) != 0 {
-        // We just go with black as being the keyed color.
-        if base_color.r + base_color.g + base_color.b == 0.0 {
-            discard;
-        }
-    }
-
+fn shade(vertex: VertexOutput, base_color: vec4<f32>) -> vec3<f32> {
     let distance = length(vertex.world_position - u_camera_env.position.xyz);
 
-    let lit = diffuse_with_fog(
+    return diffuse_with_fog(
         u_camera_env,
         vertex.world_normal,
         base_color.rgb,
         distance,
         1.0,
     );
+}
+
+@fragment
+fn fragment_opaque(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffer {
+    let base_color = textureSample(u_texture, u_sampler, vertex.tex_coord);
+    let lit = shade(vertex, base_color);
 
     if (vertex.flags & FLAGS_HIGHLIGHTED) != 0 {
         let h = highlight(vec4<f32>(lit, base_color.a));
         return geometry_buffer::to_opaque_geometry_buffer(h.rgb);
-    } 
+    }
+
+    return geometry_buffer::to_opaque_geometry_buffer(lit);
+}
+
+@fragment
+fn fragment_opaque_keyed(vertex: VertexOutput) -> geometry_buffer::OpaqueGeometryBuffer {
+    let base_color = textureSample(u_texture, u_sampler, vertex.tex_coord);
+
+    // Color-keyed: black is treated as transparent.
+    if base_color.r + base_color.g + base_color.b == 0.0 {
+        discard;
+    }
+
+    let lit = shade(vertex, base_color);
+
+    if (vertex.flags & FLAGS_HIGHLIGHTED) != 0 {
+        let h = highlight(vec4<f32>(lit, base_color.a));
+        return geometry_buffer::to_opaque_geometry_buffer(h.rgb);
+    }
 
     return geometry_buffer::to_opaque_geometry_buffer(lit);
 }
 
 @fragment
 fn fragment_alpha(vertex: VertexOutput) -> geometry_buffer::AlphaGeometryBuffer {
-    let texture_data = u_texture_data[vertex.texture_data_index];
-    let texture = u_texture_buckets[texture_data.bucket];
-    let base_color = textureSample(texture, u_texture_sampler, vertex.tex_coord, texture_data.layer);
-
-    let distance = length(vertex.world_position - u_camera_env.position.xyz);
-
-    let lit = diffuse_with_fog(
-        u_camera_env,
-        vertex.world_normal,
-        base_color.rgb,
-        distance,
-        1.0,
-    );
+    let base_color = textureSample(u_texture, u_sampler, vertex.tex_coord);
+    let lit = shade(vertex, base_color);
 
     if (vertex.flags & FLAGS_HIGHLIGHTED) != 0 {
         let h = highlight(vec4<f32>(lit, base_color.a));
         return geometry_buffer::to_alpha_geometry_buffer(h.rgb, h.a, 1.0);
-    } 
+    }
 
     return geometry_buffer::to_alpha_geometry_buffer(lit, base_color.a, 1.0);
 }

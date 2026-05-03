@@ -9,7 +9,6 @@ mod render_layouts;
 mod render_models;
 mod render_pipeline;
 mod render_targets;
-mod render_textures;
 mod terrain_render_pipeline;
 mod ui_render_pipeline;
 mod uniform_buffer;

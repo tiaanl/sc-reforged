@@ -7,6 +7,7 @@ use crate::{
     },
     game::{
         assets::{images::Images, models::Models},
+        render::textures::Textures,
         scenes::world::{
             extract::RenderSnapshot,
             render::{
@@ -41,6 +42,8 @@ impl WorldRenderer {
         // Warm up the shader cache.
         shader_cache.preload_all(&context.device);
 
+        let textures = Arc::new(Textures::new(context.clone(), Arc::clone(&images)));
+
         let mut pipelines = RenderPipelineList::default();
 
         pipelines.push(CameraRenderPipeline);
@@ -56,7 +59,7 @@ impl WorldRenderer {
             context,
             layouts,
             shader_cache,
-            Arc::clone(&images),
+            Arc::clone(&textures),
             Arc::clone(&models),
         ));
         pipelines.push(UiRenderPipeline::new(

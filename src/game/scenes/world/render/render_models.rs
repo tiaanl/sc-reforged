@@ -1,6 +1,5 @@
 use std::ops::Range;
 
-use super::render_textures::RenderTextures;
 use crate::{
     engine::{
         assets::AssetError,
@@ -9,7 +8,10 @@ use crate::{
         renderer::RenderContext,
         storage::{Handle, Storage},
     },
-    game::assets::{image::BlendMode, images::Images, model::Model, models::Models},
+    game::{
+        assets::{image::BlendMode, model::Model, models::Models},
+        render::textures::{Texture, Textures},
+    },
 };
 
 #[derive(Clone, Copy, bytemuck::NoUninit)]
@@ -27,24 +29,29 @@ pub struct RenderVertex {
     pub normal: [f32; 3],
     pub tex_coord: [f32; 2],
     pub node_index: u32,
-    pub texture_data_index: u32,
 }
 
+/// One drawable mesh: a contiguous range in the global index buffer plus the
+/// texture used to sample its pixels.
+pub struct RenderMesh {
+    pub index_range: Range<u32>,
+    pub texture: Handle<Texture>,
+}
+
+/// GPU-side data for a single [Model], with meshes split per blend mode so the
+/// queue path can pick them up in the matching render pass.
 pub struct RenderModel {
-    /// Range for opaque mesh indices.
-    pub opaque_range: Range<u32>,
-    /// Range for alpha blended mesh indices.
-    pub alpha_range: Range<u32>,
-    /// Range for additive blended mesh indices.
-    pub _additive_range: Range<u32>,
-    /// Range for [RenderNode]'s for the model.
+    pub opaque_meshes: Vec<RenderMesh>,
+    pub keyed_meshes: Vec<RenderMesh>,
+    pub alpha_meshes: Vec<RenderMesh>,
+    /// Range of [RenderNode]s for this model in the shared nodes buffer.
     pub nodes_range: Range<u32>,
 }
 
 pub struct RenderModels {
     /// Buffer containing all model vertices.
     vertices_buffer: GrowingBuffer<RenderVertex>,
-    /// Buffer containing all model vertices.
+    /// Buffer containing all model indices.
     indices_buffer: GrowingBuffer<u32>,
     /// Buffer containing node data for all models.
     nodes_buffer: GrowingBuffer<RenderNode>,
@@ -128,19 +135,14 @@ impl RenderModels {
 
     pub fn add(
         &mut self,
-        images: &Images,
+        textures: &Textures,
         models: &Models,
         context: &RenderContext,
-        render_textures: &mut RenderTextures,
         model_handle: Handle<Model>,
     ) -> Result<Handle<RenderModel>, AssetError> {
         let model = models
             .get(model_handle)
-            .expect("Model should have been loaded byt his time.");
-
-        let mut opaque_mesh = IndexedMesh::default();
-        let mut alpha_mesh = IndexedMesh::default();
-        let mut additive_mesh = IndexedMesh::default();
+            .expect("Model should have been loaded by this time.");
 
         let nodes: Vec<RenderNode> = model
             .skeleton
@@ -153,18 +155,19 @@ impl RenderModels {
             })
             .collect();
 
+        let mut opaque_meshes: Vec<RenderMesh> = Vec::new();
+        let mut keyed_meshes: Vec<RenderMesh> = Vec::new();
+        let mut alpha_meshes: Vec<RenderMesh> = Vec::new();
+
         for mesh in model.meshes.iter() {
-            let texture_handle = render_textures.get_or_create(images, context, mesh.image);
-            let texture = render_textures.get(texture_handle).unwrap();
+            let texture_handle = textures
+                .create_from_image(mesh.image)
+                .expect("Image should have been loaded by this time.");
+            let texture_data = textures
+                .get(texture_handle)
+                .expect("Texture should exist immediately after creation.");
 
-            let indexed_mesh = match texture.blend_mode {
-                BlendMode::Opaque | BlendMode::ColorKeyed => &mut opaque_mesh,
-                BlendMode::Alpha => &mut alpha_mesh,
-                BlendMode::_Additive => &mut additive_mesh,
-            };
-
-            // Extend the mesh for the texture with the data from the model.
-            indexed_mesh.extend(IndexedMesh {
+            let mut indexed_mesh: IndexedMesh<RenderVertex> = IndexedMesh {
                 vertices: mesh
                     .mesh
                     .vertices
@@ -174,47 +177,52 @@ impl RenderModels {
                         normal: v.normal.to_array(),
                         tex_coord: v.tex_coord.to_array(),
                         node_index: v.node_index,
-                        texture_data_index: texture.texture_data_index,
                     })
                     .collect(),
                 indices: mesh.mesh.indices.clone(),
-            });
-        }
+            };
 
-        let mut push_mesh = |mut indexed_mesh: IndexedMesh<RenderVertex>| {
             let (vertices_range, _) = self.vertices_buffer.extend(context, &indexed_mesh.vertices);
-            // Adjust the indices to point to the range of the vertices.
+            // Adjust the indices to reference the global vertex range.
             indexed_mesh
                 .indices
                 .iter_mut()
                 .for_each(|i| *i += vertices_range.start);
 
-            self.indices_buffer.extend(context, &indexed_mesh.indices)
-        };
+            let (index_range, _) = self.indices_buffer.extend(context, &indexed_mesh.indices);
 
-        let (opaque_range, _) = push_mesh(opaque_mesh);
-        let (alpha_range, _) = push_mesh(alpha_mesh);
-        let (additive_range, _) = push_mesh(additive_mesh);
+            let render_mesh = RenderMesh {
+                index_range,
+                texture: texture_handle,
+            };
+
+            match texture_data.blend_mode {
+                BlendMode::Opaque => opaque_meshes.push(render_mesh),
+                BlendMode::ColorKeyed => keyed_meshes.push(render_mesh),
+                BlendMode::Alpha => alpha_meshes.push(render_mesh),
+                BlendMode::_Additive => {
+                    // Additive blending is not currently rendered.
+                }
+            }
+        }
 
         let nodes_range = {
             let old_capacity = self.nodes_buffer.capacity;
             let (range, _) = self.nodes_buffer.extend(context, &nodes);
             if self.nodes_buffer.capacity != old_capacity {
-                // The buffer capacity changed, so we have a new buffer; recreate the bind group.
                 self.nodes_bind_group = Self::create_nodes_bind_group(
                     &context.device,
                     &self.nodes_bind_group_layout,
                     self.nodes_buffer.buffer(),
                 );
             }
-
             range
         };
 
         let render_model = self.models.insert(RenderModel {
-            opaque_range,
-            alpha_range,
-            _additive_range: additive_range,
+            opaque_meshes,
+            keyed_meshes,
+            alpha_meshes,
             nodes_range,
         });
 

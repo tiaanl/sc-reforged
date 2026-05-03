@@ -12,19 +12,20 @@ use crate::{
         storage::Handle,
     },
     game::{
-        assets::{images::Images, model::Model, models::Models},
+        assets::{model::Model, models::Models},
+        render::textures::{Texture, Textures},
         scenes::world::{
             extract::RenderSnapshot,
             render::{
                 GeometryBuffer, RenderBindings, RenderLayouts, RenderModel, RenderVertex,
                 camera_render_pipeline::CameraEnvironmentLayout, model_render_pipeline,
-                per_frame::PerFrame, render_pipeline::RenderPipeline,
+                per_frame::PerFrame, render_models::RenderMesh, render_pipeline::RenderPipeline,
             },
         },
     },
 };
 
-use super::{render_models::RenderModels, render_textures::RenderTextures};
+use super::render_models::RenderModels;
 
 bitflags::bitflags! {
     #[derive(Clone, Copy)]
@@ -47,16 +48,26 @@ struct Batch {
 }
 
 pub struct ModelRenderPipeline {
-    images: Arc<Images>,
+    textures: Arc<Textures>,
     asset_models: Arc<Models>,
 
-    textures: RenderTextures,
     models: RenderModels,
 
     /// Cache of model handles to render model handles.
     model_to_render_model: HashMap<Handle<Model>, Handle<RenderModel>>,
 
+    /// Layout used for per-texture bind groups (texture + sampler).
+    texture_bind_group_layout: wgpu::BindGroupLayout,
+    /// Sampler shared across all model textures.
+    sampler: wgpu::Sampler,
+    /// Per-texture bind groups, lazily created when a texture is first used.
+    texture_bind_groups: HashMap<Handle<Texture>, wgpu::BindGroup>,
+
+    /// Pipeline used for `BlendMode::Opaque` meshes.
     opaque_pipeline: wgpu::RenderPipeline,
+    /// Pipeline used for `BlendMode::ColorKeyed` meshes (opaque pass + discard).
+    keyed_pipeline: wgpu::RenderPipeline,
+    /// Pipeline used for `BlendMode::Alpha` meshes.
     alpha_pipeline: wgpu::RenderPipeline,
 
     /// Local cache for render models to render.
@@ -79,30 +90,60 @@ impl ModelRenderPipeline {
         context: &RenderContext,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
-        images: Arc<Images>,
+        textures: Arc<Textures>,
         asset_models: Arc<Models>,
     ) -> Self {
         let device = &context.device;
 
-        let textures = RenderTextures::new(context);
         let models = RenderModels::new(context);
 
-        let poses_bind_group_layout =
-            context
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("poses_bind_group_layout"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("model_texture_bind_group_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
                         },
                         count: None,
-                    }],
-                });
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("model_texture_sampler"),
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
+        let poses_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("poses_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
 
         let module = shader_cache.get_or_create(
             &context.device,
@@ -110,10 +151,10 @@ impl ModelRenderPipeline {
         );
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("objects_pipeline_layout"),
+            label: Some("models_pipeline_layout"),
             bind_group_layouts: &[
                 layouts.get::<CameraEnvironmentLayout>(context),
-                &textures.texture_data_bind_group_layout,
+                &texture_bind_group_layout,
                 &models.nodes_bind_group_layout,
                 &poses_bind_group_layout,
             ],
@@ -129,7 +170,6 @@ impl ModelRenderPipeline {
                     1 => Float32x3,  // normal
                     2 => Float32x2,  // tex_coord
                     3 => Uint32,     // node_index
-                    4 => Uint32,     // texture_data_index
                 ],
             },
             wgpu::VertexBufferLayout {
@@ -137,12 +177,12 @@ impl ModelRenderPipeline {
                     as wgpu::BufferAddress,
                 step_mode: wgpu::VertexStepMode::Instance,
                 attributes: &wgpu::vertex_attr_array![
-                    5 => Float32x4,  // model_mat_0
-                    6 => Float32x4,  // model_mat_1
-                    7 => Float32x4,  // model_mat_2
-                    8 => Float32x4,  // model_mat_3
-                    9 => Uint32,     // first_node_index
-                    10 => Uint32,    // flags
+                    4 => Float32x4,  // model_mat_0
+                    5 => Float32x4,  // model_mat_1
+                    6 => Float32x4,  // model_mat_2
+                    7 => Float32x4,  // model_mat_3
+                    8 => Uint32,     // first_node_index
+                    9 => Uint32,     // flags
                 ],
             },
         ];
@@ -155,8 +195,21 @@ impl ModelRenderPipeline {
             ..Default::default()
         };
 
+        let opaque_depth = wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::LessEqual,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        };
+
+        let alpha_depth = wgpu::DepthStencilState {
+            depth_write_enabled: false,
+            ..opaque_depth.clone()
+        };
+
         let opaque_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("opaque_objects_pipeline"),
+            label: Some("models_opaque_pipeline"),
             layout: Some(&layout),
             vertex: wgpu::VertexState {
                 module,
@@ -165,13 +218,7 @@ impl ModelRenderPipeline {
                 buffers,
             },
             primitive,
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::LessEqual,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
+            depth_stencil: Some(opaque_depth.clone()),
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module,
@@ -183,8 +230,8 @@ impl ModelRenderPipeline {
             cache: None,
         });
 
-        let alpha_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("alpha_objects_pipeline"),
+        let keyed_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("models_keyed_pipeline"),
             layout: Some(&layout),
             vertex: wgpu::VertexState {
                 module,
@@ -193,13 +240,29 @@ impl ModelRenderPipeline {
                 buffers,
             },
             primitive,
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::LessEqual,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
+            depth_stencil: Some(opaque_depth),
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module,
+                entry_point: Some("fragment_opaque_keyed"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: GeometryBuffer::opaque_targets(),
             }),
+            multiview: None,
+            cache: None,
+        });
+
+        let alpha_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("models_alpha_pipeline"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module,
+                entry_point: Some("vertex_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers,
+            },
+            primitive,
+            depth_stencil: Some(alpha_depth),
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module,
@@ -243,15 +306,20 @@ impl ModelRenderPipeline {
         });
 
         Self {
-            images,
+            textures,
             asset_models,
 
-            textures,
             models,
 
-            opaque_pipeline,
-            alpha_pipeline,
             model_to_render_model: HashMap::default(),
+
+            texture_bind_group_layout,
+            sampler,
+            texture_bind_groups: HashMap::default(),
+
+            opaque_pipeline,
+            keyed_pipeline,
+            alpha_pipeline,
 
             render_models_cache: Vec::default(),
 
@@ -275,19 +343,60 @@ impl ModelRenderPipeline {
             return Ok(*render_model_handle);
         }
 
-        let render_model_handle = self.models.add(
-            &self.images,
-            &self.asset_models,
-            context,
-            &mut self.textures,
-            model_handle,
-        )?;
+        let render_model_handle =
+            self.models
+                .add(&self.textures, &self.asset_models, context, model_handle)?;
 
-        // Cache the new handle.
+        // Create per-texture bind groups for any new textures introduced by this model.
+        let new_textures: Vec<Handle<Texture>> = self
+            .models
+            .get(render_model_handle)
+            .map(|render_model| {
+                render_model
+                    .opaque_meshes
+                    .iter()
+                    .chain(render_model.keyed_meshes.iter())
+                    .chain(render_model.alpha_meshes.iter())
+                    .map(|mesh| mesh.texture)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        for texture in new_textures {
+            self.ensure_texture_bind_group(&context.device, texture);
+        }
+
         self.model_to_render_model
             .insert(model_handle, render_model_handle);
 
         Ok(render_model_handle)
+    }
+
+    fn ensure_texture_bind_group(&mut self, device: &wgpu::Device, texture: Handle<Texture>) {
+        if self.texture_bind_groups.contains_key(&texture) {
+            return;
+        }
+
+        let Some(texture_data) = self.textures.get(texture) else {
+            return;
+        };
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("model_texture_bind_group"),
+            layout: &self.texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_data.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+        });
+
+        self.texture_bind_groups.insert(texture, bind_group);
     }
 
     #[inline]
@@ -428,24 +537,32 @@ impl RenderPipeline for ModelRenderPipeline {
 }
 
 impl ModelRenderPipeline {
-    fn setup_render_pass(
-        &self,
-        render_pass: &mut wgpu::RenderPass,
-        pipeline: &wgpu::RenderPipeline,
-        textures: &RenderTextures,
-        models: &RenderModels,
-        bindings: &RenderBindings,
-    ) {
-        render_pass.set_pipeline(pipeline);
-
+    fn bind_static_resources(&self, render_pass: &mut wgpu::RenderPass, bindings: &RenderBindings) {
         render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
-        render_pass.set_bind_group(1, &textures.texture_data_bind_group, &[]);
-        render_pass.set_bind_group(2, &models.nodes_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.models.nodes_bind_group, &[]);
         render_pass.set_bind_group(3, &self.poses.current().1, &[]);
 
-        render_pass.set_vertex_buffer(0, models.vertices_buffer_slice());
+        render_pass.set_vertex_buffer(0, self.models.vertices_buffer_slice());
         render_pass.set_vertex_buffer(1, self.model_instances.current().slice(..));
-        render_pass.set_index_buffer(models.indices_buffer_slice(), wgpu::IndexFormat::Uint32);
+        render_pass.set_index_buffer(
+            self.models.indices_buffer_slice(),
+            wgpu::IndexFormat::Uint32,
+        );
+    }
+
+    fn draw_meshes(
+        &self,
+        render_pass: &mut wgpu::RenderPass,
+        meshes: &[RenderMesh],
+        instance_range: std::ops::Range<u32>,
+    ) {
+        for mesh in meshes {
+            let Some(bind_group) = self.texture_bind_groups.get(&mesh.texture) else {
+                continue;
+            };
+            render_pass.set_bind_group(1, bind_group, &[]);
+            render_pass.draw_indexed(mesh.index_range.clone(), 0, instance_range.clone());
+        }
     }
 
     fn opaque_render_pass(
@@ -454,25 +571,34 @@ impl ModelRenderPipeline {
         geometry_buffer: &GeometryBuffer,
         bindings: &RenderBindings,
     ) {
-        let mut render_pass = geometry_buffer.begin_opaque_render_pass(encoder, "objects_opaque");
+        let mut render_pass = geometry_buffer.begin_opaque_render_pass(encoder, "models_opaque");
 
-        self.setup_render_pass(
-            &mut render_pass,
-            &self.opaque_pipeline,
-            &self.textures,
-            &self.models,
-            bindings,
-        );
+        self.bind_static_resources(&mut render_pass, bindings);
 
-        for (render_model, range) in self.batches.iter().filter_map(|batch| {
-            self.models
-                .get(batch.render_model)
-                .and_then(|render_model| {
-                    (!render_model.opaque_range.is_empty())
-                        .then(|| (render_model, batch.range.clone()))
-                })
-        }) {
-            render_pass.draw_indexed(render_model.opaque_range.clone(), 0, range);
+        // Opaque (non-keyed) meshes.
+        render_pass.set_pipeline(&self.opaque_pipeline);
+        for batch in self.batches.iter() {
+            let Some(render_model) = self.models.get(batch.render_model) else {
+                continue;
+            };
+            self.draw_meshes(
+                &mut render_pass,
+                &render_model.opaque_meshes,
+                batch.range.clone(),
+            );
+        }
+
+        // Color-keyed meshes (still in the opaque pass; shader discards near-black pixels).
+        render_pass.set_pipeline(&self.keyed_pipeline);
+        for batch in self.batches.iter() {
+            let Some(render_model) = self.models.get(batch.render_model) else {
+                continue;
+            };
+            self.draw_meshes(
+                &mut render_pass,
+                &render_model.keyed_meshes,
+                batch.range.clone(),
+            );
         }
     }
 
@@ -482,28 +608,20 @@ impl ModelRenderPipeline {
         geometry_buffer: &GeometryBuffer,
         bindings: &RenderBindings,
     ) {
-        let mut render_pass = geometry_buffer.begin_alpha_render_pass(encoder, "objects_alpha");
+        let mut render_pass = geometry_buffer.begin_alpha_render_pass(encoder, "models_alpha");
 
-        self.setup_render_pass(
-            &mut render_pass,
-            &self.alpha_pipeline,
-            &self.textures,
-            &self.models,
-            bindings,
-        );
+        self.bind_static_resources(&mut render_pass, bindings);
 
-        // TODO: Should the blend mode pipelines each have their own set of instances? Right now
-        //       the instances without alpha ranges are just filtered out. This might be good
-        //       enough.
-        for (render_model, range) in self.batches.iter().filter_map(|batch| {
-            self.models
-                .get(batch.render_model)
-                .and_then(|render_model| {
-                    (!render_model.alpha_range.is_empty())
-                        .then(|| (render_model, batch.range.clone()))
-                })
-        }) {
-            render_pass.draw_indexed(render_model.alpha_range.clone(), 0, range);
+        render_pass.set_pipeline(&self.alpha_pipeline);
+        for batch in self.batches.iter() {
+            let Some(render_model) = self.models.get(batch.render_model) else {
+                continue;
+            };
+            self.draw_meshes(
+                &mut render_pass,
+                &render_model.alpha_meshes,
+                batch.range.clone(),
+            );
         }
     }
 }
