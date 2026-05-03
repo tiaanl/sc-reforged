@@ -1,12 +1,11 @@
 use std::ops::Range;
 
+use ahash::HashMap;
+use wgpu::util::DeviceExt;
+
 use crate::{
     engine::{
-        assets::AssetError,
-        growing_buffer::GrowingBuffer,
-        mesh::IndexedMesh,
-        renderer::RenderContext,
-        storage::{Handle, Storage},
+        mesh::IndexedMesh, renderer::RenderContext, storage::Handle,
     },
     game::{
         assets::{image::BlendMode, model::Model, models::Models},
@@ -31,65 +30,32 @@ pub struct RenderVertex {
     pub node_index: u32,
 }
 
-/// One drawable mesh: a contiguous range in the global index buffer plus the
-/// texture used to sample its pixels.
+/// One drawable mesh: a contiguous range in its [RenderModel]'s index buffer
+/// plus the texture used to sample its pixels.
 pub struct RenderMesh {
     pub index_range: Range<u32>,
     pub texture: Handle<Texture>,
 }
 
-/// GPU-side data for a single [Model], with meshes split per blend mode so the
-/// queue path can pick them up in the matching render pass.
+/// GPU-side data for a single [Model]. Each model owns its own vertex/index/nodes
+/// buffers and the bind group used to access the nodes during rendering.
 pub struct RenderModel {
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub _nodes_buffer: wgpu::Buffer,
+    pub nodes_bind_group: wgpu::BindGroup,
     pub opaque_meshes: Vec<RenderMesh>,
     pub keyed_meshes: Vec<RenderMesh>,
     pub alpha_meshes: Vec<RenderMesh>,
-    /// Range of [RenderNode]s for this model in the shared nodes buffer.
-    pub nodes_range: Range<u32>,
 }
 
 pub struct RenderModels {
-    /// Buffer containing all model vertices.
-    vertices_buffer: GrowingBuffer<RenderVertex>,
-    /// Buffer containing all model indices.
-    indices_buffer: GrowingBuffer<u32>,
-    /// Buffer containing node data for all models.
-    nodes_buffer: GrowingBuffer<RenderNode>,
-    /// Bind group layout for the [RenderNode]'s.
     pub nodes_bind_group_layout: wgpu::BindGroupLayout,
-    /// Bind group for the [RenderNode]'s.
-    pub nodes_bind_group: wgpu::BindGroup,
-    /// Local data for each model.
-    models: Storage<RenderModel>,
+    models: HashMap<Handle<Model>, RenderModel>,
 }
 
 impl RenderModels {
-    const INITIAL_VERTEX_COUNT: u32 = 1 << 15;
-    const INITIAL_INDEX_COUNT: u32 = 1 << 15;
-    const INITIAL_NODES_COUNT: u32 = 1 << 15;
-
     pub fn new(context: &RenderContext) -> Self {
-        let vertices_buffer = GrowingBuffer::new(
-            context,
-            Self::INITIAL_VERTEX_COUNT,
-            wgpu::BufferUsages::VERTEX,
-            "render_models_vertices",
-        );
-
-        let indices_buffer = GrowingBuffer::new(
-            context,
-            Self::INITIAL_INDEX_COUNT,
-            wgpu::BufferUsages::INDEX,
-            "render_models_indices",
-        );
-
-        let nodes_buffer = GrowingBuffer::new(
-            context,
-            Self::INITIAL_NODES_COUNT,
-            wgpu::BufferUsages::STORAGE,
-            "render_models_nodes",
-        );
-
         let nodes_bind_group_layout =
             context
                 .device
@@ -107,40 +73,24 @@ impl RenderModels {
                     }],
                 });
 
-        let nodes_bind_group = Self::create_nodes_bind_group(
-            &context.device,
-            &nodes_bind_group_layout,
-            nodes_buffer.buffer(),
-        );
-
-        let models = Storage::default();
-
         Self {
-            vertices_buffer,
-            indices_buffer,
-            nodes_buffer,
             nodes_bind_group_layout,
-            nodes_bind_group,
-            models,
+            models: HashMap::default(),
         }
-    }
-
-    pub fn vertices_buffer_slice(&self) -> wgpu::BufferSlice<'_> {
-        self.vertices_buffer.slice(..)
-    }
-
-    pub fn indices_buffer_slice(&self) -> wgpu::BufferSlice<'_> {
-        self.indices_buffer.slice(..)
     }
 
     pub fn add(
         &mut self,
         textures: &Textures,
-        models: &Models,
+        asset_models: &Models,
         context: &RenderContext,
         model_handle: Handle<Model>,
-    ) -> Result<Handle<RenderModel>, AssetError> {
-        let model = models
+    ) {
+        if self.models.contains_key(&model_handle) {
+            return;
+        }
+
+        let model = asset_models
             .get(model_handle)
             .expect("Model should have been loaded by this time.");
 
@@ -154,6 +104,12 @@ impl RenderModels {
                 _pad: Default::default(),
             })
             .collect();
+
+        // Build the per-model vertex and index buffers by concatenating all
+        // mesh data, with each mesh's indices rebased onto where its vertices
+        // land in the combined vertex buffer.
+        let mut vertices: Vec<RenderVertex> = Vec::new();
+        let mut indices: Vec<u32> = Vec::new();
 
         let mut opaque_meshes: Vec<RenderMesh> = Vec::new();
         let mut keyed_meshes: Vec<RenderMesh> = Vec::new();
@@ -182,17 +138,15 @@ impl RenderModels {
                 indices: mesh.mesh.indices.clone(),
             };
 
-            let (vertices_range, _) = self.vertices_buffer.extend(context, &indexed_mesh.vertices);
-            // Adjust the indices to reference the global vertex range.
-            indexed_mesh
-                .indices
-                .iter_mut()
-                .for_each(|i| *i += vertices_range.start);
+            let vertex_offset = vertices.len() as u32;
+            vertices.append(&mut indexed_mesh.vertices);
 
-            let (index_range, _) = self.indices_buffer.extend(context, &indexed_mesh.indices);
+            let index_start = indices.len() as u32;
+            indices.extend(indexed_mesh.indices.iter().map(|i| i + vertex_offset));
+            let index_end = indices.len() as u32;
 
             let render_mesh = RenderMesh {
-                index_range,
+                index_range: index_start..index_end,
                 texture: texture_handle,
             };
 
@@ -206,46 +160,56 @@ impl RenderModels {
             }
         }
 
-        let nodes_range = {
-            let old_capacity = self.nodes_buffer.capacity;
-            let (range, _) = self.nodes_buffer.extend(context, &nodes);
-            if self.nodes_buffer.capacity != old_capacity {
-                self.nodes_bind_group = Self::create_nodes_bind_group(
-                    &context.device,
-                    &self.nodes_bind_group_layout,
-                    self.nodes_buffer.buffer(),
-                );
-            }
-            range
-        };
+        let device = &context.device;
 
-        let render_model = self.models.insert(RenderModel {
-            opaque_meshes,
-            keyed_meshes,
-            alpha_meshes,
-            nodes_range,
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("render_model_vertex_buffer"),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
-        Ok(render_model)
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("render_model_index_buffer"),
+            contents: bytemuck::cast_slice(&indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let nodes_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("render_model_nodes_buffer"),
+            contents: bytemuck::cast_slice(&nodes),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let nodes_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("render_model_nodes_bind_group"),
+            layout: &self.nodes_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: nodes_buffer.as_entire_binding(),
+            }],
+        });
+
+        self.models.insert(
+            model_handle,
+            RenderModel {
+                vertex_buffer,
+                index_buffer,
+                _nodes_buffer: nodes_buffer,
+                nodes_bind_group,
+                opaque_meshes,
+                keyed_meshes,
+                alpha_meshes,
+            },
+        );
     }
 
     #[inline]
-    pub fn get(&self, handle: Handle<RenderModel>) -> Option<&RenderModel> {
-        self.models.get(handle)
+    pub fn get(&self, handle: Handle<Model>) -> Option<&RenderModel> {
+        self.models.get(&handle)
     }
 
-    fn create_nodes_bind_group(
-        device: &wgpu::Device,
-        layout: &wgpu::BindGroupLayout,
-        buffer: &wgpu::Buffer,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("model_nodes_bind_group"),
-            layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffer.as_entire_binding(),
-            }],
-        })
+    #[inline]
+    pub fn contains(&self, handle: Handle<Model>) -> bool {
+        self.models.contains_key(&handle)
     }
 }

@@ -5,7 +5,6 @@ use glam::Mat4;
 
 use crate::{
     engine::{
-        assets::AssetError,
         growing_buffer::GrowingBuffer,
         renderer::{Frame, RenderContext},
         shader_cache::ShaderCache,
@@ -17,7 +16,7 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                GeometryBuffer, RenderBindings, RenderLayouts, RenderModel, RenderVertex,
+                GeometryBuffer, RenderBindings, RenderLayouts, RenderVertex,
                 camera_render_pipeline::CameraEnvironmentLayout, model_render_pipeline,
                 per_frame::PerFrame, render_models::RenderMesh, render_pipeline::RenderPipeline,
             },
@@ -36,14 +35,14 @@ bitflags::bitflags! {
 }
 
 pub struct RenderModelToRender {
-    pub render_model: Handle<RenderModel>,
+    pub model: Handle<Model>,
     pub transform: Mat4,
     pub first_node_index: u32,
     pub flags: ModelRenderFlags,
 }
 
 struct Batch {
-    render_model: Handle<RenderModel>,
+    model: Handle<Model>,
     range: std::ops::Range<u32>,
 }
 
@@ -52,9 +51,6 @@ pub struct ModelRenderPipeline {
     asset_models: Arc<Models>,
 
     models: RenderModels,
-
-    /// Cache of model handles to render model handles.
-    model_to_render_model: HashMap<Handle<Model>, Handle<RenderModel>>,
 
     /// Layout used for per-texture bind groups (texture + sampler).
     texture_bind_group_layout: wgpu::BindGroupLayout,
@@ -311,8 +307,6 @@ impl ModelRenderPipeline {
 
             models,
 
-            model_to_render_model: HashMap::default(),
-
             texture_bind_group_layout,
             sampler,
             texture_bind_groups: HashMap::default(),
@@ -334,23 +328,18 @@ impl ModelRenderPipeline {
         }
     }
 
-    pub fn get_or_create_render_model(
-        &mut self,
-        context: &RenderContext,
-        model_handle: Handle<Model>,
-    ) -> Result<Handle<RenderModel>, AssetError> {
-        if let Some(render_model_handle) = self.model_to_render_model.get(&model_handle) {
-            return Ok(*render_model_handle);
+    pub fn ensure_render_model(&mut self, context: &RenderContext, model_handle: Handle<Model>) {
+        if self.models.contains(model_handle) {
+            return;
         }
 
-        let render_model_handle =
-            self.models
-                .add(&self.textures, &self.asset_models, context, model_handle)?;
+        self.models
+            .add(&self.textures, &self.asset_models, context, model_handle);
 
         // Create per-texture bind groups for any new textures introduced by this model.
         let new_textures: Vec<Handle<Texture>> = self
             .models
-            .get(render_model_handle)
+            .get(model_handle)
             .map(|render_model| {
                 render_model
                     .opaque_meshes
@@ -365,11 +354,6 @@ impl ModelRenderPipeline {
         for texture in new_textures {
             self.ensure_texture_bind_group(&context.device, texture);
         }
-
-        self.model_to_render_model
-            .insert(model_handle, render_model_handle);
-
-        Ok(render_model_handle)
     }
 
     fn ensure_texture_bind_group(&mut self, device: &wgpu::Device, texture: Handle<Texture>) {
@@ -398,11 +382,6 @@ impl ModelRenderPipeline {
 
         self.texture_bind_groups.insert(texture, bind_group);
     }
-
-    #[inline]
-    pub fn render_model_for_model(&self, model: Handle<Model>) -> Option<Handle<RenderModel>> {
-        self.model_to_render_model.get(&model).cloned()
-    }
 }
 
 impl RenderPipeline for ModelRenderPipeline {
@@ -417,9 +396,7 @@ impl RenderPipeline for ModelRenderPipeline {
             tracing::info!("Preparing {} models for the GPU.", models_to_prepare.len());
 
             for &model_handle in models_to_prepare {
-                if let Err(err) = self.get_or_create_render_model(context, model_handle) {
-                    tracing::warn!("Could not prepare model! ({err})");
-                }
+                self.ensure_render_model(context, model_handle);
             }
         }
 
@@ -433,14 +410,9 @@ impl RenderPipeline for ModelRenderPipeline {
 
         // Build an intermediate list of render models to render with some of the details resolved.
         for model_to_render in models.iter() {
-            let Some(render_model_handle) = self.render_model_for_model(model_to_render.model)
-            else {
+            if !self.models.contains(model_to_render.model) {
                 continue;
-            };
-
-            let Some(render_model) = self.models.get(render_model_handle) else {
-                continue;
-            };
+            }
 
             let mut flags = ModelRenderFlags::empty();
             flags.set(ModelRenderFlags::HIGHLIGHTED, model_to_render.highlighted);
@@ -458,11 +430,13 @@ impl RenderPipeline for ModelRenderPipeline {
 
                 first_node
             } else {
-                render_model.nodes_range.start
+                // Each model owns its own nodes buffer; default-pose draws always
+                // start at index 0.
+                0
             };
 
             self.render_models_cache.push(RenderModelToRender {
-                render_model: render_model_handle,
+                model: model_to_render.model,
                 transform: model_to_render.transform,
                 first_node_index,
                 flags,
@@ -503,17 +477,17 @@ impl RenderPipeline for ModelRenderPipeline {
 
         let instances_count = self.render_models_cache.len();
         while start_index < instances_count {
-            let render_model = self.render_models_cache[start_index].render_model;
+            let model = self.render_models_cache[start_index].model;
 
             let mut end_index = start_index + 1;
             while end_index < instances_count
-                && self.render_models_cache[end_index].render_model == render_model
+                && self.render_models_cache[end_index].model == model
             {
                 end_index += 1;
             }
 
             self.batches.push(Batch {
-                render_model,
+                model,
                 range: start_index as u32..end_index as u32,
             });
             start_index = end_index;
@@ -537,17 +511,10 @@ impl RenderPipeline for ModelRenderPipeline {
 }
 
 impl ModelRenderPipeline {
-    fn bind_static_resources(&self, render_pass: &mut wgpu::RenderPass, bindings: &RenderBindings) {
+    fn bind_pass_resources(&self, render_pass: &mut wgpu::RenderPass, bindings: &RenderBindings) {
         render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
-        render_pass.set_bind_group(2, &self.models.nodes_bind_group, &[]);
         render_pass.set_bind_group(3, &self.poses.current().1, &[]);
-
-        render_pass.set_vertex_buffer(0, self.models.vertices_buffer_slice());
         render_pass.set_vertex_buffer(1, self.model_instances.current().slice(..));
-        render_pass.set_index_buffer(
-            self.models.indices_buffer_slice(),
-            wgpu::IndexFormat::Uint32,
-        );
     }
 
     fn draw_meshes(
@@ -565,6 +532,33 @@ impl ModelRenderPipeline {
         }
     }
 
+    fn run_pass<F>(
+        &self,
+        render_pass: &mut wgpu::RenderPass,
+        pipeline: &wgpu::RenderPipeline,
+        select_meshes: F,
+    ) where
+        F: Fn(&super::render_models::RenderModel) -> &[RenderMesh],
+    {
+        render_pass.set_pipeline(pipeline);
+        for batch in self.batches.iter() {
+            let Some(render_model) = self.models.get(batch.model) else {
+                continue;
+            };
+            let meshes = select_meshes(render_model);
+            if meshes.is_empty() {
+                continue;
+            }
+            render_pass.set_bind_group(2, &render_model.nodes_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, render_model.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(
+                render_model.index_buffer.slice(..),
+                wgpu::IndexFormat::Uint32,
+            );
+            self.draw_meshes(render_pass, meshes, batch.range.clone());
+        }
+    }
+
     fn opaque_render_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -572,34 +566,10 @@ impl ModelRenderPipeline {
         bindings: &RenderBindings,
     ) {
         let mut render_pass = geometry_buffer.begin_opaque_render_pass(encoder, "models_opaque");
+        self.bind_pass_resources(&mut render_pass, bindings);
 
-        self.bind_static_resources(&mut render_pass, bindings);
-
-        // Opaque (non-keyed) meshes.
-        render_pass.set_pipeline(&self.opaque_pipeline);
-        for batch in self.batches.iter() {
-            let Some(render_model) = self.models.get(batch.render_model) else {
-                continue;
-            };
-            self.draw_meshes(
-                &mut render_pass,
-                &render_model.opaque_meshes,
-                batch.range.clone(),
-            );
-        }
-
-        // Color-keyed meshes (still in the opaque pass; shader discards near-black pixels).
-        render_pass.set_pipeline(&self.keyed_pipeline);
-        for batch in self.batches.iter() {
-            let Some(render_model) = self.models.get(batch.render_model) else {
-                continue;
-            };
-            self.draw_meshes(
-                &mut render_pass,
-                &render_model.keyed_meshes,
-                batch.range.clone(),
-            );
-        }
+        self.run_pass(&mut render_pass, &self.opaque_pipeline, |m| &m.opaque_meshes);
+        self.run_pass(&mut render_pass, &self.keyed_pipeline, |m| &m.keyed_meshes);
     }
 
     fn alpha_render_pass(
@@ -609,20 +579,9 @@ impl ModelRenderPipeline {
         bindings: &RenderBindings,
     ) {
         let mut render_pass = geometry_buffer.begin_alpha_render_pass(encoder, "models_alpha");
+        self.bind_pass_resources(&mut render_pass, bindings);
 
-        self.bind_static_resources(&mut render_pass, bindings);
-
-        render_pass.set_pipeline(&self.alpha_pipeline);
-        for batch in self.batches.iter() {
-            let Some(render_model) = self.models.get(batch.render_model) else {
-                continue;
-            };
-            self.draw_meshes(
-                &mut render_pass,
-                &render_model.alpha_meshes,
-                batch.range.clone(),
-            );
-        }
+        self.run_pass(&mut render_pass, &self.alpha_pipeline, |m| &m.alpha_meshes);
     }
 }
 
