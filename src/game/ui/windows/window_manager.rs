@@ -21,6 +21,7 @@ use crate::{
         ui::{
             EventResult,
             render::window_renderer::{WindowRenderItems, WindowRenderer},
+            windows::window_manager_context::WindowManagerContext,
         },
     },
 };
@@ -34,6 +35,8 @@ pub struct WindowManager {
 
     window_renderer: WindowRenderer,
     window_render_items_cache: WindowRenderItems,
+
+    window_manager_context: WindowManagerContext,
 
     /// The stack of windows. In bottom-to-top z-index order.
     windows: Vec<Box<dyn Window>>,
@@ -67,6 +70,8 @@ impl WindowManager {
 
             window_renderer,
             window_render_items_cache: WindowRenderItems::default(),
+
+            window_manager_context: WindowManagerContext::default(),
 
             windows: Vec::default(),
             modal_window: None,
@@ -173,13 +178,23 @@ impl WindowManager {
         if let Some(modal_index) = self.modal_window
             && let Some(window) = self.windows.get_mut(modal_index)
         {
-            Self::try_mouse_down_on_window(window.as_mut(), mouse, button);
+            Self::try_mouse_down_on_window(
+                window.as_mut(),
+                mouse,
+                button,
+                &mut self.window_manager_context,
+            );
             return;
         }
 
         let windows = &mut self.windows;
         for window in windows.iter_mut().rev() {
-            let result = Self::try_mouse_down_on_window(window.as_mut(), mouse, button);
+            let result = Self::try_mouse_down_on_window(
+                window.as_mut(),
+                mouse,
+                button,
+                &mut self.window_manager_context,
+            );
 
             if matches!(result, EventResult::Handled) {
                 return;
@@ -223,6 +238,7 @@ impl WindowManager {
         window: &mut dyn Window,
         mouse: IVec2,
         button: MouseButton,
+        context: &mut WindowManagerContext,
     ) -> EventResult {
         if !window.is_visible() || !window.wants_input() || !window.hit_test(mouse) {
             return EventResult::Ignore;
@@ -231,8 +247,8 @@ impl WindowManager {
         let local = mouse - window.rect().position;
 
         match button {
-            MouseButton::Left => window.on_primary_mouse_down(local),
-            MouseButton::Right => window.on_secondary_mouse_down(local),
+            MouseButton::Left => window.on_primary_mouse_down(local, context),
+            MouseButton::Right => window.on_secondary_mouse_down(local, context),
             _ => EventResult::Ignore,
         }
     }

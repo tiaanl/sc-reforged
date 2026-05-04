@@ -3,6 +3,7 @@ use glam::IVec2;
 use crate::game::ui::{
     EventResult, Rect,
     render::window_renderer::{WindowRenderItems, WindowRenderer},
+    windows::window_manager_context::WindowManagerContext,
 };
 
 pub trait Window {
@@ -30,14 +31,24 @@ pub trait Window {
     fn rect(&self) -> Rect;
 
     /// Handle a primary mouse down event.
-    fn on_primary_mouse_down(&mut self, mouse: IVec2) -> EventResult {
+    fn on_primary_mouse_down(
+        &mut self,
+        mouse: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
         let _ = mouse;
+        let _ = context;
         EventResult::Ignore
     }
 
     /// Handle a secondary mouse down event.
-    fn on_secondary_mouse_down(&mut self, mouse: IVec2) -> EventResult {
+    fn on_secondary_mouse_down(
+        &mut self,
+        mouse: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
         let _ = mouse;
+        let _ = context;
         EventResult::Ignore
     }
 

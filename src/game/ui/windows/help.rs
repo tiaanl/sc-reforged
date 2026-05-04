@@ -11,6 +11,7 @@ use crate::game::{
             text_button::TextButtonWidget,
             widget::Widgets,
         },
+        windows::window_manager_context::WindowManagerContext,
     },
 };
 
@@ -123,11 +124,19 @@ impl Window for HelpWindow {
         self.rect
     }
 
-    fn on_primary_mouse_down(&mut self, mouse: IVec2) -> EventResult {
+    fn on_primary_mouse_down(
+        &mut self,
+        mouse: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         self.widgets.on_primary_mouse_down(mouse)
     }
 
-    fn on_secondary_mouse_down(&mut self, _mouse: IVec2) -> EventResult {
+    fn on_secondary_mouse_down(
+        &mut self,
+        _mouse: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         // TODO: Confirm whether right-click should be ignored or routed to the
         // child widgets for help-window button handling.
         EventResult::Ignore

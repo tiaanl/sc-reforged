@@ -5,6 +5,7 @@ use crate::game::{
     ui::{
         EventResult, Rect,
         render::window_renderer::{WindowRenderItems, WindowRenderer},
+        windows::window_manager_context::WindowManagerContext,
     },
 };
 
@@ -45,11 +46,19 @@ impl Window for MainMenuWindow {
         self.rect
     }
 
-    fn on_primary_mouse_down(&mut self, _mouse: IVec2) -> EventResult {
+    fn on_primary_mouse_down(
+        &mut self,
+        _mouse: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         EventResult::Ignore
     }
 
-    fn on_secondary_mouse_down(&mut self, _mouse: IVec2) -> EventResult {
+    fn on_secondary_mouse_down(
+        &mut self,
+        _mouse: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         EventResult::Ignore
     }
 
