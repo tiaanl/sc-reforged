@@ -1,12 +1,9 @@
-pub use render_snapshot::*;
-
 use bevy_ecs::prelude::*;
 
 mod camera;
 mod environment;
 mod gizmos;
 mod models;
-mod render_snapshot;
 mod terrain;
 mod ui;
 

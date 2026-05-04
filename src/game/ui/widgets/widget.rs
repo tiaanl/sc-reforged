@@ -10,9 +10,23 @@ pub trait Widget {
     /// Returns the widget rect in its parent window's coordinate space.
     fn rect(&self) -> Rect;
 
-    fn on_primary_mouse_down(&mut self, mouse_position: IVec2) -> EventResult;
-    fn on_primary_mouse_up(&mut self, mouse_position: IVec2) -> EventResult;
-    fn on_mouse_wheel(&mut self, wheel_steps: i32) -> EventResult;
+    fn on_primary_mouse_down(
+        &mut self,
+        position: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult;
+
+    fn on_primary_mouse_up(
+        &mut self,
+        position: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult;
+
+    fn on_mouse_wheel(
+        &mut self,
+        wheel_steps: i32,
+        context: &mut WindowManagerContext,
+    ) -> EventResult;
 
     fn render(
         &mut self,
@@ -38,16 +52,16 @@ impl Widgets {
     /// the cursor.
     pub fn on_primary_mouse_down(
         &mut self,
-        mouse_position: IVec2,
-        _context: &mut WindowManagerContext,
+        position: IVec2,
+        context: &mut WindowManagerContext,
     ) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
             let rect = widget.rect();
-            if !rect.contains(mouse_position) {
+            if !rect.contains(position) {
                 continue;
             }
 
-            let result = widget.on_primary_mouse_down(mouse_position);
+            let result = widget.on_primary_mouse_down(position, context);
 
             if matches!(result, EventResult::Handled) {
                 return result;
@@ -61,16 +75,16 @@ impl Widgets {
     /// the cursor.
     pub fn on_primary_mouse_up(
         &mut self,
-        mouse_position: IVec2,
-        _context: &mut WindowManagerContext,
+        position: IVec2,
+        context: &mut WindowManagerContext,
     ) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
             let rect = widget.rect();
-            if !rect.contains(mouse_position) {
+            if !rect.contains(position) {
                 continue;
             }
 
-            let result = widget.on_primary_mouse_up(mouse_position);
+            let result = widget.on_primary_mouse_up(position, context);
 
             if matches!(result, EventResult::Handled) {
                 return result;
@@ -81,11 +95,11 @@ impl Widgets {
         // when the cursor was released outside their bounds.
         for widget in self.widgets.iter_mut().rev() {
             let rect = widget.rect();
-            if rect.contains(mouse_position) {
+            if rect.contains(position) {
                 continue;
             }
 
-            let result = widget.on_primary_mouse_up(mouse_position);
+            let result = widget.on_primary_mouse_up(position, context);
 
             if matches!(result, EventResult::Handled) {
                 return result;
@@ -117,7 +131,7 @@ impl Widgets {
         &mut self,
         mouse_position: IVec2,
         wheel_steps: i32,
-        _context: &mut WindowManagerContext,
+        context: &mut WindowManagerContext,
     ) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
             let rect = widget.rect();
@@ -125,7 +139,7 @@ impl Widgets {
                 continue;
             }
 
-            let result = widget.on_mouse_wheel(wheel_steps);
+            let result = widget.on_mouse_wheel(wheel_steps, context);
 
             if matches!(result, EventResult::Handled) {
                 return result;

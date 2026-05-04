@@ -4,11 +4,14 @@ use crate::game::ui::{
     EventResult, Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
     widgets::widget::Widget,
+    windows::{actions::WindowManagerAction, window_manager_context::WindowManagerContext},
 };
 
 pub struct TextButtonWidget {
     rect: Rect,
     is_pressed: bool,
+
+    action: Option<WindowManagerAction>,
     on_click: Option<Box<dyn FnMut()>>,
 
     pub text: String,
@@ -22,12 +25,19 @@ impl TextButtonWidget {
         Self {
             rect,
             is_pressed: false,
-            on_click: None,
-            text: text.into(),
 
+            action: None,
+            on_click: None,
+
+            text: text.into(),
             font: Font::Default,
             custom_color: None,
         }
+    }
+
+    pub fn with_action(mut self, action: WindowManagerAction) -> Self {
+        self.action = Some(action);
+        self
     }
 
     /// Returns the widget with the provided click callback attached.
@@ -59,16 +69,29 @@ impl Widget for TextButtonWidget {
         self.rect
     }
 
-    fn on_primary_mouse_down(&mut self, _mouse_position: IVec2) -> EventResult {
+    fn on_primary_mouse_down(
+        &mut self,
+        _position: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         self.is_pressed = true;
         EventResult::Handled
     }
 
-    fn on_primary_mouse_up(&mut self, _mouse_position: IVec2) -> EventResult {
+    fn on_primary_mouse_up(
+        &mut self,
+        _position: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
         let was_pressed = std::mem::replace(&mut self.is_pressed, false);
 
         if !was_pressed {
             return EventResult::Ignore;
+        }
+
+        if let Some(action) = &self.action {
+            println!("action");
+            context.post_action(action.clone());
         }
 
         if let Some(on_click) = self.on_click.as_mut() {
@@ -78,7 +101,11 @@ impl Widget for TextButtonWidget {
         EventResult::Handled
     }
 
-    fn on_mouse_wheel(&mut self, _wheel_steps: i32) -> EventResult {
+    fn on_mouse_wheel(
+        &mut self,
+        _wheel_steps: i32,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         EventResult::Ignore
     }
 

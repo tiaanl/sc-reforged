@@ -17,16 +17,16 @@ fn main() {
 
 const COMMON: &[&str] = &[
     "src/game/common/fullscreen.wgsl",
-    "src/game/scenes/world/render/shaders/camera_env.wgsl",
-    "src/game/scenes/world/render/shaders/geometry_buffer.wgsl",
+    "src/game/render/world/shaders/camera_env.wgsl",
+    "src/game/render/world/shaders/geometry_buffer.wgsl",
 ];
 
 const SHADERS: &[&str] = &[
     "src/engine/gizmos.wgsl",
-    "src/game/scenes/world/render/shaders/compositor.wgsl",
-    "src/game/scenes/world/render/shaders/models.wgsl",
-    "src/game/scenes/world/render/shaders/terrain.wgsl",
-    "src/game/scenes/world/render/shaders/ui.wgsl",
+    "src/game/render/world/shaders/compositor.wgsl",
+    "src/game/render/world/shaders/models.wgsl",
+    "src/game/render/world/shaders/terrain.wgsl",
+    "src/game/render/world/shaders/ui.wgsl",
 ];
 
 fn compile_shaders() {

@@ -2,7 +2,7 @@ use crate::game::ui::windows::actions::WindowManagerAction;
 
 #[derive(Default)]
 pub struct WindowManagerContext {
-    actions: Vec<WindowManagerAction>,
+    pub actions: Vec<WindowManagerAction>,
 }
 
 impl WindowManagerContext {

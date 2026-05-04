@@ -92,7 +92,7 @@ pub struct Gizmos {
 }
 
 #[derive(Default, Resource)]
-pub struct RenderSnapshot {
+pub struct WorldRenderSnapshot {
     /// The camera we are rendering the scene from.
     pub camera: Camera,
     /// The environment details.

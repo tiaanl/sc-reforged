@@ -1,15 +1,13 @@
 use crate::{
     engine::renderer::{RenderContext, RenderTarget},
-    game::{
-        render::geometry_buffer::GeometryBuffer,
-        scenes::world::{
-            extract::RenderSnapshot,
-            render::{RenderPipeline, render_layouts::RenderLayout},
+    game::render::{
+        geometry_buffer::GeometryBuffer,
+        world::{
+            render_bindings::RenderBindings, render_layouts::RenderLayout,
+            render_pipeline::RenderPipeline, world_render_snapshot::WorldRenderSnapshot,
         },
     },
 };
-
-use super::RenderBindings;
 
 pub struct CameraEnvironmentLayout;
 
@@ -41,7 +39,7 @@ impl RenderPipeline for CameraRenderPipeline {
         &mut self,
         context: &crate::engine::renderer::Gpu,
         bindings: &mut RenderBindings,
-        snapshot: &RenderSnapshot,
+        snapshot: &WorldRenderSnapshot,
     ) {
         let data = gpu::CameraEnvironment {
             proj_view: snapshot.camera.proj_view.to_cols_array_2d(),
@@ -82,7 +80,7 @@ impl RenderPipeline for CameraRenderPipeline {
         _render_context: &mut RenderContext,
         _render_target: &RenderTarget,
         _geometry_buffer: &GeometryBuffer,
-        _snapshot: &RenderSnapshot,
+        _snapshot: &WorldRenderSnapshot,
     ) {
     }
 }

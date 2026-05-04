@@ -1,15 +1,16 @@
 use bevy_ecs::prelude::*;
 use glam::Vec3;
 
-use crate::game::scenes::world::{
-    sim_world::{DayNightCycle, SimWorldState},
-    systems::Time,
+use crate::game::{
+    render::world::WorldRenderSnapshot,
+    scenes::world::{
+        sim_world::{DayNightCycle, SimWorldState},
+        systems::Time,
+    },
 };
 
-use super::RenderSnapshot;
-
 pub fn extract_environment(
-    mut snapshot: ResMut<RenderSnapshot>,
+    mut snapshot: ResMut<WorldRenderSnapshot>,
     day_night_cycle: Res<DayNightCycle>,
     time: Res<Time>,
     state: Res<SimWorldState>,

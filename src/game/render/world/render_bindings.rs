@@ -1,8 +1,7 @@
 use crate::{
     engine::renderer::Gpu,
-    game::scenes::world::render::{
-        camera_render_pipeline, per_frame::PerFrame, render_layouts::RenderLayouts,
-        uniform_buffer::UniformBuffer,
+    game::render::{
+        per_frame::PerFrame, uniform_buffer::UniformBuffer, world::render_layouts::RenderLayouts,
     },
 };
 
@@ -13,12 +12,12 @@ pub struct RenderBindings {
 
 impl RenderBindings {
     pub fn new(gpu: &Gpu, layouts: &mut RenderLayouts) -> Self {
-        let layout = layouts.get::<camera_render_pipeline::CameraEnvironmentLayout>(gpu);
+        let layout = layouts.get::<super::camera_render_pipeline::CameraEnvironmentLayout>();
 
         let camera_env_buffer = PerFrame::new(|index| {
             let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("cameras"),
-                size: std::mem::size_of::<camera_render_pipeline::gpu::CameraEnvironment>()
+                size: std::mem::size_of::<super::camera_render_pipeline::gpu::CameraEnvironment>()
                     as wgpu::BufferAddress,
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,

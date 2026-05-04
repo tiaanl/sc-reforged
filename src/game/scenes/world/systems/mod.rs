@@ -1,30 +1,13 @@
-use std::sync::Arc;
-
 use bevy_ecs::prelude::*;
 use glam::Vec3;
 
 use crate::{
-    engine::{
-        input::InputState,
-        renderer::{Gpu, RenderContext, RenderTarget},
-        shader_cache::ShaderCache,
-        transform::Transform,
-    },
+    engine::{input::InputState, transform::Transform},
     game::{
-        assets::{images::Images, models::Models},
         math::BoundingBox,
-        scenes::world::{
-            extract,
-            render::{RenderBindings, RenderLayouts, RenderPipeline, WorldRenderer},
-            sim_world::{
-                DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle, ecs,
-                free_camera_controller, top_down_camera_controller,
-            },
-        },
+        scenes::world::sim_world::{DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle, ecs},
     },
 };
-
-use super::extract::*;
 
 mod camera;
 mod changed;
@@ -87,141 +70,128 @@ pub struct Systems {
 
     pub update_schedule: Schedule,
     pub extract_schedule: Schedule,
-
-    // pub camera_system: camera_system::CameraSystem,
-    pub world_renderer: WorldRenderer,
 }
 
-impl Systems {
-    pub fn new(
-        images: Arc<Images>,
-        models: Arc<Models>,
-        gpu: &Gpu,
-        target_format: wgpu::TextureFormat,
-        layouts: &mut RenderLayouts,
-        shader_cache: &mut ShaderCache,
-        sim_world: &mut World,
-    ) -> Self {
-        // Update schedule.
-        let update_schedule = {
-            use ecs::UpdateSet::*;
+// impl Systems {
+//     pub fn new(
+//         images: Arc<Images>,
+//         models: Arc<Models>,
+//         gpu: &Gpu,
+//         target_format: wgpu::TextureFormat,
+//         layouts: &mut RenderLayouts,
+//         shader_cache: &mut ShaderCache,
+//         sim_world: &mut World,
+//     ) -> Self {
+//         // Update schedule.
+//         let update_schedule = {
+//             use ecs::UpdateSet::*;
 
-            let mut schedule = Schedule::default();
+//             let mut schedule = Schedule::default();
 
-            schedule.configure_sets((Start, Input, Update, End).chain());
-            schedule.configure_sets(Update.run_if(should_run_simulation_update));
+//             schedule.configure_sets((Start, Input, Update, End).chain());
+//             schedule.configure_sets(Update.run_if(should_run_simulation_update));
 
-            // Start
-            schedule.add_systems(gizmos::clear_gizmo_vertices.in_set(Start));
+//             // Start
+//             schedule.add_systems(gizmos::clear_gizmo_vertices.in_set(Start));
 
-            // Input
-            schedule.add_systems(
-                (
-                    (
-                        top_down_camera_controller::input,
-                        free_camera_controller::input,
-                    ),
-                    camera::update_far_distance.run_if(changed::time_of_day_changed),
-                    camera::compute_cameras,
-                    world_interaction::input,
-                )
-                    .in_set(Input)
-                    .chain(),
-            );
+//             // Input
+//             schedule.add_systems(
+//                 (
+//                     (
+//                         top_down_camera_controller::input,
+//                         free_camera_controller::input,
+//                     ),
+//                     camera::update_far_distance.run_if(changed::time_of_day_changed),
+//                     camera::compute_cameras,
+//                     world_interaction::input,
+//                 )
+//                     .in_set(Input)
+//                     .chain(),
+//             );
 
-            // Update
-            schedule.add_systems(
-                (
-                    world_interaction::update,
-                    (
-                        orders::handle_order_requests,
-                        orders::update_orders_controller,
-                    )
-                        .chain(),
-                    sequences::update_motion_controllers,
-                    sequences::update_poses,
-                    rebuild_static_bvh.run_if(|q: Query<(), Added<ecs::BoundingBoxComponent>>| {
-                        q.iter().count() > 0
-                    }),
-                    update_dynamic_bvh,
-                    sequences::_debug_draw_root_motion,
-                    // debug::_draw_model_bounding_boxes,
-                )
-                    .in_set(Update)
-                    .chain(),
-            );
+//             // Update
+//             schedule.add_systems(
+//                 (
+//                     world_interaction::update,
+//                     (
+//                         orders::handle_order_requests,
+//                         orders::update_orders_controller,
+//                     )
+//                         .chain(),
+//                     sequences::update_motion_controllers,
+//                     sequences::update_poses,
+//                     rebuild_static_bvh.run_if(|q: Query<(), Added<ecs::BoundingBoxComponent>>| {
+//                         q.iter().count() > 0
+//                     }),
+//                     update_dynamic_bvh,
+//                     sequences::_debug_draw_root_motion,
+//                     // debug::_draw_model_bounding_boxes,
+//                 )
+//                     .in_set(Update)
+//                     .chain(),
+//             );
 
-            // End
-            schedule.add_systems(reset_input_state.in_set(End));
+//             // End
+//             schedule.add_systems(reset_input_state.in_set(End));
 
-            schedule
-        };
+//             schedule
+//         };
 
-        let extract_schedule = extract::create_extract_schedule();
+//         let extract_schedule = extract::create_extract_schedule();
 
-        Self {
-            sim_time: 0.0,
+//         Self {
+//             sim_time: 0.0,
 
-            update_schedule,
-            extract_schedule,
+//             update_schedule,
+//             extract_schedule,
+//         }
+//     }
 
-            world_renderer: WorldRenderer::new(
-                images,
-                models,
-                gpu,
-                target_format,
-                layouts,
-                shader_cache,
-                sim_world,
-            ),
-        }
-    }
+//     pub fn update(&mut self, sim_world: &mut World) {
+//         // TODO: What does self.sim_time actually do?
+//         self.sim_time = sim_world
+//             .resource::<Time>()
+//             .scene_start
+//             .elapsed()
+//             .as_secs_f32();
 
-    pub fn update(&mut self, sim_world: &mut World) {
-        // TODO: What does self.sim_time actually do?
-        self.sim_time = sim_world
-            .resource::<Time>()
-            .scene_start
-            .elapsed()
-            .as_secs_f32();
+//         self.update_schedule.run(sim_world);
+//     }
 
-        self.update_schedule.run(sim_world);
-    }
+//     pub fn extract(&mut self, sim_world: &mut World) {
+//         self.extract_schedule.run(sim_world);
+//     }
 
-    pub fn extract(&mut self, sim_world: &mut World) {
-        self.extract_schedule.run(sim_world);
-    }
+//     pub fn prepare(
+//         &mut self,
+//         bindings: &mut RenderBindings,
+//         gpu: &Gpu,
+//         render_snapshot: &RenderSnapshot,
+//     ) {
+//         // self.world_renderer.prepare(gpu, bindings, render_snapshot);
+//     }
 
-    pub fn prepare(
-        &mut self,
-        bindings: &mut RenderBindings,
-        gpu: &Gpu,
-        render_snapshot: &RenderSnapshot,
-    ) {
-        self.world_renderer.prepare(gpu, bindings, render_snapshot);
-    }
-
-    pub fn queue(
-        &mut self,
-        bindings: &RenderBindings,
-        snapshot: &RenderSnapshot,
-        render_context: &mut RenderContext,
-        render_target: &RenderTarget,
-    ) {
-        // clear_render_targets::clear_render_targets(
-        //     render_context,
-        //     &render_targets.geometry_buffer,
-        //     snapshot.environment.fog_color,
-        // );
-        // self.world_renderer.queue(
-        //     bindings,
-        //     render_context,
-        //     render_target,
-        //     &render_targets.geometry_buffer,
-        //     snapshot,
-        // );
-    }
-}
+//     pub fn queue(
+//         &mut self,
+//         bindings: &RenderBindings,
+//         snapshot: &RenderSnapshot,
+//         render_context: &mut RenderContext,
+//         render_target: &RenderTarget,
+//     ) {
+//         // clear_render_targets::clear_render_targets(
+//         //     render_context,
+//         //     &render_targets.geometry_buffer,
+//         //     snapshot.environment.fog_color,
+//         // );
+//         // self.world_renderer.queue(
+//         //     bindings,
+//         //     render_context,
+//         //     render_target,
+//         //     &render_targets.geometry_buffer,
+//         //     snapshot,
+//         // );
+//     }
+// }
 
 fn reset_input_state(mut input: ResMut<InputState>) {
     input.reset_per_frame();

@@ -5,12 +5,12 @@ use crate::{
     game::ui::{
         Rect,
         render::window_renderer::{WindowRenderItems, WindowRenderer},
-        widgets::widget::Widgets,
-        windows::window_manager::WindowManager,
+        widgets::{text_button::TextButtonWidget, widget::Widgets},
+        windows::{actions::WindowManagerAction, window_manager::WindowManager},
     },
 };
 
-use super::window::Window;
+use super::{window::Window, window_manager_context::WindowManagerContext};
 
 pub struct MainMenuWindow {
     rect: Rect,
@@ -23,8 +23,17 @@ impl MainMenuWindow {
         let window_base = window_manager.get_window_base("main_menu")?;
 
         let size = IVec2::new(window_base.render_dx, window_base.render_dy);
+        let size = size.max(IVec2::new(400, 300));
 
-        let widgets = Widgets::default();
+        let mut widgets = Widgets::default();
+
+        widgets.add(Box::new(
+            TextButtonWidget::new(
+                Rect::new(IVec2::new(10, 10), IVec2::new(100, 30)),
+                "Training",
+            )
+            .with_action(WindowManagerAction::StartCampaign(String::from("training"))),
+        ));
 
         Ok(Self {
             rect: Rect::from_size(size),
@@ -43,18 +52,35 @@ impl Window for MainMenuWindow {
     }
 
     fn hit_test(&self, position: IVec2) -> bool {
-        let bottom_right = self.rect.bottom_right();
-        position.x >= self.rect.position.x
-            && position.y >= self.rect.position.y
-            && position.x < bottom_right.x
-            && position.y < bottom_right.y
+        self.rect.contains(position)
     }
 
     fn rect(&self) -> Rect {
         self.rect
     }
 
-    fn render(&mut self, _window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems) {
+    fn on_primary_mouse_down(
+        &mut self,
+        position: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> crate::game::ui::EventResult {
+        println!("primary_mouse_down");
+        self.widgets.on_primary_mouse_down(position, context)
+    }
+
+    fn on_primary_mouse_up(
+        &mut self,
+        position: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> crate::game::ui::EventResult {
+        println!("primary_mouse_up");
+        self.widgets.on_primary_mouse_up(position, context)
+    }
+
+    fn render(&mut self, window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems) {
+        self.widgets
+            .render(self.rect.position, 100, window_renderer, render_items);
+
         render_items.render_border(
             self.rect.offset(IVec2::splat(10)),
             2,

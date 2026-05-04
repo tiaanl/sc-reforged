@@ -17,6 +17,7 @@ use crate::{
         },
         config::{CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
         file_system::FileSystem,
+        render::world::WorldRenderSnapshot,
         scenes::world::{
             sim_world::{
                 ecs::{ActiveCamera, GizmoVertices, Viewport},
@@ -60,6 +61,29 @@ pub use static_bvh::{StaticBvh, StaticBvhHandle};
 pub use terrain::Terrain;
 pub use ui::UiRect;
 
+pub struct SimWorld {
+    world: World,
+}
+
+impl SimWorld {
+    pub fn new(
+        file_system: Arc<FileSystem>,
+        assets: GameAssets,
+        campaign_def: &CampaignDef,
+    ) -> Self {
+        let mut world = World::default();
+
+        init_sim_world(file_system, &mut world, assets, campaign_def);
+
+        Self { world }
+    }
+
+    #[inline]
+    pub fn terrain(&self) -> &Terrain {
+        self.world.resource::<Terrain>()
+    }
+}
+
 #[derive(Resource)]
 pub struct SimWorldState {
     pub time_of_day: f32,
@@ -99,7 +123,7 @@ pub fn init_sim_world(
 
     world.init_resource::<WorldInteraction>();
 
-    world.init_resource::<super::extract::RenderSnapshot>();
+    world.init_resource::<WorldRenderSnapshot>();
 
     world.insert_resource(GizmoVertices::with_capacity(1024));
 

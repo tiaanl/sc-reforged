@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
@@ -12,7 +10,6 @@ use crate::{
         input::{InputEvent, InputState},
         renderer::{Gpu, RenderContext, RenderTarget},
         scene::Scene,
-        shader_cache::ShaderCache,
     },
     game::{
         assets::{
@@ -20,9 +17,7 @@ use crate::{
         },
         file_system::FileSystem,
         scenes::world::{
-            extract::RenderSnapshot,
             game_mode::GameMode,
-            render::{RenderBindings, RenderLayouts},
             sim_world::{Camera, GameAssets, ecs::Viewport, init_sim_world},
             systems::{SimulationControl, Time},
         },
@@ -32,7 +27,6 @@ use crate::{
 pub mod actions;
 mod extract;
 mod game_mode;
-mod render;
 pub mod sim_world;
 mod systems;
 
@@ -47,11 +41,10 @@ struct FrameTime {
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
     sim_world: World,
-    bindings: RenderBindings,
+    // bindings: RenderBindings,
 
     // Systems
-    systems: systems::Systems,
-
+    // systems: systems::Systems,
     /// A cache of the last surface size, set during resize and used during render.
     surface_size: UVec2,
 
@@ -73,9 +66,9 @@ pub struct WorldScene {
 impl WorldScene {
     pub fn new(
         file_system: Arc<FileSystem>,
-        gpu: &Gpu,
-        surface_size: UVec2,
-        target_format: wgpu::TextureFormat,
+        _gpu: &Gpu,
+        _surface_size: UVec2,
+        _target_format: wgpu::TextureFormat,
         campaign_def: &CampaignDef,
     ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
@@ -101,28 +94,26 @@ impl WorldScene {
             campaign_def,
         )?;
 
-        let mut layouts = RenderLayouts::new();
+        // let mut layouts = RenderLayouts::new();
 
-        let mut shader_cache = ShaderCache::default();
+        // let mut shader_cache = ShaderCache::default();
 
-        let bindings = RenderBindings::new(gpu, &mut layouts);
+        // let bindings = RenderBindings::new(gpu, &mut layouts);
 
-        let systems = systems::Systems::new(
-            Arc::clone(&images),
-            Arc::clone(&models),
-            gpu,
-            target_format,
-            &mut layouts,
-            &mut shader_cache,
-            &mut sim_world,
-        );
+        // let systems = systems::Systems::new(
+        //     Arc::clone(&images),
+        //     Arc::clone(&models),
+        //     gpu,
+        //     target_format,
+        //     &mut layouts,
+        //     &mut shader_cache,
+        //     &mut sim_world,
+        // );
 
         Ok(Self {
             sim_world,
-            bindings,
-
-            systems,
-
+            // bindings,
+            // systems,
             surface_size: UVec2::ZERO,
 
             game_mode: GameMode::Editor,
@@ -202,7 +193,7 @@ impl Scene for WorldScene {
             }
 
             let start = std::time::Instant::now();
-            self.systems.update(&mut self.sim_world);
+            // self.systems.update(&mut self.sim_world);
             frame_time.update = (std::time::Instant::now() - start).as_secs_f64();
         }
 
@@ -220,9 +211,9 @@ impl Scene for WorldScene {
 
     fn render(
         &mut self,
-        gpu: &Gpu,
-        render_context: &mut RenderContext,
-        render_target: &RenderTarget,
+        _gpu: &Gpu,
+        _render_context: &mut RenderContext,
+        _render_target: &RenderTarget,
     ) {
         // if self.render_targets.surface_size != self.surface_size {
         //     self.render_targets.resize(gpu, self.surface_size);
@@ -235,7 +226,7 @@ impl Scene for WorldScene {
             // Extract
             {
                 let start = std::time::Instant::now();
-                self.systems.extract(&mut self.sim_world);
+                // self.systems.extract(&mut self.sim_world);
                 frame_time.extract = (std::time::Instant::now() - start).as_secs_f64();
             }
 
@@ -249,22 +240,22 @@ impl Scene for WorldScene {
                 // }
 
                 let start = std::time::Instant::now();
-                let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
-                self.systems
-                    .prepare(&mut self.bindings, gpu, render_snapshot);
+                // let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
+                // self.systems
+                // .prepare(&mut self.bindings, gpu, render_snapshot);
                 frame_time.prepare = (std::time::Instant::now() - start).as_secs_f64();
             }
 
             // Queue
             {
                 let start = std::time::Instant::now();
-                let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
-                self.systems.queue(
-                    &self.bindings,
-                    render_snapshot,
-                    render_context,
-                    render_target,
-                );
+                // let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
+                // self.systems.queue(
+                //     &self.bindings,
+                //     render_snapshot,
+                //     render_context,
+                //     render_target,
+                // );
                 frame_time.queue = (std::time::Instant::now() - start).as_secs_f64();
             }
 
@@ -276,7 +267,7 @@ impl Scene for WorldScene {
     }
 
     #[cfg(feature = "egui")]
-    fn debug_panel(&mut self, ctx: &egui::Context, frame_index: u64) {
+    fn debug_panel(&mut self, ctx: &egui::Context, _frame_index: u64) {
         use egui::widgets::Slider;
 
         if !self.in_editor() {
@@ -380,12 +371,12 @@ impl Scene for WorldScene {
 
                 // Terrain
                 {
-                    let mut render_snapshot = self.sim_world.resource_mut::<RenderSnapshot>();
-                    ui.heading("Terrain");
-                    ui.checkbox(
-                        &mut render_snapshot.terrain.render_wireframe,
-                        "Render terrain wireframe",
-                    );
+                    // let mut render_snapshot = self.sim_world.resource_mut::<RenderSnapshot>();
+                    // ui.heading("Terrain");
+                    // ui.checkbox(
+                    //     &mut render_snapshot.terrain.render_wireframe,
+                    //     "Render terrain wireframe",
+                    // );
                 }
             });
 
@@ -449,30 +440,30 @@ impl Scene for WorldScene {
                 )
             });
 
-        egui::Window::new("Stats").show(ctx, |ui| {
-            let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
+        // egui::Window::new("Stats").show(ctx, |ui| {
+        //     let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
 
-            ui.horizontal(|ui| {
-                ui.label("Frame index");
-                ui.label(format!("{frame_index}"));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Visible chunks");
-                ui.label(format!("{}", render_snapshot.terrain.chunks.len()));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Visible strata");
-                ui.label(format!("{}", render_snapshot.terrain.strata.len()));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Visible objects");
-                ui.label(format!("{}", render_snapshot.models.models.len()));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Gizmo vertices");
-                ui.label(format!("{}", render_snapshot.gizmos.vertices.len()));
-            });
-        });
+        //     ui.horizontal(|ui| {
+        //         ui.label("Frame index");
+        //         ui.label(format!("{frame_index}"));
+        //     });
+        //     ui.horizontal(|ui| {
+        //         ui.label("Visible chunks");
+        //         ui.label(format!("{}", render_snapshot.terrain.chunks.len()));
+        //     });
+        //     ui.horizontal(|ui| {
+        //         ui.label("Visible strata");
+        //         ui.label(format!("{}", render_snapshot.terrain.strata.len()));
+        //     });
+        //     ui.horizontal(|ui| {
+        //         ui.label("Visible objects");
+        //         ui.label(format!("{}", render_snapshot.models.models.len()));
+        //     });
+        //     ui.horizontal(|ui| {
+        //         ui.label("Gizmo vertices");
+        //         ui.label(format!("{}", render_snapshot.gizmos.vertices.len()));
+        //     });
+        // });
 
         {
             let world_interaction = self

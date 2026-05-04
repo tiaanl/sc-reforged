@@ -5,14 +5,13 @@ use crate::{
         renderer::{Gpu, RenderContext, RenderTarget},
         shader_cache::{ShaderCache, ShaderSource},
     },
-    game::{
-        render::geometry_buffer::GeometryBuffer,
-        scenes::world::{
-            extract::RenderSnapshot,
-            render::{
-                RenderBindings, RenderLayouts, camera_render_pipeline::CameraEnvironmentLayout,
-                per_frame::PerFrame, render_pipeline::RenderPipeline,
-            },
+    game::render::{
+        geometry_buffer::GeometryBuffer,
+        per_frame::PerFrame,
+        world::{
+            camera_render_pipeline::CameraEnvironmentLayout, render_bindings::RenderBindings,
+            render_layouts::RenderLayouts, render_pipeline::RenderPipeline,
+            world_render_snapshot::WorldRenderSnapshot,
         },
     },
 };
@@ -24,19 +23,14 @@ pub struct GizmoRenderPipeline {
 }
 
 impl GizmoRenderPipeline {
-    pub fn new(
-        gpu: &Gpu,
-        surface_format: wgpu::TextureFormat,
-        layouts: &mut RenderLayouts,
-        shader_cache: &mut ShaderCache,
-    ) -> Self {
+    pub fn new(gpu: &Gpu, layouts: &mut RenderLayouts, shader_cache: &mut ShaderCache) -> Self {
         let device = &gpu.device;
 
         let module = shader_cache.get_or_create(&gpu.device, ShaderSource::Gizmos);
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("gizmos_pipeline_layout"),
-            bind_group_layouts: &[layouts.get::<CameraEnvironmentLayout>(gpu)],
+            bind_group_layouts: &[layouts.get::<CameraEnvironmentLayout>()],
             push_constant_ranges: &[],
         });
 
@@ -66,11 +60,7 @@ impl GizmoRenderPipeline {
                 module,
                 entry_point: Some("fragment_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
+                targets: GeometryBuffer::opaque_targets(),
             }),
             multiview: None,
             cache: None,
@@ -93,7 +83,12 @@ impl GizmoRenderPipeline {
 }
 
 impl RenderPipeline for GizmoRenderPipeline {
-    fn prepare(&mut self, gpu: &Gpu, _bindings: &mut RenderBindings, snapshot: &RenderSnapshot) {
+    fn prepare(
+        &mut self,
+        gpu: &Gpu,
+        _bindings: &mut RenderBindings,
+        snapshot: &WorldRenderSnapshot,
+    ) {
         let instances = self.instances_buffer.advance();
         instances.write(gpu, &snapshot.gizmos.vertices);
     }
@@ -103,8 +98,8 @@ impl RenderPipeline for GizmoRenderPipeline {
         bindings: &RenderBindings,
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
-        geometry_buffer: &GeometryBuffer,
-        snapshot: &RenderSnapshot,
+        _geometry_buffer: &GeometryBuffer,
+        snapshot: &WorldRenderSnapshot,
     ) {
         let mut render_pass =
             render_context

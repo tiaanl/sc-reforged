@@ -4,6 +4,7 @@ use crate::game::ui::{
     EventResult, Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
     u32_to_color,
+    windows::window_manager_context::WindowManagerContext,
 };
 
 use super::widget::Widget;
@@ -99,7 +100,11 @@ impl Widget for ListBoxWidget {
         self.rect
     }
 
-    fn on_primary_mouse_down(&mut self, _mouse_position: IVec2) -> EventResult {
+    fn on_primary_mouse_down(
+        &mut self,
+        _mouse_position: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         /*
         int item_top = 0;
         int local_y = (mouse_y - widget.rect.top) + m_scroll_offset_y;
@@ -186,7 +191,11 @@ impl Widget for ListBoxWidget {
         EventResult::Handled
     }
 
-    fn on_primary_mouse_up(&mut self, _mouse_position: IVec2) -> EventResult {
+    fn on_primary_mouse_up(
+        &mut self,
+        _mouse_position: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         /*
         if (m_selected_item != NULL && !m_input_disabled) {
             m_selected_item->On_Primary_Mouse_Up();
@@ -198,7 +207,11 @@ impl Widget for ListBoxWidget {
         EventResult::Handled
     }
 
-    fn on_mouse_wheel(&mut self, wheel_steps: i32) -> EventResult {
+    fn on_mouse_wheel(
+        &mut self,
+        wheel_steps: i32,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         if self.mouse_wheel_disabled || self.items.is_empty() {
             return EventResult::Ignore;
         }

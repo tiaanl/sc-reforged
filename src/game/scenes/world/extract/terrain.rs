@@ -2,15 +2,13 @@ use ahash::HashMap;
 use bevy_ecs::prelude::*;
 use glam::IVec2;
 
-use crate::game::scenes::world::{
-    extract::TerrainChunk,
-    sim_world::{ComputedCamera, SimWorldState, Terrain, ecs::ActiveCamera},
+use crate::game::{
+    render::world::{Camera, TerrainChunk, WorldRenderSnapshot},
+    scenes::world::sim_world::{ComputedCamera, SimWorldState, Terrain, ecs::ActiveCamera},
 };
 
-use super::RenderSnapshot;
-
 pub fn extract_terrain_snapshot(
-    mut snapshot: ResMut<RenderSnapshot>,
+    mut snapshot: ResMut<WorldRenderSnapshot>,
     computed_camera: Single<&ComputedCamera, With<ActiveCamera>>,
     terrain: Res<Terrain>,
     state: Res<SimWorldState>,
@@ -24,7 +22,7 @@ pub fn extract_terrain_snapshot(
     snapshot.terrain.strata.clear();
     snapshot.terrain.strata_side_count = [0; 4];
 
-    let super::Camera {
+    let Camera {
         position,
         forward,
         far,

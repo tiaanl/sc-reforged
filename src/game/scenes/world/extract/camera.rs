@@ -1,14 +1,15 @@
 use bevy_ecs::prelude::*;
 
-use crate::game::scenes::world::sim_world::{ComputedCamera, ecs::ActiveCamera};
-
-use super::RenderSnapshot;
+use crate::game::{
+    render::world::{Camera, WorldRenderSnapshot},
+    scenes::world::sim_world::{ComputedCamera, ecs::ActiveCamera},
+};
 
 pub fn extract_camera(
-    mut snapshot: ResMut<RenderSnapshot>,
+    mut snapshot: ResMut<WorldRenderSnapshot>,
     camera: Single<&ComputedCamera, With<ActiveCamera>>,
 ) {
-    snapshot.camera = super::render_snapshot::Camera {
+    snapshot.camera = Camera {
         position: camera.position,
         forward: camera.forward,
         _near: camera.near,

@@ -8,15 +8,18 @@ use crate::{
     },
     game::{
         assets::images::Images,
-        render::geometry_buffer::GeometryBuffer,
-        scenes::world::{
-            extract::{RenderSnapshot, TerrainChunk},
-            render::{
-                RenderBindings, RenderLayouts, camera_render_pipeline::CameraEnvironmentLayout,
-                per_frame::PerFrame, render_pipeline::RenderPipeline,
+        render::{
+            geometry_buffer::GeometryBuffer,
+            per_frame::PerFrame,
+            world::{
+                camera_render_pipeline::CameraEnvironmentLayout,
+                render_bindings::RenderBindings,
+                render_layouts::RenderLayouts,
+                render_pipeline::RenderPipeline,
+                world_render_snapshot::{TerrainChunk, WorldRenderSnapshot},
             },
-            sim_world::Terrain,
         },
+        scenes::world::sim_world::Terrain,
     },
 };
 
@@ -51,9 +54,8 @@ impl TerrainRenderPipeline {
         gpu: &Gpu,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
-        sim_world: &bevy_ecs::world::World,
+        terrain: &Terrain,
     ) -> Self {
-        let terrain = sim_world.resource::<Terrain>();
         let height_map = &terrain.height_map;
 
         let cells_dim = height_map.size;
@@ -244,7 +246,7 @@ impl TerrainRenderPipeline {
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain_pipeline_layout"),
                 bind_group_layouts: &[
-                    layouts.get::<CameraEnvironmentLayout>(gpu),
+                    layouts.get::<CameraEnvironmentLayout>(),
                     &terrain_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
@@ -396,7 +398,12 @@ impl TerrainRenderPipeline {
 }
 
 impl RenderPipeline for TerrainRenderPipeline {
-    fn prepare(&mut self, gpu: &Gpu, _bindings: &mut RenderBindings, snapshot: &RenderSnapshot) {
+    fn prepare(
+        &mut self,
+        gpu: &Gpu,
+        _bindings: &mut RenderBindings,
+        snapshot: &WorldRenderSnapshot,
+    ) {
         let chunk_instances: Vec<_> = snapshot
             .terrain
             .chunks
@@ -428,11 +435,11 @@ impl RenderPipeline for TerrainRenderPipeline {
 
     fn queue(
         &self,
-        bindings: &RenderBindings,
+        render_bindings: &RenderBindings,
         render_context: &mut RenderContext,
         _render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
-        snapshot: &RenderSnapshot,
+        snapshot: &WorldRenderSnapshot,
     ) {
         let mut render_pass = geometry_buffer
             .begin_opaque_render_pass(&mut render_context.encoder, "terrain_render_pass");
@@ -441,7 +448,11 @@ impl RenderPipeline for TerrainRenderPipeline {
         {
             render_pass.set_pipeline(&self.strata_pipeline);
             render_pass.set_vertex_buffer(0, self.strata_instances_buffer.current().slice(..));
-            render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
+            render_pass.set_bind_group(
+                0,
+                &render_bindings.camera_env_buffer.current().bind_group,
+                &[],
+            );
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             for (i, strata_instance) in snapshot.terrain.strata.iter().enumerate() {
@@ -470,7 +481,11 @@ impl RenderPipeline for TerrainRenderPipeline {
                 self.chunk_indices_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
+            render_pass.set_bind_group(
+                0,
+                &render_bindings.camera_env_buffer.current().bind_group,
+                &[],
+            );
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             let draw_commands =
@@ -492,7 +507,11 @@ impl RenderPipeline for TerrainRenderPipeline {
                 self.chunk_wireframe_indices_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
-            render_pass.set_bind_group(0, &bindings.camera_env_buffer.current().bind_group, &[]);
+            render_pass.set_bind_group(
+                0,
+                &render_bindings.camera_env_buffer.current().bind_group,
+                &[],
+            );
             render_pass.set_bind_group(1, &self.terrain_bind_group, &[]);
 
             let draw_commands =

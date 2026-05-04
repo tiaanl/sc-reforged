@@ -8,21 +8,24 @@ pub trait RenderLayout {
 }
 
 pub struct RenderLayouts {
+    gpu: Gpu,
     layouts: HashMap<std::any::TypeId, wgpu::BindGroupLayout>,
 }
 
 impl RenderLayouts {
-    pub fn new() -> Self {
+    pub fn new(gpu: Gpu) -> Self {
         Self {
+            gpu,
             layouts: HashMap::default(),
         }
     }
 
-    pub fn get<L: RenderLayout + 'static>(&mut self, gpu: &Gpu) -> &wgpu::BindGroupLayout {
+    pub fn get<L: RenderLayout + 'static>(&mut self) -> &wgpu::BindGroupLayout {
         let id = std::any::TypeId::of::<L>();
 
         self.layouts.entry(id).or_insert_with(|| {
-            gpu.device
+            self.gpu
+                .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some(L::label()),
                     entries: L::entries(),

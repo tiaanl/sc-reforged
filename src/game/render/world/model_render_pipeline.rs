@@ -13,20 +13,19 @@ use crate::{
         assets::{model::Model, models::Models},
         render::{
             geometry_buffer::GeometryBuffer,
+            per_frame::PerFrame,
             textures::{Texture, Textures},
-        },
-        scenes::world::{
-            extract::RenderSnapshot,
-            render::{
-                RenderBindings, RenderLayouts, RenderVertex,
-                camera_render_pipeline::CameraEnvironmentLayout, model_render_pipeline,
-                per_frame::PerFrame, render_models::RenderMesh, render_pipeline::RenderPipeline,
+            world::{
+                WorldRenderSnapshot,
+                camera_render_pipeline::CameraEnvironmentLayout,
+                render_bindings::RenderBindings,
+                render_layouts::RenderLayouts,
+                render_models::{RenderMesh, RenderModel, RenderModels, RenderVertex},
+                render_pipeline::RenderPipeline,
             },
         },
     },
 };
-
-use super::render_models::RenderModels;
 
 bitflags::bitflags! {
     #[derive(Clone, Copy)]
@@ -148,7 +147,7 @@ impl ModelRenderPipeline {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("models_pipeline_layout"),
             bind_group_layouts: &[
-                layouts.get::<CameraEnvironmentLayout>(gpu),
+                layouts.get::<CameraEnvironmentLayout>(),
                 &texture_bind_group_layout,
                 &models.nodes_bind_group_layout,
                 &poses_bind_group_layout,
@@ -168,8 +167,9 @@ impl ModelRenderPipeline {
                 ],
             },
             wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<model_render_pipeline::gpu::ModelInstanceData>()
-                    as wgpu::BufferAddress,
+                array_stride: std::mem::size_of::<
+                    super::model_render_pipeline::gpu::ModelInstanceData,
+                >() as wgpu::BufferAddress,
                 step_mode: wgpu::VertexStepMode::Instance,
                 attributes: &wgpu::vertex_attr_array![
                     4 => Float32x4,  // model_mat_0
@@ -383,7 +383,12 @@ impl ModelRenderPipeline {
 }
 
 impl RenderPipeline for ModelRenderPipeline {
-    fn prepare(&mut self, gpu: &Gpu, _bindings: &mut RenderBindings, snapshot: &RenderSnapshot) {
+    fn prepare(
+        &mut self,
+        gpu: &Gpu,
+        _bindings: &mut RenderBindings,
+        snapshot: &WorldRenderSnapshot,
+    ) {
         let snapshot_models = &snapshot.models.models;
 
         // Sort by model handle so instances of the same model end up contiguous.
@@ -476,7 +481,7 @@ impl RenderPipeline for ModelRenderPipeline {
         render_context: &mut RenderContext,
         _render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
-        _snapshot: &RenderSnapshot,
+        _snapshot: &WorldRenderSnapshot,
     ) {
         self.opaque_render_pass(&mut render_context.encoder, geometry_buffer, bindings);
         self.alpha_render_pass(&mut render_context.encoder, geometry_buffer, bindings);
@@ -511,7 +516,7 @@ impl ModelRenderPipeline {
         pipeline: &wgpu::RenderPipeline,
         select_meshes: F,
     ) where
-        F: Fn(&super::render_models::RenderModel) -> &[RenderMesh],
+        F: Fn(&RenderModel) -> &[RenderMesh],
     {
         render_pass.set_pipeline(pipeline);
         for batch in self.batches.iter() {

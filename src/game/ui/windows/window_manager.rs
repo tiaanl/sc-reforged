@@ -36,7 +36,7 @@ pub struct WindowManager {
     window_renderer: WindowRenderer,
     window_render_items_cache: WindowRenderItems,
 
-    window_manager_context: WindowManagerContext,
+    pub window_manager_context: WindowManagerContext,
 
     /// The stack of windows. In bottom-to-top z-index order.
     windows: Vec<Box<dyn Window>>,
@@ -106,6 +106,11 @@ impl WindowManager {
         Ok(def)
     }
 
+    /// Clear all windows.
+    pub fn clear(&mut self) {
+        self.windows.clear();
+    }
+
     /// Push a new window to the top of the stack.
     pub fn push(&mut self, window: Box<dyn Window>) {
         let is_modal = window.is_modal();
@@ -155,10 +160,13 @@ impl WindowManager {
             InputEvent::MouseLeave => {
                 self.mouse_position = None;
             }
-            InputEvent::MouseDown(button) => self.dispatch_mouse_down(button),
+            InputEvent::MouseDown(button) => {
+                //
+                self.dispatch_mouse_down(button)
+            }
             InputEvent::MouseUp(button) => self.dispatch_mouse_up(button),
-            InputEvent::KeyDown(_key) => todo!(),
-            InputEvent::KeyUp(_key) => todo!(),
+            InputEvent::KeyDown(_key) => {}
+            InputEvent::KeyUp(_key) => {}
             InputEvent::MouseWheel(delta) => self.dispatch_mouse_wheel(delta as i32),
         }
     }
@@ -244,6 +252,8 @@ impl WindowManager {
         }
 
         let local = mouse - window.rect().position;
+
+        println!("local: {local}");
 
         match button {
             MouseButton::Left => window.on_primary_mouse_down(local, context),

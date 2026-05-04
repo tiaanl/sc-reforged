@@ -4,8 +4,8 @@ use crate::{
     engine::{storage::Handle, transform::Transform},
     game::{
         assets::model::Model,
+        render::world::{ModelToRender, WorldRenderSnapshot},
         scenes::world::{
-            extract::{ModelToRender, RenderSnapshot},
             sim_world::{
                 ComputedCamera, DynamicBvh, StaticBvh, ecs::ActiveCamera, sequences::Pose,
             },
@@ -15,7 +15,7 @@ use crate::{
 };
 
 pub fn extract_model_snapshot(
-    mut snapshot: ResMut<RenderSnapshot>,
+    mut snapshot: ResMut<WorldRenderSnapshot>,
     models: Query<(Entity, &Transform, &Handle<Model>, Option<&Pose>)>,
     static_bvh: Res<StaticBvh>,
     dynamic_bvh: Res<DynamicBvh>,

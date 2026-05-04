@@ -1,14 +1,14 @@
 use crate::{
     engine::renderer::{Gpu, RenderContext, RenderTarget},
-    game::{
-        render::geometry_buffer::GeometryBuffer,
-        scenes::world::{extract::RenderSnapshot, render::RenderBindings},
+    game::render::{
+        geometry_buffer::GeometryBuffer,
+        world::{render_bindings::RenderBindings, world_render_snapshot::WorldRenderSnapshot},
     },
 };
 
 pub trait RenderPipeline {
     /// Prepare GPU resources that will be used when queueing commands to the GPU.
-    fn prepare(&mut self, gpu: &Gpu, bindings: &mut RenderBindings, snapshot: &RenderSnapshot);
+    fn prepare(&mut self, gpu: &Gpu, bindings: &mut RenderBindings, snapshot: &WorldRenderSnapshot);
 
     /// Queue draw commands to the GPU.
     fn queue(
@@ -17,7 +17,7 @@ pub trait RenderPipeline {
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
-        snapshot: &RenderSnapshot,
+        snapshot: &WorldRenderSnapshot,
     );
 }
 
@@ -33,7 +33,12 @@ impl RenderPipelineList {
 }
 
 impl RenderPipeline for RenderPipelineList {
-    fn prepare(&mut self, gpu: &Gpu, bindings: &mut RenderBindings, snapshot: &RenderSnapshot) {
+    fn prepare(
+        &mut self,
+        gpu: &Gpu,
+        bindings: &mut RenderBindings,
+        snapshot: &WorldRenderSnapshot,
+    ) {
         for pipeline in self.pipelines.iter_mut() {
             pipeline.prepare(gpu, bindings, snapshot);
         }
@@ -45,7 +50,7 @@ impl RenderPipeline for RenderPipelineList {
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
-        snapshot: &RenderSnapshot,
+        snapshot: &WorldRenderSnapshot,
     ) {
         for pipeline in self.pipelines.iter() {
             pipeline.queue(
