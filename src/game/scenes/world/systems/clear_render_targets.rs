@@ -1,8 +1,6 @@
 use glam::Vec3;
 
-use crate::engine::renderer::RenderContext;
-
-use super::super::render::GeometryBuffer;
+use crate::{engine::renderer::RenderContext, game::render::geometry_buffer::GeometryBuffer};
 
 pub fn clear_render_targets(
     render_context: &mut RenderContext,

@@ -22,7 +22,7 @@ use crate::{
         scenes::world::{
             extract::RenderSnapshot,
             game_mode::GameMode,
-            render::{RenderBindings, RenderLayouts, RenderTargets},
+            render::{RenderBindings, RenderLayouts},
             sim_world::{Camera, GameAssets, ecs::Viewport, init_sim_world},
             systems::{SimulationControl, Time},
         },
@@ -47,8 +47,6 @@ struct FrameTime {
 /// The [Scene] that renders the ingame world view.
 pub struct WorldScene {
     sim_world: World,
-    render_targets: RenderTargets,
-    // shader_cache: ShaderCache,
     bindings: RenderBindings,
 
     // Systems
@@ -77,7 +75,7 @@ impl WorldScene {
         file_system: Arc<FileSystem>,
         gpu: &Gpu,
         surface_size: UVec2,
-        surface_format: wgpu::TextureFormat,
+        target_format: wgpu::TextureFormat,
         campaign_def: &CampaignDef,
     ) -> Result<Self, AssetError> {
         tracing::info!("Loading campaign \"{}\"...", campaign_def.title);
@@ -103,8 +101,6 @@ impl WorldScene {
             campaign_def,
         )?;
 
-        let render_targets = RenderTargets::new(gpu, surface_size, surface_format);
-
         let mut layouts = RenderLayouts::new();
 
         let mut shader_cache = ShaderCache::default();
@@ -115,7 +111,7 @@ impl WorldScene {
             Arc::clone(&images),
             Arc::clone(&models),
             gpu,
-            &render_targets,
+            target_format,
             &mut layouts,
             &mut shader_cache,
             &mut sim_world,
@@ -123,7 +119,6 @@ impl WorldScene {
 
         Ok(Self {
             sim_world,
-            render_targets,
             bindings,
 
             systems,
@@ -229,9 +224,9 @@ impl Scene for WorldScene {
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
     ) {
-        if self.render_targets.surface_size != self.surface_size {
-            self.render_targets.resize(gpu, self.surface_size);
-        }
+        // if self.render_targets.surface_size != self.surface_size {
+        //     self.render_targets.resize(gpu, self.surface_size);
+        // }
 
         let frame_time = &mut self.fps_history[self.fps_history_cursor];
 
@@ -247,11 +242,11 @@ impl Scene for WorldScene {
             // Prepare
             {
                 // Make sure the geometry buffer is the correct size.
-                if render_target.size != self.render_targets.geometry_buffer.size {
-                    self.render_targets
-                        .geometry_buffer
-                        .resize(&gpu.device, render_target.size);
-                }
+                // if render_target.size != self.render_targets.geometry_buffer.size {
+                //     self.render_targets
+                //         .geometry_buffer
+                //         .resize(&gpu.device, render_target.size);
+                // }
 
                 let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
@@ -265,7 +260,6 @@ impl Scene for WorldScene {
                 let start = std::time::Instant::now();
                 let render_snapshot = self.sim_world.resource::<RenderSnapshot>();
                 self.systems.queue(
-                    &self.render_targets,
                     &self.bindings,
                     render_snapshot,
                     render_context,

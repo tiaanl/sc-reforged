@@ -7,11 +7,11 @@ use crate::{
     },
     game::{
         assets::{images::Images, models::Models},
-        render::textures::Textures,
+        render::{compositor::Compositor, geometry_buffer::GeometryBuffer, textures::Textures},
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                Compositor, GeometryBuffer, GizmoRenderPipeline, RenderTargets,
+                GizmoRenderPipeline,
                 camera_render_pipeline::CameraRenderPipeline,
                 render_pipeline::{RenderPipeline, RenderPipelineList},
                 ui_render_pipeline::UiRenderPipeline,
@@ -34,7 +34,7 @@ impl WorldRenderer {
         images: Arc<Images>,
         models: Arc<Models>,
         gpu: &Gpu,
-        render_targets: &RenderTargets,
+        target_format: wgpu::TextureFormat,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
         sim_world: &bevy_ecs::world::World,
@@ -62,16 +62,9 @@ impl WorldRenderer {
             Arc::clone(&textures),
             Arc::clone(&models),
         ));
-        pipelines.push(UiRenderPipeline::new(
-            gpu,
-            render_targets.surface_format,
-            layouts,
-            shader_cache,
-        ));
-        pipelines.push(Compositor::new(gpu, render_targets, shader_cache));
         pipelines.push(GizmoRenderPipeline::new(
             gpu,
-            render_targets.surface_format,
+            target_format,
             layouts,
             shader_cache,
         ));

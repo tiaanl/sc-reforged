@@ -15,7 +15,7 @@ use crate::{
         math::BoundingBox,
         scenes::world::{
             extract,
-            render::{RenderBindings, RenderLayouts, RenderPipeline, RenderTargets, WorldRenderer},
+            render::{RenderBindings, RenderLayouts, RenderPipeline, WorldRenderer},
             sim_world::{
                 DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle, ecs,
                 free_camera_controller, top_down_camera_controller,
@@ -97,7 +97,7 @@ impl Systems {
         images: Arc<Images>,
         models: Arc<Models>,
         gpu: &Gpu,
-        render_targets: &RenderTargets,
+        target_format: wgpu::TextureFormat,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
         sim_world: &mut World,
@@ -169,7 +169,7 @@ impl Systems {
                 images,
                 models,
                 gpu,
-                render_targets,
+                target_format,
                 layouts,
                 shader_cache,
                 sim_world,
@@ -203,24 +203,23 @@ impl Systems {
 
     pub fn queue(
         &mut self,
-        render_targets: &RenderTargets,
         bindings: &RenderBindings,
         snapshot: &RenderSnapshot,
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
     ) {
-        clear_render_targets::clear_render_targets(
-            render_context,
-            &render_targets.geometry_buffer,
-            snapshot.environment.fog_color,
-        );
-        self.world_renderer.queue(
-            bindings,
-            render_context,
-            render_target,
-            &render_targets.geometry_buffer,
-            snapshot,
-        );
+        // clear_render_targets::clear_render_targets(
+        //     render_context,
+        //     &render_targets.geometry_buffer,
+        //     snapshot.environment.fog_color,
+        // );
+        // self.world_renderer.queue(
+        //     bindings,
+        //     render_context,
+        //     render_target,
+        //     &render_targets.geometry_buffer,
+        //     snapshot,
+        // );
     }
 }
 

@@ -1,12 +1,15 @@
 use crate::{
     engine::renderer::{RenderContext, RenderTarget},
-    game::scenes::world::{
-        extract::RenderSnapshot,
-        render::{RenderPipeline, render_layouts::RenderLayout},
+    game::{
+        render::geometry_buffer::GeometryBuffer,
+        scenes::world::{
+            extract::RenderSnapshot,
+            render::{RenderPipeline, render_layouts::RenderLayout},
+        },
     },
 };
 
-use super::{GeometryBuffer, RenderBindings};
+use super::RenderBindings;
 
 pub struct CameraEnvironmentLayout;
 

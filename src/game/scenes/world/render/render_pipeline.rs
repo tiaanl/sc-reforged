@@ -1,8 +1,8 @@
 use crate::{
     engine::renderer::{Gpu, RenderContext, RenderTarget},
-    game::scenes::world::{
-        extract::RenderSnapshot,
-        render::{GeometryBuffer, RenderBindings},
+    game::{
+        render::geometry_buffer::GeometryBuffer,
+        scenes::world::{extract::RenderSnapshot, render::RenderBindings},
     },
 };
 

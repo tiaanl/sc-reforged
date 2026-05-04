@@ -8,12 +8,12 @@ use crate::{
     },
     game::{
         assets::images::Images,
+        render::geometry_buffer::GeometryBuffer,
         scenes::world::{
             extract::{RenderSnapshot, TerrainChunk},
             render::{
-                GeometryBuffer, RenderBindings, RenderLayouts,
-                camera_render_pipeline::CameraEnvironmentLayout, per_frame::PerFrame,
-                render_pipeline::RenderPipeline,
+                RenderBindings, RenderLayouts, camera_render_pipeline::CameraEnvironmentLayout,
+                per_frame::PerFrame, render_pipeline::RenderPipeline,
             },
             sim_world::Terrain,
         },

@@ -5,12 +5,14 @@ use crate::{
         renderer::{Gpu, RenderContext, RenderTarget},
         shader_cache::{ShaderCache, ShaderSource},
     },
-    game::scenes::world::{
-        extract::RenderSnapshot,
-        render::{
-            GeometryBuffer, RenderBindings, RenderLayouts,
-            camera_render_pipeline::CameraEnvironmentLayout, per_frame::PerFrame,
-            render_pipeline::RenderPipeline,
+    game::{
+        render::geometry_buffer::GeometryBuffer,
+        scenes::world::{
+            extract::RenderSnapshot,
+            render::{
+                RenderBindings, RenderLayouts, camera_render_pipeline::CameraEnvironmentLayout,
+                per_frame::PerFrame, render_pipeline::RenderPipeline,
+            },
         },
     },
 };
@@ -101,7 +103,7 @@ impl RenderPipeline for GizmoRenderPipeline {
         bindings: &RenderBindings,
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
-        _geometry_buffer: &GeometryBuffer,
+        geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,
     ) {
         let mut render_pass =

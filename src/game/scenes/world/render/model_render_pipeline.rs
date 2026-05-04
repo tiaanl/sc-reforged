@@ -11,11 +11,14 @@ use crate::{
     },
     game::{
         assets::{model::Model, models::Models},
-        render::textures::{Texture, Textures},
+        render::{
+            geometry_buffer::GeometryBuffer,
+            textures::{Texture, Textures},
+        },
         scenes::world::{
             extract::RenderSnapshot,
             render::{
-                GeometryBuffer, RenderBindings, RenderLayouts, RenderVertex,
+                RenderBindings, RenderLayouts, RenderVertex,
                 camera_render_pipeline::CameraEnvironmentLayout, model_render_pipeline,
                 per_frame::PerFrame, render_models::RenderMesh, render_pipeline::RenderPipeline,
             },

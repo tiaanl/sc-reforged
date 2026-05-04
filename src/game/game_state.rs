@@ -13,7 +13,10 @@ use crate::{
         config::{help_window_defs::HelpWindowDefs, load_config},
         file_system::FileSystem,
         render::textures::Textures,
-        ui::windows::{help::HelpWindow, main_menu::MainMenuWindow, window_manager::WindowManager},
+        ui::windows::{
+            help::HelpWindow, main_menu::MainMenuWindow, window_manager::WindowManager,
+            world::WorldWindow,
+        },
     },
 };
 
@@ -34,14 +37,20 @@ impl GameState {
 
         let mut window_manager = WindowManager::new(
             Arc::clone(&file_system),
-            gpu,
+            gpu.clone(),
             surface_desc,
             textures,
             sprites,
         )?;
 
-        let main_menu_window = Box::new(MainMenuWindow::new(&window_manager)?);
-        window_manager.push(main_menu_window);
+        if false {
+            let main_menu_window = Box::new(MainMenuWindow::new(&window_manager)?);
+            window_manager.push(main_menu_window);
+        }
+
+        // For testing lets add a world window.
+        let world_window = Box::new(WorldWindow::new(gpu, surface_desc.size)?);
+        window_manager.push(world_window);
 
         {
             let help_window_defs: HelpWindowDefs = load_config(

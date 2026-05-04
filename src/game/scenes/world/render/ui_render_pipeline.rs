@@ -4,11 +4,14 @@ use crate::{
         renderer::{Gpu, RenderContext, RenderTarget},
         shader_cache::{ShaderCache, ShaderSource},
     },
-    game::scenes::world::{
-        extract::RenderSnapshot,
-        render::{
-            RenderBindings, RenderLayouts, per_frame::PerFrame, render_layouts::RenderLayout,
-            render_pipeline::RenderPipeline, ui_render_pipeline, uniform_buffer::UniformBuffer,
+    game::{
+        render::geometry_buffer::GeometryBuffer,
+        scenes::world::{
+            extract::RenderSnapshot,
+            render::{
+                RenderBindings, RenderLayouts, per_frame::PerFrame, render_layouts::RenderLayout,
+                render_pipeline::RenderPipeline, ui_render_pipeline, uniform_buffer::UniformBuffer,
+            },
         },
     },
 };
@@ -170,7 +173,7 @@ impl RenderPipeline for UiRenderPipeline {
         _bindings: &RenderBindings,
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
-        _geometry_buffer: &super::GeometryBuffer,
+        _geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,
     ) {
         let mut render_pass =

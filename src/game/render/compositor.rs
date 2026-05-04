@@ -3,27 +3,27 @@ use crate::{
         renderer::{Gpu, RenderContext, RenderTarget},
         shader_cache::{ShaderCache, ShaderSource},
     },
-    game::scenes::world::{
-        extract::RenderSnapshot,
-        render::{GeometryBuffer, RenderPipeline, RenderTargets},
-    },
+    game::render::geometry_buffer::GeometryBuffer,
 };
-
-use super::RenderBindings;
 
 pub struct Compositor {
     pipeline: wgpu::RenderPipeline,
 }
 
 impl Compositor {
-    pub fn new(gpu: &Gpu, render_targets: &RenderTargets, shader_cache: &mut ShaderCache) -> Self {
+    pub fn new(
+        gpu: &Gpu,
+        target_format: wgpu::TextureFormat,
+        geometry_buffer: &GeometryBuffer,
+        shader_cache: &mut ShaderCache,
+    ) -> Self {
         let module = shader_cache.get_or_create(&gpu.device, ShaderSource::Compositor);
 
         let layout = gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compositor_pipeline_layout"),
-                bind_group_layouts: &[&render_targets.geometry_buffer.bind_group_layout],
+                bind_group_layouts: &[&geometry_buffer.bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -46,7 +46,7 @@ impl Compositor {
                     entry_point: Some("fragment"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: render_targets.surface_format,
+                        format: target_format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -59,18 +59,12 @@ impl Compositor {
     }
 }
 
-impl RenderPipeline for Compositor {
-    fn prepare(&mut self, _gpu: &Gpu, _bindings: &mut RenderBindings, _snapshot: &RenderSnapshot) {
-        // No preparation required.
-    }
-
-    fn queue(
+impl Compositor {
+    fn render(
         &self,
-        _bindings: &RenderBindings,
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
-        _snapshot: &RenderSnapshot,
     ) {
         let mut render_pass =
             render_context
