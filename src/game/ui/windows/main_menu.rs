@@ -1,11 +1,12 @@
 use glam::{IVec2, Vec4};
 
-use crate::game::{
-    config::windows::WindowBase,
-    ui::{
-        EventResult, Rect,
+use crate::{
+    engine::assets::AssetError,
+    game::ui::{
+        Rect,
         render::window_renderer::{WindowRenderItems, WindowRenderer},
-        windows::window_manager_context::WindowManagerContext,
+        widgets::widget::Widgets,
+        windows::window_manager::WindowManager,
     },
 };
 
@@ -13,15 +14,22 @@ use super::window::Window;
 
 pub struct MainMenuWindow {
     rect: Rect,
+
+    widgets: Widgets,
 }
 
 impl MainMenuWindow {
-    pub fn new(_window_base: &WindowBase) -> Self {
-        let size = IVec2::new(_window_base.render_dx, _window_base.render_dy);
+    pub fn new(window_manager: &WindowManager) -> Result<Self, AssetError> {
+        let window_base = window_manager.get_window_base("main_menu")?;
 
-        Self {
+        let size = IVec2::new(window_base.render_dx, window_base.render_dy);
+
+        let widgets = Widgets::default();
+
+        Ok(Self {
             rect: Rect::from_size(size),
-        }
+            widgets,
+        })
     }
 }
 
@@ -44,22 +52,6 @@ impl Window for MainMenuWindow {
 
     fn rect(&self) -> Rect {
         self.rect
-    }
-
-    fn on_primary_mouse_down(
-        &mut self,
-        _mouse: IVec2,
-        _context: &mut WindowManagerContext,
-    ) -> EventResult {
-        EventResult::Ignore
-    }
-
-    fn on_secondary_mouse_down(
-        &mut self,
-        _mouse: IVec2,
-        _context: &mut WindowManagerContext,
-    ) -> EventResult {
-        EventResult::Ignore
     }
 
     fn render(&mut self, _window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems) {

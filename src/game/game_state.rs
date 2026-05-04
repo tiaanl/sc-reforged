@@ -40,8 +40,8 @@ impl GameState {
             sprites,
         )?;
 
-        let window_base = window_manager.get_window_base("main_menu")?;
-        window_manager.push(Box::new(MainMenuWindow::new(&window_base)));
+        let main_menu_window = Box::new(MainMenuWindow::new(&window_manager)?);
+        window_manager.push(main_menu_window);
 
         {
             let help_window_defs: HelpWindowDefs = load_config(

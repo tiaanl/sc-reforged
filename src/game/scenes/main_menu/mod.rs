@@ -39,8 +39,7 @@ impl MainMenuScene {
             WindowManager::new(file_system, render_context, surface_desc, textures, sprites)?;
 
         {
-            let window_base = window_manager.get_window_base("main_menu")?;
-            window_manager.push(Box::new(MainMenuWindow::new(&window_base)));
+            window_manager.push(Box::new(MainMenuWindow::new(&window_manager)?));
 
             if let Some(help_def) = help_window_defs.get("conf_exit_game") {
                 let surface_size = window_manager.window_renderer().surface_size();
