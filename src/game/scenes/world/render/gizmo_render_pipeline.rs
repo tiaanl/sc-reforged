@@ -91,12 +91,7 @@ impl GizmoRenderPipeline {
 }
 
 impl RenderPipeline for GizmoRenderPipeline {
-    fn prepare(
-        &mut self,
-        gpu: &Gpu,
-        _bindings: &mut RenderBindings,
-        snapshot: &RenderSnapshot,
-    ) {
+    fn prepare(&mut self, gpu: &Gpu, _bindings: &mut RenderBindings, snapshot: &RenderSnapshot) {
         let instances = self.instances_buffer.advance();
         instances.write(gpu, &snapshot.gizmos.vertices);
     }

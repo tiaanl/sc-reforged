@@ -340,11 +340,9 @@ impl QuadRenderer {
         if let Some(new_size) = self.new_size.take() {
             let viewport = gpu::Viewport::from(new_size);
 
-            self.gpu.queue.write_buffer(
-                &self.viewport_buffer,
-                0,
-                bytemuck::bytes_of(&viewport),
-            );
+            self.gpu
+                .queue
+                .write_buffer(&self.viewport_buffer, 0, bytemuck::bytes_of(&viewport));
         }
 
         let drawable_quads: Vec<_> = quads

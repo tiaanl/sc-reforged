@@ -57,4 +57,3 @@ pub(crate) fn quantize_rgb565(image: &mut image::RgbaImage) {
         pixel.0[2] = (blue << 3) | (blue >> 2);
     }
 }
-

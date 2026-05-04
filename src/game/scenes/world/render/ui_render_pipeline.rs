@@ -111,16 +111,14 @@ impl UiRenderPipeline {
                     mapped_at_creation: false,
                 });
 
-                let bind_group = gpu
-                    .device
-                    .create_bind_group(&wgpu::BindGroupDescriptor {
-                        label: Some(&format!("ui_state_bind_group_{index}")),
-                        layout,
-                        entries: &[wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: buffer.as_entire_binding(),
-                        }],
-                    });
+                let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some(&format!("ui_state_bind_group_{index}")),
+                    layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.as_entire_binding(),
+                    }],
+                });
 
                 UniformBuffer::new(buffer, bind_group)
             })
@@ -144,12 +142,7 @@ impl UiRenderPipeline {
 }
 
 impl RenderPipeline for UiRenderPipeline {
-    fn prepare(
-        &mut self,
-        gpu: &Gpu,
-        _bindings: &mut RenderBindings,
-        snapshot: &RenderSnapshot,
-    ) {
+    fn prepare(&mut self, gpu: &Gpu, _bindings: &mut RenderBindings, snapshot: &RenderSnapshot) {
         let state = gpu::State {
             view_proj: snapshot.ui.proj_view.to_cols_array_2d(),
         };

@@ -198,8 +198,7 @@ impl Systems {
         gpu: &Gpu,
         render_snapshot: &RenderSnapshot,
     ) {
-        self.world_renderer
-            .prepare(gpu, bindings, render_snapshot);
+        self.world_renderer.prepare(gpu, bindings, render_snapshot);
     }
 
     pub fn queue(

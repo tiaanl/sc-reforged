@@ -16,11 +16,7 @@ pub struct Compositor {
 }
 
 impl Compositor {
-    pub fn new(
-        gpu: &Gpu,
-        render_targets: &RenderTargets,
-        shader_cache: &mut ShaderCache,
-    ) -> Self {
+    pub fn new(gpu: &Gpu, render_targets: &RenderTargets, shader_cache: &mut ShaderCache) -> Self {
         let module = shader_cache.get_or_create(&gpu.device, ShaderSource::Compositor);
 
         let layout = gpu
@@ -64,12 +60,7 @@ impl Compositor {
 }
 
 impl RenderPipeline for Compositor {
-    fn prepare(
-        &mut self,
-        _gpu: &Gpu,
-        _bindings: &mut RenderBindings,
-        _snapshot: &RenderSnapshot,
-    ) {
+    fn prepare(&mut self, _gpu: &Gpu, _bindings: &mut RenderBindings, _snapshot: &RenderSnapshot) {
         // No preparation required.
     }
 

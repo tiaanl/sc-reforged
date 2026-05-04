@@ -178,31 +178,31 @@ impl TerrainRenderPipeline {
 
         let terrain_bind_group = {
             gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("terrain_bind_group"),
-                    layout: &terrain_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: terrain_data_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: height_map_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::TextureView(&terrain_texture),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: wgpu::BindingResource::TextureView(&strata_texture),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 4,
-                            resource: wgpu::BindingResource::Sampler(&terrain_sampler),
-                        },
-                    ],
-                })
+                label: Some("terrain_bind_group"),
+                layout: &terrain_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: terrain_data_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: height_map_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&terrain_texture),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(&strata_texture),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::Sampler(&terrain_sampler),
+                    },
+                ],
+            })
         };
 
         let (chunk_indices_buffer, chunk_wireframe_indices_buffer) = {
@@ -256,40 +256,40 @@ impl TerrainRenderPipeline {
             2 => Uint32,
         ];
 
-        let terrain_pipeline =
-            gpu.device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("terrain_pipeline"),
-                    layout: Some(&layout),
-                    vertex: wgpu::VertexState {
-                        module,
-                        entry_point: Some("vertex_terrain"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
-                                as wgpu::BufferAddress,
-                            step_mode: wgpu::VertexStepMode::Instance,
-                            attributes: &instance_attrs,
-                        }],
-                    },
-                    primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: wgpu::TextureFormat::Depth32Float,
-                        depth_write_enabled: true,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
-                        stencil: wgpu::StencilState::default(),
-                        bias: wgpu::DepthBiasState::default(),
-                    }),
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: Some(wgpu::FragmentState {
-                        module,
-                        entry_point: Some("fragment_terrain"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: GeometryBuffer::opaque_targets(),
-                    }),
-                    multiview: None,
-                    cache: None,
-                });
+        let terrain_pipeline = gpu
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("terrain_pipeline"),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module,
+                    entry_point: Some("vertex_terrain"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
+                            as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &instance_attrs,
+                    }],
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module,
+                    entry_point: Some("fragment_terrain"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    targets: GeometryBuffer::opaque_targets(),
+                }),
+                multiview: None,
+                cache: None,
+            });
 
         let terrain_wireframe_pipeline =
             gpu.device
@@ -330,44 +330,44 @@ impl TerrainRenderPipeline {
                     cache: None,
                 });
 
-        let strata_pipeline =
-            gpu.device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("strata_render_pipeline"),
-                    layout: Some(&layout),
-                    vertex: wgpu::VertexState {
-                        module,
-                        entry_point: Some("strata_vertex"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
-                                as wgpu::BufferAddress,
-                            step_mode: wgpu::VertexStepMode::Instance,
-                            attributes: &instance_attrs,
-                        }],
-                    },
-                    primitive: wgpu::PrimitiveState {
-                        topology: wgpu::PrimitiveTopology::TriangleStrip,
-                        cull_mode: Some(wgpu::Face::Back),
-                        ..Default::default()
-                    },
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: wgpu::TextureFormat::Depth32Float,
-                        depth_write_enabled: true,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
-                        stencil: wgpu::StencilState::default(),
-                        bias: wgpu::DepthBiasState::default(),
-                    }),
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: Some(wgpu::FragmentState {
-                        module,
-                        entry_point: Some("strata_fragment"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        targets: GeometryBuffer::opaque_targets(),
-                    }),
-                    multiview: None,
-                    cache: None,
-                });
+        let strata_pipeline = gpu
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("strata_render_pipeline"),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module,
+                    entry_point: Some("strata_vertex"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
+                            as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &instance_attrs,
+                    }],
+                },
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleStrip,
+                    cull_mode: Some(wgpu::Face::Back),
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module,
+                    entry_point: Some("strata_fragment"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    targets: GeometryBuffer::opaque_targets(),
+                }),
+                multiview: None,
+                cache: None,
+            });
 
         let capacity = 1 << 7;
         let strata_instances_buffer = PerFrame::new(|index| {
@@ -396,12 +396,7 @@ impl TerrainRenderPipeline {
 }
 
 impl RenderPipeline for TerrainRenderPipeline {
-    fn prepare(
-        &mut self,
-        gpu: &Gpu,
-        _bindings: &mut RenderBindings,
-        snapshot: &RenderSnapshot,
-    ) {
+    fn prepare(&mut self, gpu: &Gpu, _bindings: &mut RenderBindings, snapshot: &RenderSnapshot) {
         let chunk_instances: Vec<_> = snapshot
             .terrain
             .chunks

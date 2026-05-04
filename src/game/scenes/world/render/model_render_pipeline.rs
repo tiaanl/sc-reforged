@@ -283,16 +283,14 @@ impl ModelRenderPipeline {
                 format!("poses:{index}"),
             );
 
-            let bind_group = gpu
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some(&format!("poses_bind_group:{index}")),
-                    layout: &poses_bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: buffer.buffer().as_entire_binding(),
-                    }],
-                });
+            let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(&format!("poses_bind_group:{index}")),
+                layout: &poses_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffer.buffer().as_entire_binding(),
+                }],
+            });
 
             (buffer, bind_group)
         });
@@ -382,12 +380,7 @@ impl ModelRenderPipeline {
 }
 
 impl RenderPipeline for ModelRenderPipeline {
-    fn prepare(
-        &mut self,
-        gpu: &Gpu,
-        _bindings: &mut RenderBindings,
-        snapshot: &RenderSnapshot,
-    ) {
+    fn prepare(&mut self, gpu: &Gpu, _bindings: &mut RenderBindings, snapshot: &RenderSnapshot) {
         let snapshot_models = &snapshot.models.models;
 
         // Sort by model handle so instances of the same model end up contiguous.
@@ -458,16 +451,14 @@ impl RenderPipeline for ModelRenderPipeline {
             let (buffer, bind_group) = self.poses.advance();
 
             if buffer.write(gpu, self.poses_cache.as_slice()) {
-                *bind_group = gpu
-                    .device
-                    .create_bind_group(&wgpu::BindGroupDescriptor {
-                        label: Some("poses_bind_group"),
-                        layout: &self.poses_bind_group_layout,
-                        entries: &[wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: buffer.buffer().as_entire_binding(),
-                        }],
-                    });
+                *bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("poses_bind_group"),
+                    layout: &self.poses_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.buffer().as_entire_binding(),
+                    }],
+                });
             }
         }
 
