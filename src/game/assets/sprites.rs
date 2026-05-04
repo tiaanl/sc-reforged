@@ -3,9 +3,13 @@ use std::{ops::RangeInclusive, path::PathBuf, sync::Arc};
 use glam::IVec2;
 
 use crate::{
-    engine::storage::{Handle, StorageMap},
+    engine::{
+        assets::AssetError,
+        storage::{Handle, StorageMap},
+    },
     game::{
-        config::ImageDefs,
+        config::{ImageDefs, load_config},
+        file_system::FileSystem,
         render::textures::{Texture, Textures},
     },
 };
@@ -57,11 +61,17 @@ pub struct Sprites {
 }
 
 impl Sprites {
-    pub fn new(textures: Arc<Textures>) -> Self {
-        Self {
+    pub fn new(textures: Arc<Textures>, file_system: &FileSystem) -> Result<Self, AssetError> {
+        let mut sprites = Self {
             textures,
             sprites: StorageMap::default(),
-        }
+        };
+
+        let image_defs: ImageDefs =
+            load_config(file_system, PathBuf::from("config").join("image_defs.txt"))?;
+        sprites.load_image_defs(&image_defs);
+
+        Ok(sprites)
     }
 
     #[inline]
@@ -81,7 +91,7 @@ impl Sprites {
     }
 
     /// Loads sprite definitions from `image_defs.txt`.
-    pub fn load_image_defs(&mut self, image_defs: &ImageDefs) {
+    fn load_image_defs(&mut self, image_defs: &ImageDefs) {
         for s in image_defs.sprite_3d.iter() {
             self.insert_sprite(
                 &s.name,

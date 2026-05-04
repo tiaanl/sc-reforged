@@ -143,7 +143,7 @@ impl WindowManager {
         self.window_renderer.resize(size);
     }
 
-    pub fn input_event(&mut self, event: &InputEvent) {
+    pub fn input(&mut self, event: &InputEvent) {
         match *event {
             InputEvent::MouseMove(position) => {
                 self.mouse_position = Some(position.as_ivec2());
@@ -315,7 +315,7 @@ impl WindowManager {
         //
     }
 
-    pub fn render(&mut self, _render_context: &RenderContext, frame: &mut Frame) {
+    pub fn render(&mut self, frame: &mut Frame) {
         self.window_render_items_cache.clear();
 
         for window in self.windows.iter_mut() {

@@ -9,7 +9,7 @@ use crate::{
     },
     game::{
         assets::{images::Images, sprites::Sprites},
-        config::{ImageDefs, help_window_defs::HelpWindowDefs, load_config},
+        config::{help_window_defs::HelpWindowDefs, load_config},
         file_system::FileSystem,
         render::textures::Textures,
         ui::windows::{help::HelpWindow, main_menu::MainMenuWindow, window_manager::WindowManager},
@@ -28,15 +28,7 @@ impl MainMenuScene {
     ) -> Result<Self, AssetError> {
         let images = Arc::new(Images::new(Arc::clone(&file_system)));
         let textures = Arc::new(Textures::new(render_context.clone(), Arc::clone(&images)));
-        let sprites = {
-            let mut sprites = Sprites::new(Arc::clone(&textures));
-            let image_defs: ImageDefs =
-                load_config(&file_system, PathBuf::from("config").join("image_defs.txt"))?;
-
-            sprites.load_image_defs(&image_defs);
-
-            Arc::new(sprites)
-        };
+        let sprites = Arc::new(Sprites::new(Arc::clone(&textures), &file_system)?);
 
         let help_window_defs: HelpWindowDefs = load_config(
             &file_system,
@@ -51,7 +43,7 @@ impl MainMenuScene {
             window_manager.push(Box::new(MainMenuWindow::new(&window_base)));
 
             if let Some(help_def) = help_window_defs.get("conf_exit_game") {
-                let surface_size = window_manager.window_renderer().surface_size().as_ivec2();
+                let surface_size = window_manager.window_renderer().surface_size();
                 window_manager.push(Box::new(HelpWindow::new(help_def, surface_size)));
             }
         }
@@ -66,15 +58,15 @@ impl Scene for MainMenuScene {
     }
 
     fn input_event(&mut self, event: &InputEvent) {
-        self.window_manager.input_event(event);
+        self.window_manager.input(event);
     }
 
     fn update(&mut self, delta_time: f32) {
         self.window_manager.update(delta_time);
     }
 
-    fn render(&mut self, context: &RenderContext, frame: &mut Frame) {
-        self.window_manager.render(context, frame);
+    fn render(&mut self, _context: &RenderContext, frame: &mut Frame) {
+        self.window_manager.render(frame);
     }
 }
 

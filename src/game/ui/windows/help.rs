@@ -1,4 +1,4 @@
-use glam::IVec2;
+use glam::{IVec2, UVec2};
 
 use crate::game::{
     config::help_window_defs::HelpDef,
@@ -27,9 +27,11 @@ pub struct HelpWindow {
 
 impl HelpWindow {
     /// Creates a help window from the specified help definition.
-    pub fn new(help_def: &HelpDef, surface_size: IVec2) -> Self {
+    pub fn new(help_def: &HelpDef, surface_size: UVec2) -> Self {
         let size = help_def.dimensions.unwrap_or(IVec2::new(380, 180));
-        let pos = help_def.position.unwrap_or(surface_size / 2 - size / 2);
+        let pos = help_def
+            .position
+            .unwrap_or(surface_size.as_ivec2() / 2 - size / 2);
 
         let mut widgets = Widgets::default();
 

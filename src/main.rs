@@ -15,13 +15,8 @@ use crate::{
     engine::{
         input,
         renderer::{Frame, RenderContext, Surface, SurfaceDesc},
-        scene::Scene,
-        threads::main::{MainThreadEvent, MainThreadReceiver},
     },
-    game::{
-        assets::config::campaign_def::CampaignDefs, config::load_config, file_system::FileSystem,
-        scenes::world::WorldScene,
-    },
+    game::{file_system::FileSystem, game_state::GameState},
 };
 
 mod engine;
@@ -38,7 +33,7 @@ struct Opts {
 
 #[allow(clippy::large_enum_variant)]
 enum App {
-    Uninitialzed(Opts, MainThreadReceiver),
+    Uninitialzed(Opts),
     Initialized {
         /// The main window the engine is rendering to. This is also the window
         /// that is receiving all the input events.
@@ -48,7 +43,7 @@ enum App {
         /// The window surface where the scene will be displayed.
         surface: Surface,
         /// Our main [RenderContext] holding the device and queue.
-        context: RenderContext,
+        render_context: RenderContext,
         /// The index of the current frame being rendered.
         frame_index: u64,
         /// The instant that the last frame started to render.
@@ -56,20 +51,16 @@ enum App {
         /// egui integration.
         #[cfg(feature = "egui")]
         egui_integration: engine::egui_integration::EguiIntegration,
-        /// The scene we are currently rendering to the screen.
-        scene: Box<dyn Scene>,
-        /// A new scene requested to be switched to.
-        requested_scene: Option<Box<dyn Scene>>,
 
-        /// A receiver for events on the main thread.
-        _main_thread_receiver: MainThreadReceiver,
+        /// The main state of the game.
+        game_state: GameState,
     },
 }
 
-impl ApplicationHandler<MainThreadEvent> for App {
+impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         match self {
-            App::Uninitialzed(opts, main_thread_receiver) => {
+            App::Uninitialzed(opts) => {
                 let mut attributes = winit::window::WindowAttributes::default()
                     .with_title("Shadow Company - Reforged")
                     .with_resizable(false)
@@ -103,7 +94,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                     UVec2::new(width, height)
                 };
 
-                let (surface, context) = engine::renderer::create(Arc::clone(&window));
+                let (surface, render_context) = engine::renderer::create(Arc::clone(&window));
 
                 let surface_desc = SurfaceDesc {
                     size: surface.size(),
@@ -113,13 +104,14 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 #[cfg(feature = "egui")]
                 let egui_integration = engine::egui_integration::EguiIntegration::new(
                     event_loop,
-                    context.device.clone(),
-                    context.queue.clone(),
+                    render_context.device.clone(),
+                    render_context.queue.clone(),
                     surface_desc.format,
                 );
 
                 let file_system = Arc::new(FileSystem::new(&opts.path));
 
+                /*
                 let scene: Box<dyn Scene> = {
                     let campaign_name = opts
                         .campaign_name
@@ -149,10 +141,17 @@ impl ApplicationHandler<MainThreadEvent> for App {
                         .unwrap(),
                     )
                 };
+                */
 
-                // let scene = Box::new(
-                //     MainMenuScene::new(file_system, context.clone(), &surface_desc).unwrap(),
-                // );
+                let game_state =
+                    match GameState::new(file_system, render_context.clone(), &surface_desc) {
+                        Ok(game_state) => game_state,
+                        Err(err) => {
+                            tracing::error!("Could not initialize GameState - {err}");
+                            event_loop.exit();
+                            return;
+                        }
+                    };
 
                 tracing::info!("Application initialized!");
 
@@ -160,14 +159,12 @@ impl ApplicationHandler<MainThreadEvent> for App {
                     window,
                     surface,
                     surface_desc,
-                    context,
+                    render_context,
                     #[cfg(feature = "egui")]
                     egui_integration,
                     frame_index: 0,
                     last_frame_time: Instant::now(),
-                    scene,
-                    requested_scene: None,
-                    _main_thread_receiver: main_thread_receiver.clone(),
+                    game_state,
                 };
             }
 
@@ -192,13 +189,12 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 window,
                 surface,
                 surface_desc,
-                context,
+                render_context: context,
                 frame_index,
                 last_frame_time,
                 #[cfg(feature = "egui")]
                 egui_integration,
-                scene,
-                requested_scene,
+                game_state,
                 ..
             } => {
                 if window_id != window.id() {
@@ -226,25 +222,19 @@ impl ApplicationHandler<MainThreadEvent> for App {
                         surface.resize(&context.device, size);
                         surface_desc.size = surface.size();
 
-                        scene.resize(size);
+                        game_state.resize(size);
 
                         window.request_redraw();
                     }
 
                     WindowEvent::RedrawRequested => {
-                        // If a new scene was requested, switch to it before processing the frame.
-                        if let Some(requested_scene) = requested_scene.take() {
-                            *scene = requested_scene;
-                            scene.resize(surface.size());
-                        }
-
                         let now = Instant::now();
                         let last_frame_duration = now - *last_frame_time;
                         *last_frame_time = now;
 
                         {
                             let delta_time = last_frame_duration.as_secs_f32();
-                            scene.update(delta_time);
+                            game_state.update(delta_time);
                         }
 
                         {
@@ -266,7 +256,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                                 size: surface.size(),
                             };
 
-                            scene.render(context, &mut frame);
+                            game_state.render(&mut frame);
 
                             // Render egui if it requires a repaint.
                             #[cfg(feature = "egui")]
@@ -278,7 +268,7 @@ impl ApplicationHandler<MainThreadEvent> for App {
                                     |ctx| {
                                         ctx.set_pixels_per_point(1.2);
                                         // Debug stuff from the scene.
-                                        scene.debug_panel(ctx, frame.frame_index);
+                                        game_state.debug_panel(ctx, frame.frame_index);
                                     },
                                 );
                             }
@@ -301,21 +291,8 @@ impl ApplicationHandler<MainThreadEvent> for App {
                 }
 
                 if let Some(input_event) = input::translate_window_event(&event) {
-                    scene.input_event(&input_event);
+                    game_state.input(&input_event);
                 }
-            }
-        }
-    }
-
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: MainThreadEvent) {
-        let Self::Initialized { scene, surface, .. } = self else {
-            return;
-        };
-
-        match event {
-            MainThreadEvent::ReplaceScene(new_scene) => {
-                *scene = new_scene;
-                scene.resize(surface.size());
             }
         }
     }
@@ -332,12 +309,9 @@ fn main() {
         }
     };
 
-    let event_loop = EventLoop::<MainThreadEvent>::with_user_event()
-        .build()
-        .unwrap();
-    let main_thread_receiver = MainThreadReceiver::new(event_loop.create_proxy());
+    let event_loop = EventLoop::new().unwrap();
 
-    let mut app = App::Uninitialzed(opts, main_thread_receiver);
+    let mut app = App::Uninitialzed(opts);
     event_loop
         .run_app(&mut app)
         .expect("run application event loop");
