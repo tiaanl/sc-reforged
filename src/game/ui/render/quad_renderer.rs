@@ -7,7 +7,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
-        renderer::{Frame, RenderContext, SurfaceDesc},
+        renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
         storage::Handle,
     },
     game::{
@@ -95,7 +95,7 @@ impl Default for Quad {
 }
 
 pub struct QuadRenderer {
-    render_context: RenderContext,
+    gpu: Gpu,
     textures: Arc<Textures>,
 
     solid_white_texture: Handle<Texture>,
@@ -119,12 +119,8 @@ pub struct QuadRenderer {
 
 impl QuadRenderer {
     /// Creates the quad renderer and its GPU state for menu quads.
-    pub fn new(
-        render_context: RenderContext,
-        surface: &SurfaceDesc,
-        textures: Arc<Textures>,
-    ) -> Self {
-        let RenderContext { device, .. } = &render_context;
+    pub fn new(gpu: Gpu, surface: &SurfaceDesc, textures: Arc<Textures>) -> Self {
+        let Gpu { device, .. } = &gpu;
 
         let viewport = gpu::Viewport::from(surface.size);
 
@@ -276,25 +272,25 @@ impl QuadRenderer {
         ];
 
         let mut vertices_buffer = GrowingBuffer::new(
-            &render_context,
+            &gpu,
             vertices.len() as u32,
             wgpu::BufferUsages::VERTEX,
             "quad_renderer_vertices",
         );
-        vertices_buffer.write(&render_context, &vertices);
+        vertices_buffer.write(&gpu, &vertices);
 
         let indices = [0, 1, 2, 2, 3, 0];
 
         let mut indices_buffer = GrowingBuffer::new(
-            &render_context,
+            &gpu,
             indices.len() as u32,
             wgpu::BufferUsages::INDEX,
             "quad_renderer_indices",
         );
-        indices_buffer.write(&render_context, &indices);
+        indices_buffer.write(&gpu, &indices);
 
         let instances_buffer = GrowingBuffer::new(
-            &render_context,
+            &gpu,
             64,
             wgpu::BufferUsages::VERTEX,
             "quad_renderer_instances",
@@ -313,7 +309,7 @@ impl QuadRenderer {
             .expect("generated solid white texture should be valid");
 
         Self {
-            render_context,
+            gpu,
             textures,
             solid_white_texture,
             render_pipeline,
@@ -335,11 +331,16 @@ impl QuadRenderer {
     }
 
     /// Uploads the provided quads and renders them in order.
-    pub fn submit(&mut self, frame: &mut Frame, quads: &[Quad]) {
+    pub fn submit(
+        &mut self,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
+        quads: &[Quad],
+    ) {
         if let Some(new_size) = self.new_size.take() {
             let viewport = gpu::Viewport::from(new_size);
 
-            self.render_context.queue.write_buffer(
+            self.gpu.queue.write_buffer(
                 &self.viewport_buffer,
                 0,
                 bytemuck::bytes_of(&viewport),
@@ -379,29 +380,29 @@ impl QuadRenderer {
             .iter()
             .map(|(_, _, instance)| *instance)
             .collect();
-        self.instances_buffer
-            .write(&self.render_context, &instances);
+        self.instances_buffer.write(&self.gpu, &instances);
 
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("quad_renderer_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                ..Default::default()
-            });
+        let mut render_pass =
+            render_context
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("quad_renderer_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &render_target.view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.1,
+                                g: 0.2,
+                                b: 0.3,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                });
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_vertex_buffer(0, self.vertices_buffer.slice(..));
@@ -416,7 +417,8 @@ impl QuadRenderer {
 
             if let Some(clip_rect) = clip_rect {
                 let clip_min = clip_rect.position.max(IVec2::ZERO);
-                let clip_max = (clip_rect.position + clip_rect.size).min(frame.size.as_ivec2());
+                let clip_max =
+                    (clip_rect.position + clip_rect.size).min(render_target.size.as_ivec2());
                 let clip_size = clip_max - clip_min;
 
                 if clip_size.x <= 0 || clip_size.y <= 0 {
@@ -430,7 +432,7 @@ impl QuadRenderer {
                     clip_size.y as u32,
                 );
             } else {
-                render_pass.set_scissor_rect(0, 0, frame.size.x, frame.size.y);
+                render_pass.set_scissor_rect(0, 0, render_target.size.x, render_target.size.y);
             }
 
             render_pass.set_bind_group(1, bind_group, &[]);
@@ -453,7 +455,7 @@ impl QuadRenderer {
         };
 
         let bind_group = self
-            .render_context
+            .gpu
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("quad_renderer_texture_bind_group"),

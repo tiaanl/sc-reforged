@@ -5,7 +5,7 @@ use ahash::HashMap;
 use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
-        renderer::{Frame, RenderContext},
+        renderer::{Gpu, RenderContext, RenderTarget},
         shader_cache::ShaderCache,
         storage::Handle,
     },
@@ -79,15 +79,15 @@ pub struct ModelRenderPipeline {
 
 impl ModelRenderPipeline {
     pub fn new(
-        context: &RenderContext,
+        gpu: &Gpu,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
         textures: Arc<Textures>,
         asset_models: Arc<Models>,
     ) -> Self {
-        let device = &context.device;
+        let device = &gpu.device;
 
-        let models = RenderModels::new(context);
+        let models = RenderModels::new(gpu);
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -138,14 +138,14 @@ impl ModelRenderPipeline {
             });
 
         let module = shader_cache.get_or_create(
-            &context.device,
+            &gpu.device,
             crate::engine::shader_cache::ShaderSource::Models,
         );
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("models_pipeline_layout"),
             bind_group_layouts: &[
-                layouts.get::<CameraEnvironmentLayout>(context),
+                layouts.get::<CameraEnvironmentLayout>(gpu),
                 &texture_bind_group_layout,
                 &models.nodes_bind_group_layout,
                 &poses_bind_group_layout,
@@ -268,7 +268,7 @@ impl ModelRenderPipeline {
 
         let model_instances = PerFrame::new(|index| {
             GrowingBuffer::new(
-                context,
+                gpu,
                 1 << 7,
                 wgpu::BufferUsages::VERTEX,
                 format!("model_instances:{index}"),
@@ -277,13 +277,13 @@ impl ModelRenderPipeline {
 
         let poses = PerFrame::new(|index| {
             let buffer = GrowingBuffer::new(
-                context,
+                gpu,
                 1 << 7,
                 wgpu::BufferUsages::STORAGE,
                 format!("poses:{index}"),
             );
 
-            let bind_group = context
+            let bind_group = gpu
                 .device
                 .create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some(&format!("poses_bind_group:{index}")),
@@ -325,13 +325,13 @@ impl ModelRenderPipeline {
         }
     }
 
-    pub fn ensure_render_model(&mut self, context: &RenderContext, model_handle: Handle<Model>) {
+    pub fn ensure_render_model(&mut self, gpu: &Gpu, model_handle: Handle<Model>) {
         if self.models.contains(model_handle) {
             return;
         }
 
         self.models
-            .add(&self.textures, &self.asset_models, context, model_handle);
+            .add(&self.textures, &self.asset_models, gpu, model_handle);
 
         // Create per-texture bind groups for any new textures introduced by this model.
         let new_textures: Vec<Handle<Texture>> = self
@@ -349,7 +349,7 @@ impl ModelRenderPipeline {
             .unwrap_or_default();
 
         for texture in new_textures {
-            self.ensure_texture_bind_group(&context.device, texture);
+            self.ensure_texture_bind_group(&gpu.device, texture);
         }
     }
 
@@ -384,7 +384,7 @@ impl ModelRenderPipeline {
 impl RenderPipeline for ModelRenderPipeline {
     fn prepare(
         &mut self,
-        context: &RenderContext,
+        gpu: &Gpu,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
@@ -407,7 +407,7 @@ impl RenderPipeline for ModelRenderPipeline {
             let idx = self.sorted_indices_cache[i];
             let m = &snapshot_models[idx];
 
-            self.ensure_render_model(context, m.model);
+            self.ensure_render_model(gpu, m.model);
 
             let mut flags = ModelRenderFlags::empty();
             flags.set(ModelRenderFlags::HIGHLIGHTED, m.highlighted);
@@ -457,8 +457,8 @@ impl RenderPipeline for ModelRenderPipeline {
         {
             let (buffer, bind_group) = self.poses.advance();
 
-            if buffer.write(context, self.poses_cache.as_slice()) {
-                *bind_group = context
+            if buffer.write(gpu, self.poses_cache.as_slice()) {
+                *bind_group = gpu
                     .device
                     .create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some("poses_bind_group"),
@@ -473,18 +473,19 @@ impl RenderPipeline for ModelRenderPipeline {
 
         // Upload instances.
         let model_instances = self.model_instances.advance();
-        model_instances.write(context, self.model_instances_cache.as_slice());
+        model_instances.write(gpu, self.model_instances_cache.as_slice());
     }
 
     fn queue(
         &self,
         bindings: &RenderBindings,
-        frame: &mut Frame,
+        render_context: &mut RenderContext,
+        _render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
         _snapshot: &RenderSnapshot,
     ) {
-        self.opaque_render_pass(&mut frame.encoder, geometry_buffer, bindings);
-        self.alpha_render_pass(&mut frame.encoder, geometry_buffer, bindings);
+        self.opaque_render_pass(&mut render_context.encoder, geometry_buffer, bindings);
+        self.alpha_render_pass(&mut render_context.encoder, geometry_buffer, bindings);
     }
 }
 
@@ -546,7 +547,9 @@ impl ModelRenderPipeline {
         let mut render_pass = geometry_buffer.begin_opaque_render_pass(encoder, "models_opaque");
         self.bind_pass_resources(&mut render_pass, bindings);
 
-        self.run_pass(&mut render_pass, &self.opaque_pipeline, |m| &m.opaque_meshes);
+        self.run_pass(&mut render_pass, &self.opaque_pipeline, |m| {
+            &m.opaque_meshes
+        });
         self.run_pass(&mut render_pass, &self.keyed_pipeline, |m| &m.keyed_meshes);
     }
 

@@ -14,7 +14,7 @@ use winit::{
 use crate::{
     engine::{
         input,
-        renderer::{Frame, RenderContext, Surface, SurfaceDesc},
+        renderer::{Gpu, RenderContext, RenderTarget, Surface, SurfaceDesc},
     },
     game::{file_system::FileSystem, game_state::GameState},
 };
@@ -42,8 +42,8 @@ enum App {
         surface_desc: SurfaceDesc,
         /// The window surface where the scene will be displayed.
         surface: Surface,
-        /// Our main [RenderContext] holding the device and queue.
-        render_context: RenderContext,
+        /// Our main [Gpu] holding the device and queue.
+        gpu: Gpu,
         /// The index of the current frame being rendered.
         frame_index: u64,
         /// The instant that the last frame started to render.
@@ -94,7 +94,7 @@ impl ApplicationHandler for App {
                     UVec2::new(width, height)
                 };
 
-                let (surface, render_context) = engine::renderer::create(Arc::clone(&window));
+                let (surface, gpu) = engine::renderer::create(Arc::clone(&window));
 
                 let surface_desc = SurfaceDesc {
                     size: surface.size(),
@@ -104,8 +104,8 @@ impl ApplicationHandler for App {
                 #[cfg(feature = "egui")]
                 let egui_integration = engine::egui_integration::EguiIntegration::new(
                     event_loop,
-                    render_context.device.clone(),
-                    render_context.queue.clone(),
+                    gpu.device.clone(),
+                    gpu.queue.clone(),
                     surface_desc.format,
                 );
 
@@ -143,15 +143,14 @@ impl ApplicationHandler for App {
                 };
                 */
 
-                let game_state =
-                    match GameState::new(file_system, render_context.clone(), &surface_desc) {
-                        Ok(game_state) => game_state,
-                        Err(err) => {
-                            tracing::error!("Could not initialize GameState - {err}");
-                            event_loop.exit();
-                            return;
-                        }
-                    };
+                let game_state = match GameState::new(file_system, gpu.clone(), &surface_desc) {
+                    Ok(game_state) => game_state,
+                    Err(err) => {
+                        tracing::error!("Could not initialize GameState - {err}");
+                        event_loop.exit();
+                        return;
+                    }
+                };
 
                 tracing::info!("Application initialized!");
 
@@ -159,7 +158,7 @@ impl ApplicationHandler for App {
                     window,
                     surface,
                     surface_desc,
-                    render_context,
+                    gpu,
                     #[cfg(feature = "egui")]
                     egui_integration,
                     frame_index: 0,
@@ -189,7 +188,7 @@ impl ApplicationHandler for App {
                 window,
                 surface,
                 surface_desc,
-                render_context: context,
+                gpu,
                 frame_index,
                 last_frame_time,
                 #[cfg(feature = "egui")]
@@ -219,7 +218,7 @@ impl ApplicationHandler for App {
                     WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
                         let size = UVec2::new(width, height);
 
-                        surface.resize(&context.device, size);
+                        surface.resize(&gpu.device, size);
                         surface_desc.size = surface.size();
 
                         game_state.resize(size);
@@ -238,44 +237,45 @@ impl ApplicationHandler for App {
                         }
 
                         {
-                            let output = surface.get_texture(&context.device);
+                            let output = surface.get_texture(&gpu.device);
                             let surface_view = output
                                 .texture
                                 .create_view(&wgpu::TextureViewDescriptor::default());
 
-                            let encoder = context.device.create_command_encoder(
+                            let encoder = gpu.device.create_command_encoder(
                                 &wgpu::CommandEncoderDescriptor {
                                     label: Some("main command encoder"),
                                 },
                             );
 
-                            let mut frame = Frame {
+                            let mut render_context = RenderContext {
                                 encoder,
-                                surface: surface_view,
                                 frame_index: *frame_index,
+                            };
+                            let render_target = RenderTarget {
+                                view: surface_view,
                                 size: surface.size(),
                             };
 
-                            game_state.render(&mut frame);
+                            game_state.render(&mut render_context, &render_target);
 
                             // Render egui if it requires a repaint.
                             #[cfg(feature = "egui")]
                             if repaint {
                                 egui_integration.render(
                                     window,
-                                    &mut frame.encoder,
-                                    &frame.surface,
+                                    &mut render_context.encoder,
+                                    &render_target.view,
                                     |ctx| {
                                         ctx.set_pixels_per_point(1.2);
                                         // Debug stuff from the scene.
-                                        game_state.debug_panel(ctx, frame.frame_index);
+                                        game_state.debug_panel(ctx, render_context.frame_index);
                                     },
                                 );
                             }
 
-                            context
-                                .queue
-                                .submit(std::iter::once(frame.encoder.finish()));
+                            gpu.queue
+                                .submit(std::iter::once(render_context.encoder.finish()));
 
                             output.present();
 

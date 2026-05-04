@@ -1,18 +1,16 @@
-mod frame;
+mod gpu;
 mod mipmaps;
-// mod render;
-mod render_context;
 mod surface;
 
 use std::sync::Arc;
 
+use glam::UVec2;
 use winit::window::Window;
 
-pub use frame::Frame;
-pub use render_context::RenderContext;
+pub use gpu::Gpu;
 pub use surface::{Surface, SurfaceDesc};
 
-pub fn create(window: Arc<Window>) -> (surface::Surface, RenderContext) {
+pub fn create(window: Arc<Window>) -> (surface::Surface, Gpu) {
     let winit::dpi::PhysicalSize { width, height } = window.inner_size();
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -68,7 +66,17 @@ pub fn create(window: Arc<Window>) -> (surface::Surface, RenderContext) {
 
     surface.configure(&device);
 
-    let context = RenderContext::new(device, queue);
+    let context = Gpu::new(device, queue);
 
     (surface, context)
+}
+
+pub struct RenderContext {
+    pub encoder: wgpu::CommandEncoder,
+    pub frame_index: u64,
+}
+
+pub struct RenderTarget {
+    pub view: wgpu::TextureView,
+    pub size: UVec2,
 }

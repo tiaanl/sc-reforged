@@ -4,7 +4,7 @@ use ahash::HashMap;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    engine::{mesh::IndexedMesh, renderer::RenderContext, storage::Handle},
+    engine::{mesh::IndexedMesh, renderer::Gpu, storage::Handle},
     game::{
         assets::{image::BlendMode, model::Model, models::Models},
         render::textures::{Texture, Textures},
@@ -45,10 +45,9 @@ pub struct RenderModels {
 }
 
 impl RenderModels {
-    pub fn new(context: &RenderContext) -> Self {
+    pub fn new(gpu: &Gpu) -> Self {
         let nodes_bind_group_layout =
-            context
-                .device
+            gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("model_nodes_bind_group_layout"),
                     entries: &[wgpu::BindGroupLayoutEntry {
@@ -73,7 +72,7 @@ impl RenderModels {
         &mut self,
         textures: &Textures,
         asset_models: &Models,
-        context: &RenderContext,
+        gpu: &Gpu,
         model_handle: Handle<Model>,
     ) {
         if self.models.contains_key(&model_handle) {
@@ -146,7 +145,7 @@ impl RenderModels {
             }
         }
 
-        let device = &context.device;
+        let device = &gpu.device;
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("render_model_vertex_buffer"),

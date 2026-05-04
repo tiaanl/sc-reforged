@@ -1,7 +1,7 @@
 use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
-        renderer::{Frame, RenderContext},
+        renderer::{Gpu, RenderContext, RenderTarget},
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::scenes::world::{
@@ -45,24 +45,23 @@ pub struct UiRenderPipeline {
 
 impl UiRenderPipeline {
     pub fn new(
-        context: &RenderContext,
+        gpu: &Gpu,
         surface_format: wgpu::TextureFormat,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
     ) -> Self {
-        let module = shader_cache.get_or_create(&context.device, ShaderSource::Ui);
+        let module = shader_cache.get_or_create(&gpu.device, ShaderSource::Ui);
 
-        let layout = context
+        let layout = gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("ui_rect_pipeline_layout"),
-                bind_group_layouts: &[layouts.get::<UiStateLayout>(context)],
+                bind_group_layouts: &[layouts.get::<UiStateLayout>(gpu)],
                 push_constant_ranges: &[],
             });
 
         let rect_render_pipeline =
-            context
-                .device
+            gpu.device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("ui_rect_render_pipeline"),
                     layout: Some(&layout),
@@ -102,17 +101,17 @@ impl UiRenderPipeline {
                 });
 
         let state_uniform = {
-            let layout = layouts.get::<UiStateLayout>(context);
+            let layout = layouts.get::<UiStateLayout>(gpu);
 
             PerFrame::new(|index| {
-                let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+                let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some(&format!("ui_state_buffer_{index}")),
                     size: std::mem::size_of::<gpu::State>() as wgpu::BufferAddress,
                     usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
                     mapped_at_creation: false,
                 });
 
-                let bind_group = context
+                let bind_group = gpu
                     .device
                     .create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some(&format!("ui_state_bind_group_{index}")),
@@ -129,7 +128,7 @@ impl UiRenderPipeline {
 
         let rects_buffer = PerFrame::new(|index| {
             GrowingBuffer::new(
-                context,
+                gpu,
                 1024,
                 wgpu::BufferUsages::VERTEX,
                 format!("ui_rects_buffer:{index}"),
@@ -147,7 +146,7 @@ impl UiRenderPipeline {
 impl RenderPipeline for UiRenderPipeline {
     fn prepare(
         &mut self,
-        context: &RenderContext,
+        gpu: &Gpu,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
@@ -156,7 +155,7 @@ impl RenderPipeline for UiRenderPipeline {
         };
 
         let state_uniform = self.state_uniform.advance();
-        state_uniform.write(context, bytemuck::bytes_of(&state));
+        state_uniform.write(gpu, bytemuck::bytes_of(&state));
 
         let rects: Vec<_> = snapshot
             .ui
@@ -170,33 +169,35 @@ impl RenderPipeline for UiRenderPipeline {
             .collect();
 
         let rects_buffer = self.rects_buffer.advance();
-        rects_buffer.write(context, rects.as_slice());
+        rects_buffer.write(gpu, rects.as_slice());
     }
 
     fn queue(
         &self,
         _bindings: &RenderBindings,
-        frame: &mut Frame,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
         _geometry_buffer: &super::GeometryBuffer,
         snapshot: &RenderSnapshot,
     ) {
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("ui_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+        let mut render_pass =
+            render_context
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("ui_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &render_target.view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
 
         render_pass.set_pipeline(&self.rect_render_pipeline);
 

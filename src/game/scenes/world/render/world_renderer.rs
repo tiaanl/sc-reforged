@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     engine::{
-        renderer::{Frame, RenderContext},
+        renderer::{Gpu, RenderContext, RenderTarget},
         shader_cache::ShaderCache,
     },
     game::{
@@ -33,44 +33,44 @@ impl WorldRenderer {
     pub fn new(
         images: Arc<Images>,
         models: Arc<Models>,
-        context: &RenderContext,
+        gpu: &Gpu,
         render_targets: &RenderTargets,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
         sim_world: &bevy_ecs::world::World,
     ) -> Self {
         // Warm up the shader cache.
-        shader_cache.preload_all(&context.device);
+        shader_cache.preload_all(&gpu.device);
 
-        let textures = Arc::new(Textures::new(context.clone(), Arc::clone(&images)));
+        let textures = Arc::new(Textures::new(gpu.clone(), Arc::clone(&images)));
 
         let mut pipelines = RenderPipelineList::default();
 
         pipelines.push(CameraRenderPipeline);
         pipelines.push(TerrainRenderPipeline::new(
             &images,
-            context,
+            gpu,
             layouts,
             shader_cache,
             sim_world,
         ));
 
         pipelines.push(ModelRenderPipeline::new(
-            context,
+            gpu,
             layouts,
             shader_cache,
             Arc::clone(&textures),
             Arc::clone(&models),
         ));
         pipelines.push(UiRenderPipeline::new(
-            context,
+            gpu,
             render_targets.surface_format,
             layouts,
             shader_cache,
         ));
-        pipelines.push(Compositor::new(context, render_targets, shader_cache));
+        pipelines.push(Compositor::new(gpu, render_targets, shader_cache));
         pipelines.push(GizmoRenderPipeline::new(
-            context,
+            gpu,
             render_targets.surface_format,
             layouts,
             shader_cache,
@@ -81,23 +81,24 @@ impl WorldRenderer {
 }
 
 impl RenderPipeline for WorldRenderer {
-    fn prepare(
-        &mut self,
-        context: &RenderContext,
-        bindings: &mut RenderBindings,
-        snapshot: &RenderSnapshot,
-    ) {
-        self.pipelines.prepare(context, bindings, snapshot);
+    fn prepare(&mut self, gpu: &Gpu, bindings: &mut RenderBindings, snapshot: &RenderSnapshot) {
+        self.pipelines.prepare(gpu, bindings, snapshot);
     }
 
     fn queue(
         &self,
         bindings: &RenderBindings,
-        frame: &mut Frame,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,
     ) {
-        self.pipelines
-            .queue(bindings, frame, geometry_buffer, snapshot);
+        self.pipelines.queue(
+            bindings,
+            render_context,
+            render_target,
+            geometry_buffer,
+            snapshot,
+        );
     }
 }

@@ -1,4 +1,4 @@
-use crate::engine::renderer::render_context::RenderContext;
+use crate::engine::renderer::gpu::Gpu;
 
 pub struct MipMaps {
     bind_group_layout: wgpu::BindGroupLayout,
@@ -7,8 +7,8 @@ pub struct MipMaps {
 }
 
 impl MipMaps {
-    pub fn new(context: RenderContext, format: wgpu::TextureFormat) -> Self {
-        let RenderContext { device, .. } = &context;
+    pub fn new(context: Gpu, format: wgpu::TextureFormat) -> Self {
+        let Gpu { device, .. } = &context;
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("mipmaps_bind_group_layout"),

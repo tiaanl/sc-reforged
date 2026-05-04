@@ -1,6 +1,6 @@
 use glam::UVec2;
 
-use crate::engine::renderer::{Frame, RenderContext};
+use crate::engine::renderer::{Gpu, RenderContext, RenderTarget};
 
 use super::input::InputEvent;
 
@@ -17,7 +17,12 @@ pub trait Scene {
     fn update(&mut self, delta_time: f32);
 
     /// Render the scene into the provided frame.
-    fn render(&mut self, renderer: &RenderContext, frame: &mut Frame);
+    fn render(
+        &mut self,
+        renderer: &Gpu,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
+    );
 
     /// Hook for adding debug panels.
     #[cfg(feature = "egui")]

@@ -2,7 +2,7 @@ use crate::{
     engine::{
         gizmos::GizmoVertex,
         growing_buffer::GrowingBuffer,
-        renderer::{Frame, RenderContext},
+        renderer::{Gpu, RenderContext, RenderTarget},
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::scenes::world::{
@@ -23,18 +23,18 @@ pub struct GizmoRenderPipeline {
 
 impl GizmoRenderPipeline {
     pub fn new(
-        context: &RenderContext,
+        gpu: &Gpu,
         surface_format: wgpu::TextureFormat,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
     ) -> Self {
-        let device = &context.device;
+        let device = &gpu.device;
 
-        let module = shader_cache.get_or_create(&context.device, ShaderSource::Gizmos);
+        let module = shader_cache.get_or_create(&gpu.device, ShaderSource::Gizmos);
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("gizmos_pipeline_layout"),
-            bind_group_layouts: &[layouts.get::<CameraEnvironmentLayout>(context)],
+            bind_group_layouts: &[layouts.get::<CameraEnvironmentLayout>(gpu)],
             push_constant_ranges: &[],
         });
 
@@ -76,7 +76,7 @@ impl GizmoRenderPipeline {
 
         let instances_buffer = PerFrame::new(|index| {
             GrowingBuffer::new(
-                context,
+                gpu,
                 1024,
                 wgpu::BufferUsages::VERTEX,
                 format!("gizmo_vertices:{index}"),
@@ -93,36 +93,38 @@ impl GizmoRenderPipeline {
 impl RenderPipeline for GizmoRenderPipeline {
     fn prepare(
         &mut self,
-        context: &RenderContext,
+        gpu: &Gpu,
         _bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
         let instances = self.instances_buffer.advance();
-        instances.write(context, &snapshot.gizmos.vertices);
+        instances.write(gpu, &snapshot.gizmos.vertices);
     }
 
     fn queue(
         &self,
         bindings: &RenderBindings,
-        frame: &mut Frame,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
         _geometry_buffer: &GeometryBuffer,
         snapshot: &RenderSnapshot,
     ) {
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("gizmos_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                ..Default::default()
-            });
+        let mut render_pass =
+            render_context
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("gizmos_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &render_target.view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                });
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, self.instances_buffer.current().slice(..));

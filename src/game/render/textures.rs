@@ -4,7 +4,7 @@ use glam::UVec2;
 
 use crate::{
     engine::{
-        renderer::RenderContext,
+        renderer::Gpu,
         storage::{Handle, StorageMap},
     },
     game::assets::{
@@ -16,16 +16,16 @@ use crate::{
 pub struct Texture;
 
 pub struct Textures {
-    render_context: RenderContext,
+    gpu: Gpu,
     images: Arc<Images>,
 
     textures: RwLock<StorageMap<Handle<Image>, Texture, Arc<TextureData>>>,
 }
 
 impl Textures {
-    pub fn new(render_context: RenderContext, images: Arc<Images>) -> Self {
+    pub fn new(gpu: Gpu, images: Arc<Images>) -> Self {
         Self {
-            render_context,
+            gpu,
             images,
 
             textures: RwLock::new(StorageMap::default()),
@@ -78,7 +78,7 @@ impl Textures {
     }
 
     fn create_texture_internal(&self, image: &image::RgbaImage) -> wgpu::TextureView {
-        let RenderContext { device, queue } = &self.render_context;
+        let Gpu { device, queue } = &self.gpu;
 
         let (width, height) = (image.width(), image.height());
 

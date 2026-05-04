@@ -11,7 +11,7 @@ use crate::{
     engine::{
         assets::AssetError,
         input::InputEvent,
-        renderer::{Frame, RenderContext, SurfaceDesc},
+        renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
     },
     game::{
         assets::sprites::Sprites,
@@ -55,13 +55,12 @@ pub struct WindowManager {
 impl WindowManager {
     pub fn new(
         file_system: Arc<FileSystem>,
-        render_context: RenderContext,
+        gpu: Gpu,
         surface_desc: &SurfaceDesc,
         textures: Arc<Textures>,
         sprites: Arc<Sprites>,
     ) -> Result<Self, AssetError> {
-        let window_renderer =
-            WindowRenderer::new(render_context.clone(), surface_desc, textures, sprites);
+        let window_renderer = WindowRenderer::new(gpu.clone(), surface_desc, textures, sprites);
 
         Ok(Self {
             file_system,
@@ -334,14 +333,17 @@ impl WindowManager {
         //
     }
 
-    pub fn render(&mut self, frame: &mut Frame) {
+    pub fn render(&mut self, render_context: &mut RenderContext, render_target: &RenderTarget) {
         self.window_render_items_cache.clear();
 
         for window in self.windows.iter_mut() {
             window.render(&self.window_renderer, &mut self.window_render_items_cache);
         }
 
-        self.window_renderer
-            .submit_render_items(frame, &self.window_render_items_cache);
+        self.window_renderer.submit_render_items(
+            render_context,
+            render_target,
+            &self.window_render_items_cache,
+        );
     }
 }

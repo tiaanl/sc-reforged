@@ -1,5 +1,5 @@
 use crate::{
-    engine::renderer::RenderContext,
+    engine::renderer::Gpu,
     game::scenes::world::render::{
         camera_render_pipeline, per_frame::PerFrame, render_layouts::RenderLayouts,
         uniform_buffer::UniformBuffer,
@@ -12,11 +12,11 @@ pub struct RenderBindings {
 }
 
 impl RenderBindings {
-    pub fn new(context: &RenderContext, layouts: &mut RenderLayouts) -> Self {
-        let layout = layouts.get::<camera_render_pipeline::CameraEnvironmentLayout>(context);
+    pub fn new(gpu: &Gpu, layouts: &mut RenderLayouts) -> Self {
+        let layout = layouts.get::<camera_render_pipeline::CameraEnvironmentLayout>(gpu);
 
         let camera_env_buffer = PerFrame::new(|index| {
-            let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+            let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("cameras"),
                 size: std::mem::size_of::<camera_render_pipeline::gpu::CameraEnvironment>()
                     as wgpu::BufferAddress,
@@ -24,7 +24,7 @@ impl RenderBindings {
                 mapped_at_creation: false,
             });
 
-            let bind_group = context
+            let bind_group = gpu
                 .device
                 .create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some(&format!("cmaera_bind_group_{index}")),

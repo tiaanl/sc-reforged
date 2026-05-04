@@ -4,7 +4,7 @@ use crate::{
     engine::{
         assets::AssetError,
         input::InputEvent,
-        renderer::{Frame, RenderContext, SurfaceDesc},
+        renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
         scene::Scene,
     },
     game::{
@@ -23,11 +23,11 @@ pub struct MainMenuScene {
 impl MainMenuScene {
     pub fn new(
         file_system: Arc<FileSystem>,
-        render_context: RenderContext,
+        gpu: Gpu,
         surface_desc: &SurfaceDesc,
     ) -> Result<Self, AssetError> {
         let images = Arc::new(Images::new(Arc::clone(&file_system)));
-        let textures = Arc::new(Textures::new(render_context.clone(), Arc::clone(&images)));
+        let textures = Arc::new(Textures::new(gpu.clone(), Arc::clone(&images)));
         let sprites = Arc::new(Sprites::new(Arc::clone(&textures), &file_system)?);
 
         let help_window_defs: HelpWindowDefs = load_config(
@@ -36,7 +36,7 @@ impl MainMenuScene {
         )?;
 
         let mut window_manager =
-            WindowManager::new(file_system, render_context, surface_desc, textures, sprites)?;
+            WindowManager::new(file_system, gpu, surface_desc, textures, sprites)?;
 
         {
             window_manager.push(Box::new(MainMenuWindow::new(&window_manager)?));
@@ -64,8 +64,13 @@ impl Scene for MainMenuScene {
         self.window_manager.update(delta_time);
     }
 
-    fn render(&mut self, _context: &RenderContext, frame: &mut Frame) {
-        self.window_manager.render(frame);
+    fn render(
+        &mut self,
+        _gpu: &Gpu,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
+    ) {
+        self.window_manager.render(render_context, render_target);
     }
 }
 

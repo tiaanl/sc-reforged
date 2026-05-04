@@ -4,7 +4,7 @@ use glam::{IVec2, UVec2, Vec4};
 
 use crate::{
     engine::{
-        renderer::{Frame, RenderContext, SurfaceDesc},
+        renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
         storage::{Handle, Storage},
     },
     game::{
@@ -154,7 +154,7 @@ pub struct WindowRenderer {
 impl WindowRenderer {
     /// Creates the window renderer.
     pub fn new(
-        render_context: RenderContext,
+        gpu: Gpu,
         surface_desc: &SurfaceDesc,
         textures: Arc<Textures>,
         sprites: Arc<Sprites>,
@@ -162,7 +162,7 @@ impl WindowRenderer {
         Self {
             sprites,
             textures: Arc::clone(&textures),
-            quad_renderer: QuadRenderer::new(render_context, surface_desc, textures),
+            quad_renderer: QuadRenderer::new(gpu, surface_desc, textures),
             tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
         }
@@ -250,7 +250,12 @@ impl WindowRenderer {
     }
 
     /// Resolves window render items into quads and submits them for drawing.
-    pub fn submit_render_items(&mut self, frame: &mut Frame, items: &WindowRenderItems) {
+    pub fn submit_render_items(
+        &mut self,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
+        items: &WindowRenderItems,
+    ) {
         let mut quads = Vec::new();
 
         let mut clip_stack: Vec<Rect> = Vec::default();
@@ -400,7 +405,8 @@ impl WindowRenderer {
             }
         }
 
-        self.quad_renderer.submit(frame, quads.as_slice());
+        self.quad_renderer
+            .submit(render_context, render_target, quads.as_slice());
     }
 }
 

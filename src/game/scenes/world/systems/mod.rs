@@ -6,7 +6,7 @@ use glam::Vec3;
 use crate::{
     engine::{
         input::InputState,
-        renderer::{Frame, RenderContext},
+        renderer::{Gpu, RenderContext, RenderTarget},
         shader_cache::ShaderCache,
         transform::Transform,
     },
@@ -96,7 +96,7 @@ impl Systems {
     pub fn new(
         images: Arc<Images>,
         models: Arc<Models>,
-        context: &RenderContext,
+        gpu: &Gpu,
         render_targets: &RenderTargets,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
@@ -168,7 +168,7 @@ impl Systems {
             world_renderer: WorldRenderer::new(
                 images,
                 models,
-                context,
+                gpu,
                 render_targets,
                 layouts,
                 shader_cache,
@@ -195,11 +195,11 @@ impl Systems {
     pub fn prepare(
         &mut self,
         bindings: &mut RenderBindings,
-        context: &RenderContext,
+        gpu: &Gpu,
         render_snapshot: &RenderSnapshot,
     ) {
         self.world_renderer
-            .prepare(context, bindings, render_snapshot);
+            .prepare(gpu, bindings, render_snapshot);
     }
 
     pub fn queue(
@@ -207,15 +207,21 @@ impl Systems {
         render_targets: &RenderTargets,
         bindings: &RenderBindings,
         snapshot: &RenderSnapshot,
-        frame: &mut Frame,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
     ) {
         clear_render_targets::clear_render_targets(
-            frame,
+            render_context,
             &render_targets.geometry_buffer,
             snapshot.environment.fog_color,
         );
-        self.world_renderer
-            .queue(bindings, frame, &render_targets.geometry_buffer, snapshot);
+        self.world_renderer.queue(
+            bindings,
+            render_context,
+            render_target,
+            &render_targets.geometry_buffer,
+            snapshot,
+        );
     }
 }
 

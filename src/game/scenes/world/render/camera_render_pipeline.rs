@@ -1,5 +1,5 @@
 use crate::{
-    engine::renderer::Frame,
+    engine::renderer::{RenderContext, RenderTarget},
     game::scenes::world::{
         extract::RenderSnapshot,
         render::{RenderPipeline, render_layouts::RenderLayout},
@@ -36,7 +36,7 @@ pub struct CameraRenderPipeline;
 impl RenderPipeline for CameraRenderPipeline {
     fn prepare(
         &mut self,
-        context: &crate::engine::renderer::RenderContext,
+        context: &crate::engine::renderer::Gpu,
         bindings: &mut RenderBindings,
         snapshot: &RenderSnapshot,
     ) {
@@ -76,7 +76,8 @@ impl RenderPipeline for CameraRenderPipeline {
     fn queue(
         &self,
         _bindings: &RenderBindings,
-        _frame: &mut Frame,
+        _render_context: &mut RenderContext,
+        _render_target: &RenderTarget,
         _geometry_buffer: &GeometryBuffer,
         _snapshot: &RenderSnapshot,
     ) {

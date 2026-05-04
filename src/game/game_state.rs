@@ -6,7 +6,7 @@ use crate::{
     engine::{
         assets::AssetError,
         input::InputEvent,
-        renderer::{Frame, RenderContext, SurfaceDesc},
+        renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
     },
     game::{
         assets::{images::Images, sprites::Sprites},
@@ -25,16 +25,16 @@ pub struct GameState {
 impl GameState {
     pub fn new(
         file_system: Arc<FileSystem>,
-        render_context: RenderContext,
+        gpu: Gpu,
         surface_desc: &SurfaceDesc,
     ) -> Result<Self, AssetError> {
         let images = Arc::new(Images::new(Arc::clone(&file_system)));
-        let textures = Arc::new(Textures::new(render_context.clone(), images));
+        let textures = Arc::new(Textures::new(gpu.clone(), images));
         let sprites = Arc::new(Sprites::new(Arc::clone(&textures), &file_system)?);
 
         let mut window_manager = WindowManager::new(
             Arc::clone(&file_system),
-            render_context,
+            gpu,
             surface_desc,
             textures,
             sprites,
@@ -69,8 +69,8 @@ impl GameState {
         self.window_manager.update(delta_time);
     }
 
-    pub fn render(&mut self, frame: &mut Frame) {
-        self.window_manager.render(frame);
+    pub fn render(&mut self, render_context: &mut RenderContext, render_target: &RenderTarget) {
+        self.window_manager.render(render_context, render_target);
     }
 
     #[cfg(feature = "egui")]

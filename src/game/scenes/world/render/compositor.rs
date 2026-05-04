@@ -1,6 +1,6 @@
 use crate::{
     engine::{
-        renderer::{Frame, RenderContext},
+        renderer::{Gpu, RenderContext, RenderTarget},
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::scenes::world::{
@@ -17,13 +17,13 @@ pub struct Compositor {
 
 impl Compositor {
     pub fn new(
-        context: &RenderContext,
+        gpu: &Gpu,
         render_targets: &RenderTargets,
         shader_cache: &mut ShaderCache,
     ) -> Self {
-        let module = shader_cache.get_or_create(&context.device, ShaderSource::Compositor);
+        let module = shader_cache.get_or_create(&gpu.device, ShaderSource::Compositor);
 
-        let layout = context
+        let layout = gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compositor_pipeline_layout"),
@@ -31,7 +31,7 @@ impl Compositor {
                 push_constant_ranges: &[],
             });
 
-        let pipeline = context
+        let pipeline = gpu
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("compositor_pipeline"),
@@ -66,7 +66,7 @@ impl Compositor {
 impl RenderPipeline for Compositor {
     fn prepare(
         &mut self,
-        _context: &RenderContext,
+        _gpu: &Gpu,
         _bindings: &mut RenderBindings,
         _snapshot: &RenderSnapshot,
     ) {
@@ -76,27 +76,29 @@ impl RenderPipeline for Compositor {
     fn queue(
         &self,
         _bindings: &RenderBindings,
-        frame: &mut Frame,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
         _snapshot: &RenderSnapshot,
     ) {
-        let mut render_pass = frame
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("compositor_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.surface,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+        let mut render_pass =
+            render_context
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("compositor_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &render_target.view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, geometry_buffer.bind_group(), &[]);
