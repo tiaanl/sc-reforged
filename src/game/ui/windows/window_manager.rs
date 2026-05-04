@@ -275,12 +275,14 @@ impl WindowManager {
         let window = self.windows[window_index].as_mut();
         let local = mouse - window.rect().position;
 
+        let context = &mut self.window_manager_context;
+
         match button {
             MouseButton::Left => {
-                let _ = window.on_primary_mouse_up(local);
+                let _ = window.on_primary_mouse_up(local, context);
             }
             MouseButton::Right => {
-                let _ = window.on_secondary_mouse_up(local);
+                let _ = window.on_secondary_mouse_up(local, context);
             }
             _ => {}
         }
@@ -304,7 +306,8 @@ impl WindowManager {
         let window = self.windows[window_index].as_mut();
         let local = mouse - window.rect().position;
 
-        let _ = window.on_mouse_wheel(local, delta);
+        let context = &mut self.window_manager_context;
+        let _ = window.on_mouse_wheel(local, delta, context);
 
         // TODO: Route wheel input to the captured or hovered window once the
         // manager tracks those states explicitly.

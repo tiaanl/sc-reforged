@@ -127,9 +127,9 @@ impl Window for HelpWindow {
     fn on_primary_mouse_down(
         &mut self,
         mouse: IVec2,
-        _context: &mut WindowManagerContext,
+        context: &mut WindowManagerContext,
     ) -> EventResult {
-        self.widgets.on_primary_mouse_down(mouse)
+        self.widgets.on_primary_mouse_down(mouse, context)
     }
 
     fn on_secondary_mouse_down(
@@ -142,12 +142,21 @@ impl Window for HelpWindow {
         EventResult::Ignore
     }
 
-    fn on_primary_mouse_up(&mut self, mouse: IVec2) -> EventResult {
-        self.widgets.on_primary_mouse_up(mouse)
+    fn on_primary_mouse_up(
+        &mut self,
+        mouse: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
+        self.widgets.on_primary_mouse_up(mouse, context)
     }
 
-    fn on_mouse_wheel(&mut self, mouse: IVec2, wheel_steps: i32) -> EventResult {
-        self.widgets.on_mouse_wheel(mouse, wheel_steps)
+    fn on_mouse_wheel(
+        &mut self,
+        mouse: IVec2,
+        wheel_steps: i32,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
+        self.widgets.on_mouse_wheel(mouse, wheel_steps, context)
     }
 
     fn render(&mut self, window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems) {

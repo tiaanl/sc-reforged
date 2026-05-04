@@ -53,21 +53,37 @@ pub trait Window {
     }
 
     /// Handle a primary mouse up event.
-    fn on_primary_mouse_up(&mut self, mouse: IVec2) -> EventResult {
+    fn on_primary_mouse_up(
+        &mut self,
+        mouse: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
         let _ = mouse;
+        let _ = context;
         EventResult::Ignore
     }
 
     /// Handle a secondary mouse up event.
-    fn on_secondary_mouse_up(&mut self, mouse: IVec2) -> EventResult {
+    fn on_secondary_mouse_up(
+        &mut self,
+        mouse: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
         let _ = mouse;
+        let _ = context;
         EventResult::Ignore
     }
 
     /// Handle a mouse wheel event in window-local coordinates.
-    fn on_mouse_wheel(&mut self, mouse: IVec2, wheel_steps: i32) -> EventResult {
+    fn on_mouse_wheel(
+        &mut self,
+        mouse: IVec2,
+        wheel_steps: i32,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
         let _ = mouse;
         let _ = wheel_steps;
+        let _ = context;
         EventResult::Ignore
     }
 

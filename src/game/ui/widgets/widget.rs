@@ -3,6 +3,7 @@ use glam::IVec2;
 use crate::game::ui::{
     EventResult, Rect,
     render::window_renderer::{WindowRenderItems, WindowRenderer},
+    windows::window_manager_context::WindowManagerContext,
 };
 
 pub trait Widget {
@@ -35,7 +36,11 @@ impl Widgets {
 
     /// Forwards a primary mouse-down event to the topmost child widget under
     /// the cursor.
-    pub fn on_primary_mouse_down(&mut self, mouse_position: IVec2) -> EventResult {
+    pub fn on_primary_mouse_down(
+        &mut self,
+        mouse_position: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
             let rect = widget.rect();
             if !rect.contains(mouse_position) {
@@ -54,7 +59,11 @@ impl Widgets {
 
     /// Forwards a primary mouse-up event to the topmost child widget under
     /// the cursor.
-    pub fn on_primary_mouse_up(&mut self, mouse_position: IVec2) -> EventResult {
+    pub fn on_primary_mouse_up(
+        &mut self,
+        mouse_position: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
             let rect = widget.rect();
             if !rect.contains(mouse_position) {
@@ -86,9 +95,30 @@ impl Widgets {
         EventResult::Ignore
     }
 
+    pub fn on_secondary_mouse_down(
+        &mut self,
+        _position: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
+        EventResult::Ignore
+    }
+
+    pub fn on_secondary_mouse_up(
+        &mut self,
+        _position: IVec2,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
+        EventResult::Ignore
+    }
+
     /// Forwards a mouse-wheel event to the topmost child widget under the
     /// cursor.
-    pub fn on_mouse_wheel(&mut self, mouse_position: IVec2, wheel_steps: i32) -> EventResult {
+    pub fn on_mouse_wheel(
+        &mut self,
+        mouse_position: IVec2,
+        wheel_steps: i32,
+        _context: &mut WindowManagerContext,
+    ) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
             let rect = widget.rect();
             if !rect.contains(mouse_position) {
