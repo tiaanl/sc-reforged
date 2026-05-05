@@ -26,7 +26,7 @@ use crate::{
     },
 };
 
-use super::window::Window;
+use super::window::{Window, WindowRenderContext};
 
 pub struct WindowManager {
     file_system: Arc<FileSystem>,
@@ -343,11 +343,21 @@ impl WindowManager {
         //
     }
 
-    pub fn render(&mut self, render_context: &mut RenderContext, render_target: &RenderTarget) {
+    pub fn render(
+        &mut self,
+        gpu: &Gpu,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
+    ) {
         self.window_render_items_cache.clear();
 
         for window in self.windows.iter_mut() {
-            window.render(&self.window_renderer, &mut self.window_render_items_cache);
+            let mut ctx = WindowRenderContext {
+                gpu,
+                render_context,
+                window_renderer: &self.window_renderer,
+            };
+            window.render(&mut ctx, &mut self.window_render_items_cache);
         }
 
         self.window_renderer.submit_render_items(

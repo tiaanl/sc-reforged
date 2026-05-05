@@ -1,5 +1,5 @@
 use crate::{
-    engine::renderer::{RenderContext, RenderTarget},
+    engine::renderer::RenderContext,
     game::render::{
         geometry_buffer::GeometryBuffer,
         world::{
@@ -78,7 +78,6 @@ impl RenderPipeline for CameraRenderPipeline {
         &self,
         _bindings: &RenderBindings,
         _render_context: &mut RenderContext,
-        _render_target: &RenderTarget,
         _geometry_buffer: &GeometryBuffer,
         _snapshot: &WorldRenderSnapshot,
     ) {

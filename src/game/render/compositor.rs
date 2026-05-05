@@ -1,9 +1,6 @@
-use crate::{
-    engine::{
-        renderer::{Gpu, RenderContext, RenderTarget},
-        shader_cache::{ShaderCache, ShaderSource},
-    },
-    game::render::geometry_buffer::GeometryBuffer,
+use crate::engine::{
+    renderer::{Gpu, RenderContext, RenderTarget},
+    shader_cache::{ShaderCache, ShaderSource},
 };
 
 pub struct Compositor {
@@ -14,7 +11,7 @@ impl Compositor {
     pub fn new(
         gpu: &Gpu,
         target_format: wgpu::TextureFormat,
-        geometry_buffer: &GeometryBuffer,
+        gbuffer_bind_group_layout: &wgpu::BindGroupLayout,
         shader_cache: &mut ShaderCache,
     ) -> Self {
         let module = shader_cache.get_or_create(&gpu.device, ShaderSource::Compositor);
@@ -23,7 +20,7 @@ impl Compositor {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compositor_pipeline_layout"),
-                bind_group_layouts: &[&geometry_buffer.bind_group_layout],
+                bind_group_layouts: &[gbuffer_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -60,11 +57,11 @@ impl Compositor {
 }
 
 impl Compositor {
-    fn render(
+    pub fn composite(
         &self,
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
-        geometry_buffer: &GeometryBuffer,
+        gbuffer_bind_group: &wgpu::BindGroup,
     ) {
         let mut render_pass =
             render_context
@@ -86,7 +83,7 @@ impl Compositor {
                 });
 
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, geometry_buffer.bind_group(), &[]);
+        render_pass.set_bind_group(0, gbuffer_bind_group, &[]);
         render_pass.draw(0..3, 0..1);
     }
 }

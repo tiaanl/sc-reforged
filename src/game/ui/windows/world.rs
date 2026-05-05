@@ -3,7 +3,11 @@ use std::sync::Arc;
 use glam::{IVec2, UVec2};
 
 use crate::{
-    engine::{assets::AssetError, renderer::Gpu},
+    engine::{
+        assets::AssetError,
+        renderer::Gpu,
+        storage::Handle,
+    },
     game::{
         assets::models::Models,
         file_system::FileSystem,
@@ -15,19 +19,17 @@ use crate::{
         scenes::world::sim_world::Terrain,
         ui::{
             Rect,
-            render::window_renderer::{WindowRenderItems, WindowRenderer},
-            windows::window::Window,
+            render::window_renderer::{WindowRenderItems, WindowRenderer as UiWindowRenderer},
+            windows::window::{Window, WindowRenderContext},
         },
     },
 };
 
 pub struct WorldWindow {
-    gpu: Gpu,
     rect: Rect,
 
-    geometry_buffer: GeometryBuffer,
-
     world_renderer: WorldRenderer,
+    gbuffer: Handle<GeometryBuffer>,
 }
 
 impl WorldWindow {
@@ -35,21 +37,27 @@ impl WorldWindow {
         gpu: Gpu,
         file_system: Arc<FileSystem>,
         textures: Arc<Textures>,
+        ui_window_renderer: &UiWindowRenderer,
         size: UVec2,
         terrain: &Terrain,
     ) -> Result<Self, AssetError> {
-        let geometry_buffer = GeometryBuffer::new(gpu.clone(), size);
-
         let images = textures.images();
         let models = Arc::new(Models::new(file_system, images)?);
 
-        let world_renderer = WorldRenderer::new(models, textures, gpu.clone(), terrain);
+        let mut world_renderer = WorldRenderer::new(
+            models,
+            textures,
+            gpu,
+            ui_window_renderer.gbuffer_bind_group_layout(),
+            terrain,
+        );
+
+        let gbuffer = world_renderer.register_gbuffer(size);
 
         Ok(Self {
-            gpu,
             rect: Rect::new(IVec2::ZERO, IVec2::ZERO),
-            geometry_buffer,
             world_renderer,
+            gbuffer,
         })
     }
 }
@@ -71,20 +79,30 @@ impl Window for WorldWindow {
         todo!()
     }
 
-    fn render(&mut self, window_renderer: &WindowRenderer, _render_items: &mut WindowRenderItems) {
-        let surface_size = window_renderer.surface_size();
-        if self.geometry_buffer.size != surface_size {
+    fn render(
+        &mut self,
+        ctx: &mut WindowRenderContext<'_>,
+        render_items: &mut WindowRenderItems,
+    ) {
+        let surface_size = ctx.window_renderer.surface_size();
+        if self.world_renderer.gbuffer_size(self.gbuffer) != Some(surface_size) {
             tracing::info!(
-                "Resizing geometry buffer for world window to {}x{}.",
+                "Resizing world view gbuffer to {}x{}.",
                 surface_size.x,
-                surface_size.y
+                surface_size.y,
             );
-            self.geometry_buffer.resize(surface_size);
+            self.world_renderer
+                .resize_gbuffer(self.gbuffer, surface_size);
         }
 
         let snapshot = WorldRenderSnapshot::default();
 
-        self.world_renderer.prepare(&self.gpu, &snapshot);
-        // TODO: self.world_renderer.queue(&self.geometry_buffer, &snapshot);
+        self.world_renderer.prepare(ctx.gpu, &snapshot);
+        self.world_renderer
+            .render_to(self.gbuffer, ctx.render_context, &snapshot);
+
+        if let Some(bind_group) = self.world_renderer.gbuffer_bind_group(self.gbuffer) {
+            render_items.render_world_view(bind_group);
+        }
     }
 }

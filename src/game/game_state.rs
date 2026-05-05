@@ -124,7 +124,8 @@ impl GameState {
     }
 
     pub fn render(&mut self, render_context: &mut RenderContext, render_target: &RenderTarget) {
-        self.window_manager.render(render_context, render_target);
+        self.window_manager
+            .render(&self.gpu, render_context, render_target);
     }
 
     #[cfg(feature = "egui")]
@@ -167,6 +168,7 @@ impl GameState {
             self.gpu.clone(),
             Arc::clone(&self.file_system),
             Arc::clone(&self.textures),
+            self.window_manager.window_renderer(),
             UVec2::new(640, 480),
             sim.terrain(),
         )?);

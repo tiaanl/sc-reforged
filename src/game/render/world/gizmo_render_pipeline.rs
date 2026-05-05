@@ -2,7 +2,7 @@ use crate::{
     engine::{
         gizmos::GizmoVertex,
         growing_buffer::GrowingBuffer,
-        renderer::{Gpu, RenderContext, RenderTarget},
+        renderer::{Gpu, RenderContext},
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::render::{
@@ -54,7 +54,13 @@ impl GizmoRenderPipeline {
                 topology: wgpu::PrimitiveTopology::LineList,
                 ..Default::default()
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: GeometryBuffer::DEPTH_FORMAT,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module,
@@ -97,26 +103,11 @@ impl RenderPipeline for GizmoRenderPipeline {
         &self,
         bindings: &RenderBindings,
         render_context: &mut RenderContext,
-        render_target: &RenderTarget,
-        _geometry_buffer: &GeometryBuffer,
+        geometry_buffer: &GeometryBuffer,
         snapshot: &WorldRenderSnapshot,
     ) {
-        let mut render_pass =
-            render_context
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("gizmos_render_pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &render_target.view,
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    ..Default::default()
-                });
+        let mut render_pass = geometry_buffer
+            .begin_opaque_render_pass(&mut render_context.encoder, "gizmos_render_pass");
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, self.instances_buffer.current().slice(..));

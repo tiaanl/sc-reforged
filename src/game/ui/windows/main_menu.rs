@@ -4,13 +4,16 @@ use crate::{
     engine::assets::AssetError,
     game::ui::{
         Rect,
-        render::window_renderer::{WindowRenderItems, WindowRenderer},
+        render::window_renderer::WindowRenderItems,
         widgets::{text_button::TextButtonWidget, widget::Widgets},
         windows::{actions::WindowManagerAction, window_manager::WindowManager},
     },
 };
 
-use super::{window::Window, window_manager_context::WindowManagerContext};
+use super::{
+    window::{Window, WindowRenderContext},
+    window_manager_context::WindowManagerContext,
+};
 
 pub struct MainMenuWindow {
     rect: Rect,
@@ -77,9 +80,13 @@ impl Window for MainMenuWindow {
         self.widgets.on_primary_mouse_up(position, context)
     }
 
-    fn render(&mut self, window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems) {
+    fn render(
+        &mut self,
+        ctx: &mut WindowRenderContext<'_>,
+        render_items: &mut WindowRenderItems,
+    ) {
         self.widgets
-            .render(self.rect.position, 100, window_renderer, render_items);
+            .render(self.rect.position, 100, ctx.window_renderer, render_items);
 
         render_items.render_border(
             self.rect.offset(IVec2::splat(10)),

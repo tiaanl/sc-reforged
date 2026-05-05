@@ -5,6 +5,7 @@ use glam::{IVec2, UVec2, Vec4};
 use crate::{
     engine::{
         renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
+        shader_cache::ShaderCache,
         storage::{Handle, Storage},
     },
     game::{
@@ -12,7 +13,11 @@ use crate::{
             image::Image,
             sprites::{Sprite3d, Sprites},
         },
-        render::textures::{Texture, Textures},
+        render::{
+            compositor::Compositor,
+            geometry_buffer::GeometryBuffer,
+            textures::{Texture, Textures},
+        },
         ui::{Rect, u32_to_color},
     },
 };
@@ -140,6 +145,11 @@ impl WindowRenderItems {
             color: color.unwrap_or(font.primary_color()),
         });
     }
+
+    /// Queues a composite of a world-view gbuffer onto the window target.
+    pub fn render_world_view(&mut self, bind_group: wgpu::BindGroup) {
+        self.0.push(WindowRenderItem::WorldView { bind_group });
+    }
 }
 
 /// Renders all the components required for windows.
@@ -149,6 +159,8 @@ pub struct WindowRenderer {
     sprites: Arc<Sprites>,
     tiled_geometries: Storage<TiledGeometry>,
     surface_size: UVec2,
+    gbuffer_bind_group_layout: wgpu::BindGroupLayout,
+    compositor: Compositor,
 }
 
 impl WindowRenderer {
@@ -159,13 +171,31 @@ impl WindowRenderer {
         textures: Arc<Textures>,
         sprites: Arc<Sprites>,
     ) -> Self {
+        let gbuffer_bind_group_layout = GeometryBuffer::create_bind_group_layout(&gpu.device);
+        let mut shader_cache = ShaderCache::default();
+        let compositor = Compositor::new(
+            &gpu,
+            surface_desc.format,
+            &gbuffer_bind_group_layout,
+            &mut shader_cache,
+        );
+
         Self {
             sprites,
             textures: Arc::clone(&textures),
             quad_renderer: QuadRenderer::new(gpu, surface_desc, textures),
             tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
+            gbuffer_bind_group_layout,
+            compositor,
         }
+    }
+
+    /// The shared bind group layout used by all gbuffers in the world view
+    /// pipeline. World renderers must build their gbuffers against this layout
+    /// so the compositor can sample them.
+    pub fn gbuffer_bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.gbuffer_bind_group_layout
     }
 
     /// Create a tiled geometry render item.
@@ -256,6 +286,24 @@ impl WindowRenderer {
         render_target: &RenderTarget,
         items: &WindowRenderItems,
     ) {
+        // Per-frame surface clear. Subsequent passes (quads, compositor) all
+        // use LoadOp::Load and stack on top of this.
+        render_context
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("window_renderer_surface_clear"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &render_target.view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+
         let mut quads = Vec::new();
 
         let mut clip_stack: Vec<Rect> = Vec::default();
@@ -341,6 +389,15 @@ impl WindowRenderer {
                     quad.clip_rect = clip_stack.last().cloned();
 
                     quads.push(quad);
+                }
+                WindowRenderItem::WorldView { bind_group } => {
+                    if !quads.is_empty() {
+                        self.quad_renderer
+                            .submit(render_context, render_target, quads.as_slice());
+                        quads.clear();
+                    }
+                    self.compositor
+                        .composite(render_context, render_target, bind_group);
                 }
                 WindowRenderItem::Text {
                     pos,
@@ -441,6 +498,9 @@ enum WindowRenderItem {
         text: Vec<u8>,
         font: Font,
         color: Vec4,
+    },
+    WorldView {
+        bind_group: wgpu::BindGroup,
     },
 }
 

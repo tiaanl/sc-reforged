@@ -5,7 +5,7 @@ use ahash::HashMap;
 use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
-        renderer::{Gpu, RenderContext, RenderTarget},
+        renderer::{Gpu, RenderContext},
         shader_cache::ShaderCache,
         storage::Handle,
     },
@@ -479,7 +479,6 @@ impl RenderPipeline for ModelRenderPipeline {
         &self,
         bindings: &RenderBindings,
         render_context: &mut RenderContext,
-        _render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
         _snapshot: &WorldRenderSnapshot,
     ) {

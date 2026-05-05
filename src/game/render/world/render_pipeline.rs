@@ -1,5 +1,5 @@
 use crate::{
-    engine::renderer::{Gpu, RenderContext, RenderTarget},
+    engine::renderer::{Gpu, RenderContext},
     game::render::{
         geometry_buffer::GeometryBuffer,
         world::{render_bindings::RenderBindings, world_render_snapshot::WorldRenderSnapshot},
@@ -15,7 +15,6 @@ pub trait RenderPipeline {
         &self,
         bindings: &RenderBindings,
         render_context: &mut RenderContext,
-        render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
         snapshot: &WorldRenderSnapshot,
     );
@@ -48,18 +47,11 @@ impl RenderPipeline for RenderPipelineList {
         &self,
         bindings: &RenderBindings,
         render_context: &mut RenderContext,
-        render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
         snapshot: &WorldRenderSnapshot,
     ) {
         for pipeline in self.pipelines.iter() {
-            pipeline.queue(
-                bindings,
-                render_context,
-                render_target,
-                geometry_buffer,
-                snapshot,
-            );
+            pipeline.queue(bindings, render_context, geometry_buffer, snapshot);
         }
     }
 }

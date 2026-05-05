@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     engine::{
         growing_buffer::GrowingBuffer,
-        renderer::{Gpu, RenderContext, RenderTarget},
+        renderer::{Gpu, RenderContext},
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::{
@@ -437,7 +437,6 @@ impl RenderPipeline for TerrainRenderPipeline {
         &self,
         render_bindings: &RenderBindings,
         render_context: &mut RenderContext,
-        _render_target: &RenderTarget,
         geometry_buffer: &GeometryBuffer,
         snapshot: &WorldRenderSnapshot,
     ) {

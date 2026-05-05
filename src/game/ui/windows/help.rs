@@ -4,7 +4,7 @@ use crate::game::{
     config::help_window_defs::HelpDef,
     ui::{
         EventResult, Rect,
-        render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
+        render::window_renderer::{Font, WindowRenderItems},
         u32_to_color,
         widgets::{
             list_box::{ListBoxItem, ListBoxWidget},
@@ -15,7 +15,7 @@ use crate::game::{
     },
 };
 
-use super::window::Window;
+use super::window::{Window, WindowRenderContext};
 
 pub struct HelpWindow {
     rect: Rect,
@@ -159,7 +159,11 @@ impl Window for HelpWindow {
         self.widgets.on_mouse_wheel(mouse, wheel_steps, context)
     }
 
-    fn render(&mut self, window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems) {
+    fn render(
+        &mut self,
+        ctx: &mut WindowRenderContext<'_>,
+        render_items: &mut WindowRenderItems,
+    ) {
         // TODO: The original help window render has first-frame special
         // handling. It does not draw the translucent fills until
         // `m_render_frame_count != 0`, and it increments that counter at the
@@ -172,7 +176,7 @@ impl Window for HelpWindow {
             // Render modal background.
             // Render_Solid_Rect(0,0,g_renderer->m_screen_width,g_renderer->m_screen_height,0x50000000);
             render_items.render_solid_rect(
-                Rect::from_size(window_renderer.surface_size().as_ivec2()),
+                Rect::from_size(ctx.window_renderer.surface_size().as_ivec2()),
                 u32_to_color(0x50000000),
             );
 
@@ -205,7 +209,7 @@ impl Window for HelpWindow {
         self.widgets.render(
             self.rect.position,
             DELTA_TIME_MS,
-            window_renderer,
+            ctx.window_renderer,
             render_items,
         );
     }

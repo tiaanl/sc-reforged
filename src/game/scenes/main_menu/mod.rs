@@ -66,11 +66,12 @@ impl Scene for MainMenuScene {
 
     fn render(
         &mut self,
-        _gpu: &Gpu,
+        gpu: &Gpu,
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
     ) {
-        self.window_manager.render(render_context, render_target);
+        self.window_manager
+            .render(gpu, render_context, render_target);
     }
 }
 

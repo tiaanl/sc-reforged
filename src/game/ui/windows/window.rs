@@ -1,10 +1,22 @@
 use glam::IVec2;
 
-use crate::game::ui::{
-    EventResult, Rect,
-    render::window_renderer::{WindowRenderItems, WindowRenderer},
-    windows::window_manager_context::WindowManagerContext,
+use crate::{
+    engine::renderer::{Gpu, RenderContext},
+    game::ui::{
+        EventResult, Rect,
+        render::window_renderer::{WindowRenderItems, WindowRenderer},
+        windows::window_manager_context::WindowManagerContext,
+    },
 };
+
+/// Resources passed to each window during the render phase. Carries enough to
+/// drive direct GPU work (e.g. world rendering into a gbuffer) in addition to
+/// emitting window render items.
+pub struct WindowRenderContext<'a> {
+    pub gpu: &'a Gpu,
+    pub render_context: &'a mut RenderContext,
+    pub window_renderer: &'a WindowRenderer,
+}
 
 pub trait Window {
     /// Return true if the window is modal and should exclusively receive input.
@@ -93,6 +105,11 @@ pub trait Window {
         let _ = delta_time;
     }
 
-    /// Called for each window so they can append items to the `render_items` to be rendered.
-    fn render(&mut self, window_renderer: &WindowRenderer, render_items: &mut WindowRenderItems);
+    /// Called for each window so they can drive any GPU work and append items
+    /// to `render_items` to be composited later.
+    fn render(
+        &mut self,
+        ctx: &mut WindowRenderContext<'_>,
+        render_items: &mut WindowRenderItems,
+    );
 }
