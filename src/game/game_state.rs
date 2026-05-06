@@ -38,8 +38,6 @@ pub struct GameState {
     textures: Arc<Textures>,
 
     window_manager: WindowManager,
-
-    sim: Option<SimWorld>,
 }
 
 impl GameState {
@@ -90,7 +88,6 @@ impl GameState {
             motions,
             textures,
             window_manager,
-            sim: None,
         })
     }
 
@@ -160,21 +157,19 @@ impl GameState {
                 motions: Arc::clone(&self.motions),
             },
             campaign_def,
-        );
+        )?;
 
         self.window_manager.clear();
 
         let world_window = Box::new(WorldWindow::new(
             self.gpu.clone(),
-            Arc::clone(&self.file_system),
+            Arc::clone(&self.models),
             Arc::clone(&self.textures),
             self.window_manager.window_renderer(),
             UVec2::new(640, 480),
-            sim.terrain(),
+            sim,
         )?);
         self.window_manager.push(world_window);
-
-        self.sim = Some(sim);
 
         Ok(())
     }

@@ -3,20 +3,11 @@ use std::sync::Arc;
 use glam::{IVec2, UVec2};
 
 use crate::{
-    engine::{
-        assets::AssetError,
-        renderer::Gpu,
-        storage::Handle,
-    },
+    engine::{assets::AssetError, input::InputEvent, renderer::Gpu, storage::Handle},
     game::{
         assets::models::Models,
-        file_system::FileSystem,
-        render::{
-            geometry_buffer::GeometryBuffer,
-            textures::Textures,
-            world::{WorldRenderSnapshot, WorldRenderer},
-        },
-        scenes::world::sim_world::Terrain,
+        render::{geometry_buffer::GeometryBuffer, textures::Textures, world::WorldRenderer},
+        scenes::world::sim_world::SimWorld,
         ui::{
             Rect,
             render::window_renderer::{WindowRenderItems, WindowRenderer as UiWindowRenderer},
@@ -30,26 +21,24 @@ pub struct WorldWindow {
 
     world_renderer: WorldRenderer,
     gbuffer: Handle<GeometryBuffer>,
+    sim: SimWorld,
 }
 
 impl WorldWindow {
     pub fn new(
         gpu: Gpu,
-        file_system: Arc<FileSystem>,
+        models: Arc<Models>,
         textures: Arc<Textures>,
         ui_window_renderer: &UiWindowRenderer,
         size: UVec2,
-        terrain: &Terrain,
+        sim: SimWorld,
     ) -> Result<Self, AssetError> {
-        let images = textures.images();
-        let models = Arc::new(Models::new(file_system, images)?);
-
         let mut world_renderer = WorldRenderer::new(
             models,
             textures,
             gpu,
             ui_window_renderer.gbuffer_bind_group_layout(),
-            terrain,
+            sim.terrain(),
         );
 
         let gbuffer = world_renderer.register_gbuffer(size);
@@ -58,6 +47,7 @@ impl WorldWindow {
             rect: Rect::new(IVec2::ZERO, IVec2::ZERO),
             world_renderer,
             gbuffer,
+            sim,
         })
     }
 }
@@ -79,6 +69,14 @@ impl Window for WorldWindow {
         todo!()
     }
 
+    fn on_input(&mut self, event: &InputEvent) {
+        self.sim.input(event);
+    }
+
+    fn update(&mut self, delta_time: f32) {
+        self.sim.update(delta_time);
+    }
+
     fn render(
         &mut self,
         ctx: &mut WindowRenderContext<'_>,
@@ -93,13 +91,13 @@ impl Window for WorldWindow {
             );
             self.world_renderer
                 .resize_gbuffer(self.gbuffer, surface_size);
+            self.sim.resize_viewport(surface_size);
         }
 
-        let snapshot = WorldRenderSnapshot::default();
-
-        self.world_renderer.prepare(ctx.gpu, &snapshot);
+        let snapshot = self.sim.extract_snapshot();
+        self.world_renderer.prepare(ctx.gpu, snapshot);
         self.world_renderer
-            .render_to(self.gbuffer, ctx.render_context, &snapshot);
+            .render_to(self.gbuffer, ctx.render_context, snapshot);
 
         if let Some(bind_group) = self.world_renderer.gbuffer_bind_group(self.gbuffer) {
             render_items.render_world_view(bind_group);

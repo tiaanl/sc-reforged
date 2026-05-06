@@ -10,7 +10,11 @@ use bevy_ecs::prelude::*;
 use glam::{IVec2, Quat, Vec2, Vec3};
 
 use crate::{
-    engine::{assets::AssetError, input::InputState, transform::Transform},
+    engine::{
+        assets::AssetError,
+        input::{InputEvent, InputState},
+        transform::Transform,
+    },
     game::{
         assets::{
             config::campaign_def::CampaignDef, images::Images, models::Models, motions::Motions,
@@ -28,7 +32,7 @@ use crate::{
                 ui::Ui,
             },
             systems::{
-                SimulationControl, Time,
+                SimulationControl, Time, build_extract_schedule, build_update_schedule,
                 world_interaction::{self, WorldInteraction},
             },
         },
@@ -63,6 +67,8 @@ pub use ui::UiRect;
 
 pub struct SimWorld {
     world: World,
+    update_schedule: Schedule,
+    extract_schedule: Schedule,
 }
 
 impl SimWorld {
@@ -70,17 +76,47 @@ impl SimWorld {
         file_system: Arc<FileSystem>,
         assets: GameAssets,
         campaign_def: &CampaignDef,
-    ) -> Self {
+    ) -> Result<Self, AssetError> {
         let mut world = World::default();
+        init_sim_world(file_system, &mut world, assets, campaign_def)?;
 
-        init_sim_world(file_system, &mut world, assets, campaign_def);
+        let update_schedule = build_update_schedule();
+        let extract_schedule = build_extract_schedule();
 
-        Self { world }
+        Ok(Self {
+            world,
+            update_schedule,
+            extract_schedule,
+        })
     }
 
     #[inline]
     pub fn terrain(&self) -> &Terrain {
         self.world.resource::<Terrain>()
+    }
+
+    /// Update the viewport size used by camera systems.
+    pub fn resize_viewport(&mut self, size: glam::UVec2) {
+        self.world.resource_mut::<Viewport>().resize(size);
+    }
+
+    /// Forward an input event into the simulation's `InputState`.
+    pub fn input(&mut self, event: &InputEvent) {
+        self.world.resource_mut::<InputState>().apply(event);
+    }
+
+    /// Advance the simulation by `delta_time` seconds.
+    pub fn update(&mut self, delta_time: f32) {
+        self.world.resource_mut::<Time>().next_frame(delta_time);
+        self.update_schedule.run(&mut self.world);
+    }
+
+    /// Run the extract schedule to populate the snapshot, then return a
+    /// reference to it. The snapshot is owned by the simulation `World`; a
+    /// later call will overwrite it.
+    pub fn extract_snapshot(&mut self) -> &WorldRenderSnapshot {
+        self.extract_schedule.run(&mut self.world);
+        self.world.resource::<WorldRenderSnapshot>()
     }
 }
 

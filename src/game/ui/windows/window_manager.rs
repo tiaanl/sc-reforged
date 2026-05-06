@@ -169,6 +169,12 @@ impl WindowManager {
             InputEvent::KeyUp(_key) => {}
             InputEvent::MouseWheel(delta) => self.dispatch_mouse_wheel(delta as i32),
         }
+
+        // Fan out the raw event to any window that wants direct access to the
+        // input stream (e.g. WorldWindow forwarding to its simulation).
+        for window in self.windows.iter_mut() {
+            window.on_input(event);
+        }
     }
 
     fn dispatch_mouse_down(&mut self, button: MouseButton) {
@@ -339,8 +345,10 @@ impl WindowManager {
             })
     }
 
-    pub fn update(&mut self, _delta_time: f32) {
-        //
+    pub fn update(&mut self, delta_time: f32) {
+        for window in self.windows.iter_mut() {
+            window.update(delta_time);
+        }
     }
 
     pub fn render(
