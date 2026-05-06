@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use bevy_ecs::prelude::*;
 
 use crate::{
-    engine::{assets::AssetError, storage::Handle, transform::Transform},
+    engine::{assets::AssetError, transform::Transform},
     game::{
         assets::{
             model::{Mesh, Model},

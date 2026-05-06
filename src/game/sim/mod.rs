@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -22,20 +20,19 @@ use crate::{
         config::{CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
         file_system::FileSystem,
         render::world::WorldRenderSnapshot,
-        sim::{
-            ecs::{ActiveCamera, GizmoVertices, Viewport},
-            free_camera_controller::FreeCameraController,
-            orders::OrderRequest,
-            sequences::MotionSequencer,
-            systems::{
-                SimulationControl, Time, build_extract_schedule, build_update_schedule,
-                world_interaction::{self, WorldInteraction},
-            },
-            top_down_camera_controller::TopDownCameraController,
-            ui::Ui,
-        },
     },
 };
+
+use ecs::{ActiveCamera, GizmoVertices, Viewport};
+use free_camera_controller::FreeCameraController;
+use orders::OrderRequest;
+use sequences::MotionSequencer;
+use systems::{
+    SimulationControl, Time, build_extract_schedule, build_update_schedule,
+    world_interaction::{self, WorldInteraction},
+};
+use top_down_camera_controller::TopDownCameraController;
+use ui::Ui;
 
 mod camera;
 mod day_night_cycle;
@@ -59,8 +56,6 @@ pub use camera::ComputedCamera;
 pub use day_night_cycle::DayNightCycle;
 pub use dynamic_bvh::{DynamicBvh, DynamicBvhHandle};
 pub use height_map::HeightMap;
-pub use spawner::SpawnInfo;
-
 pub use static_bvh::{StaticBvh, StaticBvhHandle};
 pub use terrain::Terrain;
 pub use ui::UiRect;
@@ -139,7 +134,7 @@ pub struct GameAssets {
     pub motions: Arc<Motions>,
 }
 
-pub fn init_sim_world(
+fn init_sim_world(
     file_system: Arc<FileSystem>,
     world: &mut World,
     assets: GameAssets,
