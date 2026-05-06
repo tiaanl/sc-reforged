@@ -12,7 +12,7 @@ use crate::{
         config::{BodyDefinition, CharacterProfiles, ObjectType},
         math::BoundingBox,
         models::ModelName,
-        scenes::world::sim_world::{
+        sim::{
             DynamicBvh, StaticBvhHandle, ecs::BoundingBoxComponent, sequences::MotionController,
         },
     },

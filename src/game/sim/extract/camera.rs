@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 
 use crate::game::{
     render::world::{Camera, WorldRenderSnapshot},
-    scenes::world::sim_world::{ComputedCamera, ecs::ActiveCamera},
+    sim::{ComputedCamera, ecs::ActiveCamera},
 };
 
 pub fn extract_camera(

@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 
-use crate::game::scenes::world::{
-    sim_world::orders::{OrderRequest, OrdersController},
+use crate::game::sim::{
+    orders::{OrderRequest, OrdersController},
     systems::Time,
 };
 

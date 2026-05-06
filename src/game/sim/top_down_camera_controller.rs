@@ -6,10 +6,7 @@ use crate::{
     engine::input::InputState,
     game::{
         interpolate::Interpolate,
-        scenes::world::{
-            sim_world::{Camera, ecs::ActiveCamera},
-            systems::Time,
-        },
+        sim::{Camera, ecs::ActiveCamera, systems::Time},
     },
 };
 

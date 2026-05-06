@@ -3,7 +3,7 @@ use glam::Mat4;
 
 use crate::game::{
     render::world::WorldRenderSnapshot,
-    scenes::world::sim_world::{SimWorldState, ecs::Viewport},
+    sim::{SimWorldState, ecs::Viewport},
 };
 
 pub fn extract_ui_snapshot(

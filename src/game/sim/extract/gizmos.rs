@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 
 use crate::game::{
-    render::world::WorldRenderSnapshot, scenes::world::sim_world::ecs::GizmoVertices,
+    render::world::WorldRenderSnapshot, sim::ecs::GizmoVertices,
 };
 
 pub fn extract_gizmos(

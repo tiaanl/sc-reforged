@@ -5,12 +5,9 @@ use crate::{
     engine::{input::InputState, transform::Transform},
     game::{
         math::BoundingBox,
-        scenes::world::{
-            extract,
-            sim_world::{
-                DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle, ecs,
-                free_camera_controller, top_down_camera_controller,
-            },
+        sim::{
+            DynamicBvh, DynamicBvhHandle, StaticBvh, StaticBvhHandle, ecs, extract,
+            free_camera_controller, top_down_camera_controller,
         },
     },
 };

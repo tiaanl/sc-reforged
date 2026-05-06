@@ -22,19 +22,17 @@ use crate::{
         config::{CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
         file_system::FileSystem,
         render::world::WorldRenderSnapshot,
-        scenes::world::{
-            sim_world::{
-                ecs::{ActiveCamera, GizmoVertices, Viewport},
-                free_camera_controller::FreeCameraController,
-                orders::OrderRequest,
-                sequences::MotionSequencer,
-                top_down_camera_controller::TopDownCameraController,
-                ui::Ui,
-            },
+        sim::{
+            ecs::{ActiveCamera, GizmoVertices, Viewport},
+            free_camera_controller::FreeCameraController,
+            orders::OrderRequest,
+            sequences::MotionSequencer,
             systems::{
                 SimulationControl, Time, build_extract_schedule, build_update_schedule,
                 world_interaction::{self, WorldInteraction},
             },
+            top_down_camera_controller::TopDownCameraController,
+            ui::Ui,
         },
     },
 };
@@ -43,6 +41,7 @@ mod camera;
 mod day_night_cycle;
 mod dynamic_bvh;
 pub mod ecs;
+pub mod extract;
 pub mod free_camera_controller;
 mod height_map;
 pub mod orders;
@@ -50,6 +49,7 @@ mod quad_tree;
 pub mod sequences;
 mod spawner;
 mod static_bvh;
+pub mod systems;
 mod terrain;
 pub mod top_down_camera_controller;
 mod ui;

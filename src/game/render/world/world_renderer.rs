@@ -23,7 +23,7 @@ use crate::{
                 terrain_render_pipeline::TerrainRenderPipeline,
             },
         },
-        scenes::world::sim_world::Terrain,
+        sim::Terrain,
     },
 };
 

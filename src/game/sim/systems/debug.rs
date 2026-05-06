@@ -3,7 +3,7 @@ use glam::Vec4;
 
 use crate::{
     engine::transform::Transform,
-    game::scenes::world::sim_world::ecs::{BoundingBoxComponent, GizmoVertices},
+    game::sim::ecs::{BoundingBoxComponent, GizmoVertices},
 };
 
 pub fn _draw_model_bounding_boxes(

@@ -7,7 +7,7 @@ use crate::{
     game::{
         assets::models::Models,
         render::{geometry_buffer::GeometryBuffer, textures::Textures, world::WorldRenderer},
-        scenes::world::sim_world::SimWorld,
+        sim::SimWorld,
         ui::{
             Rect,
             render::window_renderer::{WindowRenderItems, WindowRenderer as UiWindowRenderer},

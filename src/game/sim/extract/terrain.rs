@@ -4,7 +4,7 @@ use glam::IVec2;
 
 use crate::game::{
     render::world::{Camera, TerrainChunk, WorldRenderSnapshot},
-    scenes::world::sim_world::{ComputedCamera, SimWorldState, Terrain, ecs::ActiveCamera},
+    sim::{ComputedCamera, SimWorldState, Terrain, ecs::ActiveCamera},
 };
 
 pub fn extract_terrain_snapshot(

@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use bevy_ecs::prelude::*;
 
-use crate::game::scenes::world::sim_world::orders::{
+use crate::game::sim::orders::{
     ActiveOrder, OrderRequest, order_request::OrderPriority,
 };
 

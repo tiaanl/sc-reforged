@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 use glam::Vec3;
 
-use crate::game::scenes::world::sim_world::orders::{
+use crate::game::sim::orders::{
     ActiveOrder,
     active_order::{move_to::MoveToOrder, move_to_attack::MoveToAttackOrder},
 };

@@ -3,7 +3,7 @@ use glam::{IVec2, UVec2, Vec4};
 
 use crate::{
     engine::input::InputState,
-    game::scenes::world::sim_world::{
+    game::sim::{
         ComputedCamera, DynamicBvh, SimWorldState, Terrain, UiRect,
         ecs::{ActiveCamera, Viewport},
         orders::{OrderRequest, RequestedOrder},

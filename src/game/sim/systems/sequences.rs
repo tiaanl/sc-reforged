@@ -5,7 +5,7 @@ use crate::{
     engine::{storage::Handle, transform::Transform},
     game::{
         assets::model::Model,
-        scenes::world::sim_world::{
+        sim::{
             GameAssets,
             ecs::GizmoVertices,
             sequences::{

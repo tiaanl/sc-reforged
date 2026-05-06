@@ -16,7 +16,7 @@ use crate::{
         config::load_config,
         file_system::FileSystem,
         render::textures::Textures,
-        scenes::world::sim_world::{GameAssets, SimWorld},
+        sim::{GameAssets, SimWorld},
         ui::windows::{
             main_menu::MainMenuWindow, window_manager::WindowManager, world::WorldWindow,
         },

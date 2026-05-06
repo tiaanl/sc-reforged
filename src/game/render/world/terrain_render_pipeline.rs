@@ -19,7 +19,7 @@ use crate::{
                 world_render_snapshot::{TerrainChunk, WorldRenderSnapshot},
             },
         },
-        scenes::world::sim_world::Terrain,
+        sim::Terrain,
     },
 };
 

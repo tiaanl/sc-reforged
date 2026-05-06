@@ -3,10 +3,7 @@ use glam::Vec3;
 
 use crate::game::{
     render::world::WorldRenderSnapshot,
-    scenes::world::{
-        sim_world::{DayNightCycle, SimWorldState},
-        systems::Time,
-    },
+    sim::{DayNightCycle, SimWorldState, systems::Time},
 };
 
 pub fn extract_environment(
