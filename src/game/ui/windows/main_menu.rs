@@ -80,11 +80,7 @@ impl Window for MainMenuWindow {
         self.widgets.on_primary_mouse_up(position, context)
     }
 
-    fn render(
-        &mut self,
-        ctx: &mut WindowRenderContext<'_>,
-        render_items: &mut WindowRenderItems,
-    ) {
+    fn render(&mut self, ctx: &mut WindowRenderContext<'_>, render_items: &mut WindowRenderItems) {
         self.widgets
             .render(self.rect.position, 100, ctx.window_renderer, render_items);
 

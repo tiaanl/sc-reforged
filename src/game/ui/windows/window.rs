@@ -1,7 +1,7 @@
 use glam::IVec2;
 
 use crate::{
-    engine::{input::InputEvent, renderer::RenderContext},
+    engine::renderer::RenderContext,
     game::ui::{
         EventResult, Rect,
         render::window_renderer::{WindowRenderItems, WindowRenderer},
@@ -96,14 +96,6 @@ pub trait Window {
         let _ = wheel_steps;
         let _ = context;
         EventResult::Ignore
-    }
-
-    /// Receive every raw input event in addition to the cooked
-    /// `on_*_mouse_*` / `on_mouse_wheel` callbacks. Default is no-op; windows
-    /// that need direct access to the input stream (e.g. the world window
-    /// forwarding to its simulation) can override this.
-    fn on_input(&mut self, event: &InputEvent) {
-        let _ = event;
     }
 
     /// Called to update the window state given the time in seconds since the last frame was drawn

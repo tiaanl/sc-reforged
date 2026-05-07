@@ -12,9 +12,8 @@ use crate::{
         assets::config::campaign_def::CampaignDefs,
         config::load_config,
         sim::SimWorld,
-        ui::windows::{
-            main_menu::MainMenuWindow, window_manager::WindowManager, world::WorldWindow,
-        },
+        ui::windows::{main_menu::MainMenuWindow, window_manager::WindowManager},
+        world_layer::WorldLayer,
     },
 };
 
@@ -24,6 +23,9 @@ use super::ui::windows::actions::WindowManagerAction;
 pub struct GameState {
     campaign_defs: CampaignDefs,
 
+    surface_size: UVec2,
+    surface_format: wgpu::TextureFormat,
+    world_layer: Option<WorldLayer>,
     window_manager: WindowManager,
 }
 
@@ -49,16 +51,23 @@ impl GameState {
 
         Ok(Self {
             campaign_defs,
+            surface_size: surface_desc.size,
+            surface_format: surface_desc.format,
+            world_layer: None,
             window_manager,
         })
     }
 
     pub fn resize(&mut self, size: UVec2) {
+        self.surface_size = size;
+        if let Some(world_layer) = &mut self.world_layer {
+            world_layer.resize(size);
+        }
         self.window_manager.resize(size);
     }
 
     pub fn input(&mut self, event: &InputEvent) {
-        self.window_manager.input(event);
+        let ui_consumed = self.window_manager.input(event);
 
         // TODO: This shouldn't reach into window manager's internals.
         let mut actions = std::mem::take(&mut self.window_manager.window_manager_context.actions);
@@ -73,13 +82,26 @@ impl GameState {
                 },
             }
         }
+
+        if !ui_consumed && let Some(world_layer) = &mut self.world_layer {
+            world_layer.input(event);
+        }
     }
 
     pub fn update(&mut self, delta_time: f32) {
+        if let Some(world_layer) = &mut self.world_layer {
+            world_layer.update(delta_time);
+        }
         self.window_manager.update(delta_time);
     }
 
     pub fn render(&mut self, render_context: &mut RenderContext, render_target: &RenderTarget) {
+        if let Some(world_layer) = &mut self.world_layer {
+            world_layer.render(render_context, render_target);
+        } else {
+            clear_render_target(render_context, render_target);
+        }
+
         self.window_manager.render(render_context, render_target);
     }
 
@@ -106,14 +128,27 @@ impl GameState {
         let sim = SimWorld::new(campaign_def)?;
 
         self.window_manager.clear();
-
-        let world_window = Box::new(WorldWindow::new(
-            self.window_manager.window_renderer(),
-            UVec2::new(640, 480),
-            sim,
-        )?);
-        self.window_manager.push(world_window);
+        self.world_layer = Some(WorldLayer::new(self.surface_size, self.surface_format, sim));
 
         Ok(())
     }
+}
+
+/// Clears the swapchain target when no native world layer is present.
+fn clear_render_target(render_context: &mut RenderContext, render_target: &RenderTarget) {
+    render_context
+        .encoder
+        .begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("game_state_surface_clear"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &render_target.view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        });
 }

@@ -2,9 +2,7 @@ use std::collections::VecDeque;
 
 use bevy_ecs::prelude::*;
 
-use crate::game::sim::orders::{
-    ActiveOrder, OrderRequest, order_request::OrderPriority,
-};
+use crate::game::sim::orders::{ActiveOrder, OrderRequest, order_request::OrderPriority};
 
 #[derive(Component, Default)]
 pub struct OrdersController {

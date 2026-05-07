@@ -38,8 +38,8 @@ pub struct WindowManager {
     /// The index of the current modal window in `windows`, if any.
     modal_window: Option<usize>,
 
-    /// The current position of the mouse in the native window. None if the
-    /// mouse left the window at some point.
+    /// The current position of the mouse in logical UI coordinates. None if
+    /// the mouse is outside the centered UI presentation rect.
     mouse_position: Option<IVec2>,
 
     /// Track the down state of the used mouse buttons.
@@ -96,6 +96,7 @@ impl WindowManager {
     /// Clear all windows.
     pub fn clear(&mut self) {
         self.windows.clear();
+        self.modal_window = None;
     }
 
     /// Push a new window to the top of the stack.
@@ -139,34 +140,34 @@ impl WindowManager {
         self.window_renderer.resize(size);
     }
 
-    pub fn input(&mut self, event: &InputEvent) {
+    pub fn input(&mut self, event: &InputEvent) -> bool {
         match *event {
             InputEvent::MouseMove(position) => {
-                self.mouse_position = Some(position.as_ivec2());
+                self.mouse_position = self
+                    .window_renderer
+                    .surface_to_logical_position(position.as_ivec2());
+
+                self.modal_window.is_some()
+                    || self
+                        .mouse_position
+                        .and_then(|mouse| self.topmost_input_window_index(mouse))
+                        .is_some()
             }
             InputEvent::MouseLeave => {
                 self.mouse_position = None;
+                self.modal_window.is_some()
             }
-            InputEvent::MouseDown(button) => {
-                //
-                self.dispatch_mouse_down(button)
-            }
+            InputEvent::MouseDown(button) => self.dispatch_mouse_down(button),
             InputEvent::MouseUp(button) => self.dispatch_mouse_up(button),
-            InputEvent::KeyDown(_key) => {}
-            InputEvent::KeyUp(_key) => {}
+            InputEvent::KeyDown(_key) => self.modal_window.is_some(),
+            InputEvent::KeyUp(_key) => self.modal_window.is_some(),
             InputEvent::MouseWheel(delta) => self.dispatch_mouse_wheel(delta as i32),
-        }
-
-        // Fan out the raw event to any window that wants direct access to the
-        // input stream (e.g. WorldWindow forwarding to its simulation).
-        for window in self.windows.iter_mut() {
-            window.on_input(event);
         }
     }
 
-    fn dispatch_mouse_down(&mut self, button: MouseButton) {
+    fn dispatch_mouse_down(&mut self, button: MouseButton) -> bool {
         let Some(mouse) = self.mouse_position else {
-            return;
+            return self.modal_window.is_some();
         };
 
         match button {
@@ -178,26 +179,26 @@ impl WindowManager {
         if let Some(modal_index) = self.modal_window
             && let Some(window) = self.windows.get_mut(modal_index)
         {
-            Self::try_mouse_down_on_window(
+            let _ = Self::try_mouse_down_on_window(
                 window.as_mut(),
                 mouse,
                 button,
                 &mut self.window_manager_context,
             );
-            return;
+            return true;
         }
 
         let windows = &mut self.windows;
         for window in windows.iter_mut().rev() {
-            let result = Self::try_mouse_down_on_window(
+            if Self::try_mouse_down_on_window(
                 window.as_mut(),
                 mouse,
                 button,
                 &mut self.window_manager_context,
-            );
-
-            if matches!(result, EventResult::Handled) {
-                return;
+            )
+            .is_some()
+            {
+                return true;
             }
 
             // TODO: Handle dragging and capture results.
@@ -232,6 +233,8 @@ impl WindowManager {
             }
             */
         }
+
+        false
     }
 
     fn try_mouse_down_on_window(
@@ -239,23 +242,23 @@ impl WindowManager {
         mouse: IVec2,
         button: MouseButton,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> Option<EventResult> {
         if !window.is_visible() || !window.wants_input() || !window.hit_test(mouse) {
-            return EventResult::Ignore;
+            return None;
         }
 
         let local = mouse - window.rect().position;
 
         println!("local: {local}");
 
-        match button {
+        Some(match button {
             MouseButton::Left => window.on_primary_mouse_down(local, context),
             MouseButton::Right => window.on_secondary_mouse_down(local, context),
             _ => EventResult::Ignore,
-        }
+        })
     }
 
-    fn dispatch_mouse_up(&mut self, button: MouseButton) {
+    fn dispatch_mouse_up(&mut self, button: MouseButton) -> bool {
         match button {
             MouseButton::Left => self.primary_button_down = false,
             MouseButton::Right => self.secondary_button_down = false,
@@ -263,7 +266,7 @@ impl WindowManager {
         }
 
         let Some(mouse) = self.mouse_position else {
-            return;
+            return self.modal_window.is_some();
         };
 
         // TODO: Match the original manager more closely once we track mouse
@@ -271,7 +274,7 @@ impl WindowManager {
         // the captured or mouse-down window, not by re-hit-testing the current
         // topmost window under the cursor.
         let Some(window_index) = self.topmost_input_window_index(mouse) else {
-            return;
+            return self.modal_window.is_some();
         };
 
         let window = self.windows[window_index].as_mut();
@@ -291,18 +294,19 @@ impl WindowManager {
 
         // TODO: Clear transient drag items and finalize any captured-mouse
         // state like the original manager does after mouse-up.
+        true
     }
 
-    fn dispatch_mouse_wheel(&mut self, delta: i32) {
+    fn dispatch_mouse_wheel(&mut self, delta: i32) -> bool {
         // In Ghidra the wheel goes to the captured window if one exists,
         // otherwise to the hovered window. We do not track either yet, so use
         // the current topmost eligible window under the cursor as a first pass.
         let Some(mouse) = self.mouse_position else {
-            return;
+            return self.modal_window.is_some();
         };
 
         let Some(window_index) = self.topmost_input_window_index(mouse) else {
-            return;
+            return self.modal_window.is_some();
         };
 
         let window = self.windows[window_index].as_mut();
@@ -313,6 +317,7 @@ impl WindowManager {
 
         // TODO: Route wheel input to the captured or hovered window once the
         // manager tracks those states explicitly.
+        true
     }
 
     fn topmost_input_window_index(&self, mouse: IVec2) -> Option<usize> {

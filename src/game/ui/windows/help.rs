@@ -159,11 +159,7 @@ impl Window for HelpWindow {
         self.widgets.on_mouse_wheel(mouse, wheel_steps, context)
     }
 
-    fn render(
-        &mut self,
-        ctx: &mut WindowRenderContext<'_>,
-        render_items: &mut WindowRenderItems,
-    ) {
+    fn render(&mut self, ctx: &mut WindowRenderContext<'_>, render_items: &mut WindowRenderItems) {
         // TODO: The original help window render has first-frame special
         // handling. It does not draw the translucent fills until
         // `m_render_frame_count != 0`, and it increments that counter at the

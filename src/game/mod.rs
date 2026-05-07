@@ -7,5 +7,6 @@ pub mod sim;
 pub mod ui;
 
 mod common;
+mod world_layer;
 
 pub use common::*;
