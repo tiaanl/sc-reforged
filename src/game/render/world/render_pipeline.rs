@@ -1,5 +1,5 @@
 use crate::{
-    engine::renderer::{Gpu, RenderContext},
+    engine::renderer::RenderContext,
     game::render::{
         geometry_buffer::GeometryBuffer,
         world::{render_bindings::RenderBindings, world_render_snapshot::WorldRenderSnapshot},
@@ -8,7 +8,7 @@ use crate::{
 
 pub trait RenderPipeline {
     /// Prepare GPU resources that will be used when queueing commands to the GPU.
-    fn prepare(&mut self, gpu: &Gpu, bindings: &mut RenderBindings, snapshot: &WorldRenderSnapshot);
+    fn prepare(&mut self, bindings: &mut RenderBindings, snapshot: &WorldRenderSnapshot);
 
     /// Queue draw commands to the GPU.
     fn queue(
@@ -32,14 +32,9 @@ impl RenderPipelineList {
 }
 
 impl RenderPipeline for RenderPipelineList {
-    fn prepare(
-        &mut self,
-        gpu: &Gpu,
-        bindings: &mut RenderBindings,
-        snapshot: &WorldRenderSnapshot,
-    ) {
+    fn prepare(&mut self, bindings: &mut RenderBindings, snapshot: &WorldRenderSnapshot) {
         for pipeline in self.pipelines.iter_mut() {
-            pipeline.prepare(gpu, bindings, snapshot);
+            pipeline.prepare(bindings, snapshot);
         }
     }
 

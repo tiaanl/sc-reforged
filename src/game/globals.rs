@@ -9,6 +9,7 @@ use crate::{
     },
 };
 
+static GPU: OnceLock<Gpu> = OnceLock::new();
 static FILE_SYSTEM: OnceLock<FileSystem> = OnceLock::new();
 static IMAGES: OnceLock<Images> = OnceLock::new();
 static MODELS: OnceLock<Models> = OnceLock::new();
@@ -17,6 +18,10 @@ static TEXTURES: OnceLock<Textures> = OnceLock::new();
 static SPRITES: OnceLock<Sprites> = OnceLock::new();
 
 pub fn init(root_dir: impl AsRef<Path>, gpu: Gpu) -> bool {
+    if GPU.set(gpu).is_err() {
+        return false;
+    }
+
     if FILE_SYSTEM.set(FileSystem::new(root_dir)).is_err() {
         return false;
     }
@@ -33,7 +38,7 @@ pub fn init(root_dir: impl AsRef<Path>, gpu: Gpu) -> bool {
         return false;
     }
 
-    if TEXTURES.set(Textures::new(gpu.clone())).is_err() {
+    if TEXTURES.set(Textures::default()).is_err() {
         return false;
     }
 
@@ -42,6 +47,10 @@ pub fn init(root_dir: impl AsRef<Path>, gpu: Gpu) -> bool {
     }
 
     true
+}
+
+pub fn gpu() -> &'static Gpu {
+    GPU.get().unwrap()
 }
 
 pub fn file_system() -> &'static FileSystem {

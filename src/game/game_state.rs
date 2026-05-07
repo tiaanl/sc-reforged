@@ -6,7 +6,7 @@ use crate::{
     engine::{
         assets::AssetError,
         input::InputEvent,
-        renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
+        renderer::{RenderContext, RenderTarget, SurfaceDesc},
     },
     game::{
         assets::config::campaign_def::CampaignDefs,
@@ -22,18 +22,16 @@ use super::ui::windows::actions::WindowManagerAction;
 
 /// The main state of the game.
 pub struct GameState {
-    gpu: Gpu,
-
     campaign_defs: CampaignDefs,
 
     window_manager: WindowManager,
 }
 
 impl GameState {
-    pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc) -> Result<Self, AssetError> {
+    pub fn new(surface_desc: &SurfaceDesc) -> Result<Self, AssetError> {
         let campaign_defs = load_config(PathBuf::from("config").join("campaign_defs.txt"))?;
 
-        let mut window_manager = WindowManager::new(gpu.clone(), surface_desc)?;
+        let mut window_manager = WindowManager::new(surface_desc)?;
 
         let main_menu_window = Box::new(MainMenuWindow::new(&window_manager)?);
         window_manager.push(main_menu_window);
@@ -50,7 +48,6 @@ impl GameState {
         // }
 
         Ok(Self {
-            gpu,
             campaign_defs,
             window_manager,
         })
@@ -83,8 +80,7 @@ impl GameState {
     }
 
     pub fn render(&mut self, render_context: &mut RenderContext, render_target: &RenderTarget) {
-        self.window_manager
-            .render(&self.gpu, render_context, render_target);
+        self.window_manager.render(render_context, render_target);
     }
 
     #[cfg(feature = "egui")]
@@ -112,7 +108,6 @@ impl GameState {
         self.window_manager.clear();
 
         let world_window = Box::new(WorldWindow::new(
-            self.gpu.clone(),
             self.window_manager.window_renderer(),
             UVec2::new(640, 480),
             sim,

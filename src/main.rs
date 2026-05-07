@@ -7,14 +7,14 @@ use clap::Parser;
 use glam::UVec2;
 use winit::{
     application::ApplicationHandler,
-    dpi::PhysicalPosition,
+    dpi::PhysicalSize,
     event_loop::{ActiveEventLoop, EventLoop},
 };
 
 use crate::{
     engine::{
         input,
-        renderer::{Gpu, RenderContext, RenderTarget, Surface, SurfaceDesc},
+        renderer::{RenderContext, RenderTarget, Surface, SurfaceDesc},
     },
     game::{game_state::GameState, globals},
 };
@@ -42,8 +42,6 @@ enum App {
         surface_desc: SurfaceDesc,
         /// The window surface where the scene will be displayed.
         surface: Surface,
-        /// Our main [Gpu] holding the device and queue.
-        gpu: Gpu,
         /// The index of the current frame being rendered.
         frame_index: u64,
         /// The instant that the last frame started to render.
@@ -61,28 +59,10 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         match self {
             App::Uninitialzed(opts) => {
-                let mut attributes = winit::window::WindowAttributes::default()
+                let attributes = winit::window::WindowAttributes::default()
                     .with_title("Shadow Company - Reforged")
-                    .with_resizable(false)
-                    .with_inner_size(winit::dpi::LogicalSize::new(640, 480));
-
-                // No resizing?
-                if true {
-                    attributes = attributes.with_resizable(false).with_enabled_buttons(
-                        winit::window::WindowButtons::MINIMIZE
-                            | winit::window::WindowButtons::CLOSE,
-                    )
-                }
-
-                if let Some(screen_size) =
-                    event_loop.primary_monitor().map(|monitor| monitor.size())
-                {
-                    let position = winit::dpi::Position::Physical(PhysicalPosition::new(
-                        screen_size.width as i32 / 4,
-                        screen_size.height as i32 / 4,
-                    ));
-                    attributes = attributes.with_position(position);
-                }
+                    .with_resizable(true)
+                    .with_inner_size(winit::dpi::LogicalSize::new(1024, 768));
 
                 let window = Arc::new(
                     event_loop
@@ -90,7 +70,7 @@ impl ApplicationHandler for App {
                         .expect("create main window"),
                 );
                 let _window_size = {
-                    let winit::dpi::PhysicalSize { width, height } = window.inner_size();
+                    let PhysicalSize { width, height } = window.inner_size();
                     UVec2::new(width, height)
                 };
 
@@ -109,9 +89,9 @@ impl ApplicationHandler for App {
                     surface_desc.format,
                 );
 
-                globals::init(&opts.path, gpu.clone());
+                globals::init(&opts.path, gpu);
 
-                let game_state = match GameState::new(gpu.clone(), &surface_desc) {
+                let game_state = match GameState::new(&surface_desc) {
                     Ok(game_state) => game_state,
                     Err(err) => {
                         tracing::error!("Could not initialize GameState - {err}");
@@ -126,7 +106,6 @@ impl ApplicationHandler for App {
                     window,
                     surface,
                     surface_desc,
-                    gpu,
                     #[cfg(feature = "egui")]
                     egui_integration,
                     frame_index: 0,
@@ -156,7 +135,6 @@ impl ApplicationHandler for App {
                 window,
                 surface,
                 surface_desc,
-                gpu,
                 frame_index,
                 last_frame_time,
                 #[cfg(feature = "egui")]
@@ -183,10 +161,10 @@ impl ApplicationHandler for App {
                         event_loop.exit();
                     }
 
-                    WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
+                    WindowEvent::Resized(PhysicalSize { width, height }) => {
                         let size = UVec2::new(width, height);
 
-                        surface.resize(&gpu.device, size);
+                        surface.resize(&globals::gpu().device, size);
                         surface_desc.size = surface.size();
 
                         game_state.resize(size);
@@ -205,12 +183,12 @@ impl ApplicationHandler for App {
                         }
 
                         {
-                            let output = surface.get_texture(&gpu.device);
+                            let output = surface.get_texture(&globals::gpu().device);
                             let surface_view = output
                                 .texture
                                 .create_view(&wgpu::TextureViewDescriptor::default());
 
-                            let encoder = gpu.device.create_command_encoder(
+                            let encoder = globals::gpu().device.create_command_encoder(
                                 &wgpu::CommandEncoderDescriptor {
                                     label: Some("main command encoder"),
                                 },
@@ -242,7 +220,8 @@ impl ApplicationHandler for App {
                                 );
                             }
 
-                            gpu.queue
+                            globals::gpu()
+                                .queue
                                 .submit(std::iter::once(render_context.encoder.finish()));
 
                             output.present();

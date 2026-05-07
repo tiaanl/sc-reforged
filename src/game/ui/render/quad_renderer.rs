@@ -94,8 +94,6 @@ impl Default for Quad {
 }
 
 pub struct QuadRenderer {
-    gpu: Gpu,
-
     solid_white_texture: Handle<Texture>,
 
     render_pipeline: wgpu::RenderPipeline,
@@ -117,8 +115,8 @@ pub struct QuadRenderer {
 
 impl QuadRenderer {
     /// Creates the quad renderer and its GPU state for menu quads.
-    pub fn new(gpu: Gpu, surface: &SurfaceDesc) -> Self {
-        let Gpu { device, .. } = &gpu;
+    pub fn new(surface: &SurfaceDesc) -> Self {
+        let Gpu { device, .. } = &globals::gpu();
 
         let viewport = gpu::Viewport::from(surface.size);
 
@@ -270,29 +268,23 @@ impl QuadRenderer {
         ];
 
         let mut vertices_buffer = GrowingBuffer::new(
-            &gpu,
             vertices.len() as u32,
             wgpu::BufferUsages::VERTEX,
             "quad_renderer_vertices",
         );
-        vertices_buffer.write(&gpu, &vertices);
+        vertices_buffer.write(&vertices);
 
         let indices = [0, 1, 2, 2, 3, 0];
 
         let mut indices_buffer = GrowingBuffer::new(
-            &gpu,
             indices.len() as u32,
             wgpu::BufferUsages::INDEX,
             "quad_renderer_indices",
         );
-        indices_buffer.write(&gpu, &indices);
+        indices_buffer.write(&indices);
 
-        let instances_buffer = GrowingBuffer::new(
-            &gpu,
-            64,
-            wgpu::BufferUsages::VERTEX,
-            "quad_renderer_instances",
-        );
+        let instances_buffer =
+            GrowingBuffer::new(64, wgpu::BufferUsages::VERTEX, "quad_renderer_instances");
 
         let white_image = globals::images().insert(
             "solid_white",
@@ -307,7 +299,6 @@ impl QuadRenderer {
             .expect("generated solid white texture should be valid");
 
         Self {
-            gpu,
             solid_white_texture,
             render_pipeline,
             vertices_buffer,
@@ -337,9 +328,11 @@ impl QuadRenderer {
         if let Some(new_size) = self.new_size.take() {
             let viewport = gpu::Viewport::from(new_size);
 
-            self.gpu
-                .queue
-                .write_buffer(&self.viewport_buffer, 0, bytemuck::bytes_of(&viewport));
+            globals::gpu().queue.write_buffer(
+                &self.viewport_buffer,
+                0,
+                bytemuck::bytes_of(&viewport),
+            );
         }
 
         let drawable_quads: Vec<_> = quads
@@ -375,7 +368,7 @@ impl QuadRenderer {
             .iter()
             .map(|(_, _, instance)| *instance)
             .collect();
-        self.instances_buffer.write(&self.gpu, &instances);
+        self.instances_buffer.write(&instances);
 
         let mut render_pass =
             render_context
@@ -444,8 +437,7 @@ impl QuadRenderer {
             return false;
         };
 
-        let bind_group = self
-            .gpu
+        let bind_group = globals::gpu()
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("quad_renderer_texture_bind_group"),

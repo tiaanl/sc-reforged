@@ -2,7 +2,7 @@ use glam::UVec2;
 
 use crate::{
     engine::{
-        renderer::{Gpu, RenderContext},
+        renderer::RenderContext,
         shader_cache::ShaderCache,
         storage::{Handle, Storage},
     },
@@ -26,7 +26,6 @@ use crate::{
 use super::render_layouts::RenderLayouts;
 
 pub struct WorldRenderer {
-    gpu: Gpu,
     gbuffer_layout: wgpu::BindGroupLayout,
     gbuffers: Storage<GeometryBuffer>,
 
@@ -36,38 +35,28 @@ pub struct WorldRenderer {
 
 impl WorldRenderer {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(gpu: Gpu, gbuffer_layout: &wgpu::BindGroupLayout, terrain: &Terrain) -> Self {
+    pub fn new(gbuffer_layout: &wgpu::BindGroupLayout, terrain: &Terrain) -> Self {
         // Warm up the shader cache.
         let mut shader_cache = ShaderCache::default();
-        shader_cache.preload_all(&gpu.device);
+        shader_cache.preload_all();
 
-        let mut layouts = RenderLayouts::new(gpu.clone());
-        let bindings = RenderBindings::new(&gpu, &mut layouts);
+        let mut layouts = RenderLayouts::default();
+        let bindings = RenderBindings::new(&mut layouts);
 
         let mut pipelines = RenderPipelineList::default();
 
         pipelines.push(CameraRenderPipeline);
 
         pipelines.push(TerrainRenderPipeline::new(
-            &gpu,
             &mut layouts,
             &mut shader_cache,
             terrain,
         ));
 
-        pipelines.push(ModelRenderPipeline::new(
-            &gpu,
-            &mut layouts,
-            &mut shader_cache,
-        ));
-        pipelines.push(GizmoRenderPipeline::new(
-            &gpu,
-            &mut layouts,
-            &mut shader_cache,
-        ));
+        pipelines.push(ModelRenderPipeline::new(&mut layouts, &mut shader_cache));
+        pipelines.push(GizmoRenderPipeline::new(&mut layouts, &mut shader_cache));
 
         Self {
-            gpu,
             gbuffer_layout: gbuffer_layout.clone(),
             gbuffers: Storage::default(),
             pipelines,
@@ -77,7 +66,7 @@ impl WorldRenderer {
 
     /// Register a new gbuffer of the given size and return a handle to it.
     pub fn register_gbuffer(&mut self, size: UVec2) -> Handle<GeometryBuffer> {
-        let gbuffer = GeometryBuffer::new(self.gpu.clone(), self.gbuffer_layout.clone(), size);
+        let gbuffer = GeometryBuffer::new(self.gbuffer_layout.clone(), size);
         self.gbuffers.insert(gbuffer)
     }
 
@@ -101,8 +90,8 @@ impl WorldRenderer {
             .map(|gbuffer| gbuffer.bind_group().clone())
     }
 
-    pub fn prepare(&mut self, gpu: &Gpu, snapshot: &WorldRenderSnapshot) {
-        self.pipelines.prepare(gpu, &mut self.bindings, snapshot);
+    pub fn prepare(&mut self, snapshot: &WorldRenderSnapshot) {
+        self.pipelines.prepare(&mut self.bindings, snapshot);
     }
 
     /// Clear the gbuffer behind `handle` and queue every gbuffer-writing

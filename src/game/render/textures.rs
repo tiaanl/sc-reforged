@@ -16,20 +16,18 @@ use crate::{
 pub struct Texture;
 
 pub struct Textures {
-    gpu: Gpu,
-
     textures: RwLock<StorageMap<Handle<Image>, Texture, Arc<TextureData>>>,
 }
 
-impl Textures {
-    pub fn new(gpu: Gpu) -> Self {
+impl Default for Textures {
+    fn default() -> Self {
         Self {
-            gpu,
-
             textures: RwLock::new(StorageMap::default()),
         }
     }
+}
 
+impl Textures {
     pub fn get(&self, handle: Handle<Texture>) -> Option<Arc<TextureData>> {
         let textures = self.textures.read().unwrap();
         textures.get(handle).cloned()
@@ -72,7 +70,7 @@ impl Textures {
     }
 
     fn create_texture_internal(&self, image: &image::RgbaImage) -> wgpu::TextureView {
-        let Gpu { device, queue } = &self.gpu;
+        let Gpu { device, queue } = globals::gpu();
 
         let (width, height) = (image.width(), image.height());
 

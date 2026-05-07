@@ -1,6 +1,6 @@
-use crate::{
-    engine::renderer::Gpu,
-    game::render::{
+use crate::game::{
+    globals,
+    render::{
         per_frame::PerFrame, uniform_buffer::UniformBuffer, world::render_layouts::RenderLayouts,
     },
 };
@@ -11,26 +11,32 @@ pub struct RenderBindings {
 }
 
 impl RenderBindings {
-    pub fn new(gpu: &Gpu, layouts: &mut RenderLayouts) -> Self {
+    pub fn new(layouts: &mut RenderLayouts) -> Self {
         let layout = layouts.get::<super::camera_render_pipeline::CameraEnvironmentLayout>();
 
         let camera_env_buffer = PerFrame::new(|index| {
-            let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("cameras"),
-                size: std::mem::size_of::<super::camera_render_pipeline::gpu::CameraEnvironment>()
-                    as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
+            let buffer =
+                globals::gpu()
+                    .device
+                    .create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("cameras"),
+                        size: std::mem::size_of::<
+                            super::camera_render_pipeline::gpu::CameraEnvironment,
+                        >() as wgpu::BufferAddress,
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    });
 
-            let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(&format!("cmaera_bind_group_{index}")),
-                layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffer.as_entire_binding(),
-                }],
-            });
+            let bind_group = globals::gpu()
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some(&format!("cmaera_bind_group_{index}")),
+                    layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.as_entire_binding(),
+                    }],
+                });
 
             UniformBuffer::new(buffer, bind_group)
         });

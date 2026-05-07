@@ -2,9 +2,7 @@ use ahash::HashMap;
 
 use crate::{
     engine::{
-        growing_buffer::GrowingBuffer,
-        renderer::{Gpu, RenderContext},
-        shader_cache::ShaderCache,
+        growing_buffer::GrowingBuffer, renderer::RenderContext, shader_cache::ShaderCache,
         storage::Handle,
     },
     game::{
@@ -76,74 +74,78 @@ pub struct ModelRenderPipeline {
 }
 
 impl ModelRenderPipeline {
-    pub fn new(gpu: &Gpu, layouts: &mut RenderLayouts, shader_cache: &mut ShaderCache) -> Self {
-        let device = &gpu.device;
-
-        let models = RenderModels::new(gpu);
+    pub fn new(layouts: &mut RenderLayouts, shader_cache: &mut ShaderCache) -> Self {
+        let models = RenderModels::default();
 
         let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("model_texture_bind_group_layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
+            globals::gpu()
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("model_texture_bind_group_layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
                         },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("model_texture_sampler"),
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
-            address_mode_w: wgpu::AddressMode::Repeat,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
+        let sampler = globals::gpu()
+            .device
+            .create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("model_texture_sampler"),
+                address_mode_u: wgpu::AddressMode::Repeat,
+                address_mode_v: wgpu::AddressMode::Repeat,
+                address_mode_w: wgpu::AddressMode::Repeat,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            });
 
         let poses_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("poses_bind_group_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
+            globals::gpu()
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("poses_bind_group_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
 
-        let module = shader_cache.get_or_create(
-            &gpu.device,
-            crate::engine::shader_cache::ShaderSource::Models,
-        );
+        let module = shader_cache.get_or_create(crate::engine::shader_cache::ShaderSource::Models);
 
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("models_pipeline_layout"),
-            bind_group_layouts: &[
-                layouts.get::<CameraEnvironmentLayout>(),
-                &texture_bind_group_layout,
-                &models.nodes_bind_group_layout,
-                &poses_bind_group_layout,
-            ],
-            push_constant_ranges: &[],
-        });
+        let layout =
+            globals::gpu()
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("models_pipeline_layout"),
+                    bind_group_layouts: &[
+                        layouts.get::<CameraEnvironmentLayout>(),
+                        &texture_bind_group_layout,
+                        &models.nodes_bind_group_layout,
+                        &poses_bind_group_layout,
+                    ],
+                    push_constant_ranges: &[],
+                });
 
         let buffers = &[
             wgpu::VertexBufferLayout {
@@ -193,75 +195,83 @@ impl ModelRenderPipeline {
             ..opaque_depth.clone()
         };
 
-        let opaque_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("models_opaque_pipeline"),
-            layout: Some(&layout),
-            vertex: wgpu::VertexState {
-                module,
-                entry_point: Some("vertex_main"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers,
-            },
-            primitive,
-            depth_stencil: Some(opaque_depth.clone()),
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module,
-                entry_point: Some("fragment_opaque"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: GeometryBuffer::opaque_targets(),
-            }),
-            multiview: None,
-            cache: None,
-        });
+        let opaque_pipeline =
+            globals::gpu()
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("models_opaque_pipeline"),
+                    layout: Some(&layout),
+                    vertex: wgpu::VertexState {
+                        module,
+                        entry_point: Some("vertex_main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers,
+                    },
+                    primitive,
+                    depth_stencil: Some(opaque_depth.clone()),
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module,
+                        entry_point: Some("fragment_opaque"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        targets: GeometryBuffer::opaque_targets(),
+                    }),
+                    multiview: None,
+                    cache: None,
+                });
 
-        let keyed_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("models_keyed_pipeline"),
-            layout: Some(&layout),
-            vertex: wgpu::VertexState {
-                module,
-                entry_point: Some("vertex_main"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers,
-            },
-            primitive,
-            depth_stencil: Some(opaque_depth),
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module,
-                entry_point: Some("fragment_opaque_keyed"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: GeometryBuffer::opaque_targets(),
-            }),
-            multiview: None,
-            cache: None,
-        });
+        let keyed_pipeline =
+            globals::gpu()
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("models_keyed_pipeline"),
+                    layout: Some(&layout),
+                    vertex: wgpu::VertexState {
+                        module,
+                        entry_point: Some("vertex_main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers,
+                    },
+                    primitive,
+                    depth_stencil: Some(opaque_depth),
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module,
+                        entry_point: Some("fragment_opaque_keyed"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        targets: GeometryBuffer::opaque_targets(),
+                    }),
+                    multiview: None,
+                    cache: None,
+                });
 
-        let alpha_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("models_alpha_pipeline"),
-            layout: Some(&layout),
-            vertex: wgpu::VertexState {
-                module,
-                entry_point: Some("vertex_main"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers,
-            },
-            primitive,
-            depth_stencil: Some(alpha_depth),
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module,
-                entry_point: Some("fragment_alpha"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: GeometryBuffer::alpha_targets(),
-            }),
-            multiview: None,
-            cache: None,
-        });
+        let alpha_pipeline =
+            globals::gpu()
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("models_alpha_pipeline"),
+                    layout: Some(&layout),
+                    vertex: wgpu::VertexState {
+                        module,
+                        entry_point: Some("vertex_main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        buffers,
+                    },
+                    primitive,
+                    depth_stencil: Some(alpha_depth),
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module,
+                        entry_point: Some("fragment_alpha"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        targets: GeometryBuffer::alpha_targets(),
+                    }),
+                    multiview: None,
+                    cache: None,
+                });
 
         let model_instances = PerFrame::new(|index| {
             GrowingBuffer::new(
-                gpu,
                 1 << 7,
                 wgpu::BufferUsages::VERTEX,
                 format!("model_instances:{index}"),
@@ -270,20 +280,21 @@ impl ModelRenderPipeline {
 
         let poses = PerFrame::new(|index| {
             let buffer = GrowingBuffer::new(
-                gpu,
                 1 << 7,
                 wgpu::BufferUsages::STORAGE,
                 format!("poses:{index}"),
             );
 
-            let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(&format!("poses_bind_group:{index}")),
-                layout: &poses_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffer.buffer().as_entire_binding(),
-                }],
-            });
+            let bind_group = globals::gpu()
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some(&format!("poses_bind_group:{index}")),
+                    layout: &poses_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.buffer().as_entire_binding(),
+                    }],
+                });
 
             (buffer, bind_group)
         });
@@ -313,12 +324,12 @@ impl ModelRenderPipeline {
         }
     }
 
-    pub fn ensure_render_model(&mut self, gpu: &Gpu, model_handle: Handle<Model>) {
+    pub fn ensure_render_model(&mut self, model_handle: Handle<Model>) {
         if self.models.contains(model_handle) {
             return;
         }
 
-        self.models.add(gpu, model_handle);
+        self.models.add(model_handle);
 
         // Create per-texture bind groups for any new textures introduced by this model.
         let new_textures: Vec<Handle<Texture>> = self
@@ -336,11 +347,11 @@ impl ModelRenderPipeline {
             .unwrap_or_default();
 
         for texture in new_textures {
-            self.ensure_texture_bind_group(&gpu.device, texture);
+            self.ensure_texture_bind_group(texture);
         }
     }
 
-    fn ensure_texture_bind_group(&mut self, device: &wgpu::Device, texture: Handle<Texture>) {
+    fn ensure_texture_bind_group(&mut self, texture: Handle<Texture>) {
         if self.texture_bind_groups.contains_key(&texture) {
             return;
         }
@@ -349,32 +360,29 @@ impl ModelRenderPipeline {
             return;
         };
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("model_texture_bind_group"),
-            layout: &self.texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_data.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-            ],
-        });
+        let bind_group = globals::gpu()
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("model_texture_bind_group"),
+                layout: &self.texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&texture_data.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                ],
+            });
 
         self.texture_bind_groups.insert(texture, bind_group);
     }
 }
 
 impl RenderPipeline for ModelRenderPipeline {
-    fn prepare(
-        &mut self,
-        gpu: &Gpu,
-        _bindings: &mut RenderBindings,
-        snapshot: &WorldRenderSnapshot,
-    ) {
+    fn prepare(&mut self, _bindings: &mut RenderBindings, snapshot: &WorldRenderSnapshot) {
         let snapshot_models = &snapshot.models.models;
 
         // Sort by model handle so instances of the same model end up contiguous.
@@ -394,7 +402,7 @@ impl RenderPipeline for ModelRenderPipeline {
             let idx = self.sorted_indices_cache[i];
             let m = &snapshot_models[idx];
 
-            self.ensure_render_model(gpu, m.model);
+            self.ensure_render_model(m.model);
 
             let mut flags = ModelRenderFlags::empty();
             flags.set(ModelRenderFlags::HIGHLIGHTED, m.highlighted);
@@ -444,21 +452,23 @@ impl RenderPipeline for ModelRenderPipeline {
         {
             let (buffer, bind_group) = self.poses.advance();
 
-            if buffer.write(gpu, self.poses_cache.as_slice()) {
-                *bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("poses_bind_group"),
-                    layout: &self.poses_bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: buffer.buffer().as_entire_binding(),
-                    }],
-                });
+            if buffer.write(self.poses_cache.as_slice()) {
+                *bind_group = globals::gpu()
+                    .device
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("poses_bind_group"),
+                        layout: &self.poses_bind_group_layout,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: buffer.buffer().as_entire_binding(),
+                        }],
+                    });
             }
         }
 
         // Upload instances.
         let model_instances = self.model_instances.advance();
-        model_instances.write(gpu, self.model_instances_cache.as_slice());
+        model_instances.write(self.model_instances_cache.as_slice());
     }
 
     fn queue(

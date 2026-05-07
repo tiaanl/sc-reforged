@@ -2,7 +2,7 @@ use glam::{IVec2, UVec2, Vec4};
 
 use crate::{
     engine::{
-        renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
+        renderer::{RenderContext, RenderTarget, SurfaceDesc},
         shader_cache::ShaderCache,
         storage::{Handle, Storage},
     },
@@ -155,18 +155,17 @@ pub struct WindowRenderer {
 
 impl WindowRenderer {
     /// Creates the window renderer.
-    pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc) -> Self {
-        let gbuffer_bind_group_layout = GeometryBuffer::create_bind_group_layout(&gpu.device);
+    pub fn new(surface_desc: &SurfaceDesc) -> Self {
+        let gbuffer_bind_group_layout = GeometryBuffer::create_bind_group_layout();
         let mut shader_cache = ShaderCache::default();
         let compositor = Compositor::new(
-            &gpu,
             surface_desc.format,
             &gbuffer_bind_group_layout,
             &mut shader_cache,
         );
 
         Self {
-            quad_renderer: QuadRenderer::new(gpu, surface_desc),
+            quad_renderer: QuadRenderer::new(surface_desc),
             tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
             gbuffer_bind_group_layout,

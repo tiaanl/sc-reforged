@@ -1,4 +1,4 @@
-use crate::engine::renderer::Gpu;
+use crate::game::globals;
 
 pub struct UniformBuffer {
     pub buffer: wgpu::Buffer,
@@ -11,7 +11,7 @@ impl UniformBuffer {
     }
 
     #[inline]
-    pub fn write(&self, gpu: &Gpu, data: &[u8]) {
-        gpu.queue.write_buffer(&self.buffer, 0, data)
+    pub fn write(&self, data: &[u8]) {
+        globals::gpu().queue.write_buffer(&self.buffer, 0, data)
     }
 }

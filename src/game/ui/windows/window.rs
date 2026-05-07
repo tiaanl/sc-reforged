@@ -1,10 +1,7 @@
 use glam::IVec2;
 
 use crate::{
-    engine::{
-        input::InputEvent,
-        renderer::{Gpu, RenderContext},
-    },
+    engine::{input::InputEvent, renderer::RenderContext},
     game::ui::{
         EventResult, Rect,
         render::window_renderer::{WindowRenderItems, WindowRenderer},
@@ -16,7 +13,6 @@ use crate::{
 /// drive direct GPU work (e.g. world rendering into a gbuffer) in addition to
 /// emitting window render items.
 pub struct WindowRenderContext<'a> {
-    pub gpu: &'a Gpu,
     pub render_context: &'a mut RenderContext,
     pub window_renderer: &'a WindowRenderer,
 }
@@ -118,9 +114,5 @@ pub trait Window {
 
     /// Called for each window so they can drive any GPU work and append items
     /// to `render_items` to be composited later.
-    fn render(
-        &mut self,
-        ctx: &mut WindowRenderContext<'_>,
-        render_items: &mut WindowRenderItems,
-    );
+    fn render(&mut self, ctx: &mut WindowRenderContext<'_>, render_items: &mut WindowRenderItems);
 }

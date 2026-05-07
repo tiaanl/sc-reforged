@@ -35,12 +35,7 @@ impl RenderLayout for CameraEnvironmentLayout {
 pub struct CameraRenderPipeline;
 
 impl RenderPipeline for CameraRenderPipeline {
-    fn prepare(
-        &mut self,
-        context: &crate::engine::renderer::Gpu,
-        bindings: &mut RenderBindings,
-        snapshot: &WorldRenderSnapshot,
-    ) {
+    fn prepare(&mut self, bindings: &mut RenderBindings, snapshot: &WorldRenderSnapshot) {
         let data = gpu::CameraEnvironment {
             proj_view: snapshot.camera.proj_view.to_cols_array_2d(),
             frustum: snapshot
@@ -71,7 +66,7 @@ impl RenderPipeline for CameraRenderPipeline {
         bindings
             .camera_env_buffer
             .advance()
-            .write(context, bytemuck::bytes_of(&data));
+            .write(bytemuck::bytes_of(&data));
     }
 
     fn queue(

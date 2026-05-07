@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use bytemuck::{NoUninit, cast_slice};
 
-use crate::engine::renderer::Gpu;
+use crate::game::globals;
 
 pub struct GrowingBuffer<T: NoUninit> {
     /// Label used for the buffer.
@@ -22,15 +22,10 @@ pub struct GrowingBuffer<T: NoUninit> {
 impl<T: NoUninit> GrowingBuffer<T> {
     const STRIDE: u64 = std::mem::size_of::<T>() as u64;
 
-    pub fn new(
-        renderer: &Gpu,
-        capacity: u32,
-        usage: wgpu::BufferUsages,
-        label: impl Into<String>,
-    ) -> Self {
+    pub fn new(capacity: u32, usage: wgpu::BufferUsages, label: impl Into<String>) -> Self {
         let label = label.into();
         let size = Self::STRIDE * capacity as u64;
-        let buffer = Self::create_buffer(renderer, &label, size, usage);
+        let buffer = Self::create_buffer(&label, size, usage);
 
         Self {
             label,
@@ -56,10 +51,12 @@ impl<T: NoUninit> GrowingBuffer<T> {
     }
 
     /// Write the given data to the start of the buffer. Returns the range where it was written.
-    pub fn write(&mut self, gpu: &Gpu, data: &[T]) -> bool {
-        let resized = self.ensure_size(gpu, data.len() as u32);
+    pub fn write(&mut self, data: &[T]) -> bool {
+        let resized = self.ensure_size(data.len() as u32);
 
-        gpu.queue.write_buffer(&self.buffer, 0, cast_slice(data));
+        globals::gpu()
+            .queue
+            .write_buffer(&self.buffer, 0, cast_slice(data));
 
         self.count = data.len() as u32;
 
@@ -68,14 +65,15 @@ impl<T: NoUninit> GrowingBuffer<T> {
 
     /// Write the given data to the end of the buffer. Returns the range where
     /// it was written to and whether the buffer was resized.
-    pub fn extend(&mut self, gpu: &Gpu, data: &[T]) -> (Range<u32>, bool) {
-        let resized = self.ensure_size(gpu, self.count + data.len() as u32);
+    pub fn extend(&mut self, data: &[T]) -> (Range<u32>, bool) {
+        let resized = self.ensure_size(self.count + data.len() as u32);
 
         let start = self.count;
 
         let offset = Self::STRIDE * start as u64;
 
-        gpu.queue
+        globals::gpu()
+            .queue
             .write_buffer(&self.buffer, offset, cast_slice(data));
 
         self.count += data.len() as u32;
@@ -86,16 +84,16 @@ impl<T: NoUninit> GrowingBuffer<T> {
 
     /// Ensure the buffer is at least the `required_capacity` and return `true`
     /// if it was resized.
-    fn ensure_size(&mut self, gpu: &Gpu, required_capacity: u32) -> bool {
+    fn ensure_size(&mut self, required_capacity: u32) -> bool {
         if required_capacity > self.capacity {
-            self.resize(gpu, required_capacity);
+            self.resize(required_capacity);
             true
         } else {
             false
         }
     }
 
-    fn resize(&mut self, gpu: &Gpu, required_capacity: u32) {
+    fn resize(&mut self, required_capacity: u32) {
         let mut new_capacity = self.capacity * 2;
         while new_capacity < required_capacity {
             new_capacity *= 2;
@@ -110,13 +108,14 @@ impl<T: NoUninit> GrowingBuffer<T> {
             new_size_in_bytes,
         );
 
-        let buffer = Self::create_buffer(gpu, &self.label, new_size_in_bytes, self.usage);
+        let buffer = Self::create_buffer(&self.label, new_size_in_bytes, self.usage);
 
-        let mut encoder = gpu
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some(&format!("{}_grow", self.label)),
-            });
+        let mut encoder =
+            globals::gpu()
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some(&format!("{}_grow", self.label)),
+                });
 
         encoder.copy_buffer_to_buffer(
             &self.buffer,
@@ -126,24 +125,23 @@ impl<T: NoUninit> GrowingBuffer<T> {
             self.count as u64 * Self::STRIDE,
         );
 
-        gpu.queue.submit(std::iter::once(encoder.finish()));
+        globals::gpu()
+            .queue
+            .submit(std::iter::once(encoder.finish()));
 
         self.capacity = new_capacity;
         self.buffer = buffer;
     }
 
     #[inline]
-    fn create_buffer(
-        gpu: &Gpu,
-        label: &str,
-        size_in_bytes: u64,
-        usage: wgpu::BufferUsages,
-    ) -> wgpu::Buffer {
-        gpu.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(&format!("{label}_buffer")),
-            size: size_in_bytes,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC | usage,
-            mapped_at_creation: false,
-        })
+    fn create_buffer(label: &str, size_in_bytes: u64, usage: wgpu::BufferUsages) -> wgpu::Buffer {
+        globals::gpu()
+            .device
+            .create_buffer(&wgpu::BufferDescriptor {
+                label: Some(&format!("{label}_buffer")),
+                size: size_in_bytes,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC | usage,
+                mapped_at_creation: false,
+            })
     }
 }

@@ -2,14 +2,14 @@
 
 use glam::{UVec2, Vec3};
 
-use crate::engine::renderer::Gpu;
+use crate::{engine::renderer::Gpu, game::globals};
 
 pub struct RenderTarget {
     pub view: wgpu::TextureView,
 }
 
 impl RenderTarget {
-    pub fn new(gpu: &Gpu, label: &str, size: UVec2, format: wgpu::TextureFormat) -> Self {
+    pub fn new(label: &str, size: UVec2, format: wgpu::TextureFormat) -> Self {
         let size = wgpu::Extent3d {
             width: size.x.max(1),
             height: size.y.max(1),
@@ -18,18 +18,20 @@ impl RenderTarget {
 
         let full_label = format!("render_target_texture_{label}");
 
-        let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(&full_label),
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
+        let texture = globals::gpu()
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some(&full_label),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_SRC,
+                view_formats: &[],
+            });
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -48,34 +50,35 @@ struct Inner {
 }
 
 impl Inner {
-    fn new(gpu: &Gpu, bind_group_layout: &wgpu::BindGroupLayout, size: UVec2) -> Self {
+    fn new(bind_group_layout: &wgpu::BindGroupLayout, size: UVec2) -> Self {
         tracing::info!("Creating geometry buffers ({}x{})", size.x, size.y);
 
-        let depth = RenderTarget::new(gpu, "depth", size, GeometryBuffer::DEPTH_FORMAT);
-        let color = RenderTarget::new(gpu, "color", size, GeometryBuffer::COLOR_FORMAT);
+        let depth = RenderTarget::new("depth", size, GeometryBuffer::DEPTH_FORMAT);
+        let color = RenderTarget::new("color", size, GeometryBuffer::COLOR_FORMAT);
         let oit_accumulation =
-            RenderTarget::new(gpu, "color", size, GeometryBuffer::OIT_ACCUMULATION_FORMAT);
-        let oit_revealage =
-            RenderTarget::new(gpu, "color", size, GeometryBuffer::OIT_REVEALAGE_FORMAT);
+            RenderTarget::new("color", size, GeometryBuffer::OIT_ACCUMULATION_FORMAT);
+        let oit_revealage = RenderTarget::new("color", size, GeometryBuffer::OIT_REVEALAGE_FORMAT);
 
-        let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("g_buffer_bind_group"),
-            layout: bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&color.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&oit_accumulation.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&oit_revealage.view),
-                },
-            ],
-        });
+        let bind_group = globals::gpu()
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("g_buffer_bind_group"),
+                layout: bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&color.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&oit_accumulation.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&oit_revealage.view),
+                    },
+                ],
+            });
 
         Self {
             depth,
@@ -89,8 +92,6 @@ impl Inner {
 }
 
 pub struct GeometryBuffer {
-    gpu: Gpu,
-
     bind_group_layout: wgpu::BindGroupLayout,
 
     /// The current size of the buffers.
@@ -105,52 +106,53 @@ impl GeometryBuffer {
     pub const OIT_ACCUMULATION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
     pub const OIT_REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
 
-    pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("g_buffer_bind_group_layout"),
-            entries: &[
-                // color
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+    pub fn create_bind_group_layout() -> wgpu::BindGroupLayout {
+        globals::gpu()
+            .device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("g_buffer_bind_group_layout"),
+                entries: &[
+                    // color
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // oit_accumulation
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                    // oit_accumulation
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                // oit_revealage
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                    // oit_revealage
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-            ],
-        })
+                ],
+            })
     }
 
-    pub fn new(gpu: Gpu, bind_group_layout: wgpu::BindGroupLayout, size: UVec2) -> Self {
-        let inner = Inner::new(&gpu, &bind_group_layout, size);
+    pub fn new(bind_group_layout: wgpu::BindGroupLayout, size: UVec2) -> Self {
+        let inner = Inner::new(&bind_group_layout, size);
 
         Self {
-            gpu,
             bind_group_layout,
             size,
             inner,
@@ -158,7 +160,7 @@ impl GeometryBuffer {
     }
 
     pub fn resize(&mut self, size: UVec2) {
-        self.inner = Inner::new(&self.gpu, &self.bind_group_layout, size);
+        self.inner = Inner::new(&self.bind_group_layout, size);
         self.size = size;
     }
 

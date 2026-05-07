@@ -1,7 +1,7 @@
 use glam::{IVec2, UVec2};
 
 use crate::{
-    engine::{assets::AssetError, input::InputEvent, renderer::Gpu, storage::Handle},
+    engine::{assets::AssetError, input::InputEvent, storage::Handle},
     game::{
         render::{geometry_buffer::GeometryBuffer, world::WorldRenderer},
         sim::SimWorld,
@@ -23,13 +23,11 @@ pub struct WorldWindow {
 
 impl WorldWindow {
     pub fn new(
-        gpu: Gpu,
         ui_window_renderer: &UiWindowRenderer,
         size: UVec2,
         sim: SimWorld,
     ) -> Result<Self, AssetError> {
         let mut world_renderer = WorldRenderer::new(
-            gpu,
             ui_window_renderer.gbuffer_bind_group_layout(),
             sim.terrain(),
         );
@@ -84,7 +82,7 @@ impl Window for WorldWindow {
         }
 
         let snapshot = self.sim.extract_snapshot();
-        self.world_renderer.prepare(ctx.gpu, snapshot);
+        self.world_renderer.prepare(snapshot);
         self.world_renderer
             .render_to(self.gbuffer, ctx.render_context, snapshot);
 
