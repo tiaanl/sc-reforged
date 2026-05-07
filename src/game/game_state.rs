@@ -10,8 +10,7 @@ use crate::{
     },
     game::{
         assets::{
-            config::campaign_def::CampaignDefs, images::Images, models::Models, motions::Motions,
-            sprites::Sprites,
+            config::campaign_def::CampaignDefs, models::Models, motions::Motions, sprites::Sprites,
         },
         config::load_config,
         render::textures::Textures,
@@ -30,7 +29,6 @@ pub struct GameState {
 
     campaign_defs: CampaignDefs,
 
-    images: Arc<Images>,
     models: Arc<Models>,
     motions: Arc<Motions>,
     textures: Arc<Textures>,
@@ -42,10 +40,9 @@ impl GameState {
     pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc) -> Result<Self, AssetError> {
         let campaign_defs = load_config(PathBuf::from("config").join("campaign_defs.txt"))?;
 
-        let images = Arc::new(Images::default());
-        let models = Arc::new(Models::new(Arc::clone(&images))?);
+        let models = Arc::new(Models::default());
         let motions = Arc::new(Motions::default());
-        let textures = Arc::new(Textures::new(gpu.clone(), Arc::clone(&images)));
+        let textures = Arc::new(Textures::new(gpu.clone()));
         let sprites = Arc::new(Sprites::new(Arc::clone(&textures))?);
 
         let mut window_manager =
@@ -68,7 +65,6 @@ impl GameState {
         Ok(Self {
             gpu,
             campaign_defs,
-            images,
             models,
             motions,
             textures,
@@ -129,7 +125,6 @@ impl GameState {
 
         let sim = SimWorld::new(
             GameAssets {
-                images: Arc::clone(&self.images),
                 models: Arc::clone(&self.models),
                 motions: Arc::clone(&self.motions),
             },

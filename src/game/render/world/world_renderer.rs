@@ -59,7 +59,6 @@ impl WorldRenderer {
         pipelines.push(CameraRenderPipeline);
 
         pipelines.push(TerrainRenderPipeline::new(
-            textures.images().as_ref(),
             &gpu,
             &mut layouts,
             &mut shader_cache,
@@ -108,10 +107,7 @@ impl WorldRenderer {
 
     /// Returns a clone of the gbuffer's bind group, suitable for embedding in a
     /// window render item that the compositor will sample.
-    pub fn gbuffer_bind_group(
-        &self,
-        handle: Handle<GeometryBuffer>,
-    ) -> Option<wgpu::BindGroup> {
+    pub fn gbuffer_bind_group(&self, handle: Handle<GeometryBuffer>) -> Option<wgpu::BindGroup> {
         self.gbuffers
             .get(handle)
             .map(|gbuffer| gbuffer.bind_group().clone())

@@ -10,6 +10,7 @@ use crate::{
             models::Models,
         },
         config::{BodyDefinition, CharacterProfiles, ObjectType},
+        globals,
         math::BoundingBox,
         models::ModelName,
         sim::{
@@ -252,8 +253,6 @@ fn build_body_definition_model(
     body_definition: &BodyDefinition,
     models: &Models,
 ) -> Result<Model, AssetError> {
-    let images = models.images();
-
     let (body_skeleton, body_meshes, body_collision_boxes, body_bounding_box, body_name_lookup) = {
         let body_handle = models.load(ModelName::Body(body_definition.body_model.clone()))?;
         let body_model = models.get(body_handle).unwrap();
@@ -299,7 +298,7 @@ fn build_body_definition_model(
     let body_image_path = PathBuf::from("textures")
         .join("shared")
         .join(&body_image_name);
-    let body_image = images.load(&body_image_path)?;
+    let body_image = globals::images().load(&body_image_path)?;
     for (node_index, mesh) in body_meshes {
         new_model.meshes.push(Mesh {
             node_index,
@@ -316,7 +315,7 @@ fn build_body_definition_model(
     let head_image_path = PathBuf::from("textures")
         .join("shared")
         .join(&head_image_name);
-    let head_image = images.load(&head_image_path)?;
+    let head_image = globals::images().load(&head_image_path)?;
     for (node_index, mesh) in head_meshes {
         new_model.meshes.push(Mesh {
             node_index,

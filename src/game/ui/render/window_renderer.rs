@@ -13,6 +13,7 @@ use crate::{
             image::Image,
             sprites::{Sprite3d, Sprites},
         },
+        globals,
         render::{
             compositor::Compositor,
             geometry_buffer::GeometryBuffer,
@@ -205,7 +206,7 @@ impl WindowRenderer {
         dimensions: IVec2,
         chunk_dimensions: IVec2,
     ) -> Option<Handle<TiledGeometry>> {
-        let render_size = self.textures.images().get(image)?.size.as_ivec2();
+        let render_size = globals::images().get(image)?.size.as_ivec2();
         let texture = self.textures.create_from_image(image)?;
 
         Some(self.tiled_geometries.insert(TiledGeometry {

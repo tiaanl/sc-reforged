@@ -14,9 +14,7 @@ use crate::{
         transform::Transform,
     },
     game::{
-        assets::{
-            config::campaign_def::CampaignDef, images::Images, models::Models, motions::Motions,
-        },
+        assets::{config::campaign_def::CampaignDef, models::Models, motions::Motions},
         config::{CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
         globals,
         render::world::WorldRenderSnapshot,
@@ -125,7 +123,6 @@ pub struct SimWorldState {
 /// thread-safe and may be cloned cheaply.
 #[derive(Clone, Resource)]
 pub struct GameAssets {
-    pub images: Arc<Images>,
     pub models: Arc<Models>,
     pub motions: Arc<Motions>,
 }
@@ -235,7 +232,7 @@ fn init_sim_world(
         FreeCameraController::new(1000.0, 0.2),
     ));
 
-    init_terrain(world, &assets, campaign_def)?;
+    init_terrain(world, campaign_def)?;
 
     init_objects(world, &assets, campaign)?;
 
@@ -256,11 +253,7 @@ fn init_sim_world(
     Ok(())
 }
 
-fn init_terrain(
-    world: &mut World,
-    assets: &GameAssets,
-    campaign_def: &CampaignDef,
-) -> Result<(), AssetError> {
+fn init_terrain(world: &mut World, campaign_def: &CampaignDef) -> Result<(), AssetError> {
     let terrain = {
         let terrain_mapping = load_config::<TerrainMapping>(
             PathBuf::from("textures")
@@ -319,12 +312,12 @@ fn init_terrain(
             let path = PathBuf::from("trnhigh")
                 .join(&terrain_mapping.texture_map_base_name)
                 .with_extension("jpg");
-            assets.images.load(path)?
+            globals::images().load(path)?
         };
 
         let strata_texture = {
             let path = PathBuf::from("textures").join("shared").join("strata.bmp");
-            assets.images.load(path)?
+            globals::images().load(path)?
         };
 
         Terrain::new(height_map, terrain_texture, strata_texture)

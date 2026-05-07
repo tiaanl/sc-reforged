@@ -9,6 +9,7 @@ use crate::{
     },
     game::{
         config::{ImageDefs, load_config},
+        globals,
         render::textures::{Texture, Textures},
     },
 };
@@ -124,7 +125,7 @@ impl Sprites {
     ) {
         let image_path = PathBuf::from("textures").join("object").join(texture_name);
 
-        let image_handle = match self.textures.images().load(&image_path) {
+        let image_handle = match globals::images().load(&image_path) {
             Ok(image_handle) => image_handle,
             Err(err) => {
                 tracing::warn!("Could not load image: {} ({})", image_path.display(), err);

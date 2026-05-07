@@ -7,7 +7,7 @@ use crate::{
         shader_cache::{ShaderCache, ShaderSource},
     },
     game::{
-        assets::images::Images,
+        globals,
         render::{
             geometry_buffer::GeometryBuffer,
             per_frame::PerFrame,
@@ -50,7 +50,6 @@ pub struct TerrainRenderPipeline {
 
 impl TerrainRenderPipeline {
     pub fn new(
-        images: &Images,
         gpu: &Gpu,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
@@ -104,12 +103,12 @@ impl TerrainRenderPipeline {
         };
 
         let terrain_texture = {
-            let image = images.get(terrain.terrain_texture).unwrap();
+            let image = globals::images().get(terrain.terrain_texture).unwrap();
             Self::create_texture(gpu, "terrain_texture", &image.data)
         };
 
         let strata_texture = {
-            let image = images
+            let image = globals::images()
                 .get(terrain.strata_texture)
                 .expect("Could not load strate texture.");
             Self::create_texture(gpu, "strata", &image.data)

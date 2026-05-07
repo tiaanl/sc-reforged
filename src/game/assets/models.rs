@@ -14,10 +14,7 @@ use crate::{
         transform::Transform,
     },
     game::{
-        assets::{
-            images::Images,
-            model::{CollisionBox, Mesh, Model, NodeIndex, Vertex},
-        },
+        assets::model::{CollisionBox, Mesh, Model, NodeIndex, Vertex},
         config::{LodModelProfileDefinition, SubModelDefinition, load_config},
         globals,
         math::BoundingBox,
@@ -27,39 +24,49 @@ use crate::{
 };
 
 pub struct Models {
-    images: Arc<Images>,
     model_lod_defs: HashMap<String, Vec<SubModelDefinition>>,
     storage: RwLock<StorageMap<ModelName, Model, Arc<Model>>>,
 }
 
-impl Models {
-    pub fn new(images: Arc<Images>) -> Result<Self, AssetError> {
+impl Default for Models {
+    fn default() -> Self {
         let mut model_lod_defs: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
         let profiles_path = PathBuf::from("config").join("lod_model_profiles");
-        for lod_path in globals::file_system().dir(&profiles_path)?.filter(|path| {
-            path.extension()
-                .filter(|ext| ext.eq_ignore_ascii_case("txt"))
-                .is_some()
-        }) {
-            let profile = load_config::<LodModelProfileDefinition>(lod_path)?;
-            model_lod_defs.insert(
-                profile.lod_model_name,
-                profile.sub_model_definitions.clone(),
-            );
+
+        match globals::file_system().dir(&profiles_path) {
+            Ok(dir) => {
+                for lod_path in dir.filter(|path| {
+                    path.extension()
+                        .filter(|ext| ext.eq_ignore_ascii_case("txt"))
+                        .is_some()
+                }) {
+                    match load_config::<LodModelProfileDefinition>(lod_path) {
+                        Ok(profile) => {
+                            model_lod_defs.insert(
+                                profile.lod_model_name,
+                                profile.sub_model_definitions.clone(),
+                            );
+                        }
+                        Err(err) => {
+                            tracing::warn!("Could not load profile - {}", err);
+                        }
+                    }
+                }
+            }
+            Err(err) => {
+                tracing::warn!("Could not enumerate directory - {}", err);
+            }
         }
 
-        Ok(Self {
-            images,
+        Self {
             model_lod_defs,
             storage: RwLock::new(StorageMap::default()),
-        })
+        }
     }
+}
 
-    pub fn images(&self) -> Arc<Images> {
-        Arc::clone(&self.images)
-    }
-
+impl Models {
     pub fn get(&self, handle: Handle<Model>) -> Option<Arc<Model>> {
         self.storage.read().unwrap().get(handle).map(Arc::clone)
     }
@@ -190,7 +197,7 @@ impl Models {
                     .join("shared")
                     .join(&smf_mesh.texture_name);
 
-                let image_handle = match self.images.load(texture_path) {
+                let image_handle = match globals::images().load(texture_path) {
                     Ok(handle) => handle,
                     Err(err) => {
                         tracing::warn!("Could not load mesh texture: {}", err);

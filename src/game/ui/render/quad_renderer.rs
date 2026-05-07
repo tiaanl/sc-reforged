@@ -15,6 +15,7 @@ use crate::{
             asset_source::AssetSource,
             image::{BlendMode, Image},
         },
+        globals,
         render::textures::{Texture, Textures},
         ui::Rect,
     },
@@ -296,7 +297,7 @@ impl QuadRenderer {
             "quad_renderer_instances",
         );
 
-        let white_image = textures.images().insert(
+        let white_image = globals::images().insert(
             "solid_white",
             Image::from_rgba(
                 AssetSource::Generated,

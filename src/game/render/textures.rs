@@ -7,9 +7,9 @@ use crate::{
         renderer::Gpu,
         storage::{Handle, StorageMap},
     },
-    game::assets::{
-        image::{BlendMode, Image},
-        images::Images,
+    game::{
+        assets::image::{BlendMode, Image},
+        globals,
     },
 };
 
@@ -17,23 +17,17 @@ pub struct Texture;
 
 pub struct Textures {
     gpu: Gpu,
-    images: Arc<Images>,
 
     textures: RwLock<StorageMap<Handle<Image>, Texture, Arc<TextureData>>>,
 }
 
 impl Textures {
-    pub fn new(gpu: Gpu, images: Arc<Images>) -> Self {
+    pub fn new(gpu: Gpu) -> Self {
         Self {
             gpu,
-            images,
 
             textures: RwLock::new(StorageMap::default()),
         }
-    }
-
-    pub fn images(&self) -> Arc<Images> {
-        Arc::clone(&self.images)
     }
 
     pub fn get(&self, handle: Handle<Texture>) -> Option<Arc<TextureData>> {
@@ -57,7 +51,7 @@ impl Textures {
         }
 
         let image_handle = image;
-        let image = self.images.get(image)?;
+        let image = globals::images().get(image)?;
 
         let view = self.create_texture_internal(&image.data);
 
