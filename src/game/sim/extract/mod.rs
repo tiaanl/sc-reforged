@@ -5,7 +5,6 @@ mod environment;
 mod gizmos;
 mod models;
 mod terrain;
-mod ui;
 
 pub fn create_extract_schedule() -> Schedule {
     let mut schedule = Schedule::default();
@@ -19,7 +18,6 @@ pub fn create_extract_schedule() -> Schedule {
             (
                 terrain::extract_terrain_snapshot,
                 models::extract_model_snapshot,
-                ui::extract_ui_snapshot,
                 gizmos::extract_gizmos,
             ),
         )

@@ -105,9 +105,8 @@ pub fn build_update_schedule() -> Schedule {
                 .chain(),
             sequences::update_motion_controllers,
             sequences::update_poses,
-            rebuild_static_bvh.run_if(|q: Query<(), Added<ecs::BoundingBoxComponent>>| {
-                q.iter().count() > 0
-            }),
+            rebuild_static_bvh
+                .run_if(|q: Query<(), Added<ecs::BoundingBoxComponent>>| q.iter().count() > 0),
             update_dynamic_bvh,
             sequences::_debug_draw_root_motion,
         )

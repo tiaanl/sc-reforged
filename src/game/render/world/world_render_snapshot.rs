@@ -81,12 +81,6 @@ pub struct UiRect {
 }
 
 #[derive(Default)]
-pub struct Ui {
-    pub proj_view: Mat4,
-    pub ui_rects: Vec<UiRect>,
-}
-
-#[derive(Default)]
 pub struct Gizmos {
     pub vertices: Vec<GizmoVertex>,
 }
@@ -101,8 +95,6 @@ pub struct WorldRenderSnapshot {
     pub terrain: Terrain,
     /// Models to render.
     pub models: Models,
-    /// UI to render.
-    pub ui: Ui,
     /// Gizmos to render.
     pub gizmos: Gizmos,
 }
