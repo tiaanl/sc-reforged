@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use ahash::HashMap;
 use glam::{IVec2, UVec2, Vec2, Vec4};
 use wgpu::util::DeviceExt;
@@ -16,7 +14,7 @@ use crate::{
             image::{BlendMode, Image},
         },
         globals,
-        render::textures::{Texture, Textures},
+        render::textures::Texture,
         ui::Rect,
     },
 };
@@ -97,7 +95,6 @@ impl Default for Quad {
 
 pub struct QuadRenderer {
     gpu: Gpu,
-    textures: Arc<Textures>,
 
     solid_white_texture: Handle<Texture>,
 
@@ -120,7 +117,7 @@ pub struct QuadRenderer {
 
 impl QuadRenderer {
     /// Creates the quad renderer and its GPU state for menu quads.
-    pub fn new(gpu: Gpu, surface: &SurfaceDesc, textures: Arc<Textures>) -> Self {
+    pub fn new(gpu: Gpu, surface: &SurfaceDesc) -> Self {
         let Gpu { device, .. } = &gpu;
 
         let viewport = gpu::Viewport::from(surface.size);
@@ -305,13 +302,12 @@ impl QuadRenderer {
                 BlendMode::Opaque,
             ),
         );
-        let solid_white_texture = textures
+        let solid_white_texture = globals::textures()
             .create_from_image(white_image)
             .expect("generated solid white texture should be valid");
 
         Self {
             gpu,
-            textures,
             solid_white_texture,
             render_pipeline,
             vertices_buffer,
@@ -444,7 +440,7 @@ impl QuadRenderer {
             return true;
         }
 
-        let Some(texture) = self.textures.get(texture_handle) else {
+        let Some(texture) = globals::textures().get(texture_handle) else {
             return false;
         };
 

@@ -6,7 +6,7 @@ use crate::{
     engine::{assets::AssetError, input::InputEvent, renderer::Gpu, storage::Handle},
     game::{
         assets::models::Models,
-        render::{geometry_buffer::GeometryBuffer, textures::Textures, world::WorldRenderer},
+        render::{geometry_buffer::GeometryBuffer, world::WorldRenderer},
         sim::SimWorld,
         ui::{
             Rect,
@@ -28,14 +28,12 @@ impl WorldWindow {
     pub fn new(
         gpu: Gpu,
         models: Arc<Models>,
-        textures: Arc<Textures>,
         ui_window_renderer: &UiWindowRenderer,
         size: UVec2,
         sim: SimWorld,
     ) -> Result<Self, AssetError> {
         let mut world_renderer = WorldRenderer::new(
             models,
-            textures,
             gpu,
             ui_window_renderer.gbuffer_bind_group_layout(),
             sim.terrain(),
@@ -77,11 +75,7 @@ impl Window for WorldWindow {
         self.sim.update(delta_time);
     }
 
-    fn render(
-        &mut self,
-        ctx: &mut WindowRenderContext<'_>,
-        render_items: &mut WindowRenderItems,
-    ) {
+    fn render(&mut self, ctx: &mut WindowRenderContext<'_>, render_items: &mut WindowRenderItems) {
         let surface_size = ctx.window_renderer.surface_size();
         if self.world_renderer.gbuffer_size(self.gbuffer) != Some(surface_size) {
             tracing::info!(

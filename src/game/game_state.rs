@@ -13,7 +13,6 @@ use crate::{
             config::campaign_def::CampaignDefs, models::Models, motions::Motions, sprites::Sprites,
         },
         config::load_config,
-        render::textures::Textures,
         sim::{GameAssets, SimWorld},
         ui::windows::{
             main_menu::MainMenuWindow, window_manager::WindowManager, world::WorldWindow,
@@ -31,7 +30,6 @@ pub struct GameState {
 
     models: Arc<Models>,
     motions: Arc<Motions>,
-    textures: Arc<Textures>,
 
     window_manager: WindowManager,
 }
@@ -42,11 +40,9 @@ impl GameState {
 
         let models = Arc::new(Models::default());
         let motions = Arc::new(Motions::default());
-        let textures = Arc::new(Textures::new(gpu.clone()));
-        let sprites = Arc::new(Sprites::new(Arc::clone(&textures))?);
+        let sprites = Arc::new(Sprites::new()?);
 
-        let mut window_manager =
-            WindowManager::new(gpu.clone(), surface_desc, Arc::clone(&textures), sprites)?;
+        let mut window_manager = WindowManager::new(gpu.clone(), surface_desc, sprites)?;
 
         let main_menu_window = Box::new(MainMenuWindow::new(&window_manager)?);
         window_manager.push(main_menu_window);
@@ -67,7 +63,6 @@ impl GameState {
             campaign_defs,
             models,
             motions,
-            textures,
             window_manager,
         })
     }
@@ -136,7 +131,6 @@ impl GameState {
         let world_window = Box::new(WorldWindow::new(
             self.gpu.clone(),
             Arc::clone(&self.models),
-            Arc::clone(&self.textures),
             self.window_manager.window_renderer(),
             UVec2::new(640, 480),
             sim,

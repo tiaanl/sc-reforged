@@ -11,10 +11,11 @@ use crate::{
     },
     game::{
         assets::{model::Model, models::Models},
+        globals,
         render::{
             geometry_buffer::GeometryBuffer,
             per_frame::PerFrame,
-            textures::{Texture, Textures},
+            textures::Texture,
             world::{
                 WorldRenderSnapshot,
                 camera_render_pipeline::CameraEnvironmentLayout,
@@ -41,7 +42,6 @@ struct Batch {
 }
 
 pub struct ModelRenderPipeline {
-    textures: Arc<Textures>,
     asset_models: Arc<Models>,
 
     models: RenderModels,
@@ -84,7 +84,6 @@ impl ModelRenderPipeline {
         gpu: &Gpu,
         layouts: &mut RenderLayouts,
         shader_cache: &mut ShaderCache,
-        textures: Arc<Textures>,
         asset_models: Arc<Models>,
     ) -> Self {
         let device = &gpu.device;
@@ -299,7 +298,6 @@ impl ModelRenderPipeline {
         });
 
         Self {
-            textures,
             asset_models,
 
             models,
@@ -331,8 +329,7 @@ impl ModelRenderPipeline {
             return;
         }
 
-        self.models
-            .add(&self.textures, &self.asset_models, gpu, model_handle);
+        self.models.add(&self.asset_models, gpu, model_handle);
 
         // Create per-texture bind groups for any new textures introduced by this model.
         let new_textures: Vec<Handle<Texture>> = self
@@ -359,7 +356,7 @@ impl ModelRenderPipeline {
             return;
         }
 
-        let Some(texture_data) = self.textures.get(texture) else {
+        let Some(texture_data) = globals::textures().get(texture) else {
             return;
         };
 

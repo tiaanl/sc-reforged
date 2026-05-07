@@ -1,4 +1,4 @@
-use std::{ops::RangeInclusive, path::PathBuf, sync::Arc};
+use std::{ops::RangeInclusive, path::PathBuf};
 
 use glam::IVec2;
 
@@ -10,7 +10,7 @@ use crate::{
     game::{
         config::{ImageDefs, load_config},
         globals,
-        render::textures::{Texture, Textures},
+        render::textures::Texture,
     },
 };
 
@@ -56,14 +56,12 @@ impl Sprite3d {
 }
 
 pub struct Sprites {
-    textures: Arc<Textures>,
     sprites: StorageMap<String, Sprite3d>,
 }
 
 impl Sprites {
-    pub fn new(textures: Arc<Textures>) -> Result<Self, AssetError> {
+    pub fn new() -> Result<Self, AssetError> {
         let mut sprites = Self {
-            textures,
             sprites: StorageMap::default(),
         };
 
@@ -133,7 +131,7 @@ impl Sprites {
             }
         };
 
-        let texture_handle = match self.textures.create_from_image(image_handle) {
+        let texture_handle = match globals::textures().create_from_image(image_handle) {
             Some(handle) => handle,
             None => {
                 tracing::warn!(
@@ -144,7 +142,7 @@ impl Sprites {
             }
         };
 
-        let Some(size) = self.textures.size(texture_handle) else {
+        let Some(size) = globals::textures().size(texture_handle) else {
             tracing::warn!("Invalid image size: {}", image_path.display());
             return;
         };

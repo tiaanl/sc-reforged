@@ -16,7 +16,6 @@ use crate::{
     game::{
         assets::sprites::Sprites,
         config::{load_config, windows::WindowBase},
-        render::textures::Textures,
         ui::{
             EventResult,
             render::window_renderer::{WindowRenderItems, WindowRenderer},
@@ -53,10 +52,9 @@ impl WindowManager {
     pub fn new(
         gpu: Gpu,
         surface_desc: &SurfaceDesc,
-        textures: Arc<Textures>,
         sprites: Arc<Sprites>,
     ) -> Result<Self, AssetError> {
-        let window_renderer = WindowRenderer::new(gpu.clone(), surface_desc, textures, sprites);
+        let window_renderer = WindowRenderer::new(gpu.clone(), surface_desc, sprites);
 
         Ok(Self {
             window_bases: Mutex::new(HashMap::default()),

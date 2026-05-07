@@ -109,7 +109,7 @@ impl ApplicationHandler for App {
                     surface_desc.format,
                 );
 
-                globals::init(&opts.path);
+                globals::init(&opts.path, gpu.clone());
 
                 let game_state = match GameState::new(gpu.clone(), &surface_desc) {
                     Ok(game_state) => game_state,

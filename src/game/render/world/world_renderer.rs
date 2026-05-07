@@ -12,7 +12,6 @@ use crate::{
         assets::models::Models,
         render::{
             geometry_buffer::GeometryBuffer,
-            textures::Textures,
             world::{
                 WorldRenderSnapshot,
                 camera_render_pipeline::CameraRenderPipeline,
@@ -42,7 +41,6 @@ impl WorldRenderer {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         models: Arc<Models>,
-        textures: Arc<Textures>,
         gpu: Gpu,
         gbuffer_layout: &wgpu::BindGroupLayout,
         terrain: &Terrain,
@@ -69,7 +67,6 @@ impl WorldRenderer {
             &gpu,
             &mut layouts,
             &mut shader_cache,
-            Arc::clone(&textures),
             Arc::clone(&models),
         ));
         pipelines.push(GizmoRenderPipeline::new(

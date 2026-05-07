@@ -7,7 +7,8 @@ use crate::{
     engine::{mesh::IndexedMesh, renderer::Gpu, storage::Handle},
     game::{
         assets::{image::BlendMode, model::Model, models::Models},
-        render::textures::{Texture, Textures},
+        globals,
+        render::textures::Texture,
     },
 };
 
@@ -68,13 +69,7 @@ impl RenderModels {
         }
     }
 
-    pub fn add(
-        &mut self,
-        textures: &Textures,
-        asset_models: &Models,
-        gpu: &Gpu,
-        model_handle: Handle<Model>,
-    ) {
+    pub fn add(&mut self, asset_models: &Models, gpu: &Gpu, model_handle: Handle<Model>) {
         if self.models.contains_key(&model_handle) {
             return;
         }
@@ -101,10 +96,10 @@ impl RenderModels {
         let mut alpha_meshes: Vec<RenderMesh> = Vec::new();
 
         for mesh in model.meshes.iter() {
-            let texture_handle = textures
+            let texture_handle = globals::textures()
                 .create_from_image(mesh.image)
                 .expect("Image should have been loaded by this time.");
-            let texture_data = textures
+            let texture_data = globals::textures()
                 .get(texture_handle)
                 .expect("Texture should exist immediately after creation.");
 

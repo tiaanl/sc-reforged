@@ -1,16 +1,24 @@
 use std::{path::Path, sync::OnceLock};
 
-use crate::game::{assets::images::Images, file_system::FileSystem};
+use crate::{
+    engine::renderer::Gpu,
+    game::{assets::images::Images, file_system::FileSystem, render::textures::Textures},
+};
 
 static FILE_SYSTEM: OnceLock<FileSystem> = OnceLock::new();
 static IMAGES: OnceLock<Images> = OnceLock::new();
+static TEXTURES: OnceLock<Textures> = OnceLock::new();
 
-pub fn init(root_dir: impl AsRef<Path>) -> bool {
+pub fn init(root_dir: impl AsRef<Path>, gpu: Gpu) -> bool {
     if FILE_SYSTEM.set(FileSystem::new(root_dir)).is_err() {
         return false;
     }
 
     if IMAGES.set(Images::default()).is_err() {
+        return false;
+    }
+
+    if TEXTURES.set(Textures::new(gpu.clone())).is_err() {
         return false;
     }
 
@@ -23,4 +31,8 @@ pub fn file_system() -> &'static FileSystem {
 
 pub fn images() -> &'static Images {
     IMAGES.get().unwrap()
+}
+
+pub fn textures() -> &'static Textures {
+    TEXTURES.get().unwrap()
 }

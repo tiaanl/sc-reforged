@@ -14,11 +14,7 @@ use crate::{
             sprites::{Sprite3d, Sprites},
         },
         globals,
-        render::{
-            compositor::Compositor,
-            geometry_buffer::GeometryBuffer,
-            textures::{Texture, Textures},
-        },
+        render::{compositor::Compositor, geometry_buffer::GeometryBuffer, textures::Texture},
         ui::{Rect, u32_to_color},
     },
 };
@@ -156,7 +152,6 @@ impl WindowRenderItems {
 /// Renders all the components required for windows.
 pub struct WindowRenderer {
     quad_renderer: QuadRenderer,
-    textures: Arc<Textures>,
     sprites: Arc<Sprites>,
     tiled_geometries: Storage<TiledGeometry>,
     surface_size: UVec2,
@@ -166,12 +161,7 @@ pub struct WindowRenderer {
 
 impl WindowRenderer {
     /// Creates the window renderer.
-    pub fn new(
-        gpu: Gpu,
-        surface_desc: &SurfaceDesc,
-        textures: Arc<Textures>,
-        sprites: Arc<Sprites>,
-    ) -> Self {
+    pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc, sprites: Arc<Sprites>) -> Self {
         let gbuffer_bind_group_layout = GeometryBuffer::create_bind_group_layout(&gpu.device);
         let mut shader_cache = ShaderCache::default();
         let compositor = Compositor::new(
@@ -183,8 +173,7 @@ impl WindowRenderer {
 
         Self {
             sprites,
-            textures: Arc::clone(&textures),
-            quad_renderer: QuadRenderer::new(gpu, surface_desc, textures),
+            quad_renderer: QuadRenderer::new(gpu, surface_desc),
             tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
             gbuffer_bind_group_layout,
@@ -207,7 +196,7 @@ impl WindowRenderer {
         chunk_dimensions: IVec2,
     ) -> Option<Handle<TiledGeometry>> {
         let render_size = globals::images().get(image)?.size.as_ivec2();
-        let texture = self.textures.create_from_image(image)?;
+        let texture = globals::textures().create_from_image(image)?;
 
         Some(self.tiled_geometries.insert(TiledGeometry {
             texture,
@@ -369,7 +358,7 @@ impl WindowRenderer {
                     let Some(sprite_frame) = sprite_data.frame(*frame) else {
                         continue;
                     };
-                    let Some(texture) = self.textures.get(sprite_data.texture) else {
+                    let Some(texture) = globals::textures().get(sprite_data.texture) else {
                         continue;
                     };
 
@@ -414,7 +403,7 @@ impl WindowRenderer {
                     let Some(font_sprite) = self.sprites.get(font_sprite_handle) else {
                         continue;
                     };
-                    let Some(texture_data) = self.textures.get(font_sprite.texture) else {
+                    let Some(texture_data) = globals::textures().get(font_sprite.texture) else {
                         continue;
                     };
 
