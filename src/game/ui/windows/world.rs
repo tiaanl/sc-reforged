@@ -1,11 +1,8 @@
-use std::sync::Arc;
-
 use glam::{IVec2, UVec2};
 
 use crate::{
     engine::{assets::AssetError, input::InputEvent, renderer::Gpu, storage::Handle},
     game::{
-        assets::models::Models,
         render::{geometry_buffer::GeometryBuffer, world::WorldRenderer},
         sim::SimWorld,
         ui::{
@@ -27,13 +24,11 @@ pub struct WorldWindow {
 impl WorldWindow {
     pub fn new(
         gpu: Gpu,
-        models: Arc<Models>,
         ui_window_renderer: &UiWindowRenderer,
         size: UVec2,
         sim: SimWorld,
     ) -> Result<Self, AssetError> {
         let mut world_renderer = WorldRenderer::new(
-            models,
             gpu,
             ui_window_renderer.gbuffer_bind_group_layout(),
             sim.terrain(),

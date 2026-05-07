@@ -9,9 +9,7 @@ use crate::{
         renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
     },
     game::{
-        assets::{
-            config::campaign_def::CampaignDefs, models::Models, motions::Motions, sprites::Sprites,
-        },
+        assets::{config::campaign_def::CampaignDefs, motions::Motions, sprites::Sprites},
         config::load_config,
         sim::{GameAssets, SimWorld},
         ui::windows::{
@@ -28,7 +26,6 @@ pub struct GameState {
 
     campaign_defs: CampaignDefs,
 
-    models: Arc<Models>,
     motions: Arc<Motions>,
 
     window_manager: WindowManager,
@@ -38,7 +35,6 @@ impl GameState {
     pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc) -> Result<Self, AssetError> {
         let campaign_defs = load_config(PathBuf::from("config").join("campaign_defs.txt"))?;
 
-        let models = Arc::new(Models::default());
         let motions = Arc::new(Motions::default());
         let sprites = Arc::new(Sprites::new()?);
 
@@ -61,7 +57,6 @@ impl GameState {
         Ok(Self {
             gpu,
             campaign_defs,
-            models,
             motions,
             window_manager,
         })
@@ -120,7 +115,6 @@ impl GameState {
 
         let sim = SimWorld::new(
             GameAssets {
-                models: Arc::clone(&self.models),
                 motions: Arc::clone(&self.motions),
             },
             campaign_def,
@@ -130,7 +124,6 @@ impl GameState {
 
         let world_window = Box::new(WorldWindow::new(
             self.gpu.clone(),
-            Arc::clone(&self.models),
             self.window_manager.window_renderer(),
             UVec2::new(640, 480),
             sim,

@@ -6,7 +6,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     engine::{mesh::IndexedMesh, renderer::Gpu, storage::Handle},
     game::{
-        assets::{image::BlendMode, model::Model, models::Models},
+        assets::{image::BlendMode, model::Model},
         globals,
         render::textures::Texture,
     },
@@ -69,12 +69,12 @@ impl RenderModels {
         }
     }
 
-    pub fn add(&mut self, asset_models: &Models, gpu: &Gpu, model_handle: Handle<Model>) {
+    pub fn add(&mut self, gpu: &Gpu, model_handle: Handle<Model>) {
         if self.models.contains_key(&model_handle) {
             return;
         }
 
-        let model = asset_models
+        let model = globals::models()
             .get(model_handle)
             .expect("Model should have been loaded by this time.");
 

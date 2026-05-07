@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use glam::UVec2;
 
 use crate::{
@@ -9,7 +7,6 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
-        assets::models::Models,
         render::{
             geometry_buffer::GeometryBuffer,
             world::{
@@ -39,12 +36,7 @@ pub struct WorldRenderer {
 
 impl WorldRenderer {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        models: Arc<Models>,
-        gpu: Gpu,
-        gbuffer_layout: &wgpu::BindGroupLayout,
-        terrain: &Terrain,
-    ) -> Self {
+    pub fn new(gpu: Gpu, gbuffer_layout: &wgpu::BindGroupLayout, terrain: &Terrain) -> Self {
         // Warm up the shader cache.
         let mut shader_cache = ShaderCache::default();
         shader_cache.preload_all(&gpu.device);
@@ -67,7 +59,6 @@ impl WorldRenderer {
             &gpu,
             &mut layouts,
             &mut shader_cache,
-            Arc::clone(&models),
         ));
         pipelines.push(GizmoRenderPipeline::new(
             &gpu,

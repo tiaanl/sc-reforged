@@ -5,6 +5,7 @@ use crate::{
     engine::{storage::Handle, transform::Transform},
     game::{
         assets::model::Model,
+        globals,
         sim::{
             GameAssets,
             ecs::GizmoVertices,
@@ -40,7 +41,7 @@ pub fn update_poses(
     motion_sequencer: Res<MotionSequencer>,
 ) {
     for (motion_controller, model_handle, mut pose) in poses.iter_mut() {
-        let Some(model) = assets.models.get(*model_handle) else {
+        let Some(model) = globals::models().get(*model_handle) else {
             continue;
         };
         let skeleton = &model.skeleton;

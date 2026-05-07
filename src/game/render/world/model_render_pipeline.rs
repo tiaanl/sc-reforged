@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use ahash::HashMap;
 
 use crate::{
@@ -10,7 +8,7 @@ use crate::{
         storage::Handle,
     },
     game::{
-        assets::{model::Model, models::Models},
+        assets::model::Model,
         globals,
         render::{
             geometry_buffer::GeometryBuffer,
@@ -42,8 +40,6 @@ struct Batch {
 }
 
 pub struct ModelRenderPipeline {
-    asset_models: Arc<Models>,
-
     models: RenderModels,
 
     /// Layout used for per-texture bind groups (texture + sampler).
@@ -80,12 +76,7 @@ pub struct ModelRenderPipeline {
 }
 
 impl ModelRenderPipeline {
-    pub fn new(
-        gpu: &Gpu,
-        layouts: &mut RenderLayouts,
-        shader_cache: &mut ShaderCache,
-        asset_models: Arc<Models>,
-    ) -> Self {
+    pub fn new(gpu: &Gpu, layouts: &mut RenderLayouts, shader_cache: &mut ShaderCache) -> Self {
         let device = &gpu.device;
 
         let models = RenderModels::new(gpu);
@@ -298,8 +289,6 @@ impl ModelRenderPipeline {
         });
 
         Self {
-            asset_models,
-
             models,
 
             texture_bind_group_layout,
@@ -329,7 +318,7 @@ impl ModelRenderPipeline {
             return;
         }
 
-        self.models.add(&self.asset_models, gpu, model_handle);
+        self.models.add(gpu, model_handle);
 
         // Create per-texture bind groups for any new textures introduced by this model.
         let new_textures: Vec<Handle<Texture>> = self

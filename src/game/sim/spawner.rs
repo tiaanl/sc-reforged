@@ -5,10 +5,7 @@ use bevy_ecs::prelude::*;
 use crate::{
     engine::{assets::AssetError, transform::Transform},
     game::{
-        assets::{
-            model::{Mesh, Model},
-            models::Models,
-        },
+        assets::model::{Mesh, Model},
         config::{BodyDefinition, CharacterProfiles, ObjectType},
         globals,
         math::BoundingBox,
@@ -41,7 +38,6 @@ impl Spawner {
     pub fn spawn(
         &mut self,
         world: &mut World,
-        models: &Models,
         title: &str,
         name: &str,
         object_type: ObjectType,
@@ -49,7 +45,7 @@ impl Spawner {
     ) -> Result<Entity, AssetError> {
         match object_type {
             ObjectType::Ape | ObjectType::Bipedal => {
-                self.spawn_bipedal(world, models, title, name, object_type, transform)
+                self.spawn_bipedal(world, title, name, object_type, transform)
             }
 
             ObjectType::Scenery
@@ -60,7 +56,7 @@ impl Spawner {
             | ObjectType::SceneryShadowed
             | ObjectType::SceneryStripLight
             | ObjectType::SceneryTree => {
-                self.spawn_scenery(world, models, title, name, object_type, transform)
+                self.spawn_scenery(world, title, name, object_type, transform)
             }
 
             ObjectType::Structure
@@ -93,7 +89,7 @@ impl Spawner {
             | ObjectType::StructureSwingDoor
             | ObjectType::StructureTent
             | ObjectType::StructureWall => {
-                self.spawn_structure(world, models, title, name, object_type, transform)
+                self.spawn_structure(world, title, name, object_type, transform)
             }
 
             ObjectType::SixBySix
@@ -103,7 +99,7 @@ impl Spawner {
             | ObjectType::TreadedChallenger
             | ObjectType::TreadedScorpion
             | ObjectType::TreadedT55 => {
-                self.spawn_vehicle(world, models, title, name, object_type, transform)
+                self.spawn_vehicle(world, title, name, object_type, transform)
             }
 
             // These are unknown at this time.
@@ -113,7 +109,7 @@ impl Spawner {
             | ObjectType::Helicopter
             | ObjectType::Howitzer
             | ObjectType::SentryGun => {
-                self.spawn_structure(world, models, title, name, object_type, transform)
+                self.spawn_structure(world, title, name, object_type, transform)
             }
         }
     }
@@ -121,7 +117,6 @@ impl Spawner {
     fn spawn_bipedal(
         &mut self,
         world: &mut World,
-        models: &Models,
         title: &str,
         _name: &str,
         _object_type: ObjectType,
@@ -143,11 +138,11 @@ impl Spawner {
             ));
         };
 
-        let model = build_body_definition_model(body_definition, models)?;
+        let model = build_body_definition_model(body_definition)?;
 
         let bounding_box = model.bounding_box;
 
-        let model_handle = models.insert(
+        let model_handle = globals::models().insert(
             ModelName::BodyDefinition(
                 character_profile.character.clone(),
                 body_definition.body_type.clone(),
@@ -185,14 +180,13 @@ impl Spawner {
     fn spawn_scenery(
         &self,
         world: &mut World,
-        models: &Models,
         title: &str,
         name: &str,
         object_type: ObjectType,
         transform: Transform,
     ) -> Result<Entity, AssetError> {
-        let model_handle = models.load(ModelName::Object(name.to_string()))?;
-        let model = models.get(model_handle).unwrap();
+        let model_handle = globals::models().load(ModelName::Object(name.to_string()))?;
+        let model = globals::models().get(model_handle).unwrap();
 
         Ok(world
             .spawn((
@@ -212,14 +206,13 @@ impl Spawner {
     fn spawn_structure(
         &self,
         world: &mut World,
-        models: &Models,
         title: &str,
         name: &str,
         object_type: ObjectType,
         transform: Transform,
     ) -> Result<Entity, AssetError> {
-        let model_handle = models.load(ModelName::Object(name.to_string()))?;
-        let model = models.get(model_handle).unwrap();
+        let model_handle = globals::models().load(ModelName::Object(name.to_string()))?;
+        let model = globals::models().get(model_handle).unwrap();
 
         Ok(world
             .spawn((
@@ -239,23 +232,20 @@ impl Spawner {
     fn spawn_vehicle(
         &self,
         world: &mut World,
-        models: &Models,
         title: &str,
         name: &str,
         object_type: ObjectType,
         transform: Transform,
     ) -> Result<Entity, AssetError> {
-        self.spawn_structure(world, models, title, name, object_type, transform)
+        self.spawn_structure(world, title, name, object_type, transform)
     }
 }
 
-fn build_body_definition_model(
-    body_definition: &BodyDefinition,
-    models: &Models,
-) -> Result<Model, AssetError> {
+fn build_body_definition_model(body_definition: &BodyDefinition) -> Result<Model, AssetError> {
     let (body_skeleton, body_meshes, body_collision_boxes, body_bounding_box, body_name_lookup) = {
-        let body_handle = models.load(ModelName::Body(body_definition.body_model.clone()))?;
-        let body_model = models.get(body_handle).unwrap();
+        let body_handle =
+            globals::models().load(ModelName::Body(body_definition.body_model.clone()))?;
+        let body_model = globals::models().get(body_handle).unwrap();
         (
             body_model.skeleton.clone(),
             body_model
@@ -270,8 +260,9 @@ fn build_body_definition_model(
     };
 
     let (head_meshes, head_collision_boxes, head_bounding_box) = {
-        let head_handle = models.load(ModelName::Head(body_definition.head_model.clone()))?;
-        let head_model = models.get(head_handle).unwrap();
+        let head_handle =
+            globals::models().load(ModelName::Head(body_definition.head_model.clone()))?;
+        let head_model = globals::models().get(head_handle).unwrap();
         (
             head_model
                 .meshes

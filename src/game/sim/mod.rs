@@ -14,7 +14,7 @@ use crate::{
         transform::Transform,
     },
     game::{
-        assets::{config::campaign_def::CampaignDef, models::Models, motions::Motions},
+        assets::{config::campaign_def::CampaignDef, motions::Motions},
         config::{CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
         globals,
         render::world::WorldRenderSnapshot,
@@ -123,7 +123,6 @@ pub struct SimWorldState {
 /// thread-safe and may be cloned cheaply.
 #[derive(Clone, Resource)]
 pub struct GameAssets {
-    pub models: Arc<Models>,
     pub motions: Arc<Motions>,
 }
 
@@ -234,7 +233,7 @@ fn init_sim_world(
 
     init_terrain(world, campaign_def)?;
 
-    init_objects(world, &assets, campaign)?;
+    init_objects(world, campaign)?;
 
     let ui = Ui::new();
 
@@ -328,7 +327,6 @@ fn init_terrain(world: &mut World, campaign_def: &CampaignDef) -> Result<(), Ass
 
 fn init_objects(
     world: &mut World,
-    assets: &GameAssets,
     campaign: crate::game::config::Campaign,
 ) -> Result<(), AssetError> {
     world.insert_resource(StaticBvh::new(8));
@@ -368,7 +366,6 @@ fn init_objects(
 
             let _ = match object_spawner.spawn(
                 world,
-                &assets.models,
                 &object.title,
                 &object.name,
                 object_type,
