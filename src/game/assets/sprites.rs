@@ -9,7 +9,6 @@ use crate::{
     },
     game::{
         config::{ImageDefs, load_config},
-        file_system::FileSystem,
         render::textures::{Texture, Textures},
     },
 };
@@ -61,14 +60,13 @@ pub struct Sprites {
 }
 
 impl Sprites {
-    pub fn new(textures: Arc<Textures>, file_system: &FileSystem) -> Result<Self, AssetError> {
+    pub fn new(textures: Arc<Textures>) -> Result<Self, AssetError> {
         let mut sprites = Self {
             textures,
             sprites: StorageMap::default(),
         };
 
-        let image_defs: ImageDefs =
-            load_config(file_system, PathBuf::from("config").join("image_defs.txt"))?;
+        let image_defs: ImageDefs = load_config(PathBuf::from("config").join("image_defs.txt"))?;
         sprites.load_image_defs(&image_defs);
 
         Ok(sprites)

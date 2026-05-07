@@ -12,8 +12,7 @@ use crate::{
             motions::Motions,
         },
         config::parser::ConfigLines,
-        file_system::FileSystem,
-        hash,
+        globals, hash,
     },
 };
 
@@ -197,11 +196,10 @@ enum ParseState {
 impl MotionSequencer {
     pub fn load_motion_sequencer_defs(
         &mut self,
-        file_system: &FileSystem,
         motions: &Motions,
         path: impl AsRef<Path>,
     ) -> Result<(), AssetError> {
-        let data = file_system.load(path.as_ref())?;
+        let data = globals::file_system().load(path.as_ref())?;
         let text = String::from_utf8_lossy(&data);
         let config_lines = ConfigLines::parse(&text);
         self.parse(config_lines, motions)

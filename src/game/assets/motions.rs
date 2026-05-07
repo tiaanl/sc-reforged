@@ -12,23 +12,16 @@ use crate::{
     },
     game::{
         assets::motion::{Motion, MotionFlags, State},
-        file_system::FileSystem,
+        globals,
     },
 };
 
+#[derive(Default)]
 pub struct Motions {
-    file_system: Arc<FileSystem>,
     storage: RwLock<StorageMap<String, Motion, Arc<Motion>>>,
 }
 
 impl Motions {
-    pub fn new(file_system: Arc<FileSystem>) -> Self {
-        Self {
-            file_system,
-            storage: RwLock::new(StorageMap::default()),
-        }
-    }
-
     pub fn get(&self, handle: Handle<Motion>) -> Option<Arc<Motion>> {
         self.storage.read().unwrap().get(handle).map(Arc::clone)
     }
@@ -52,7 +45,7 @@ impl Motions {
         }
 
         let path = PathBuf::from("motions").join(&name).with_extension("bmf");
-        let data = self.file_system.load(&path)?;
+        let data = globals::file_system().load(&path)?;
         let motion = build_motion_from_memory(&path, &data)?;
 
         let handle = {

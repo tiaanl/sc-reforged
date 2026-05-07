@@ -16,7 +16,7 @@ use crate::{
         input,
         renderer::{Gpu, RenderContext, RenderTarget, Surface, SurfaceDesc},
     },
-    game::{file_system::FileSystem, game_state::GameState},
+    game::{game_state::GameState, globals},
 };
 
 mod engine;
@@ -109,41 +109,9 @@ impl ApplicationHandler for App {
                     surface_desc.format,
                 );
 
-                let file_system = Arc::new(FileSystem::new(&opts.path));
+                globals::init(&opts.path);
 
-                /*
-                let scene: Box<dyn Scene> = {
-                    let campaign_name = opts
-                        .campaign_name
-                        .clone()
-                        .unwrap_or(String::from("training"));
-
-                    let campaign_defs = load_config::<CampaignDefs>(
-                        &file_system,
-                        PathBuf::from("config").join("campaign_defs.txt"),
-                    )
-                    .unwrap();
-
-                    let campaign_def = campaign_defs
-                        .campaign_defs
-                        .iter()
-                        .find(|c| c.base_name == campaign_name)
-                        .unwrap();
-
-                    Box::new(
-                        WorldScene::new(
-                            Arc::clone(&file_system),
-                            &context,
-                            surface.size(),
-                            surface.format(),
-                            campaign_def,
-                        )
-                        .unwrap(),
-                    )
-                };
-                */
-
-                let game_state = match GameState::new(file_system, gpu.clone(), &surface_desc) {
+                let game_state = match GameState::new(gpu.clone(), &surface_desc) {
                     Ok(game_state) => game_state,
                     Err(err) => {
                         tracing::error!("Could not initialize GameState - {err}");

@@ -13,23 +13,16 @@ use crate::{
             asset_source::AssetSource,
             image::{BlendMode, Image, quantize_rgb565, quantize_rgba4444},
         },
-        file_system::FileSystem,
+        globals,
     },
 };
 
+#[derive(Default)]
 pub struct Images {
-    file_system: Arc<FileSystem>,
     storage: RwLock<StorageMap<String, Image, Arc<Image>>>,
 }
 
 impl Images {
-    pub fn new(file_system: Arc<FileSystem>) -> Self {
-        Self {
-            file_system,
-            storage: RwLock::new(StorageMap::default()),
-        }
-    }
-
     pub fn get(&self, handle: Handle<Image>) -> Option<Arc<Image>> {
         self.storage.read().unwrap().get(handle).map(Arc::clone)
     }
@@ -54,7 +47,7 @@ impl Images {
             }
         }
 
-        let data = self.file_system.load(&path)?;
+        let data = globals::file_system().load(&path)?;
 
         let is_color_keyd = path
             .file_name()
@@ -76,7 +69,7 @@ impl Images {
             )
             .map_err(|err| image_error_to_asset_error(err, &path))?;
 
-            let raw = if let Ok(data) = self.file_system.load(path.with_extension("raw")) {
+            let raw = if let Ok(data) = globals::file_system().load(path.with_extension("raw")) {
                 Some(
                     shadow_company_tools::images::load_raw_file(
                         &mut std::io::Cursor::new(data),

@@ -16,7 +16,6 @@ use crate::{
     game::{
         assets::sprites::Sprites,
         config::{load_config, windows::WindowBase},
-        file_system::FileSystem,
         render::textures::Textures,
         ui::{
             EventResult,
@@ -29,8 +28,6 @@ use crate::{
 use super::window::{Window, WindowRenderContext};
 
 pub struct WindowManager {
-    file_system: Arc<FileSystem>,
-
     window_bases: Mutex<HashMap<String, Arc<WindowBase>>>,
 
     window_renderer: WindowRenderer,
@@ -54,7 +51,6 @@ pub struct WindowManager {
 
 impl WindowManager {
     pub fn new(
-        file_system: Arc<FileSystem>,
         gpu: Gpu,
         surface_desc: &SurfaceDesc,
         textures: Arc<Textures>,
@@ -63,8 +59,6 @@ impl WindowManager {
         let window_renderer = WindowRenderer::new(gpu.clone(), surface_desc, textures, sprites);
 
         Ok(Self {
-            file_system,
-
             window_bases: Mutex::new(HashMap::default()),
 
             window_renderer,
@@ -95,7 +89,7 @@ impl WindowManager {
             .join(name)
             .with_extension("txt");
 
-        let loaded: Arc<WindowBase> = Arc::new(load_config(self.file_system.as_ref(), path)?);
+        let loaded: Arc<WindowBase> = Arc::new(load_config(path)?);
 
         let mut defs = self.window_bases.lock().unwrap();
         let def = defs

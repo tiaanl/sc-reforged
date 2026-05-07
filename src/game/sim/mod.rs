@@ -18,7 +18,7 @@ use crate::{
             config::campaign_def::CampaignDef, images::Images, models::Models, motions::Motions,
         },
         config::{CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
-        file_system::FileSystem,
+        globals,
         render::world::WorldRenderSnapshot,
     },
 };
@@ -67,13 +67,9 @@ pub struct SimWorld {
 }
 
 impl SimWorld {
-    pub fn new(
-        file_system: Arc<FileSystem>,
-        assets: GameAssets,
-        campaign_def: &CampaignDef,
-    ) -> Result<Self, AssetError> {
+    pub fn new(assets: GameAssets, campaign_def: &CampaignDef) -> Result<Self, AssetError> {
         let mut world = World::default();
-        init_sim_world(file_system, &mut world, assets, campaign_def)?;
+        init_sim_world(&mut world, assets, campaign_def)?;
 
         let update_schedule = build_update_schedule();
         let extract_schedule = build_extract_schedule();
@@ -135,13 +131,11 @@ pub struct GameAssets {
 }
 
 fn init_sim_world(
-    file_system: Arc<FileSystem>,
     world: &mut World,
     assets: GameAssets,
     campaign_def: &CampaignDef,
 ) -> Result<(), AssetError> {
     let campaign = load_config::<crate::game::config::Campaign>(
-        &file_system,
         PathBuf::from("campaign")
             .join(&campaign_def.base_name)
             .join(&campaign_def.base_name)
@@ -168,7 +162,6 @@ fn init_sim_world(
         let mut motion_sequencer = MotionSequencer::default();
 
         motion_sequencer.load_motion_sequencer_defs(
-            &file_system,
             &assets.motions,
             PathBuf::from("config").join("mot_sequencer_defs.txt"),
         )?;
@@ -242,9 +235,9 @@ fn init_sim_world(
         FreeCameraController::new(1000.0, 0.2),
     ));
 
-    init_terrain(&file_system, world, &assets, campaign_def)?;
+    init_terrain(world, &assets, campaign_def)?;
 
-    init_objects(&file_system, world, &assets, campaign)?;
+    init_objects(world, &assets, campaign)?;
 
     let ui = Ui::new();
 
@@ -264,14 +257,12 @@ fn init_sim_world(
 }
 
 fn init_terrain(
-    file_system: &FileSystem,
     world: &mut World,
     assets: &GameAssets,
     campaign_def: &CampaignDef,
 ) -> Result<(), AssetError> {
     let terrain = {
         let terrain_mapping = load_config::<TerrainMapping>(
-            file_system,
             PathBuf::from("textures")
                 .join("terrain")
                 .join(&campaign_def.base_name)
@@ -279,14 +270,13 @@ fn init_terrain(
         )?;
 
         pub fn load_new_height_map(
-            file_system: &FileSystem,
             path: impl AsRef<Path>,
             elevation_scale: f32,
             cell_size: f32,
         ) -> Result<HeightMap, AssetError> {
             use glam::UVec2;
 
-            let data = file_system.load(path.as_ref())?;
+            let data = globals::file_system().load(path.as_ref())?;
 
             let mut reader = pcx::Reader::from_mem(&data)
                 .map_err(|err| AssetError::from_io_error(err, path.as_ref()))?;
@@ -319,7 +309,6 @@ fn init_terrain(
             let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
             tracing::info!("Loading terrain height map: {}", path.display());
             load_new_height_map(
-                file_system,
                 path,
                 terrain_mapping.altitude_map_height_base,
                 terrain_mapping.nominal_edge_size,
@@ -345,7 +334,6 @@ fn init_terrain(
 }
 
 fn init_objects(
-    file_system: &FileSystem,
     world: &mut World,
     assets: &GameAssets,
     campaign: crate::game::config::Campaign,
@@ -356,7 +344,7 @@ fn init_objects(
     let character_profiles = {
         let mut character_profiles = CharacterProfiles::default();
 
-        for file in file_system
+        for file in globals::file_system()
             .dir(PathBuf::from("config").join("character_profiles"))?
             .filter(|p| {
                 if let Some(e) = p.extension() {
@@ -366,7 +354,7 @@ fn init_objects(
                 }
             })
         {
-            let config = load_config(file_system, file)?;
+            let config = load_config(file)?;
             character_profiles.parse_lines(config);
         }
 
@@ -376,7 +364,7 @@ fn init_objects(
     let mut object_spawner = spawner::Spawner::new(character_profiles);
 
     if let Some(ref mtf_name) = campaign.mtf_name {
-        let mtf = load_config::<Mtf>(file_system, PathBuf::from("maps").join(mtf_name))?;
+        let mtf = load_config::<Mtf>(PathBuf::from("maps").join(mtf_name))?;
 
         for object in mtf.objects.iter() {
             let object_type = ObjectType::from_string(&object.typ)

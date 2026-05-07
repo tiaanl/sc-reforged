@@ -19,7 +19,7 @@ use crate::{
             model::{CollisionBox, Mesh, Model, NodeIndex, Vertex},
         },
         config::{LodModelProfileDefinition, SubModelDefinition, load_config},
-        file_system::FileSystem,
+        globals,
         math::BoundingBox,
         models::ModelName,
         skeleton::{Bone, Skeleton},
@@ -27,23 +27,22 @@ use crate::{
 };
 
 pub struct Models {
-    file_system: Arc<FileSystem>,
     images: Arc<Images>,
     model_lod_defs: HashMap<String, Vec<SubModelDefinition>>,
     storage: RwLock<StorageMap<ModelName, Model, Arc<Model>>>,
 }
 
 impl Models {
-    pub fn new(file_system: Arc<FileSystem>, images: Arc<Images>) -> Result<Self, AssetError> {
+    pub fn new(images: Arc<Images>) -> Result<Self, AssetError> {
         let mut model_lod_defs: HashMap<String, Vec<SubModelDefinition>> = HashMap::default();
 
         let profiles_path = PathBuf::from("config").join("lod_model_profiles");
-        for lod_path in file_system.dir(&profiles_path)?.filter(|path| {
+        for lod_path in globals::file_system().dir(&profiles_path)?.filter(|path| {
             path.extension()
                 .filter(|ext| ext.eq_ignore_ascii_case("txt"))
                 .is_some()
         }) {
-            let profile = load_config::<LodModelProfileDefinition>(&file_system, lod_path)?;
+            let profile = load_config::<LodModelProfileDefinition>(lod_path)?;
             model_lod_defs.insert(
                 profile.lod_model_name,
                 profile.sub_model_definitions.clone(),
@@ -51,7 +50,6 @@ impl Models {
         }
 
         Ok(Self {
-            file_system,
             images,
             model_lod_defs,
             storage: RwLock::new(StorageMap::default()),
@@ -92,7 +90,7 @@ impl Models {
 
         let path = PathBuf::from("models").join(&path).with_extension("smf");
 
-        let data = self.file_system.load(&path)?;
+        let data = globals::file_system().load(&path)?;
         let model = self.build_model_from_smf(&path, &data)?;
 
         if model.meshes.is_empty() {

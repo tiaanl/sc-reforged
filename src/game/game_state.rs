@@ -14,7 +14,6 @@ use crate::{
             sprites::Sprites,
         },
         config::load_config,
-        file_system::FileSystem,
         render::textures::Textures,
         sim::{GameAssets, SimWorld},
         ui::windows::{
@@ -31,7 +30,6 @@ pub struct GameState {
 
     campaign_defs: CampaignDefs,
 
-    file_system: Arc<FileSystem>,
     images: Arc<Images>,
     models: Arc<Models>,
     motions: Arc<Motions>,
@@ -41,29 +39,17 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new(
-        file_system: Arc<FileSystem>,
-        gpu: Gpu,
-        surface_desc: &SurfaceDesc,
-    ) -> Result<Self, AssetError> {
-        let campaign_defs = load_config(
-            &file_system,
-            PathBuf::from("config").join("campaign_defs.txt"),
-        )?;
+    pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc) -> Result<Self, AssetError> {
+        let campaign_defs = load_config(PathBuf::from("config").join("campaign_defs.txt"))?;
 
-        let images = Arc::new(Images::new(Arc::clone(&file_system)));
-        let models = Arc::new(Models::new(Arc::clone(&file_system), Arc::clone(&images))?);
-        let motions = Arc::new(Motions::new(Arc::clone(&file_system)));
+        let images = Arc::new(Images::default());
+        let models = Arc::new(Models::new(Arc::clone(&images))?);
+        let motions = Arc::new(Motions::default());
         let textures = Arc::new(Textures::new(gpu.clone(), Arc::clone(&images)));
-        let sprites = Arc::new(Sprites::new(Arc::clone(&textures), &file_system)?);
+        let sprites = Arc::new(Sprites::new(Arc::clone(&textures))?);
 
-        let mut window_manager = WindowManager::new(
-            Arc::clone(&file_system),
-            gpu.clone(),
-            surface_desc,
-            Arc::clone(&textures),
-            sprites,
-        )?;
+        let mut window_manager =
+            WindowManager::new(gpu.clone(), surface_desc, Arc::clone(&textures), sprites)?;
 
         let main_menu_window = Box::new(MainMenuWindow::new(&window_manager)?);
         window_manager.push(main_menu_window);
@@ -82,7 +68,6 @@ impl GameState {
         Ok(Self {
             gpu,
             campaign_defs,
-            file_system,
             images,
             models,
             motions,
@@ -103,15 +88,12 @@ impl GameState {
         for action in actions.drain(..) {
             match action {
                 WindowManagerAction::Quit => tracing::info!("Quit game!"),
-                WindowManagerAction::StartCampaign(name) => {
-                    let file_system = Arc::clone(&self.file_system);
-                    match self.start_campaign(&name, file_system) {
-                        Ok(_) => {}
-                        Err(err) => {
-                            tracing::error!("Could not start campaign {name} - {err}");
-                        }
+                WindowManagerAction::StartCampaign(name) => match self.start_campaign(&name) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        tracing::error!("Could not start campaign {name} - {err}");
                     }
-                }
+                },
             }
         }
     }
@@ -130,11 +112,7 @@ impl GameState {
         let _ = (egui, frame_index);
     }
 
-    fn start_campaign(
-        &mut self,
-        name: &str,
-        file_system: Arc<FileSystem>,
-    ) -> Result<(), AssetError> {
+    fn start_campaign(&mut self, name: &str) -> Result<(), AssetError> {
         tracing::info!("Starting campaign: {name}");
 
         let Some(campaign_def) = self
@@ -150,7 +128,6 @@ impl GameState {
         };
 
         let sim = SimWorld::new(
-            file_system,
             GameAssets {
                 images: Arc::clone(&self.images),
                 models: Arc::clone(&self.models),
