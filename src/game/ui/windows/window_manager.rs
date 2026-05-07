@@ -14,7 +14,6 @@ use crate::{
         renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
     },
     game::{
-        assets::sprites::Sprites,
         config::{load_config, windows::WindowBase},
         ui::{
             EventResult,
@@ -49,12 +48,8 @@ pub struct WindowManager {
 }
 
 impl WindowManager {
-    pub fn new(
-        gpu: Gpu,
-        surface_desc: &SurfaceDesc,
-        sprites: Arc<Sprites>,
-    ) -> Result<Self, AssetError> {
-        let window_renderer = WindowRenderer::new(gpu.clone(), surface_desc, sprites);
+    pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc) -> Result<Self, AssetError> {
+        let window_renderer = WindowRenderer::new(gpu.clone(), surface_desc);
 
         Ok(Self {
             window_bases: Mutex::new(HashMap::default()),

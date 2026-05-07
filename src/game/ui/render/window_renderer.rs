@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use glam::{IVec2, UVec2, Vec4};
 
 use crate::{
@@ -9,10 +7,7 @@ use crate::{
         storage::{Handle, Storage},
     },
     game::{
-        assets::{
-            image::Image,
-            sprites::{Sprite3d, Sprites},
-        },
+        assets::{image::Image, sprites::Sprite3d},
         globals,
         render::{compositor::Compositor, geometry_buffer::GeometryBuffer, textures::Texture},
         ui::{Rect, u32_to_color},
@@ -152,7 +147,6 @@ impl WindowRenderItems {
 /// Renders all the components required for windows.
 pub struct WindowRenderer {
     quad_renderer: QuadRenderer,
-    sprites: Arc<Sprites>,
     tiled_geometries: Storage<TiledGeometry>,
     surface_size: UVec2,
     gbuffer_bind_group_layout: wgpu::BindGroupLayout,
@@ -161,7 +155,7 @@ pub struct WindowRenderer {
 
 impl WindowRenderer {
     /// Creates the window renderer.
-    pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc, sprites: Arc<Sprites>) -> Self {
+    pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc) -> Self {
         let gbuffer_bind_group_layout = GeometryBuffer::create_bind_group_layout(&gpu.device);
         let mut shader_cache = ShaderCache::default();
         let compositor = Compositor::new(
@@ -172,7 +166,6 @@ impl WindowRenderer {
         );
 
         Self {
-            sprites,
             quad_renderer: QuadRenderer::new(gpu, surface_desc),
             tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
@@ -209,10 +202,10 @@ impl WindowRenderer {
     /// Measures the pixel width of a text string in the given font, matching
     /// the original engine's `Calculate_Text_Width` logic.
     pub fn measure_text_width(&self, text: &[u8], font: Font) -> i32 {
-        let Some(handle) = self.sprites.get_handle_by_name(font.sprite_name()) else {
+        let Some(handle) = globals::sprites().get_handle_by_name(font.sprite_name()) else {
             return 0;
         };
-        let Some(font_sprite) = self.sprites.get(handle) else {
+        let Some(font_sprite) = globals::sprites().get(handle) else {
             return 0;
         };
 
@@ -239,10 +232,10 @@ impl WindowRenderer {
     /// the original engine's `Calculate_Text_Height` logic. Returns the
     /// tallest glyph height found in the string.
     pub fn measure_text_height(&self, text: &[u8], font: Font) -> i32 {
-        let Some(handle) = self.sprites.get_handle_by_name(font.sprite_name()) else {
+        let Some(handle) = globals::sprites().get_handle_by_name(font.sprite_name()) else {
             return 0;
         };
-        let Some(font_sprite) = self.sprites.get(handle) else {
+        let Some(font_sprite) = globals::sprites().get(handle) else {
             return 0;
         };
 
@@ -352,7 +345,7 @@ impl WindowRenderer {
                     frame,
                     alpha,
                 } => {
-                    let Some(sprite_data) = self.sprites.get(*sprite) else {
+                    let Some(sprite_data) = globals::sprites().get(*sprite) else {
                         continue;
                     };
                     let Some(sprite_frame) = sprite_data.frame(*frame) else {
@@ -396,11 +389,11 @@ impl WindowRenderer {
                     color,
                 } => {
                     let Some(font_sprite_handle) =
-                        self.sprites.get_handle_by_name(font.sprite_name())
+                        globals::sprites().get_handle_by_name(font.sprite_name())
                     else {
                         continue;
                     };
-                    let Some(font_sprite) = self.sprites.get(font_sprite_handle) else {
+                    let Some(font_sprite) = globals::sprites().get(font_sprite_handle) else {
                         continue;
                     };
                     let Some(texture_data) = globals::textures().get(font_sprite.texture) else {

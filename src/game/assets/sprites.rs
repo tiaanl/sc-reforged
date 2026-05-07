@@ -3,10 +3,7 @@ use std::{ops::RangeInclusive, path::PathBuf};
 use glam::IVec2;
 
 use crate::{
-    engine::{
-        assets::AssetError,
-        storage::{Handle, StorageMap},
-    },
+    engine::storage::{Handle, StorageMap},
     game::{
         config::{ImageDefs, load_config},
         globals,
@@ -59,18 +56,24 @@ pub struct Sprites {
     sprites: StorageMap<String, Sprite3d>,
 }
 
-impl Sprites {
-    pub fn new() -> Result<Self, AssetError> {
+impl Default for Sprites {
+    fn default() -> Self {
         let mut sprites = Self {
             sprites: StorageMap::default(),
         };
 
-        let image_defs: ImageDefs = load_config(PathBuf::from("config").join("image_defs.txt"))?;
-        sprites.load_image_defs(&image_defs);
+        match load_config::<ImageDefs>(PathBuf::from("config").join("image_defs.txt")) {
+            Ok(image_defs) => sprites.load_image_defs(&image_defs),
+            Err(err) => {
+                tracing::warn!("Could not load image defs - {err}");
+            }
+        };
 
-        Ok(sprites)
+        sprites
     }
+}
 
+impl Sprites {
     #[inline]
     /// Returns a sprite by handle.
     pub fn get(&self, handle: Handle<Sprite3d>) -> Option<&Sprite3d> {

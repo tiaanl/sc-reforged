@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 use glam::UVec2;
 
@@ -9,7 +9,7 @@ use crate::{
         renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
     },
     game::{
-        assets::{config::campaign_def::CampaignDefs, sprites::Sprites},
+        assets::config::campaign_def::CampaignDefs,
         config::load_config,
         sim::SimWorld,
         ui::windows::{
@@ -33,9 +33,7 @@ impl GameState {
     pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc) -> Result<Self, AssetError> {
         let campaign_defs = load_config(PathBuf::from("config").join("campaign_defs.txt"))?;
 
-        let sprites = Arc::new(Sprites::new()?);
-
-        let mut window_manager = WindowManager::new(gpu.clone(), surface_desc, sprites)?;
+        let mut window_manager = WindowManager::new(gpu.clone(), surface_desc)?;
 
         let main_menu_window = Box::new(MainMenuWindow::new(&window_manager)?);
         window_manager.push(main_menu_window);
