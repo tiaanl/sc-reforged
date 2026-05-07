@@ -87,6 +87,8 @@ pub fn build_update_schedule() -> Schedule {
                 free_camera_controller::input,
             ),
             camera::update_far_distance.run_if(changed::time_of_day_changed),
+            camera::update_active_camera_aspect_ratio
+                .run_if(resource_changed::<ecs::Viewport>),
             camera::compute_cameras,
             world_interaction::input,
         )

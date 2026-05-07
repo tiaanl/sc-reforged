@@ -1,10 +1,25 @@
 use bevy_ecs::prelude::*;
 
-use crate::game::sim::{Camera, ComputedCamera, DayNightCycle, SimWorldState};
+use crate::game::sim::{
+    Camera, ComputedCamera, DayNightCycle, SimWorldState,
+    ecs::{ActiveCamera, Viewport},
+};
 
 pub fn compute_cameras(mut cameras: Query<(&Camera, &mut ComputedCamera)>) {
     for (camera, mut computed_camera) in cameras.iter_mut() {
         *computed_camera = camera.compute();
+    }
+}
+
+/// Refresh the aspect ratio of the active camera from the current viewport.
+/// Gated on `viewport_changed` in the schedule so it only fires on resize.
+pub fn update_active_camera_aspect_ratio(
+    viewport: Res<Viewport>,
+    mut active_cameras: Query<&mut Camera, With<ActiveCamera>>,
+) {
+    let aspect_ratio = viewport.size.x as f32 / viewport.size.y.max(1) as f32;
+    for mut camera in active_cameras.iter_mut() {
+        camera.aspect_ratio = aspect_ratio;
     }
 }
 
