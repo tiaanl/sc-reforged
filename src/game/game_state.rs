@@ -9,9 +9,9 @@ use crate::{
         renderer::{Gpu, RenderContext, RenderTarget, SurfaceDesc},
     },
     game::{
-        assets::{config::campaign_def::CampaignDefs, motions::Motions, sprites::Sprites},
+        assets::{config::campaign_def::CampaignDefs, sprites::Sprites},
         config::load_config,
-        sim::{GameAssets, SimWorld},
+        sim::SimWorld,
         ui::windows::{
             main_menu::MainMenuWindow, window_manager::WindowManager, world::WorldWindow,
         },
@@ -26,8 +26,6 @@ pub struct GameState {
 
     campaign_defs: CampaignDefs,
 
-    motions: Arc<Motions>,
-
     window_manager: WindowManager,
 }
 
@@ -35,7 +33,6 @@ impl GameState {
     pub fn new(gpu: Gpu, surface_desc: &SurfaceDesc) -> Result<Self, AssetError> {
         let campaign_defs = load_config(PathBuf::from("config").join("campaign_defs.txt"))?;
 
-        let motions = Arc::new(Motions::default());
         let sprites = Arc::new(Sprites::new()?);
 
         let mut window_manager = WindowManager::new(gpu.clone(), surface_desc, sprites)?;
@@ -57,7 +54,6 @@ impl GameState {
         Ok(Self {
             gpu,
             campaign_defs,
-            motions,
             window_manager,
         })
     }
@@ -113,12 +109,7 @@ impl GameState {
             ));
         };
 
-        let sim = SimWorld::new(
-            GameAssets {
-                motions: Arc::clone(&self.motions),
-            },
-            campaign_def,
-        )?;
+        let sim = SimWorld::new(campaign_def)?;
 
         self.window_manager.clear();
 

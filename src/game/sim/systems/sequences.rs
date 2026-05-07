@@ -7,7 +7,6 @@ use crate::{
         assets::model::Model,
         globals,
         sim::{
-            GameAssets,
             ecs::GizmoVertices,
             sequences::{
                 MotionController, MotionSequencer, Pose, generate_pose, generate_pose_at_key_frame,
@@ -21,11 +20,10 @@ use super::Time;
 /// Advance all motion controllers for the current frame.
 pub fn update_motion_controllers(
     mut motion_controllers: Query<(&mut MotionController, &mut Transform)>,
-    assets: Res<GameAssets>,
     time: Res<Time>,
 ) {
     for (mut motion_controller, mut transform) in motion_controllers.iter_mut() {
-        motion_controller.update(time.delta_time, &assets.motions);
+        motion_controller.update(time.delta_time);
 
         // Once the motion has been calculated, adjust the transform of the
         // entity by the `root_motion` from the [MotionController].
@@ -37,7 +35,6 @@ pub fn update_motion_controllers(
 /// Build a full pose for each animated entity from the currently active motion.
 pub fn update_poses(
     mut poses: Query<(&MotionController, &Handle<Model>, &mut Pose)>,
-    assets: Res<GameAssets>,
     motion_sequencer: Res<MotionSequencer>,
 ) {
     for (motion_controller, model_handle, mut pose) in poses.iter_mut() {
@@ -77,7 +74,7 @@ pub fn update_poses(
         let root_translation_override =
             motion_sequencer.default_cog_position(motion_controller.transition_check_state());
 
-        let Some(motion) = assets.motions.get(motion_info.motion) else {
+        let Some(motion) = globals::motions().get(motion_info.motion) else {
             continue;
         };
 

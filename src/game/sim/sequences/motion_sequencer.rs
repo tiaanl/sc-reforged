@@ -7,10 +7,7 @@ use glam::Vec3;
 use crate::{
     engine::assets::AssetError,
     game::{
-        assets::{
-            motion::{MotionFlags, State},
-            motions::Motions,
-        },
+        assets::motion::{MotionFlags, State},
         config::parser::ConfigLines,
         globals, hash,
     },
@@ -194,18 +191,14 @@ enum ParseState {
 }
 
 impl MotionSequencer {
-    pub fn load_motion_sequencer_defs(
-        &mut self,
-        motions: &Motions,
-        path: impl AsRef<Path>,
-    ) -> Result<(), AssetError> {
+    pub fn load_motion_sequencer_defs(&mut self, path: impl AsRef<Path>) -> Result<(), AssetError> {
         let data = globals::file_system().load(path.as_ref())?;
         let text = String::from_utf8_lossy(&data);
         let config_lines = ConfigLines::parse(&text);
-        self.parse(config_lines, motions)
+        self.parse(config_lines)
     }
 
-    fn parse(&mut self, config_lines: ConfigLines, motions: &Motions) -> Result<(), AssetError> {
+    fn parse(&mut self, config_lines: ConfigLines) -> Result<(), AssetError> {
         let mut parse_state = ParseState::None;
 
         fn state_from_str(str: &str) -> Option<State> {
@@ -224,7 +217,7 @@ impl MotionSequencer {
             match line.key.as_str() {
                 "BEGIN_TRANSITION_SEQ" => {
                     let current = std::mem::replace(&mut parse_state, ParseState::None);
-                    self.commit_parse_state(motions, current);
+                    self.commit_parse_state(current);
 
                     let begin_state_name = line.string(0);
                     let end_state_name = line.string(1);
@@ -268,11 +261,11 @@ impl MotionSequencer {
                     } => {
                         let motion_name = line.string(0);
 
-                        let Ok(motion_handle) = motions.load(&motion_name) else {
+                        let Ok(motion_handle) = globals::motions().load(&motion_name) else {
                             // Skip this motion info if the motion fails to load.
                             continue;
                         };
-                        let Some(motion) = motions.get(motion_handle) else {
+                        let Some(motion) = globals::motions().get(motion_handle) else {
                             continue;
                         };
 
@@ -317,7 +310,7 @@ impl MotionSequencer {
                     let current = std::mem::replace(&mut parse_state, ParseState::None);
                     match current {
                         ParseState::None => tracing::warn!("No sequence to end."),
-                        other => self.commit_parse_state(motions, other),
+                        other => self.commit_parse_state(other),
                     }
                 }
 
@@ -339,7 +332,7 @@ impl MotionSequencer {
 
                 "BEGIN_SEQUENCE" => {
                     let current = std::mem::replace(&mut parse_state, ParseState::None);
-                    self.commit_parse_state(motions, current);
+                    self.commit_parse_state(current);
 
                     let name = line.string(0);
                     parse_state = ParseState::Sequence {
@@ -361,7 +354,7 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    if let Some(motion) = motions.get_by_key(&motion_name) {
+                    if let Some(motion) = globals::motions().get_by_key(&motion_name) {
                         motion.add_flags(MotionFlags::Z_IND_MOTION);
                     } else {
                         tracing::warn!("DECLARE_Z_IND_MOTION missing motion.");
@@ -376,7 +369,7 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    if let Some(motion) = motions.get_by_key(&motion_name) {
+                    if let Some(motion) = globals::motions().get_by_key(&motion_name) {
                         motion.add_flags(MotionFlags::SPED_MOTION);
                     } else {
                         tracing::warn!("SPED_MOTION missing motion.");
@@ -391,7 +384,7 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    if let Some(motion) = motions.get_by_key(&motion_name) {
+                    if let Some(motion) = globals::motions().get_by_key(&motion_name) {
                         motion.add_flags(MotionFlags::SKIP_LAST_FRAME);
                     } else {
                         tracing::warn!("SKIP_LAST_FRAME missing motion.");
@@ -406,7 +399,7 @@ impl MotionSequencer {
                         continue;
                     }
 
-                    if let Some(motion) = motions.get_by_key(&motion_name) {
+                    if let Some(motion) = globals::motions().get_by_key(&motion_name) {
                         motion.add_flags(MotionFlags::NO_LVE_MOTION);
                     } else {
                         tracing::warn!("NO_LVE_MOTION missing motion.");
@@ -426,12 +419,12 @@ impl MotionSequencer {
             }
         }
 
-        self.commit_parse_state(motions, parse_state);
+        self.commit_parse_state(parse_state);
 
         Ok(())
     }
 
-    fn commit_parse_state(&mut self, motions: &Motions, parse_state: ParseState) {
+    fn commit_parse_state(&mut self, parse_state: ParseState) {
         match parse_state {
             ParseState::None => {}
             ParseState::TransitionSequence {
@@ -457,13 +450,13 @@ impl MotionSequencer {
             } => {
                 let begin_state = sequence_motions
                     .first()
-                    .and_then(|motion_info| motions.get(motion_info.motion))
+                    .and_then(|motion_info| globals::motions().get(motion_info.motion))
                     .map(|motion| motion.from_state);
 
                 let (begin_state, end_state) = if let Some(begin_state) = begin_state {
                     let end_state = sequence_motions
                         .last()
-                        .and_then(|motion_info| motions.get(motion_info.motion))
+                        .and_then(|motion_info| globals::motions().get(motion_info.motion))
                         .map(|motion| motion.to_state)
                         .unwrap_or(begin_state);
 

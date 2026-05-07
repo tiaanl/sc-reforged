@@ -3,7 +3,7 @@ use std::{path::Path, sync::OnceLock};
 use crate::{
     engine::renderer::Gpu,
     game::{
-        assets::{images::Images, models::Models},
+        assets::{images::Images, models::Models, motions::Motions},
         file_system::FileSystem,
         render::textures::Textures,
     },
@@ -12,6 +12,7 @@ use crate::{
 static FILE_SYSTEM: OnceLock<FileSystem> = OnceLock::new();
 static IMAGES: OnceLock<Images> = OnceLock::new();
 static MODELS: OnceLock<Models> = OnceLock::new();
+static MOTIONS: OnceLock<Motions> = OnceLock::new();
 static TEXTURES: OnceLock<Textures> = OnceLock::new();
 
 pub fn init(root_dir: impl AsRef<Path>, gpu: Gpu) -> bool {
@@ -24,6 +25,10 @@ pub fn init(root_dir: impl AsRef<Path>, gpu: Gpu) -> bool {
     }
 
     if MODELS.set(Models::default()).is_err() {
+        return false;
+    }
+
+    if MOTIONS.set(Motions::default()).is_err() {
         return false;
     }
 
@@ -44,6 +49,10 @@ pub fn images() -> &'static Images {
 
 pub fn models() -> &'static Models {
     MODELS.get().unwrap()
+}
+
+pub fn motions() -> &'static Motions {
+    MOTIONS.get().unwrap()
 }
 
 pub fn textures() -> &'static Textures {

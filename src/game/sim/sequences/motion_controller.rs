@@ -3,9 +3,12 @@ use glam::Vec3;
 
 use std::{collections::VecDeque, sync::Arc};
 
-use crate::game::assets::{
-    motion::{Motion, MotionFlags, State},
-    motions::Motions,
+use crate::game::{
+    assets::{
+        motion::{Motion, MotionFlags, State},
+        motions::Motions,
+    },
+    globals,
 };
 
 use super::motion_info::MotionInfo;
@@ -103,7 +106,7 @@ impl MotionController {
     }
 
     /// Called each frame with the amount of time passed since the last update in `delta_time`.
-    pub fn update(&mut self, delta_time: f32, motions: &Motions) {
+    pub fn update(&mut self, delta_time: f32) {
         // The original runtime drives motion updates with a clamped millisecond delta.
         let mut delta_time_ms = (delta_time.max(0.0) * 1000.0).clamp(0.0, 125.0) as i32;
         let has_pending = !self.pending.is_empty();
@@ -112,7 +115,7 @@ impl MotionController {
         if self
             .active
             .as_ref()
-            .and_then(|active| motions.get(active.motion_info.motion))
+            .and_then(|active| globals::motions().get(active.motion_info.motion))
             .is_some_and(|motion| motion.has_flags(MotionFlags::SPED_MOTION))
         {
             delta_time_ms = (delta_time_ms * 3) / 2;
@@ -133,11 +136,11 @@ impl MotionController {
             if next_is_immediate {
                 // Immediate requests interrupt active playback before active motion advancement.
                 if let Some(interrupted) = self.active.as_ref() {
-                    self.handle_immediate_interrupt(interrupted, motions);
+                    self.handle_immediate_interrupt(interrupted);
                 }
 
                 if let Some(next) = self.pending.pop_front() {
-                    self.promote_to_active(next, motions);
+                    self.promote_to_active(next);
                 }
                 return;
             }
@@ -145,7 +148,7 @@ impl MotionController {
             // Non-immediate requests become active as soon as there is no active motion.
             if self.active.is_none() {
                 if let Some(next) = self.pending.pop_front() {
-                    self.promote_to_active(next, motions);
+                    self.promote_to_active(next);
                 }
                 return;
             }
@@ -155,7 +158,7 @@ impl MotionController {
         let mut sampled_root_motion = None;
         let mut sampled_motion_frame = None;
         if let Some(active) = self.active.as_mut() {
-            if let Some(motion) = motions.get(active.motion_info.motion) {
+            if let Some(motion) = globals::motions().get(active.motion_info.motion) {
                 let motion = motion.as_ref();
                 let mut terminal_frame_index = None;
                 active.current_time_ticks = active.current_time_ticks.saturating_add(delta_time_ms);
@@ -214,7 +217,7 @@ impl MotionController {
 
         if self.active.is_none() {
             if let Some(next) = self.pending.pop_front() {
-                self.promote_to_active(next, motions);
+                self.promote_to_active(next);
                 return;
             }
 
@@ -223,7 +226,7 @@ impl MotionController {
     }
 
     /// Promote a queued motion into active runtime state without cloning motion data.
-    fn promote_to_active(&mut self, next: MotionInfoContext, motions: &Motions) {
+    fn promote_to_active(&mut self, next: MotionInfoContext) {
         let scaled_ticks_per_frame =
             (next.motion_info.base_ticks_per_frame as f32 * next.playback_speed) as i32;
         let scaled_ticks_per_frame = scaled_ticks_per_frame.max(1);
@@ -238,7 +241,7 @@ impl MotionController {
         });
 
         if let Some(active) = self.active.as_ref()
-            && let Some(motion) = motions.get(active.motion_info.motion)
+            && let Some(motion) = globals::motions().get(active.motion_info.motion)
         {
             self.current_target_state = motion.to_state;
         }
@@ -247,8 +250,8 @@ impl MotionController {
     }
 
     /// Handle an immediate handoff that interrupts the currently active motion.
-    fn handle_immediate_interrupt(&self, interrupted: &ActiveMotionInfo, motions: &Motions) {
-        if let Some(motion) = motions.get(interrupted.motion_info.motion) {
+    fn handle_immediate_interrupt(&self, interrupted: &ActiveMotionInfo) {
+        if let Some(motion) = globals::motions().get(interrupted.motion_info.motion) {
             tracing::debug!(
                 "Interrupting active motion \"{}\" for immediate handoff.",
                 motion.name

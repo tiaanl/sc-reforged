@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use ahash::HashSet;
 use bevy_ecs::prelude::*;
@@ -14,7 +11,7 @@ use crate::{
         transform::Transform,
     },
     game::{
-        assets::{config::campaign_def::CampaignDef, motions::Motions},
+        assets::config::campaign_def::CampaignDef,
         config::{CharacterProfiles, Mtf, ObjectType, TerrainMapping, load_config},
         globals,
         render::world::WorldRenderSnapshot,
@@ -65,9 +62,9 @@ pub struct SimWorld {
 }
 
 impl SimWorld {
-    pub fn new(assets: GameAssets, campaign_def: &CampaignDef) -> Result<Self, AssetError> {
+    pub fn new(campaign_def: &CampaignDef) -> Result<Self, AssetError> {
         let mut world = World::default();
-        init_sim_world(&mut world, assets, campaign_def)?;
+        init_sim_world(&mut world, campaign_def)?;
 
         let update_schedule = build_update_schedule();
         let extract_schedule = build_extract_schedule();
@@ -119,18 +116,7 @@ pub struct SimWorldState {
     pub ui: Ui,
 }
 
-/// Asset containers shared with the ECS world. Each container is internally
-/// thread-safe and may be cloned cheaply.
-#[derive(Clone, Resource)]
-pub struct GameAssets {
-    pub motions: Arc<Motions>,
-}
-
-fn init_sim_world(
-    world: &mut World,
-    assets: GameAssets,
-    campaign_def: &CampaignDef,
-) -> Result<(), AssetError> {
+fn init_sim_world(world: &mut World, campaign_def: &CampaignDef) -> Result<(), AssetError> {
     let campaign = load_config::<crate::game::config::Campaign>(
         PathBuf::from("campaign")
             .join(&campaign_def.base_name)
@@ -157,10 +143,8 @@ fn init_sim_world(
     let motion_sequencer = {
         let mut motion_sequencer = MotionSequencer::default();
 
-        motion_sequencer.load_motion_sequencer_defs(
-            &assets.motions,
-            PathBuf::from("config").join("mot_sequencer_defs.txt"),
-        )?;
+        motion_sequencer
+            .load_motion_sequencer_defs(PathBuf::from("config").join("mot_sequencer_defs.txt"))?;
 
         motion_sequencer
     };
@@ -246,8 +230,6 @@ fn init_sim_world(
     world.insert_resource(sim_world_state);
 
     world.init_resource::<Viewport>();
-
-    world.insert_resource(assets);
 
     Ok(())
 }
