@@ -11,10 +11,11 @@ use crate::{
     game::{
         assets::config::campaign_def::CampaignDefs,
         config::load_config,
+        globals,
         sim::SimWorld,
-        ui::windows::{
-            bottombar::BottomBarWindow, main_menu::MainMenuWindow,
-            window_manager::WindowManager,
+        ui::{
+            render::window_renderer::WindowRenderer,
+            windows::{bottombar::BottomBarWindow, main_menu::MainMenuWindow},
         },
         world_layer::WorldLayer,
     },
@@ -29,24 +30,24 @@ pub struct GameState {
     surface_size: UVec2,
     surface_format: wgpu::TextureFormat,
     world_layer: Option<WorldLayer>,
-    window_manager: WindowManager,
+    window_renderer: WindowRenderer,
 }
 
 impl GameState {
     pub fn new(surface_desc: &SurfaceDesc) -> Result<Self, AssetError> {
         let campaign_defs = load_config(PathBuf::from("config").join("campaign_defs.txt"))?;
 
-        let mut window_manager = WindowManager::new(surface_desc)?;
+        let window_renderer = WindowRenderer::new(surface_desc);
 
-        let main_menu_window = Box::new(MainMenuWindow::new(&window_manager)?);
-        window_manager.push(main_menu_window);
+        let main_menu_window = Box::new(MainMenuWindow::new(&globals::window_manager())?);
+        globals::window_manager().push(main_menu_window);
 
         Ok(Self {
             campaign_defs,
             surface_size: surface_desc.size,
             surface_format: surface_desc.format,
             world_layer: None,
-            window_manager,
+            window_renderer,
         })
     }
 
@@ -55,14 +56,15 @@ impl GameState {
         if let Some(world_layer) = &mut self.world_layer {
             world_layer.resize(size);
         }
-        self.window_manager.resize(size);
+        globals::window_manager().resize(size, &mut self.window_renderer);
     }
 
     pub fn input(&mut self, event: &InputEvent) {
-        let ui_consumed = self.window_manager.input(event);
+        let ui_consumed = globals::window_manager().input(event, &self.window_renderer);
 
         // TODO: This shouldn't reach into window manager's internals.
-        let mut actions = std::mem::take(&mut self.window_manager.window_manager_context.actions);
+        let mut actions =
+            std::mem::take(&mut globals::window_manager().window_manager_context.actions);
         for action in actions.drain(..) {
             match action {
                 WindowManagerAction::Quit => tracing::info!("Quit game!"),
@@ -84,7 +86,7 @@ impl GameState {
         if let Some(world_layer) = &mut self.world_layer {
             world_layer.update(delta_time);
         }
-        self.window_manager.update(delta_time);
+        globals::window_manager().update(delta_time);
     }
 
     pub fn render(&mut self, render_context: &mut RenderContext, render_target: &RenderTarget) {
@@ -94,7 +96,11 @@ impl GameState {
             clear_render_target(render_context, render_target);
         }
 
-        self.window_manager.render(render_context, render_target);
+        globals::window_manager().render(
+            render_context,
+            render_target,
+            &mut self.window_renderer,
+        );
     }
 
     #[cfg(feature = "egui")]
@@ -119,7 +125,7 @@ impl GameState {
 
         let sim = SimWorld::new(campaign_def)?;
 
-        self.window_manager.clear();
+        globals::window_manager().clear();
         self.world_layer = Some(WorldLayer::new(self.surface_size, self.surface_format, sim));
         self.spawn_game_ui()?;
 
@@ -132,8 +138,8 @@ impl GameState {
     /// Window_Inventory_Bar, and Window_Command_Pad — only the first is wired
     /// up here so far.
     fn spawn_game_ui(&mut self) -> Result<(), AssetError> {
-        let bottom_bar_window = Box::new(BottomBarWindow::new(&self.window_manager)?);
-        self.window_manager.push(bottom_bar_window);
+        let bottom_bar_window = Box::new(BottomBarWindow::new(&globals::window_manager())?);
+        globals::window_manager().push(bottom_bar_window);
         Ok(())
     }
 }

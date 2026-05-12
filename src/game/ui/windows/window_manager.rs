@@ -11,7 +11,7 @@ use crate::{
     engine::{
         assets::AssetError,
         input::InputEvent,
-        renderer::{RenderContext, RenderTarget, SurfaceDesc},
+        renderer::{RenderContext, RenderTarget},
     },
     game::{
         config::{load_config, windows::WindowBase},
@@ -28,7 +28,6 @@ use super::window::{Window, WindowRenderContext};
 pub struct WindowManager {
     window_bases: Mutex<HashMap<String, Arc<WindowBase>>>,
 
-    window_renderer: WindowRenderer,
     window_render_items_cache: WindowRenderItems,
 
     pub window_manager_context: WindowManagerContext,
@@ -48,13 +47,10 @@ pub struct WindowManager {
 }
 
 impl WindowManager {
-    pub fn new(surface_desc: &SurfaceDesc) -> Result<Self, AssetError> {
-        let window_renderer = WindowRenderer::new(surface_desc);
-
-        Ok(Self {
+    pub fn new() -> Self {
+        Self {
             window_bases: Mutex::new(HashMap::default()),
 
-            window_renderer,
             window_render_items_cache: WindowRenderItems::default(),
 
             window_manager_context: WindowManagerContext::default(),
@@ -65,11 +61,7 @@ impl WindowManager {
             mouse_position: None,
             primary_button_down: false,
             secondary_button_down: false,
-        })
-    }
-
-    pub fn window_renderer(&self) -> &WindowRenderer {
-        &self.window_renderer
+        }
     }
 
     pub fn get_window_base(&self, name: &str) -> Result<Arc<WindowBase>, AssetError> {
@@ -136,32 +128,31 @@ impl WindowManager {
         }
     }
 
-    pub fn resize(&mut self, size: glam::UVec2) {
-        self.window_renderer.resize(size);
-        self.notify_layout_changed();
+    pub fn resize(&mut self, size: glam::UVec2, window_renderer: &mut WindowRenderer) {
+        window_renderer.resize(size);
+        self.notify_layout_changed(window_renderer);
     }
 
     /// Switches the renderer's UI scale (logical vs native) and re-lays out
     /// every window if the logical size changed as a result.
-    pub fn set_ui_scale(&mut self, ui_scale: UiScale) {
-        if self.window_renderer.set_ui_scale(ui_scale).is_some() {
-            self.notify_layout_changed();
+    pub fn set_ui_scale(&mut self, ui_scale: UiScale, window_renderer: &mut WindowRenderer) {
+        if window_renderer.set_ui_scale(ui_scale).is_some() {
+            self.notify_layout_changed(window_renderer);
         }
     }
 
-    fn notify_layout_changed(&mut self) {
-        let logical_size = self.window_renderer.surface_size().as_ivec2();
+    fn notify_layout_changed(&mut self, window_renderer: &WindowRenderer) {
+        let logical_size = window_renderer.surface_size().as_ivec2();
         for window in self.windows.iter_mut() {
             window.on_resize(logical_size);
         }
     }
 
-    pub fn input(&mut self, event: &InputEvent) -> bool {
+    pub fn input(&mut self, event: &InputEvent, window_renderer: &WindowRenderer) -> bool {
         match *event {
             InputEvent::MouseMove(position) => {
-                self.mouse_position = self
-                    .window_renderer
-                    .surface_to_logical_position(position.as_ivec2());
+                self.mouse_position =
+                    window_renderer.surface_to_logical_position(position.as_ivec2());
 
                 self.modal_window.is_some()
                     || self
@@ -359,18 +350,23 @@ impl WindowManager {
         }
     }
 
-    pub fn render(&mut self, render_context: &mut RenderContext, render_target: &RenderTarget) {
+    pub fn render(
+        &mut self,
+        render_context: &mut RenderContext,
+        render_target: &RenderTarget,
+        window_renderer: &mut WindowRenderer,
+    ) {
         self.window_render_items_cache.clear();
 
         let mut ctx = WindowRenderContext {
             render_context,
-            window_renderer: &self.window_renderer,
+            window_renderer,
         };
         for window in self.windows.iter_mut() {
             window.render(&mut ctx, &mut self.window_render_items_cache);
         }
 
-        self.window_renderer.submit_render_items(
+        window_renderer.submit_render_items(
             render_context,
             render_target,
             &self.window_render_items_cache,

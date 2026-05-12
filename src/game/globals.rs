@@ -1,4 +1,10 @@
-use std::{path::Path, sync::OnceLock};
+use std::{
+    cell::{RefCell, RefMut},
+    path::Path,
+    sync::OnceLock,
+};
+
+use send_wrapper::SendWrapper;
 
 use crate::{
     engine::renderer::Gpu,
@@ -6,6 +12,7 @@ use crate::{
         assets::{images::Images, models::Models, motions::Motions, sprites::Sprites},
         file_system::FileSystem,
         render::textures::Textures,
+        ui::windows::window_manager::WindowManager,
     },
 };
 
@@ -16,6 +23,7 @@ static MODELS: OnceLock<Models> = OnceLock::new();
 static MOTIONS: OnceLock<Motions> = OnceLock::new();
 static TEXTURES: OnceLock<Textures> = OnceLock::new();
 static SPRITES: OnceLock<Sprites> = OnceLock::new();
+static WINDOW_MANAGER: OnceLock<SendWrapper<RefCell<WindowManager>>> = OnceLock::new();
 
 pub fn init(root_dir: impl AsRef<Path>, gpu: Gpu) -> bool {
     if GPU.set(gpu).is_err() {
@@ -43,6 +51,13 @@ pub fn init(root_dir: impl AsRef<Path>, gpu: Gpu) -> bool {
     }
 
     if SPRITES.set(Sprites::default()).is_err() {
+        return false;
+    }
+
+    if WINDOW_MANAGER
+        .set(SendWrapper::new(RefCell::new(WindowManager::new())))
+        .is_err()
+    {
         return false;
     }
 
@@ -75,4 +90,8 @@ pub fn textures() -> &'static Textures {
 
 pub fn sprites() -> &'static Sprites {
     SPRITES.get().unwrap()
+}
+
+pub fn window_manager() -> RefMut<'static, WindowManager> {
+    WINDOW_MANAGER.get().unwrap().borrow_mut()
 }
