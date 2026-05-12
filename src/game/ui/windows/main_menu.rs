@@ -2,11 +2,14 @@ use glam::{IVec2, Vec4};
 
 use crate::{
     engine::assets::AssetError,
-    game::ui::{
-        Rect,
-        render::window_renderer::WindowRenderItems,
-        widgets::{text_button::TextButtonWidget, widget::Widgets},
-        windows::{actions::WindowManagerAction, window_manager::WindowManager},
+    game::{
+        config::windows::WindowCtx,
+        ui::{
+            Rect,
+            render::window_renderer::{WindowRenderItems, WindowRenderer},
+            widgets::{text_button::TextButtonWidget, widget::Widgets},
+            windows::{actions::WindowManagerAction, window_manager::WindowManager},
+        },
     },
 };
 
@@ -25,7 +28,11 @@ impl MainMenuWindow {
     pub fn new(window_manager: &WindowManager) -> Result<Self, AssetError> {
         let window_base = window_manager.get_window_base("main_menu")?;
 
-        let size = IVec2::new(window_base.render_dx, window_base.render_dy);
+        let layout = window_base
+            .layout(&WindowCtx::from_logical_size(
+                WindowRenderer::LOGICAL_SIZE.as_ivec2(),
+            ));
+        let size = IVec2::new(layout.render_dx, layout.render_dy);
         let size = size.max(IVec2::new(400, 300));
 
         let mut widgets = Widgets::default();

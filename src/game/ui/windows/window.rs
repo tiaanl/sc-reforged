@@ -104,6 +104,13 @@ pub trait Window {
         let _ = delta_time;
     }
 
+    /// Called when the logical UI size changes so windows can re-resolve any
+    /// expression-based layout (button positions, geometry, etc.) keyed off
+    /// `%screen_dx` / `%screen_dy`.
+    fn on_resize(&mut self, logical_size: IVec2) {
+        let _ = logical_size;
+    }
+
     /// Called for each window so they can drive any GPU work and append items
     /// to `render_items` to be composited later.
     fn render(&mut self, ctx: &mut WindowRenderContext<'_>, render_items: &mut WindowRenderItems);

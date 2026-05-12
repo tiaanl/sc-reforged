@@ -12,7 +12,10 @@ use crate::{
         assets::config::campaign_def::CampaignDefs,
         config::load_config,
         sim::SimWorld,
-        ui::windows::{main_menu::MainMenuWindow, window_manager::WindowManager},
+        ui::windows::{
+            bottombar::BottomBarWindow, main_menu::MainMenuWindow,
+            window_manager::WindowManager,
+        },
         world_layer::WorldLayer,
     },
 };
@@ -37,17 +40,6 @@ impl GameState {
 
         let main_menu_window = Box::new(MainMenuWindow::new(&window_manager)?);
         window_manager.push(main_menu_window);
-
-        // {
-        //     let help_window_defs: HelpWindowDefs = load_config(
-        //         &file_system,
-        //         PathBuf::from("config").join("help_window_defs.txt"),
-        //     )?;
-
-        //     if let Some(help_def) = help_window_defs.get("conf_exit_game") {
-        //         window_manager.push(Box::new(HelpWindow::new(help_def, surface_desc.size)));
-        //     }
-        // }
 
         Ok(Self {
             campaign_defs,
@@ -129,7 +121,19 @@ impl GameState {
 
         self.window_manager.clear();
         self.world_layer = Some(WorldLayer::new(self.surface_size, self.surface_format, sim));
+        self.spawn_game_ui()?;
 
+        Ok(())
+    }
+
+    /// Mirrors the original engine's `Spawn_Game_UI` (`0x004dde00`), which the
+    /// `Big_Switch` campaign-start events call right after constructing the
+    /// terrain window. The original creates Window_Bottom_Bar,
+    /// Window_Inventory_Bar, and Window_Command_Pad — only the first is wired
+    /// up here so far.
+    fn spawn_game_ui(&mut self) -> Result<(), AssetError> {
+        let bottom_bar_window = Box::new(BottomBarWindow::new(&self.window_manager)?);
+        self.window_manager.push(bottom_bar_window);
         Ok(())
     }
 }

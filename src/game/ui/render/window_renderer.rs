@@ -1,4 +1,4 @@
-use glam::{IVec2, UVec2, Vec4};
+use glam::{IVec2, UVec2, Vec2, Vec4};
 
 use crate::{
     engine::{
@@ -87,9 +87,22 @@ impl WindowRenderItems {
         self.0.push(WindowRenderItem::ClearClipRect);
     }
 
-    /// Queues a non-tiled geometry item.
-    pub fn render_geometry(&mut self) {
-        self.0.push(WindowRenderItem::Geometry);
+    /// Queues a textured rectangle drawn from a window-base geometry block.
+    pub fn render_textured_rect(
+        &mut self,
+        rect: Rect,
+        texture: Handle<Texture>,
+        uv_min: Vec2,
+        uv_max: Vec2,
+        color: Vec4,
+    ) {
+        self.0.push(WindowRenderItem::TexturedRect {
+            rect,
+            texture,
+            uv_min,
+            uv_max,
+            color,
+        });
     }
 
     /// Queues a tiled geometry item with the given alpha.
@@ -138,28 +151,77 @@ impl WindowRenderItems {
     }
 }
 
+/// How the UI's logical coordinate space relates to the physical surface.
+///
+/// - `Logical`: a 480-tall logical box stretched horizontally to the surface
+///   aspect — used outside gameplay (menus, briefing, etc.). Lets the original
+///   640x480/800x600 window bases reflow cleanly to widescreen.
+/// - `Native`: 1:1 with the physical surface — used in-game so widgets land at
+///   real screen pixels and `%screen_dx` / `%screen_dy` reflect the actual
+///   window dimensions, matching the original game's behavior at the active
+///   display resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UiScale {
+    Logical,
+    Native,
+}
+
 /// Renders all the components required for windows.
 pub struct WindowRenderer {
     quad_renderer: QuadRenderer,
     tiled_geometries: Storage<TiledGeometry>,
     surface_size: UVec2,
+    logical_size: UVec2,
+    surface_format: wgpu::TextureFormat,
+    ui_scale: UiScale,
     ui_target: UiRenderTarget,
     ui_presenter: UiPresenter,
 }
 
 impl WindowRenderer {
-    /// The original fixed UI render area used by the window system.
-    pub const LOGICAL_SIZE: UVec2 = UVec2::new(640, 480);
+    /// The vertical logical UI resolution (locked). Widescreen surfaces stretch
+    /// horizontally — `%screen_dx` grows past 640 while `%screen_dy` stays 480.
+    pub const LOGICAL_DY: u32 = 480;
+    /// Minimum logical width — surfaces narrower than 4:3 letterbox instead of
+    /// squeezing the bar below its base width.
+    pub const MIN_LOGICAL_DX: u32 = 640;
+    /// The base (un-stretched) logical UI size — handy as a default.
+    pub const LOGICAL_SIZE: UVec2 = UVec2::new(Self::MIN_LOGICAL_DX, Self::LOGICAL_DY);
 
-    /// Creates the window renderer.
+    /// Resolves a (physical, scale) pair to a logical UI size. Native is 1:1;
+    /// Logical locks height to [`Self::LOGICAL_DY`] and stretches width with
+    /// aspect, divided by the integer scale that fits both
+    /// [`Self::MIN_LOGICAL_DX`] × [`Self::LOGICAL_DY`] into the surface so the
+    /// presentation rect can never exceed the surface bounds.
+    pub fn compute_logical_size(physical: UVec2, ui_scale: UiScale) -> UVec2 {
+        match ui_scale {
+            UiScale::Native => physical.max(UVec2::splat(1)),
+            UiScale::Logical => {
+                let scale = Self::compute_logical_scale(physical);
+                let dx = (physical.x / scale).max(Self::MIN_LOGICAL_DX);
+                UVec2::new(dx, Self::LOGICAL_DY)
+            }
+        }
+    }
+
+    fn compute_logical_scale(physical: UVec2) -> u32 {
+        let vertical = physical.y / Self::LOGICAL_DY;
+        let horizontal = physical.x / Self::MIN_LOGICAL_DX;
+        vertical.min(horizontal).max(1)
+    }
+
+    /// Creates the window renderer. Starts in [`UiScale::Logical`]; the game
+    /// state flips to [`UiScale::Native`] when entering gameplay.
     pub fn new(surface_desc: &SurfaceDesc) -> Self {
+        let ui_scale = UiScale::Logical;
+        let logical_size = Self::compute_logical_size(surface_desc.size, ui_scale);
         let logical_surface = SurfaceDesc {
-            size: Self::LOGICAL_SIZE,
+            size: logical_size,
             format: surface_desc.format,
         };
         let ui_presenter = UiPresenter::new(surface_desc.format);
         let ui_target = UiRenderTarget::new(
-            Self::LOGICAL_SIZE,
+            logical_size,
             surface_desc.format,
             ui_presenter.bind_group_layout(),
             ui_presenter.sampler(),
@@ -169,9 +231,47 @@ impl WindowRenderer {
             quad_renderer: QuadRenderer::new(&logical_surface),
             tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
+            logical_size,
+            surface_format: surface_desc.format,
+            ui_scale,
             ui_target,
             ui_presenter,
         }
+    }
+
+    /// Switches the UI between the stretched 480-tall logical box and a 1:1
+    /// native mapping to the physical surface. Returns the new logical size if
+    /// it changed (so the caller can re-layout windows); returns `None` if the
+    /// mode was already active.
+    pub fn set_ui_scale(&mut self, ui_scale: UiScale) -> Option<UVec2> {
+        if self.ui_scale == ui_scale {
+            return None;
+        }
+        self.ui_scale = ui_scale;
+        self.refresh_logical_size().then_some(self.logical_size)
+    }
+
+    pub fn ui_scale(&self) -> UiScale {
+        self.ui_scale
+    }
+
+    /// Recomputes the logical size from the current surface size + ui_scale,
+    /// rebuilding the offscreen target and quad viewport if it changed.
+    /// Returns whether the size actually moved.
+    fn refresh_logical_size(&mut self) -> bool {
+        let new_logical = Self::compute_logical_size(self.surface_size, self.ui_scale);
+        if new_logical == self.logical_size {
+            return false;
+        }
+        self.logical_size = new_logical;
+        self.ui_target = UiRenderTarget::new(
+            new_logical,
+            self.surface_format,
+            self.ui_presenter.bind_group_layout(),
+            self.ui_presenter.sampler(),
+        );
+        self.quad_renderer.resize(new_logical);
+        true
     }
 
     /// Create a tiled geometry render item.
@@ -244,9 +344,10 @@ impl WindowRenderer {
         height
     }
 
-    /// Returns the logical UI size in original game pixels.
+    /// Returns the current logical UI size — locked to 480 in height, stretched
+    /// horizontally to match the surface aspect.
     pub fn surface_size(&self) -> UVec2 {
-        Self::LOGICAL_SIZE
+        self.logical_size
     }
 
     /// Returns the physical swapchain surface size in pixels.
@@ -254,21 +355,26 @@ impl WindowRenderer {
         self.surface_size
     }
 
-    /// Returns the largest integer UI scale that fits the current surface.
+    /// Returns the largest integer UI scale that fits the current surface. In
+    /// [`UiScale::Native`] this is always 1 (no scaling). In Logical it's
+    /// constrained by both axes so the presentation rect never exceeds the
+    /// surface bounds.
     pub fn integer_scale(&self) -> u32 {
-        let scale_x = self.surface_size.x / Self::LOGICAL_SIZE.x;
-        let scale_y = self.surface_size.y / Self::LOGICAL_SIZE.y;
-        scale_x.min(scale_y)
+        match self.ui_scale {
+            UiScale::Native => 1,
+            UiScale::Logical => Self::compute_logical_scale(self.surface_size),
+        }
     }
 
-    /// Returns the centered physical rect used to present the logical UI.
+    /// Returns the centered physical rect used to present the logical UI. In
+    /// Native mode this is the full surface; in Logical mode it's a centered
+    /// integer-scaled rect with letterboxing on whichever axis has slack.
     pub fn presentation_rect(&self) -> Rect {
         let scale = self.integer_scale();
-        if scale == 0 {
+        let size = (self.logical_size * scale).as_ivec2();
+        if size.x > self.surface_size.x as i32 || size.y > self.surface_size.y as i32 {
             return Rect::default();
         }
-
-        let size = (Self::LOGICAL_SIZE * scale).as_ivec2();
         let position = (self.surface_size.as_ivec2() - size) / 2;
 
         Rect::new(position, size)
@@ -287,9 +393,12 @@ impl WindowRenderer {
             .then_some((position - presentation_rect.position) / scale)
     }
 
-    /// Queues a resize for the window.
+    /// Queues a resize for the window. If the derived logical size changes,
+    /// rebuilds the offscreen UI target and reconfigures the quad renderer's
+    /// viewport so widgets keep mapping 1:1 into the target.
     pub fn resize(&mut self, size: UVec2) {
         self.surface_size = size;
+        self.refresh_logical_size();
     }
 
     /// Resolves window render items into quads and submits them for drawing.
@@ -322,7 +431,18 @@ impl WindowRenderer {
                 WindowRenderItem::ClearClipRect => {
                     let _ = clip_stack.pop();
                 }
-                WindowRenderItem::Geometry => {}
+                WindowRenderItem::TexturedRect {
+                    rect,
+                    texture,
+                    uv_min,
+                    uv_max,
+                    color,
+                } => {
+                    let mut quad = Quad::sub_texture(*rect, *texture, *uv_min, *uv_max)
+                        .with_color(*color);
+                    quad.clip_rect = clip_stack.last().cloned();
+                    quads.push(quad);
+                }
                 WindowRenderItem::TiledGeometry { handle, alpha } => {
                     let Some(geometry) = self.tiled_geometries.get(*handle) else {
                         continue;
@@ -465,11 +585,17 @@ impl WindowRenderer {
 
 #[derive(Clone)]
 enum WindowRenderItem {
-    Geometry,
     PushClipRect {
         clip_rect: Rect,
     },
     ClearClipRect,
+    TexturedRect {
+        rect: Rect,
+        texture: Handle<Texture>,
+        uv_min: Vec2,
+        uv_max: Vec2,
+        color: Vec4,
+    },
     TiledGeometry {
         handle: Handle<TiledGeometry>,
         alpha: f32,

@@ -17,7 +17,7 @@ use crate::{
         config::{load_config, windows::WindowBase},
         ui::{
             EventResult,
-            render::window_renderer::{WindowRenderItems, WindowRenderer},
+            render::window_renderer::{UiScale, WindowRenderItems, WindowRenderer},
             windows::window_manager_context::WindowManagerContext,
         },
     },
@@ -138,6 +138,22 @@ impl WindowManager {
 
     pub fn resize(&mut self, size: glam::UVec2) {
         self.window_renderer.resize(size);
+        self.notify_layout_changed();
+    }
+
+    /// Switches the renderer's UI scale (logical vs native) and re-lays out
+    /// every window if the logical size changed as a result.
+    pub fn set_ui_scale(&mut self, ui_scale: UiScale) {
+        if self.window_renderer.set_ui_scale(ui_scale).is_some() {
+            self.notify_layout_changed();
+        }
+    }
+
+    fn notify_layout_changed(&mut self) {
+        let logical_size = self.window_renderer.surface_size().as_ivec2();
+        for window in self.windows.iter_mut() {
+            window.on_resize(logical_size);
+        }
     }
 
     pub fn input(&mut self, event: &InputEvent) -> bool {
