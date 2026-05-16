@@ -28,10 +28,9 @@ impl MainMenuWindow {
     pub fn new(window_manager: &WindowManager) -> Result<Self, AssetError> {
         let window_base = window_manager.get_window_base("main_menu")?;
 
-        let layout = window_base
-            .layout(&WindowCtx::from_logical_size(
-                WindowRenderer::LOGICAL_SIZE.as_ivec2(),
-            ));
+        let layout = window_base.layout(&WindowCtx::from_logical_size(
+            WindowRenderer::LOGICAL_SIZE.as_ivec2(),
+        ));
         let size = IVec2::new(layout.render_dx, layout.render_dy);
         let size = size.max(IVec2::new(400, 300));
 

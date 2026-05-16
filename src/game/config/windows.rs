@@ -124,7 +124,8 @@ impl IVars {
             tracing::warn!("DEFINE_USER_IVAR {name}: missing value");
             return;
         };
-        self.ivars.insert(strip_ivar_prefix(&name).to_string(), expr);
+        self.ivars
+            .insert(strip_ivar_prefix(&name).to_string(), expr);
     }
 
     /// `MODIFY_USER_IVAR $name <op> <value-expr>` — appends an adjustment to
@@ -416,10 +417,7 @@ impl WindowBase {
                 GeometryExpr::Tiled(t) => Geometry::Tiled(GeometryTiled {
                     jpg_name: t.jpg_name.clone(),
                     dimensions: [eval(&t.dimensions[0]), eval(&t.dimensions[1])],
-                    chunk_dimensions: [
-                        eval(&t.chunk_dimensions[0]),
-                        eval(&t.chunk_dimensions[1]),
-                    ],
+                    chunk_dimensions: [eval(&t.chunk_dimensions[0]), eval(&t.chunk_dimensions[1])],
                     bilinear_filtering: t.bilinear_filtering,
                 }),
             })
@@ -571,7 +569,10 @@ impl From<ConfigLines> for WindowBase {
                     let b = line.param::<f32>(4);
                     let a = line.param::<f32>(5);
                     let (u, v) = if line.params().len() >= 8 {
-                        (Some(parse_uv_param(&line, 6)), Some(parse_uv_param(&line, 7)))
+                        (
+                            Some(parse_uv_param(&line, 6)),
+                            Some(parse_uv_param(&line, 7)),
+                        )
                     } else {
                         (None, None)
                     };

@@ -438,8 +438,8 @@ impl WindowRenderer {
                     uv_max,
                     color,
                 } => {
-                    let mut quad = Quad::sub_texture(*rect, *texture, *uv_min, *uv_max)
-                        .with_color(*color);
+                    let mut quad =
+                        Quad::sub_texture(*rect, *texture, *uv_min, *uv_max).with_color(*color);
                     quad.clip_rect = clip_stack.last().cloned();
                     quads.push(quad);
                 }

@@ -96,11 +96,7 @@ impl GameState {
             clear_render_target(render_context, render_target);
         }
 
-        globals::window_manager().render(
-            render_context,
-            render_target,
-            &mut self.window_renderer,
-        );
+        globals::window_manager().render(render_context, render_target, &mut self.window_renderer);
     }
 
     #[cfg(feature = "egui")]
