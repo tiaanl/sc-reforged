@@ -12,7 +12,7 @@ use crate::{
         render::textures::Texture,
         ui::{
             Rect,
-            render::window_renderer::{WindowRenderItems, WindowRenderer},
+            render::window_renderer::WindowRenderItems,
             windows::{
                 window::{Window, WindowCommon, WindowImpl, WindowRenderContext},
                 window_manager::WindowManager,
@@ -33,14 +33,16 @@ pub struct BottomBarWindow {
 }
 
 impl BottomBarWindow {
-    pub fn new(window_manager: &WindowManager) -> Result<Window, AssetError> {
+    pub fn new(
+        window_manager: &WindowManager,
+        surface_size: IVec2,
+    ) -> Result<Window, AssetError> {
         // Matches the original engine's selection rule: the 640x480 base is
         // only used on an exact 640x480 surface, otherwise the 800x600 base is
         // the default. Both share WINDOW_BASE_DY 194 and use %screen_dx to fill
         // the screen width, so the same resolver works for either.
         let window_base = window_manager.get_window_base("bottombar_800x600")?;
-        let logical = WindowRenderer::LOGICAL_SIZE.as_ivec2();
-        let layout = window_base.layout(&WindowCtx::from_logical_size(logical));
+        let layout = window_base.layout(&WindowCtx::from_logical_size(surface_size));
 
         let geometry_textures = layout
             .geometries
@@ -51,7 +53,7 @@ impl BottomBarWindow {
             })
             .collect();
 
-        let common = WindowCommon::new(compute_rect(&layout, logical));
+        let common = WindowCommon::new(compute_rect(&layout, surface_size));
 
         Ok(Window::new(
             common,

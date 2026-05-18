@@ -6,7 +6,7 @@ use crate::{
         config::windows::WindowCtx,
         ui::{
             Rect,
-            render::window_renderer::{WindowRenderItems, WindowRenderer},
+            render::window_renderer::WindowRenderItems,
             widgets::text_button::TextButtonWidget,
             windows::{
                 actions::WindowManagerAction,
@@ -22,12 +22,13 @@ use super::window::{WindowImpl, WindowRenderContext};
 pub struct MainMenuWindow;
 
 impl MainMenuWindow {
-    pub fn new(window_manager: &WindowManager) -> Result<Window, AssetError> {
+    pub fn new(
+        window_manager: &WindowManager,
+        surface_size: IVec2,
+    ) -> Result<Window, AssetError> {
         let window_base = window_manager.get_window_base("main_menu")?;
 
-        let layout = window_base.layout(&WindowCtx::from_logical_size(
-            WindowRenderer::LOGICAL_SIZE.as_ivec2(),
-        ));
+        let layout = window_base.layout(&WindowCtx::from_logical_size(surface_size));
         let size = IVec2::new(layout.render_dx, layout.render_dy);
         let size = size.max(IVec2::new(400, 300));
 

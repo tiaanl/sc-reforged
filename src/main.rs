@@ -62,7 +62,7 @@ impl ApplicationHandler for App {
                 let attributes = winit::window::WindowAttributes::default()
                     .with_title("Shadow Company - Reforged")
                     .with_resizable(true)
-                    .with_inner_size(winit::dpi::LogicalSize::new(1024, 768));
+                    .with_inner_size(winit::dpi::LogicalSize::new(800, 600));
 
                 let window = Arc::new(
                     event_loop

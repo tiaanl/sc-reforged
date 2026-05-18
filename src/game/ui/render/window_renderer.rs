@@ -151,127 +151,21 @@ impl WindowRenderItems {
     }
 }
 
-/// How the UI's logical coordinate space relates to the physical surface.
-///
-/// - `Logical`: a 480-tall logical box stretched horizontally to the surface
-///   aspect — used outside gameplay (menus, briefing, etc.). Lets the original
-///   640x480/800x600 window bases reflow cleanly to widescreen.
-/// - `Native`: 1:1 with the physical surface — used in-game so widgets land at
-///   real screen pixels and `%screen_dx` / `%screen_dy` reflect the actual
-///   window dimensions, matching the original game's behavior at the active
-///   display resolution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UiScale {
-    Logical,
-    Native,
-}
-
 /// Renders all the components required for windows.
 pub struct WindowRenderer {
     quad_renderer: QuadRenderer,
     tiled_geometries: Storage<TiledGeometry>,
     surface_size: UVec2,
-    logical_size: UVec2,
-    surface_format: wgpu::TextureFormat,
-    ui_scale: UiScale,
-    ui_target: UiRenderTarget,
-    ui_presenter: UiPresenter,
 }
 
 impl WindowRenderer {
-    /// The vertical logical UI resolution (locked). Widescreen surfaces stretch
-    /// horizontally — `%screen_dx` grows past 640 while `%screen_dy` stays 480.
-    pub const LOGICAL_DY: u32 = 480;
-    /// Minimum logical width — surfaces narrower than 4:3 letterbox instead of
-    /// squeezing the bar below its base width.
-    pub const MIN_LOGICAL_DX: u32 = 640;
-    /// The base (un-stretched) logical UI size — handy as a default.
-    pub const LOGICAL_SIZE: UVec2 = UVec2::new(Self::MIN_LOGICAL_DX, Self::LOGICAL_DY);
-
-    /// Resolves a (physical, scale) pair to a logical UI size. Native is 1:1;
-    /// Logical locks height to [`Self::LOGICAL_DY`] and stretches width with
-    /// aspect, divided by the integer scale that fits both
-    /// [`Self::MIN_LOGICAL_DX`] × [`Self::LOGICAL_DY`] into the surface so the
-    /// presentation rect can never exceed the surface bounds.
-    pub fn compute_logical_size(physical: UVec2, ui_scale: UiScale) -> UVec2 {
-        match ui_scale {
-            UiScale::Native => physical.max(UVec2::splat(1)),
-            UiScale::Logical => {
-                let scale = Self::compute_logical_scale(physical);
-                let dx = (physical.x / scale).max(Self::MIN_LOGICAL_DX);
-                UVec2::new(dx, Self::LOGICAL_DY)
-            }
-        }
-    }
-
-    fn compute_logical_scale(physical: UVec2) -> u32 {
-        let vertical = physical.y / Self::LOGICAL_DY;
-        let horizontal = physical.x / Self::MIN_LOGICAL_DX;
-        vertical.min(horizontal).max(1)
-    }
-
-    /// Creates the window renderer. Starts in [`UiScale::Logical`]; the game
-    /// state flips to [`UiScale::Native`] when entering gameplay.
+    /// Creates the window renderer. Windows render 1:1 to the physical surface.
     pub fn new(surface_desc: &SurfaceDesc) -> Self {
-        let ui_scale = UiScale::Logical;
-        let logical_size = Self::compute_logical_size(surface_desc.size, ui_scale);
-        let logical_surface = SurfaceDesc {
-            size: logical_size,
-            format: surface_desc.format,
-        };
-        let ui_presenter = UiPresenter::new(surface_desc.format);
-        let ui_target = UiRenderTarget::new(
-            logical_size,
-            surface_desc.format,
-            ui_presenter.bind_group_layout(),
-            ui_presenter.sampler(),
-        );
-
         Self {
-            quad_renderer: QuadRenderer::new(&logical_surface),
+            quad_renderer: QuadRenderer::new(surface_desc),
             tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
-            logical_size,
-            surface_format: surface_desc.format,
-            ui_scale,
-            ui_target,
-            ui_presenter,
         }
-    }
-
-    /// Switches the UI between the stretched 480-tall logical box and a 1:1
-    /// native mapping to the physical surface. Returns the new logical size if
-    /// it changed (so the caller can re-layout windows); returns `None` if the
-    /// mode was already active.
-    pub fn set_ui_scale(&mut self, ui_scale: UiScale) -> Option<UVec2> {
-        if self.ui_scale == ui_scale {
-            return None;
-        }
-        self.ui_scale = ui_scale;
-        self.refresh_logical_size().then_some(self.logical_size)
-    }
-
-    pub fn ui_scale(&self) -> UiScale {
-        self.ui_scale
-    }
-
-    /// Recomputes the logical size from the current surface size + ui_scale,
-    /// rebuilding the offscreen target and quad viewport if it changed.
-    /// Returns whether the size actually moved.
-    fn refresh_logical_size(&mut self) -> bool {
-        let new_logical = Self::compute_logical_size(self.surface_size, self.ui_scale);
-        if new_logical == self.logical_size {
-            return false;
-        }
-        self.logical_size = new_logical;
-        self.ui_target = UiRenderTarget::new(
-            new_logical,
-            self.surface_format,
-            self.ui_presenter.bind_group_layout(),
-            self.ui_presenter.sampler(),
-        );
-        self.quad_renderer.resize(new_logical);
-        true
     }
 
     /// Create a tiled geometry render item.
@@ -344,61 +238,16 @@ impl WindowRenderer {
         height
     }
 
-    /// Returns the current logical UI size — locked to 480 in height, stretched
-    /// horizontally to match the surface aspect.
+    /// Returns the current physical surface size in pixels.
     pub fn surface_size(&self) -> UVec2 {
-        self.logical_size
-    }
-
-    /// Returns the physical swapchain surface size in pixels.
-    pub fn physical_surface_size(&self) -> UVec2 {
         self.surface_size
     }
 
-    /// Returns the largest integer UI scale that fits the current surface. In
-    /// [`UiScale::Native`] this is always 1 (no scaling). In Logical it's
-    /// constrained by both axes so the presentation rect never exceeds the
-    /// surface bounds.
-    pub fn integer_scale(&self) -> u32 {
-        match self.ui_scale {
-            UiScale::Native => 1,
-            UiScale::Logical => Self::compute_logical_scale(self.surface_size),
-        }
-    }
-
-    /// Returns the centered physical rect used to present the logical UI. In
-    /// Native mode this is the full surface; in Logical mode it's a centered
-    /// integer-scaled rect with letterboxing on whichever axis has slack.
-    pub fn presentation_rect(&self) -> Rect {
-        let scale = self.integer_scale();
-        let size = (self.logical_size * scale).as_ivec2();
-        if size.x > self.surface_size.x as i32 || size.y > self.surface_size.y as i32 {
-            return Rect::default();
-        }
-        let position = (self.surface_size.as_ivec2() - size) / 2;
-
-        Rect::new(position, size)
-    }
-
-    /// Converts a physical surface position to logical UI coordinates.
-    pub fn surface_to_logical_position(&self, position: IVec2) -> Option<IVec2> {
-        let scale = self.integer_scale() as i32;
-        if scale == 0 {
-            return None;
-        }
-
-        let presentation_rect = self.presentation_rect();
-        presentation_rect
-            .contains(position)
-            .then_some((position - presentation_rect.position) / scale)
-    }
-
-    /// Queues a resize for the window. If the derived logical size changes,
-    /// rebuilds the offscreen UI target and reconfigures the quad renderer's
-    /// viewport so widgets keep mapping 1:1 into the target.
+    /// Updates the stored surface size and reconfigures the quad renderer's
+    /// viewport so widgets keep mapping 1:1 into the surface.
     pub fn resize(&mut self, size: UVec2) {
         self.surface_size = size;
-        self.refresh_logical_size();
+        self.quad_renderer.resize(size);
     }
 
     /// Resolves window render items into quads and submits them for drawing.
@@ -408,9 +257,6 @@ impl WindowRenderer {
         render_target: &RenderTarget,
         items: &WindowRenderItems,
     ) {
-        self.ui_target.clear(render_context);
-        let ui_render_target = self.ui_target.render_target();
-
         let mut quads = Vec::new();
 
         let mut clip_stack: Vec<Rect> = Vec::default();
@@ -572,14 +418,7 @@ impl WindowRenderer {
         }
 
         self.quad_renderer
-            .submit(render_context, &ui_render_target, quads.as_slice());
-
-        self.ui_presenter.present(
-            render_context,
-            render_target,
-            self.ui_target.bind_group(),
-            self.presentation_rect(),
-        );
+            .submit(render_context, render_target, quads.as_slice());
     }
 }
 
@@ -621,240 +460,6 @@ enum WindowRenderItem {
         font: Font,
         color: Vec4,
     },
-}
-
-struct UiRenderTarget {
-    _texture: wgpu::Texture,
-    view: wgpu::TextureView,
-    bind_group: wgpu::BindGroup,
-    size: UVec2,
-}
-
-impl UiRenderTarget {
-    /// Creates a transparent offscreen target for logical UI rendering.
-    fn new(
-        size: UVec2,
-        format: wgpu::TextureFormat,
-        bind_group_layout: &wgpu::BindGroupLayout,
-        sampler: &wgpu::Sampler,
-    ) -> Self {
-        let texture = globals::gpu()
-            .device
-            .create_texture(&wgpu::TextureDescriptor {
-                label: Some("ui_logical_render_target"),
-                size: wgpu::Extent3d {
-                    width: size.x.max(1),
-                    height: size.y.max(1),
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            });
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let bind_group = globals::gpu()
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("ui_logical_present_bind_group"),
-                layout: bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(sampler),
-                    },
-                ],
-            });
-
-        Self {
-            _texture: texture,
-            view,
-            bind_group,
-            size,
-        }
-    }
-
-    /// Clears the logical UI target to transparent black.
-    fn clear(&self, render_context: &mut RenderContext) {
-        render_context
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("ui_logical_target_clear"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                ..Default::default()
-            });
-    }
-
-    /// Returns a render target view for drawing logical UI quads.
-    fn render_target(&self) -> RenderTarget {
-        RenderTarget {
-            view: self.view.clone(),
-            size: self.size,
-        }
-    }
-
-    /// Returns the bind group used by the UI presenter.
-    fn bind_group(&self) -> &wgpu::BindGroup {
-        &self.bind_group
-    }
-}
-
-struct UiPresenter {
-    pipeline: wgpu::RenderPipeline,
-    bind_group_layout: wgpu::BindGroupLayout,
-    sampler: wgpu::Sampler,
-}
-
-impl UiPresenter {
-    /// Creates the pipeline used to present logical UI to the surface.
-    fn new(target_format: wgpu::TextureFormat) -> Self {
-        let device = &globals::gpu().device;
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("ui_presenter_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("ui_presenter_sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("ui_presenter_shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "present.wgsl"
-            ))),
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("ui_presenter_pipeline_layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("ui_presenter_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vertex"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[],
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fragment"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: target_format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            multiview: None,
-            cache: None,
-        });
-
-        Self {
-            pipeline,
-            bind_group_layout,
-            sampler,
-        }
-    }
-
-    /// Returns the bind group layout used by UI source textures.
-    fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.bind_group_layout
-    }
-
-    /// Returns the nearest-neighbor sampler used by the presenter.
-    fn sampler(&self) -> &wgpu::Sampler {
-        &self.sampler
-    }
-
-    /// Presents the logical UI texture to a physical surface rect.
-    fn present(
-        &self,
-        render_context: &mut RenderContext,
-        render_target: &RenderTarget,
-        bind_group: &wgpu::BindGroup,
-        rect: Rect,
-    ) {
-        if rect.size.x <= 0 || rect.size.y <= 0 {
-            return;
-        }
-
-        let mut render_pass =
-            render_context
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("ui_presenter_pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &render_target.view,
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    ..Default::default()
-                });
-
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, bind_group, &[]);
-        render_pass.set_viewport(
-            rect.position.x as f32,
-            rect.position.y as f32,
-            rect.size.x as f32,
-            rect.size.y as f32,
-            0.0,
-            1.0,
-        );
-        render_pass.set_scissor_rect(
-            rect.position.x as u32,
-            rect.position.y as u32,
-            rect.size.x as u32,
-            rect.size.y as u32,
-        );
-        render_pass.draw(0..3, 0..1);
-    }
 }
 
 pub struct TiledGeometry {

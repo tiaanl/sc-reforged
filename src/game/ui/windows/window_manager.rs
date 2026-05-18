@@ -17,7 +17,7 @@ use crate::{
         config::{load_config, windows::WindowBase},
         ui::{
             EventResult,
-            render::window_renderer::{UiScale, WindowRenderItems, WindowRenderer},
+            render::window_renderer::{WindowRenderItems, WindowRenderer},
             windows::{window::Window, window_manager_context::WindowManagerContext},
         },
     },
@@ -37,8 +37,8 @@ pub struct WindowManager {
     /// The index of the current modal window in `windows`, if any.
     modal_window: Option<usize>,
 
-    /// The current position of the mouse in logical UI coordinates. None if
-    /// the mouse is outside the centered UI presentation rect.
+    /// The current position of the mouse in surface coordinates. None if the
+    /// mouse has left the surface.
     mouse_position: Option<IVec2>,
 
     /// Track the down state of the used mouse buttons.
@@ -133,14 +133,6 @@ impl WindowManager {
         self.notify_layout_changed(window_renderer);
     }
 
-    /// Switches the renderer's UI scale (logical vs native) and re-lays out
-    /// every window if the logical size changed as a result.
-    pub fn set_ui_scale(&mut self, ui_scale: UiScale, window_renderer: &mut WindowRenderer) {
-        if window_renderer.set_ui_scale(ui_scale).is_some() {
-            self.notify_layout_changed(window_renderer);
-        }
-    }
-
     fn notify_layout_changed(&mut self, window_renderer: &WindowRenderer) {
         let logical_size = window_renderer.surface_size().as_ivec2();
         for window in self.windows.iter_mut() {
@@ -148,11 +140,10 @@ impl WindowManager {
         }
     }
 
-    pub fn input(&mut self, event: &InputEvent, window_renderer: &WindowRenderer) -> bool {
+    pub fn input(&mut self, event: &InputEvent) -> bool {
         match *event {
             InputEvent::MouseMove(position) => {
-                self.mouse_position =
-                    window_renderer.surface_to_logical_position(position.as_ivec2());
+                self.mouse_position = Some(position.as_ivec2());
 
                 self.modal_window.is_some()
                     || self
