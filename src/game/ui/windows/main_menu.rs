@@ -7,25 +7,22 @@ use crate::{
         ui::{
             Rect,
             render::window_renderer::{WindowRenderItems, WindowRenderer},
-            widgets::{text_button::TextButtonWidget, widget::Widgets},
-            windows::{actions::WindowManagerAction, window_manager::WindowManager},
+            widgets::text_button::TextButtonWidget,
+            windows::{
+                actions::WindowManagerAction,
+                window::{Window, WindowCommon},
+                window_manager::WindowManager,
+            },
         },
     },
 };
 
-use super::{
-    window::{Window, WindowRenderContext},
-    window_manager_context::WindowManagerContext,
-};
+use super::window::{WindowImpl, WindowRenderContext};
 
-pub struct MainMenuWindow {
-    rect: Rect,
-
-    widgets: Widgets,
-}
+pub struct MainMenuWindow;
 
 impl MainMenuWindow {
-    pub fn new(window_manager: &WindowManager) -> Result<Self, AssetError> {
+    pub fn new(window_manager: &WindowManager) -> Result<Window, AssetError> {
         let window_base = window_manager.get_window_base("main_menu")?;
 
         let layout = window_base.layout(&WindowCtx::from_logical_size(
@@ -34,9 +31,9 @@ impl MainMenuWindow {
         let size = IVec2::new(layout.render_dx, layout.render_dy);
         let size = size.max(IVec2::new(400, 300));
 
-        let mut widgets = Widgets::default();
+        let mut common = WindowCommon::new(Rect::from_size(size));
 
-        widgets.add(Box::new(
+        common.widgets.add(Box::new(
             TextButtonWidget::new(
                 Rect::new(IVec2::new(10, 10), IVec2::new(100, 30)),
                 "Training",
@@ -44,54 +41,23 @@ impl MainMenuWindow {
             .with_action(WindowManagerAction::StartCampaign(String::from("training"))),
         ));
 
-        Ok(Self {
-            rect: Rect::from_size(size),
-            widgets,
-        })
+        Ok(Window::new(common, Box::new(MainMenuWindow)))
     }
 }
 
-impl Window for MainMenuWindow {
-    fn is_visible(&self) -> bool {
-        true
-    }
-
-    fn wants_input(&self) -> bool {
-        true
-    }
-
-    fn hit_test(&self, position: IVec2) -> bool {
-        self.rect.contains(position)
-    }
-
-    fn rect(&self) -> Rect {
-        self.rect
-    }
-
-    fn on_primary_mouse_down(
+impl WindowImpl for MainMenuWindow {
+    fn render(
         &mut self,
-        position: IVec2,
-        context: &mut WindowManagerContext,
-    ) -> crate::game::ui::EventResult {
-        println!("primary_mouse_down");
-        self.widgets.on_primary_mouse_down(position, context)
-    }
-
-    fn on_primary_mouse_up(
-        &mut self,
-        position: IVec2,
-        context: &mut WindowManagerContext,
-    ) -> crate::game::ui::EventResult {
-        println!("primary_mouse_up");
-        self.widgets.on_primary_mouse_up(position, context)
-    }
-
-    fn render(&mut self, ctx: &mut WindowRenderContext<'_>, render_items: &mut WindowRenderItems) {
-        self.widgets
-            .render(self.rect.position, 100, ctx.window_renderer, render_items);
+        common: &mut WindowCommon,
+        context: &mut WindowRenderContext<'_>,
+        render_items: &mut WindowRenderItems,
+    ) {
+        common
+            .widgets
+            .render(common.rect.position, 100, context, render_items);
 
         render_items.render_border(
-            self.rect.offset(IVec2::splat(10)),
+            common.rect.offset(IVec2::splat(10)),
             2,
             Vec4::new(1.0, 0.0, 0.0, 1.0),
         );

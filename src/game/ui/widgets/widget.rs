@@ -2,8 +2,8 @@ use glam::IVec2;
 
 use crate::game::ui::{
     EventResult, Rect,
-    render::window_renderer::{WindowRenderItems, WindowRenderer},
-    windows::window_manager_context::WindowManagerContext,
+    render::window_renderer::WindowRenderItems,
+    windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
 };
 
 pub trait Widget {
@@ -32,7 +32,7 @@ pub trait Widget {
         &mut self,
         origin: IVec2,
         delta_time_ms: i32,
-        window_renderer: &WindowRenderer,
+        window_render_context: &mut WindowRenderContext<'_>,
         window_render_items: &mut WindowRenderItems,
     );
 }
@@ -155,11 +155,11 @@ impl Widgets {
         &mut self,
         origin: IVec2,
         delta_time_ms: i32,
-        window_renderer: &WindowRenderer,
+        context: &mut WindowRenderContext<'_>,
         window_render_items: &mut WindowRenderItems,
     ) {
         for widget in self.widgets.iter_mut().rev() {
-            widget.render(origin, delta_time_ms, window_renderer, window_render_items);
+            widget.render(origin, delta_time_ms, context, window_render_items);
         }
     }
 }

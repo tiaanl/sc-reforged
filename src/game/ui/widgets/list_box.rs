@@ -4,7 +4,7 @@ use crate::game::ui::{
     EventResult, Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
     u32_to_color,
-    windows::window_manager_context::WindowManagerContext,
+    windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
 };
 
 use super::widget::Widget;
@@ -245,7 +245,7 @@ impl Widget for ListBoxWidget {
         &mut self,
         origin: IVec2,
         delta_time_ms: i32,
-        window_renderer: &WindowRenderer,
+        context: &mut WindowRenderContext<'_>,
         window_render_items: &mut WindowRenderItems,
     ) {
         let rect = self.rect.offset(origin);
@@ -295,7 +295,7 @@ impl Widget for ListBoxWidget {
         self.content_size = 0;
 
         for item in self.items.iter() {
-            let item_size = item.desired_size(window_renderer);
+            let item_size = item.desired_size(context.window_renderer);
 
             let stop_now;
             let item_is_visible;

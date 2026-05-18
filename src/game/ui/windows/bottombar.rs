@@ -14,7 +14,7 @@ use crate::{
             Rect,
             render::window_renderer::{WindowRenderItems, WindowRenderer},
             windows::{
-                window::{Window, WindowRenderContext},
+                window::{Window, WindowCommon, WindowImpl, WindowRenderContext},
                 window_manager::WindowManager,
             },
         },
@@ -27,14 +27,13 @@ use crate::{
 /// variant is not implemented yet; switching variants requires runtime
 /// `%screen_dx`/`%screen_dy` resolution.
 pub struct BottomBarWindow {
-    rect: Rect,
     window_base: Arc<WindowBase>,
     layout: WindowBaseLayout,
     geometry_textures: Vec<Option<Handle<Texture>>>,
 }
 
 impl BottomBarWindow {
-    pub fn new(window_manager: &WindowManager) -> Result<Self, AssetError> {
+    pub fn new(window_manager: &WindowManager) -> Result<Window, AssetError> {
         // Matches the original engine's selection rule: the 640x480 base is
         // only used on an exact 640x480 surface, otherwise the 800x600 base is
         // the default. Both share WINDOW_BASE_DY 194 and use %screen_dx to fill
@@ -52,14 +51,16 @@ impl BottomBarWindow {
             })
             .collect();
 
-        let rect = compute_rect(&layout, logical);
+        let common = WindowCommon::new(compute_rect(&layout, logical));
 
-        Ok(Self {
-            rect,
-            window_base,
-            layout,
-            geometry_textures,
-        })
+        Ok(Window::new(
+            common,
+            Box::new(Self {
+                window_base,
+                layout,
+                geometry_textures,
+            }),
+        ))
     }
 }
 
@@ -72,32 +73,20 @@ fn compute_rect(layout: &WindowBaseLayout, logical: IVec2) -> Rect {
     )
 }
 
-impl Window for BottomBarWindow {
-    fn is_visible(&self) -> bool {
-        true
-    }
-
-    fn wants_input(&self) -> bool {
-        // No widgets wired up yet; let clicks fall through to the world layer.
-        false
-    }
-
-    fn hit_test(&self, position: IVec2) -> bool {
-        self.rect.contains(position)
-    }
-
-    fn rect(&self) -> Rect {
-        self.rect
-    }
-
-    fn on_resize(&mut self, logical_size: IVec2) {
+impl WindowImpl for BottomBarWindow {
+    fn on_resize(&mut self, common: &mut WindowCommon, logical_size: IVec2) {
         self.layout = self
             .window_base
             .layout(&WindowCtx::from_logical_size(logical_size));
-        self.rect = compute_rect(&self.layout, logical_size);
+        common.rect = compute_rect(&self.layout, logical_size);
     }
 
-    fn render(&mut self, _ctx: &mut WindowRenderContext<'_>, render_items: &mut WindowRenderItems) {
+    fn render(
+        &mut self,
+        common: &mut WindowCommon,
+        _context: &mut WindowRenderContext<'_>,
+        render_items: &mut WindowRenderItems,
+    ) {
         for (geometry, texture) in self
             .layout
             .geometries
@@ -117,7 +106,7 @@ impl Window for BottomBarWindow {
 
             // Translate the geometry from window-base local coordinates into
             // global UI coordinates by offsetting with the window position.
-            let global_rect = rect.offset(self.rect.position);
+            let global_rect = rect.offset(common.rect.position);
 
             render_items.render_textured_rect(global_rect, texture, uv_min, uv_max, color);
         }

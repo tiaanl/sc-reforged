@@ -4,7 +4,10 @@ use crate::game::ui::{
     EventResult, Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
     widgets::widget::Widget,
-    windows::{actions::WindowManagerAction, window_manager_context::WindowManagerContext},
+    windows::{
+        actions::WindowManagerAction, window::WindowRenderContext,
+        window_manager_context::WindowManagerContext,
+    },
 };
 
 pub struct TextButtonWidget {
@@ -113,7 +116,7 @@ impl Widget for TextButtonWidget {
         &mut self,
         origin: IVec2,
         _delta_time_ms: i32,
-        window_renderer: &WindowRenderer,
+        context: &mut WindowRenderContext<'_>,
         window_render_items: &mut WindowRenderItems,
     ) {
         let color = if let Some(custom_color) = self.custom_color {
@@ -126,9 +129,12 @@ impl Widget for TextButtonWidget {
         // TODO: Match the original button render states more closely. The
         // current button only nudges the text when pressed instead of using
         // the original style flags and pressed-state visuals.
-        let text_offset =
-            Self::calculate_text_offset(&self.text, self.rect.size, self.font, window_renderer)
-                + IVec2::splat(self.is_pressed as i32);
+        let text_offset = Self::calculate_text_offset(
+            &self.text,
+            self.rect.size,
+            self.font,
+            context.window_renderer,
+        ) + IVec2::splat(self.is_pressed as i32);
 
         window_render_items.render_text(
             origin + self.rect.position + text_offset,

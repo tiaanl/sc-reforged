@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use glam::UVec2;
 
+use super::ui::windows::actions::WindowManagerAction;
 use crate::{
     engine::{
         assets::AssetError,
@@ -21,8 +22,6 @@ use crate::{
     },
 };
 
-use super::ui::windows::actions::WindowManagerAction;
-
 /// The main state of the game.
 pub struct GameState {
     campaign_defs: CampaignDefs,
@@ -39,7 +38,7 @@ impl GameState {
 
         let window_renderer = WindowRenderer::new(surface_desc);
 
-        let main_menu_window = Box::new(MainMenuWindow::new(&globals::window_manager())?);
+        let main_menu_window = MainMenuWindow::new(&globals::window_manager())?;
         globals::window_manager().push(main_menu_window);
 
         Ok(Self {
@@ -134,7 +133,7 @@ impl GameState {
     /// Window_Inventory_Bar, and Window_Command_Pad — only the first is wired
     /// up here so far.
     fn spawn_game_ui(&mut self) -> Result<(), AssetError> {
-        let bottom_bar_window = Box::new(BottomBarWindow::new(&globals::window_manager())?);
+        let bottom_bar_window = BottomBarWindow::new(&globals::window_manager())?;
         globals::window_manager().push(bottom_bar_window);
         Ok(())
     }

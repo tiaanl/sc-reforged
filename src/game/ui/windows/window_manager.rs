@@ -18,12 +18,12 @@ use crate::{
         ui::{
             EventResult,
             render::window_renderer::{UiScale, WindowRenderItems, WindowRenderer},
-            windows::window_manager_context::WindowManagerContext,
+            windows::{window::Window, window_manager_context::WindowManagerContext},
         },
     },
 };
 
-use super::window::{Window, WindowRenderContext};
+use super::window::WindowRenderContext;
 
 pub struct WindowManager {
     window_bases: Mutex<HashMap<String, Arc<WindowBase>>>,
@@ -33,7 +33,7 @@ pub struct WindowManager {
     pub window_manager_context: WindowManagerContext,
 
     /// The stack of windows. In bottom-to-top z-index order.
-    windows: Vec<Box<dyn Window>>,
+    windows: Vec<Window>,
     /// The index of the current modal window in `windows`, if any.
     modal_window: Option<usize>,
 
@@ -92,7 +92,7 @@ impl WindowManager {
     }
 
     /// Push a new window to the top of the stack.
-    pub fn push(&mut self, window: Box<dyn Window>) {
+    pub fn push(&mut self, window: Window) {
         let is_modal = window.is_modal();
         let is_always_on_top = window.is_always_on_top();
 
@@ -187,7 +187,7 @@ impl WindowManager {
             && let Some(window) = self.windows.get_mut(modal_index)
         {
             let _ = Self::try_mouse_down_on_window(
-                window.as_mut(),
+                window,
                 mouse,
                 button,
                 &mut self.window_manager_context,
@@ -198,7 +198,7 @@ impl WindowManager {
         let windows = &mut self.windows;
         for window in windows.iter_mut().rev() {
             if Self::try_mouse_down_on_window(
-                window.as_mut(),
+                window,
                 mouse,
                 button,
                 &mut self.window_manager_context,
@@ -245,12 +245,12 @@ impl WindowManager {
     }
 
     fn try_mouse_down_on_window(
-        window: &mut dyn Window,
+        window: &mut Window,
         mouse: IVec2,
         button: MouseButton,
         context: &mut WindowManagerContext,
     ) -> Option<EventResult> {
-        if !window.is_visible() || !window.wants_input() || !window.hit_test(mouse) {
+        if !window.is_visible() || !window.is_enabled() || !window.hit_test(mouse) {
             return None;
         }
 
@@ -284,7 +284,7 @@ impl WindowManager {
             return self.modal_window.is_some();
         };
 
-        let window = self.windows[window_index].as_mut();
+        let window = &mut self.windows[window_index];
         let local = mouse - window.rect().position;
 
         let context = &mut self.window_manager_context;
@@ -316,7 +316,7 @@ impl WindowManager {
             return self.modal_window.is_some();
         };
 
-        let window = self.windows[window_index].as_mut();
+        let window = &mut self.windows[window_index];
         let local = mouse - window.rect().position;
 
         let context = &mut self.window_manager_context;
@@ -327,10 +327,10 @@ impl WindowManager {
         true
     }
 
-    fn topmost_input_window_index(&self, mouse: IVec2) -> Option<usize> {
+    fn topmost_input_window_index(&self, position: IVec2) -> Option<usize> {
         if let Some(index) = self.modal_window {
             let window = &self.windows[index];
-            return (window.is_visible() && window.wants_input() && window.hit_test(mouse))
+            return (window.is_visible() && window.is_enabled() && window.hit_test(position))
                 .then_some(index);
         }
 
@@ -339,15 +339,15 @@ impl WindowManager {
             .enumerate()
             .rev()
             .find_map(|(index, window)| {
-                (window.is_visible() && window.wants_input() && window.hit_test(mouse))
+                (window.is_visible() && window.is_enabled() && window.hit_test(position))
                     .then_some(index)
             })
     }
 
-    pub fn update(&mut self, delta_time: f32) {
-        for window in self.windows.iter_mut() {
-            window.update(delta_time);
-        }
+    pub fn update(&mut self, _delta_time: f32) {
+        // for window in self.windows.iter_mut() {
+        //     window.update(delta_time);
+        // }
     }
 
     pub fn render(
