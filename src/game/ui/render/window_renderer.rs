@@ -156,7 +156,9 @@ impl WindowRenderItems {
 /// - `Fixed`: 480-tall logical box, width stretches with surface aspect (min
 ///   640). Used in menus so the original 640×480/800×600 window bases stay
 ///   playable at any aspect ratio. The GPU upscales the quads to the physical
-///   framebuffer via NDC mapping.
+///   framebuffer via NDC mapping. When the surface aspect is narrower than
+///   4:3, the UI keeps uniform vertical-driven scaling and the right edge
+///   clips into the surface rather than horizontally squishing.
 /// - `Native`: 1:1 with the *logical* window size (= physical / scale_factor).
 ///   Used in-mission so widgets land at real screen pixels at the user's
 ///   chosen resolution.
@@ -166,24 +168,45 @@ pub enum UiMode {
     Native,
 }
 
-/// Resolves the UI logical size from the physical surface, scale factor and
-/// active UI mode.
+/// Resolves the UI logical layout size — i.e. the coordinate space windows
+/// lay themselves out in. Clamped to a 640×480 minimum in `Fixed` mode so
+/// widgets always have at least the original game's design real estate.
 fn compute_ui_size(surface_size: UVec2, scale_factor: f32, ui_mode: UiMode) -> UVec2 {
     match ui_mode {
-        UiMode::Fixed => {
-            let height = WindowRenderer::FIXED_DY;
-            let aspect_w =
-                (height as f32 * surface_size.x as f32 / surface_size.y.max(1) as f32) as u32;
-            let width = aspect_w.max(WindowRenderer::FIXED_MIN_DX);
-            UVec2::new(width, height)
-        }
-        UiMode::Native => {
-            let sf = scale_factor.max(f32::MIN_POSITIVE);
-            (surface_size.as_vec2() / sf)
-                .as_uvec2()
-                .max(UVec2::splat(1))
-        }
+        UiMode::Fixed => aspect_matched(surface_size).max(UVec2::new(
+            WindowRenderer::FIXED_MIN_DX,
+            WindowRenderer::FIXED_DY,
+        )),
+        UiMode::Native => logical_surface_size(surface_size, scale_factor),
     }
+}
+
+/// Resolves the QuadRenderer's NDC viewport — the size that maps to the full
+/// framebuffer. Matches the surface aspect exactly in `Fixed` mode (no
+/// minimum clamp) so the GPU stretch from UI coords to physical pixels is
+/// always uniform. When `ui_size` is wider than this viewport (narrow
+/// surfaces), the extra UI extent renders past the framebuffer edges and
+/// gets clipped naturally.
+fn compute_quad_viewport(surface_size: UVec2, scale_factor: f32, ui_mode: UiMode) -> UVec2 {
+    match ui_mode {
+        UiMode::Fixed => aspect_matched(surface_size),
+        UiMode::Native => logical_surface_size(surface_size, scale_factor),
+    }
+}
+
+/// 480-tall box whose width matches the surface aspect exactly. No floor.
+fn aspect_matched(surface_size: UVec2) -> UVec2 {
+    let height = WindowRenderer::FIXED_DY;
+    let width = (height as f32 * surface_size.x as f32 / surface_size.y.max(1) as f32) as u32;
+    UVec2::new(width.max(1), height)
+}
+
+/// Logical (DPI-independent) surface size in CSS-style pixels.
+fn logical_surface_size(surface_size: UVec2, scale_factor: f32) -> UVec2 {
+    let sf = scale_factor.max(f32::MIN_POSITIVE);
+    (surface_size.as_vec2() / sf)
+        .as_uvec2()
+        .max(UVec2::splat(1))
 }
 
 /// Renders all the components required for windows.
@@ -195,10 +218,16 @@ pub struct WindowRenderer {
     /// Logical-to-physical pixel ratio (1.0 on most displays, 2.0 on Retina).
     scale_factor: f32,
     ui_mode: UiMode,
-    /// UI coordinate-space size, derived from the three fields above. This is
-    /// the viewport the QuadRenderer uses; quads in these coords get stretched
-    /// by the GPU to fill the physical framebuffer.
+    /// UI coordinate-space size — what windows use for layout. In `Fixed`
+    /// mode this is the aspect-matched size clamped to a 640×480 minimum,
+    /// guaranteeing widgets always have at least the original game's design
+    /// real estate.
     ui_size: UVec2,
+    /// QuadRenderer's NDC viewport. Matches the surface aspect exactly (no
+    /// minimum clamp), so the GPU stretch is always uniform. When `ui_size`
+    /// is wider than `quad_viewport` (narrow surfaces), UI extent past
+    /// `quad_viewport` extends beyond the framebuffer and gets clipped.
+    quad_viewport: UVec2,
 }
 
 impl WindowRenderer {
@@ -213,32 +242,32 @@ impl WindowRenderer {
     pub fn new(surface_desc: &SurfaceDesc) -> Self {
         let ui_mode = UiMode::Fixed;
         let ui_size = compute_ui_size(surface_desc.size, surface_desc.scale_factor, ui_mode);
+        let quad_viewport =
+            compute_quad_viewport(surface_desc.size, surface_desc.scale_factor, ui_mode);
 
-        // QuadRenderer's viewport is the UI size, not the physical surface —
-        // the GPU stretches via NDC into whatever physical framebuffer the
-        // caller hands `submit_render_items`.
-        let ui_surface = SurfaceDesc {
-            size: ui_size,
+        let viewport_surface = SurfaceDesc {
+            size: quad_viewport,
             format: surface_desc.format,
             scale_factor: surface_desc.scale_factor,
         };
 
         Self {
-            quad_renderer: QuadRenderer::new(&ui_surface),
+            quad_renderer: QuadRenderer::new(&viewport_surface),
             tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
             scale_factor: surface_desc.scale_factor,
             ui_mode,
             ui_size,
+            quad_viewport,
         }
     }
 
-    /// Updates the physical surface size + scale factor, then recomputes the
-    /// UI size and reconfigures the quad renderer's viewport.
+    /// Updates the physical surface size + scale factor, then recomputes
+    /// `ui_size` and reconfigures the quad-renderer viewport.
     pub fn resize(&mut self, surface_size: UVec2, scale_factor: f32) {
         self.surface_size = surface_size;
         self.scale_factor = scale_factor;
-        self.refresh_ui_size();
+        self.refresh_layout();
     }
 
     /// Switches the UI mode. Returns the new UI size if it changed (so the
@@ -248,19 +277,28 @@ impl WindowRenderer {
             return None;
         }
         self.ui_mode = ui_mode;
-        self.refresh_ui_size().then_some(self.ui_size)
+        let ui_changed = self.refresh_layout();
+        ui_changed.then_some(self.ui_size)
     }
 
-    /// Recomputes `ui_size` from the current surface size + scale + mode and
-    /// reconfigures the quad renderer's viewport if it changed. Returns
-    /// whether the size actually moved.
-    fn refresh_ui_size(&mut self) -> bool {
+    /// Recomputes `ui_size` and `quad_viewport` from the current surface +
+    /// scale + mode, pushing any viewport change to the quad renderer.
+    /// Returns whether `ui_size` actually moved (i.e. whether layouts need
+    /// to re-resolve).
+    fn refresh_layout(&mut self) -> bool {
         let new_ui_size = compute_ui_size(self.surface_size, self.scale_factor, self.ui_mode);
+        let new_viewport =
+            compute_quad_viewport(self.surface_size, self.scale_factor, self.ui_mode);
+
+        if new_viewport != self.quad_viewport {
+            self.quad_viewport = new_viewport;
+            self.quad_renderer.resize(new_viewport);
+        }
+
         if new_ui_size == self.ui_size {
             return false;
         }
         self.ui_size = new_ui_size;
-        self.quad_renderer.resize(new_ui_size);
         true
     }
 
@@ -288,16 +326,19 @@ impl WindowRenderer {
     }
 
     /// Maps a physical-pixel position (as delivered by winit) into UI
-    /// coordinates.
+    /// coordinates. The mapping uses the quad-renderer viewport rather than
+    /// `ui_size`, so the result lines up with what the user sees rendered —
+    /// in narrow surfaces (where `ui_size` extends past the viewport) the
+    /// reachable UI x-range stops at `quad_viewport.x`.
     pub fn physical_to_ui_position(&self, position: IVec2) -> IVec2 {
         let surface = self.surface_size.as_ivec2();
         if surface.x <= 0 || surface.y <= 0 {
             return position;
         }
-        let ui = self.ui_size.as_ivec2();
+        let viewport = self.quad_viewport.as_ivec2();
         IVec2::new(
-            (position.x as i64 * ui.x as i64 / surface.x as i64) as i32,
-            (position.y as i64 * ui.y as i64 / surface.y as i64) as i32,
+            (position.x as i64 * viewport.x as i64 / surface.x as i64) as i32,
+            (position.y as i64 * viewport.y as i64 / surface.y as i64) as i32,
         )
     }
 
