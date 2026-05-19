@@ -85,10 +85,7 @@ impl HelpWindow {
             common.widgets.add(button);
         }
 
-        Window::new(
-            common,
-            Box::new(Self { should_pause_game }),
-        )
+        Window::new(common, Box::new(Self { should_pause_game }))
     }
 }
 
@@ -111,14 +108,17 @@ impl WindowImpl for HelpWindow {
             // Render modal background.
             // Render_Solid_Rect(0,0,g_renderer->m_screen_width,g_renderer->m_screen_height,0x50000000);
             render_items.render_solid_rect(
-                Rect::from_size(context.window_renderer.surface_size().as_ivec2()),
+                Rect::from_size(context.window_renderer.ui_size().as_ivec2()),
                 u32_to_color(0x50000000),
             );
 
             // Render an inner dark rect.
             // Render_Solid_Rect(left + 16,top + 16,width + -32,height + -68,0x80000000);
             render_items.render_solid_rect(
-                common.rect.offset(IVec2::splat(16)).grow(-IVec2::new(32, 68)),
+                common
+                    .rect
+                    .offset(IVec2::splat(16))
+                    .grow(-IVec2::new(32, 68)),
                 u32_to_color(0x80000000),
             );
         }

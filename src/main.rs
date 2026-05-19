@@ -79,6 +79,7 @@ impl ApplicationHandler for App {
                 let surface_desc = SurfaceDesc {
                     size: surface.size(),
                     format: surface.format(),
+                    scale_factor: window.scale_factor() as f32,
                 };
 
                 #[cfg(feature = "egui")]
@@ -166,9 +167,16 @@ impl ApplicationHandler for App {
 
                         surface.resize(&globals::gpu().device, size);
                         surface_desc.size = surface.size();
+                        surface_desc.scale_factor = window.scale_factor() as f32;
 
-                        game_state.resize(size);
+                        game_state.resize(size, surface_desc.scale_factor);
 
+                        window.request_redraw();
+                    }
+
+                    WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                        surface_desc.scale_factor = scale_factor as f32;
+                        game_state.resize(surface_desc.size, surface_desc.scale_factor);
                         window.request_redraw();
                     }
 

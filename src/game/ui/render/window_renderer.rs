@@ -151,24 +151,157 @@ impl WindowRenderItems {
     }
 }
 
+/// How the logical UI coordinate space maps to the physical surface.
+///
+/// - `Fixed`: 480-tall logical box, width stretches with surface aspect (min
+///   640). Used in menus so the original 640×480/800×600 window bases stay
+///   playable at any aspect ratio. The GPU upscales the quads to the physical
+///   framebuffer via NDC mapping.
+/// - `Native`: 1:1 with the *logical* window size (= physical / scale_factor).
+///   Used in-mission so widgets land at real screen pixels at the user's
+///   chosen resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UiMode {
+    Fixed,
+    Native,
+}
+
+/// Resolves the UI logical size from the physical surface, scale factor and
+/// active UI mode.
+fn compute_ui_size(surface_size: UVec2, scale_factor: f32, ui_mode: UiMode) -> UVec2 {
+    match ui_mode {
+        UiMode::Fixed => {
+            let height = WindowRenderer::FIXED_DY;
+            let aspect_w =
+                (height as f32 * surface_size.x as f32 / surface_size.y.max(1) as f32) as u32;
+            let width = aspect_w.max(WindowRenderer::FIXED_MIN_DX);
+            UVec2::new(width, height)
+        }
+        UiMode::Native => {
+            let sf = scale_factor.max(f32::MIN_POSITIVE);
+            (surface_size.as_vec2() / sf)
+                .as_uvec2()
+                .max(UVec2::splat(1))
+        }
+    }
+}
+
 /// Renders all the components required for windows.
 pub struct WindowRenderer {
     quad_renderer: QuadRenderer,
     tiled_geometries: Storage<TiledGeometry>,
+    /// Physical framebuffer / swapchain size in pixels.
     surface_size: UVec2,
+    /// Logical-to-physical pixel ratio (1.0 on most displays, 2.0 on Retina).
+    scale_factor: f32,
+    ui_mode: UiMode,
+    /// UI coordinate-space size, derived from the three fields above. This is
+    /// the viewport the QuadRenderer uses; quads in these coords get stretched
+    /// by the GPU to fill the physical framebuffer.
+    ui_size: UVec2,
 }
 
 impl WindowRenderer {
-    /// Creates the window renderer. Windows render 1:1 to the physical surface.
+    /// `Fixed`-mode UI height. Widescreen surfaces stretch horizontally —
+    /// `%screen_dx` grows past 640 while `%screen_dy` stays 480.
+    const FIXED_DY: u32 = 480;
+    /// `Fixed`-mode minimum width. Narrower surfaces don't squeeze below 4:3.
+    const FIXED_MIN_DX: u32 = 640;
+
+    /// Creates the window renderer in [`UiMode::Fixed`]. `GameState` flips to
+    /// [`UiMode::Native`] when entering a mission.
     pub fn new(surface_desc: &SurfaceDesc) -> Self {
+        let ui_mode = UiMode::Fixed;
+        let ui_size = compute_ui_size(surface_desc.size, surface_desc.scale_factor, ui_mode);
+
+        // QuadRenderer's viewport is the UI size, not the physical surface —
+        // the GPU stretches via NDC into whatever physical framebuffer the
+        // caller hands `submit_render_items`.
+        let ui_surface = SurfaceDesc {
+            size: ui_size,
+            format: surface_desc.format,
+            scale_factor: surface_desc.scale_factor,
+        };
+
         Self {
-            quad_renderer: QuadRenderer::new(surface_desc),
+            quad_renderer: QuadRenderer::new(&ui_surface),
             tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
+            scale_factor: surface_desc.scale_factor,
+            ui_mode,
+            ui_size,
         }
     }
 
-    /// Create a tiled geometry render item.
+    /// Updates the physical surface size + scale factor, then recomputes the
+    /// UI size and reconfigures the quad renderer's viewport.
+    pub fn resize(&mut self, surface_size: UVec2, scale_factor: f32) {
+        self.surface_size = surface_size;
+        self.scale_factor = scale_factor;
+        self.refresh_ui_size();
+    }
+
+    /// Switches the UI mode. Returns the new UI size if it changed (so the
+    /// caller can re-layout windows); returns `None` otherwise.
+    pub fn set_ui_mode(&mut self, ui_mode: UiMode) -> Option<UVec2> {
+        if self.ui_mode == ui_mode {
+            return None;
+        }
+        self.ui_mode = ui_mode;
+        self.refresh_ui_size().then_some(self.ui_size)
+    }
+
+    /// Recomputes `ui_size` from the current surface size + scale + mode and
+    /// reconfigures the quad renderer's viewport if it changed. Returns
+    /// whether the size actually moved.
+    fn refresh_ui_size(&mut self) -> bool {
+        let new_ui_size = compute_ui_size(self.surface_size, self.scale_factor, self.ui_mode);
+        if new_ui_size == self.ui_size {
+            return false;
+        }
+        self.ui_size = new_ui_size;
+        self.quad_renderer.resize(new_ui_size);
+        true
+    }
+
+    /// Returns the current physical framebuffer size in pixels.
+    pub fn surface_size(&self) -> UVec2 {
+        self.surface_size
+    }
+
+    /// Returns the current UI logical size. This is the coordinate space
+    /// windows lay out in and what `%screen_dx`/`%screen_dy` resolve to.
+    /// Differs from the physical surface in [`UiMode::Fixed`] and on high-DPI
+    /// displays in [`UiMode::Native`].
+    pub fn ui_size(&self) -> UVec2 {
+        self.ui_size
+    }
+
+    /// Returns the current UI mode.
+    pub fn ui_mode(&self) -> UiMode {
+        self.ui_mode
+    }
+
+    /// Returns the current scale factor (logical-to-physical pixel ratio).
+    pub fn scale_factor(&self) -> f32 {
+        self.scale_factor
+    }
+
+    /// Maps a physical-pixel position (as delivered by winit) into UI
+    /// coordinates.
+    pub fn physical_to_ui_position(&self, position: IVec2) -> IVec2 {
+        let surface = self.surface_size.as_ivec2();
+        if surface.x <= 0 || surface.y <= 0 {
+            return position;
+        }
+        let ui = self.ui_size.as_ivec2();
+        IVec2::new(
+            (position.x as i64 * ui.x as i64 / surface.x as i64) as i32,
+            (position.y as i64 * ui.y as i64 / surface.y as i64) as i32,
+        )
+    }
+
+    /// Creates a tiled geometry render item.
     pub fn create_tiled_geometry(
         &mut self,
         image: Handle<Image>,
@@ -236,18 +369,6 @@ impl WindowRenderer {
         }
 
         height
-    }
-
-    /// Returns the current physical surface size in pixels.
-    pub fn surface_size(&self) -> UVec2 {
-        self.surface_size
-    }
-
-    /// Updates the stored surface size and reconfigures the quad renderer's
-    /// viewport so widgets keep mapping 1:1 into the surface.
-    pub fn resize(&mut self, size: UVec2) {
-        self.surface_size = size;
-        self.quad_renderer.resize(size);
     }
 
     /// Resolves window render items into quads and submits them for drawing.

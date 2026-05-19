@@ -15,7 +15,7 @@ use crate::{
         globals,
         sim::SimWorld,
         ui::{
-            render::window_renderer::WindowRenderer,
+            render::window_renderer::{UiMode, WindowRenderer},
             windows::{bottombar::BottomBarWindow, main_menu::MainMenuWindow},
         },
         world_layer::WorldLayer,
@@ -38,8 +38,7 @@ impl GameState {
 
         let window_renderer = WindowRenderer::new(surface_desc);
 
-        let main_menu_window =
-            MainMenuWindow::new(&globals::window_manager(), surface_desc.size.as_ivec2())?;
+        let main_menu_window = MainMenuWindow::new(window_renderer.ui_size().as_ivec2())?;
         globals::window_manager().push(main_menu_window);
 
         Ok(Self {
@@ -51,16 +50,16 @@ impl GameState {
         })
     }
 
-    pub fn resize(&mut self, size: UVec2) {
+    pub fn resize(&mut self, size: UVec2, scale_factor: f32) {
         self.surface_size = size;
         if let Some(world_layer) = &mut self.world_layer {
             world_layer.resize(size);
         }
-        globals::window_manager().resize(size, &mut self.window_renderer);
+        globals::window_manager().resize(size, scale_factor, &mut self.window_renderer);
     }
 
     pub fn input(&mut self, event: &InputEvent) {
-        let ui_consumed = globals::window_manager().input(event);
+        let ui_consumed = globals::window_manager().input(event, &self.window_renderer);
 
         // TODO: This shouldn't reach into window manager's internals.
         let mut actions =
@@ -122,6 +121,7 @@ impl GameState {
         let sim = SimWorld::new(campaign_def)?;
 
         globals::window_manager().clear();
+        globals::window_manager().set_ui_mode(UiMode::Native, &mut self.window_renderer);
         self.world_layer = Some(WorldLayer::new(self.surface_size, self.surface_format, sim));
         self.spawn_game_ui()?;
 
@@ -134,8 +134,7 @@ impl GameState {
     /// Window_Inventory_Bar, and Window_Command_Pad — only the first is wired
     /// up here so far.
     fn spawn_game_ui(&mut self) -> Result<(), AssetError> {
-        let bottom_bar_window =
-            BottomBarWindow::new(&globals::window_manager(), self.surface_size.as_ivec2())?;
+        let bottom_bar_window = BottomBarWindow::new(self.window_renderer.ui_size().as_ivec2())?;
         globals::window_manager().push(bottom_bar_window);
         Ok(())
     }

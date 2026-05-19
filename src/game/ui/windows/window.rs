@@ -222,7 +222,10 @@ impl Window {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        let result = self.common.widgets.on_secondary_mouse_down(position, context);
+        let result = self
+            .common
+            .widgets
+            .on_secondary_mouse_down(position, context);
         if matches!(result, EventResult::Handled) {
             return result;
         }

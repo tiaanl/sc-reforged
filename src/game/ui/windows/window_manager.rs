@@ -17,7 +17,7 @@ use crate::{
         config::{load_config, windows::WindowBase},
         ui::{
             EventResult,
-            render::window_renderer::{WindowRenderItems, WindowRenderer},
+            render::window_renderer::{UiMode, WindowRenderItems, WindowRenderer},
             windows::{window::Window, window_manager_context::WindowManagerContext},
         },
     },
@@ -128,22 +128,36 @@ impl WindowManager {
         }
     }
 
-    pub fn resize(&mut self, size: glam::UVec2, window_renderer: &mut WindowRenderer) {
-        window_renderer.resize(size);
+    pub fn resize(
+        &mut self,
+        size: glam::UVec2,
+        scale_factor: f32,
+        window_renderer: &mut WindowRenderer,
+    ) {
+        window_renderer.resize(size, scale_factor);
         self.notify_layout_changed(window_renderer);
     }
 
-    fn notify_layout_changed(&mut self, window_renderer: &WindowRenderer) {
-        let logical_size = window_renderer.surface_size().as_ivec2();
-        for window in self.windows.iter_mut() {
-            window.on_resize(logical_size);
+    /// Switches the renderer's UI mode and re-lays out every window if the UI
+    /// size moved as a result.
+    pub fn set_ui_mode(&mut self, ui_mode: UiMode, window_renderer: &mut WindowRenderer) {
+        if window_renderer.set_ui_mode(ui_mode).is_some() {
+            self.notify_layout_changed(window_renderer);
         }
     }
 
-    pub fn input(&mut self, event: &InputEvent) -> bool {
+    fn notify_layout_changed(&mut self, window_renderer: &WindowRenderer) {
+        let ui_size = window_renderer.ui_size().as_ivec2();
+        for window in self.windows.iter_mut() {
+            window.on_resize(ui_size);
+        }
+    }
+
+    pub fn input(&mut self, event: &InputEvent, window_renderer: &WindowRenderer) -> bool {
         match *event {
             InputEvent::MouseMove(position) => {
-                self.mouse_position = Some(position.as_ivec2());
+                self.mouse_position =
+                    Some(window_renderer.physical_to_ui_position(position.as_ivec2()));
 
                 self.modal_window.is_some()
                     || self

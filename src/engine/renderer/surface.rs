@@ -8,6 +8,10 @@ pub struct Surface {
 pub struct SurfaceDesc {
     pub size: UVec2,
     pub format: wgpu::TextureFormat,
+    /// Logical-to-physical pixel ratio reported by the OS (1.0 on most
+    /// displays, 2.0 on macOS Retina). Used by the UI layer to map between
+    /// physical events / framebuffer and logical (DPI-independent) UI coords.
+    pub scale_factor: f32,
 }
 
 impl Surface {

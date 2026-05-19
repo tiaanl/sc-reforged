@@ -4,6 +4,7 @@ use crate::{
     engine::assets::AssetError,
     game::{
         config::windows::WindowCtx,
+        globals,
         ui::{
             Rect,
             render::window_renderer::WindowRenderItems,
@@ -11,7 +12,6 @@ use crate::{
             windows::{
                 actions::WindowManagerAction,
                 window::{Window, WindowCommon},
-                window_manager::WindowManager,
             },
         },
     },
@@ -22,11 +22,8 @@ use super::window::{WindowImpl, WindowRenderContext};
 pub struct MainMenuWindow;
 
 impl MainMenuWindow {
-    pub fn new(
-        window_manager: &WindowManager,
-        surface_size: IVec2,
-    ) -> Result<Window, AssetError> {
-        let window_base = window_manager.get_window_base("main_menu")?;
+    pub fn new(surface_size: IVec2) -> Result<Window, AssetError> {
+        let window_base = globals::window_manager().get_window_base("main_menu")?;
 
         let layout = window_base.layout(&WindowCtx::from_logical_size(surface_size));
         let size = IVec2::new(layout.render_dx, layout.render_dy);
