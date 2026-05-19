@@ -6,7 +6,7 @@ use crate::{
         EventResult, Rect,
         render::window_renderer::{WindowRenderItems, WindowRenderer},
         widgets::widget::Widgets,
-        windows::window_manager_context::WindowManagerContext,
+        windows::{geometries::Geometries, window_manager_context::WindowManagerContext},
     },
 };
 
@@ -20,7 +20,7 @@ pub struct WindowRenderContext<'a> {
 
 pub struct WindowCommon {
     pub rect: Rect,
-    // geometries: Geometries,
+    pub geometries: Geometries,
     pub widgets: Widgets,
 
     pub is_visible: bool,
@@ -33,6 +33,7 @@ impl WindowCommon {
     pub fn new(rect: Rect) -> Self {
         Self {
             rect,
+            geometries: Geometries::default(),
             widgets: Widgets::default(),
 
             is_visible: true,
@@ -128,15 +129,16 @@ pub trait WindowImpl {
     /// Called for each window so they can drive any GPU work and append items
     /// to `render_items` to be composited later.
     ///
-    /// The default implementation renders `common.widgets`. Overrides are
-    /// responsible for calling `common.widgets.render(...)` themselves if they
-    /// want child widgets to draw.
+    /// The default implementation renders `common.geometries` (background art
+    /// from the window base) followed by `common.widgets`. Overrides are
+    /// responsible for calling these themselves if they want them drawn.
     fn render(
         &mut self,
         common: &mut WindowCommon,
         context: &mut WindowRenderContext<'_>,
         render_items: &mut WindowRenderItems,
     ) {
+        common.geometries.render(common.rect.position, render_items);
         common
             .widgets
             .render(common.rect.position, 0, context, render_items);
@@ -188,6 +190,7 @@ impl Window {
     }
 
     pub fn on_resize(&mut self, logical_size: IVec2) {
+        self.common.geometries.on_resize(logical_size);
         self.window_impl.on_resize(&mut self.common, logical_size);
     }
 

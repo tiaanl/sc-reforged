@@ -20,73 +20,71 @@ pub struct HelpWindow {
     should_pause_game: bool,
 }
 
-impl HelpWindow {
-    /// Creates a help window from the specified help definition.
-    pub fn new(help_def: &HelpDef, surface_size: UVec2) -> Window {
-        let size = help_def.dimensions.unwrap_or(IVec2::new(380, 180));
-        let pos = help_def
-            .position
-            .unwrap_or(surface_size.as_ivec2() / 2 - size / 2);
+/// Creates a help window from the specified help definition.
+pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
+    let size = help_def.dimensions.unwrap_or(IVec2::new(380, 180));
+    let pos = help_def
+        .position
+        .unwrap_or(surface_size.as_ivec2() / 2 - size / 2);
 
-        let should_pause_game = !help_def.do_not_pause_game;
+    let should_pause_game = !help_def.do_not_pause_game;
 
-        let mut common = WindowCommon::new(Rect::new(pos, size));
-        common.is_modal = should_pause_game;
-        common.is_always_on_top = true;
+    let mut common = WindowCommon::new(Rect::new(pos, size));
+    common.is_modal = should_pause_game;
+    common.is_always_on_top = true;
 
-        // List box widget to hold the help text body lines.
-        let mut list_box = Box::new(ListBoxWidget::vertical(Rect::new(
-            IVec2::splat(16),
-            size - IVec2::new(32, 68),
-        )));
-        // TODO: Match the original help-body list-box configuration here:
-        // it should be a plain clipped container for body rows, with no panel
-        // background and no extra border beyond the surrounding help window.
+    // List box widget to hold the help text body lines.
+    let mut list_box = Box::new(ListBoxWidget::vertical(Rect::new(
+        IVec2::splat(16),
+        size - IVec2::new(32, 68),
+    )));
+    // TODO: Match the original help-body list-box configuration here:
+    // it should be a plain clipped container for body rows, with no panel
+    // background and no extra border beyond the surrounding help window.
 
-        for line in help_def.body_lines.iter() {
-            let list_item = ListBoxItem::text(
-                line.clone(),
-                Font::TwelvePoint,
-                Some(u32_to_color(0xff19ff19)),
-            );
-            list_box.add_item(list_item);
-        }
-
-        common.widgets.add(list_box);
-
-        if help_def.is_confirmation {
-            let button_width = (size.x - 64) / 3;
-            // TODO: The original confirmation buttons are not just visual.
-            // Wire them up to the help-def action/callback data so Quit and
-            // Cancel actually trigger the expected behavior.
-
-            let mut button = Box::new(TextButtonWidget::new(
-                Rect::new(
-                    IVec2::new(button_width + 32, size.y - 36),
-                    IVec2::new(button_width, 20),
-                ),
-                help_def.confirmation_text_1.as_ref().unwrap(),
-            ));
-            button.font = Font::TwelvePoint;
-            button.custom_color = Some(u32_to_color(0xff19ff19));
-
-            common.widgets.add(button);
-
-            let mut button = Box::new(TextButtonWidget::new(
-                Rect::new(
-                    IVec2::new(button_width * 2 + 48, size.y - 36),
-                    IVec2::new(button_width, 20),
-                ),
-                help_def.confirmation_text_2.as_ref().unwrap(),
-            ));
-            button.font = Font::TwelvePoint;
-            button.custom_color = Some(u32_to_color(0xff19ff19));
-
-            common.widgets.add(button);
-        }
-
-        Window::new(common, Box::new(Self { should_pause_game }))
+    for line in help_def.body_lines.iter() {
+        let list_item = ListBoxItem::text(
+            line.clone(),
+            Font::TwelvePoint,
+            Some(u32_to_color(0xff19ff19)),
+        );
+        list_box.add_item(list_item);
     }
+
+    common.widgets.add(list_box);
+
+    if help_def.is_confirmation {
+        let button_width = (size.x - 64) / 3;
+        // TODO: The original confirmation buttons are not just visual.
+        // Wire them up to the help-def action/callback data so Quit and
+        // Cancel actually trigger the expected behavior.
+
+        let mut button = Box::new(TextButtonWidget::new(
+            Rect::new(
+                IVec2::new(button_width + 32, size.y - 36),
+                IVec2::new(button_width, 20),
+            ),
+            help_def.confirmation_text_1.as_ref().unwrap(),
+        ));
+        button.font = Font::TwelvePoint;
+        button.custom_color = Some(u32_to_color(0xff19ff19));
+
+        common.widgets.add(button);
+
+        let mut button = Box::new(TextButtonWidget::new(
+            Rect::new(
+                IVec2::new(button_width * 2 + 48, size.y - 36),
+                IVec2::new(button_width, 20),
+            ),
+            help_def.confirmation_text_2.as_ref().unwrap(),
+        ));
+        button.font = Font::TwelvePoint;
+        button.custom_color = Some(u32_to_color(0xff19ff19));
+
+        common.widgets.add(button);
+    }
+
+    Window::new(common, Box::new(HelpWindow { should_pause_game }))
 }
 
 impl WindowImpl for HelpWindow {

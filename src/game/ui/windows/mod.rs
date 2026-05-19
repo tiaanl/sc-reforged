@@ -1,5 +1,6 @@
 // Manager
 pub mod actions;
+pub mod geometries;
 pub mod window;
 pub mod window_manager;
 pub mod window_manager_context;

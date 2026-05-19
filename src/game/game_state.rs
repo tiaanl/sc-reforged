@@ -16,7 +16,7 @@ use crate::{
         sim::SimWorld,
         ui::{
             render::window_renderer::{UiMode, WindowRenderer},
-            windows::{bottombar::BottomBarWindow, main_menu::MainMenuWindow},
+            windows::{bottombar::new_bottombar_window, main_menu::new_main_menu_window},
         },
         world_layer::WorldLayer,
     },
@@ -38,7 +38,7 @@ impl GameState {
 
         let window_renderer = WindowRenderer::new(surface_desc);
 
-        let main_menu_window = MainMenuWindow::new(window_renderer.ui_size().as_ivec2())?;
+        let main_menu_window = new_main_menu_window(window_renderer.ui_size().as_ivec2())?;
         globals::window_manager().push(main_menu_window);
 
         Ok(Self {
@@ -134,7 +134,7 @@ impl GameState {
     /// Window_Inventory_Bar, and Window_Command_Pad — only the first is wired
     /// up here so far.
     fn spawn_game_ui(&mut self) -> Result<(), AssetError> {
-        let bottom_bar_window = BottomBarWindow::new(self.window_renderer.ui_size().as_ivec2())?;
+        let bottom_bar_window = new_bottombar_window(self.window_renderer.ui_size().as_ivec2())?;
         globals::window_manager().push(bottom_bar_window);
         Ok(())
     }
