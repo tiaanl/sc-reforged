@@ -6,7 +6,8 @@ use crate::{
     engine::storage::Handle,
     game::{
         config::windows::{
-            Geometry, GeometryNormal, Vertex, WindowBase, WindowBaseLayout, WindowCtx,
+            Geometry, GeometryNormal, GeometryTiled, Vertex, WindowBase, WindowBaseLayout,
+            WindowCtx,
         },
         globals,
         render::textures::Texture,
@@ -17,9 +18,10 @@ use crate::{
 /// Background art for a window, driven by a `WindowBase` config.
 ///
 /// A window base declares a list of geometries — `Normal` (textured 4-vertex
-/// quads) and `Tiled` (large background images chunked for streaming) — that
-/// together form the window's visual chrome. The bottombar, command pad,
-/// inventory bar etc. all get their look from this.
+/// quads) and `Tiled` (large background images, originally chunked for
+/// streaming but drawn here as a single textured quad) — that together form
+/// the window's visual chrome. The bottombar, command pad, inventory bar
+/// etc. all get their look from this.
 ///
 /// Defaults to empty; windows without a backing window base just leave it
 /// unset.
@@ -29,8 +31,7 @@ pub struct Geometries {
     window_base: Option<Arc<WindowBase>>,
     /// Layout resolved against the most recent UI size.
     layout: WindowBaseLayout,
-    /// Per-geometry texture, lazily populated for `Normal` entries. `None`
-    /// means either a tiled geometry (TODO) or a load failure.
+    /// Per-geometry texture handle. `None` means a load failure.
     textures: Vec<Option<Handle<Texture>>>,
 }
 
@@ -70,8 +71,9 @@ impl Geometries {
             .iter()
             .map(|geometry| match geometry {
                 Geometry::Normal(normal) => load_texture(&normal.texture),
-                // TODO: Tiled geometries need a streaming/chunked renderer.
-                Geometry::Tiled(_) => None,
+                // Tiled `jpg_name` is bare (no extension); the file lives at
+                // `textures/interface/<name>.jpg`.
+                Geometry::Tiled(tiled) => load_texture(&format!("{}.jpg", tiled.jpg_name)),
             })
             .collect();
     }
@@ -80,14 +82,18 @@ impl Geometries {
     /// window's position in UI coordinates).
     pub fn render(&self, origin: IVec2, render_items: &mut WindowRenderItems) {
         for (geometry, texture) in self.layout.geometries.iter().zip(self.textures.iter()) {
-            let Geometry::Normal(normal) = geometry else {
-                continue;
-            };
             let Some(texture) = *texture else {
                 continue;
             };
-            let Some((rect, uv_min, uv_max, color)) = compute_quad(normal) else {
-                continue;
+
+            let (rect, uv_min, uv_max, color) = match geometry {
+                Geometry::Normal(normal) => {
+                    let Some(quad) = compute_normal_quad(normal) else {
+                        continue;
+                    };
+                    quad
+                }
+                Geometry::Tiled(tiled) => compute_tiled_quad(tiled),
             };
 
             render_items.render_textured_rect(
@@ -122,7 +128,7 @@ fn load_texture(name: &str) -> Option<Handle<Texture>> {
 /// TODO: This drops per-vertex color gradients and ignores the `AUTO` UV mode.
 /// To match the original we'd need a triangle-soup renderer with per-vertex
 /// color and UV interpolation.
-fn compute_quad(geometry: &GeometryNormal) -> Option<(Rect, Vec2, Vec2, Vec4)> {
+fn compute_normal_quad(geometry: &GeometryNormal) -> Option<(Rect, Vec2, Vec2, Vec4)> {
     if geometry.vertices.len() < 4 {
         return None;
     }
@@ -142,6 +148,14 @@ fn compute_quad(geometry: &GeometryNormal) -> Option<(Rect, Vec2, Vec2, Vec4)> {
     let uv_max = uv0.max(uv2);
 
     Some((rect, uv_min, uv_max, color))
+}
+
+/// Renders a tiled background as a single full-texture quad at the window
+/// origin. The chunking metadata is ignored — the original engine used it for
+/// streaming large jpgs in chunks, but it's not needed here.
+fn compute_tiled_quad(geometry: &GeometryTiled) -> (Rect, Vec2, Vec2, Vec4) {
+    let size = IVec2::new(geometry.dimensions[0], geometry.dimensions[1]);
+    (Rect::new(IVec2::ZERO, size), Vec2::ZERO, Vec2::ONE, Vec4::ONE)
 }
 
 fn bounding_box(vertices: &[Vertex]) -> (IVec2, IVec2) {
