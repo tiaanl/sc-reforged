@@ -47,6 +47,8 @@ pub struct WindowManager {
 }
 
 impl WindowManager {
+    pub const UI_SIZE: IVec2 = IVec2::new(640, 480);
+
     pub fn new() -> Self {
         Self {
             window_bases: Mutex::new(HashMap::default()),

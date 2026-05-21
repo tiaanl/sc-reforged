@@ -9,7 +9,7 @@ use crate::{
         assets::{image::Image, sprites::Sprite3d},
         globals,
         render::textures::Texture,
-        ui::{Rect, u32_to_color},
+        ui::{Rect, u32_to_color, windows::window_manager::WindowManager},
     },
 };
 
@@ -233,9 +233,9 @@ pub struct WindowRenderer {
 impl WindowRenderer {
     /// `Fixed`-mode UI height. Widescreen surfaces stretch horizontally —
     /// `%screen_dx` grows past 640 while `%screen_dy` stays 480.
-    const FIXED_DY: u32 = 480;
+    const FIXED_DY: u32 = WindowManager::UI_SIZE.y as u32;
     /// `Fixed`-mode minimum width. Narrower surfaces don't squeeze below 4:3.
-    const FIXED_MIN_DX: u32 = 640;
+    const FIXED_MIN_DX: u32 = WindowManager::UI_SIZE.x as u32;
 
     /// Creates the window renderer in [`UiMode::Fixed`]. `GameState` flips to
     /// [`UiMode::Native`] when entering a mission.
