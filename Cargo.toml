@@ -36,6 +36,7 @@ zune-jpeg = { version = "=0.5.5" }
 bitflags = "2.10"
 bevy_ecs = "0.18"
 send_wrapper = "0.6.0"
+smallvec = { version = "1.15.1", features = ["const_new"] }
 
 [build-dependencies]
 heck = "0.5"

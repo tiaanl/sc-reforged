@@ -27,14 +27,15 @@ pub fn new_bottombar_window(surface_size: IVec2) -> Result<Window, AssetError> {
     // the default. Both share WINDOW_BASE_DY 194 and use %screen_dx to fill
     // the screen width, so the same resolver works for either.
     let window_base = globals::window_manager().get_window_base("bottombar_800x600")?;
-    let geometries = Geometries::from_window_base(window_base, surface_size);
+    // let geometries = Geometries::from_window_base(window_base, surface_size);
 
-    let mut common = WindowCommon::new(compute_rect(
-        geometries.layout().dx,
-        geometries.layout().dy,
-        surface_size,
-    ));
-    common.geometries = geometries;
+    let mut common = WindowCommon::new(compute_rect(0, 0, surface_size));
+    // let mut common = WindowCommon::new(compute_rect(
+    //     geometries.layout().dx,
+    //     geometries.layout().dy,
+    //     surface_size,
+    // ));
+    // common.geometries = geometries;
 
     Ok(Window::new(common, Box::new(BottomBarWindow)))
 }
@@ -52,7 +53,7 @@ impl WindowImpl for BottomBarWindow {
     fn on_resize(&mut self, common: &mut WindowCommon, logical_size: IVec2) {
         // `common.geometries` was already re-resolved against `logical_size`
         // by `Window::on_resize` before this call.
-        let layout = common.geometries.layout();
-        common.rect = compute_rect(layout.dx, layout.dy, logical_size);
+        // let layout = common.geometries.layout();
+        // common.rect = compute_rect(layout.dx, layout.dy, logical_size);
     }
 }

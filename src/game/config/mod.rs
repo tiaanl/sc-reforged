@@ -16,6 +16,7 @@ mod mtf;
 mod object_templates;
 pub mod parser;
 mod terrain_mapping;
+pub mod window_base;
 pub mod windows;
 
 pub use campaign::*;

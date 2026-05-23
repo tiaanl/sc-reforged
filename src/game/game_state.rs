@@ -11,7 +11,7 @@ use crate::{
     },
     game::{
         assets::config::campaign_def::CampaignDefs,
-        config::load_config,
+        config::{load_config, windows::WindowLayoutContext},
         globals,
         sim::SimWorld,
         ui::{
@@ -38,7 +38,12 @@ impl GameState {
 
         let window_renderer = WindowRenderer::new(surface_desc);
 
-        let main_menu_window = new_main_menu_window(window_renderer.ui_size().as_ivec2())?;
+        let context = WindowLayoutContext {
+            screen_dx: surface_desc.size.x as i32,
+            screen_dy: surface_desc.size.y as i32,
+        };
+
+        let main_menu_window = new_main_menu_window(&context)?;
         globals::window_manager().push(main_menu_window);
 
         Ok(Self {

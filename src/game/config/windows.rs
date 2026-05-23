@@ -12,12 +12,12 @@ pub const AUTO_UV: i32 = i32::MIN;
 /// Resolution context for [`WindowBase::layout`]: the named values that `%foo`
 /// substitutions in window-base expressions look up.
 #[derive(Debug, Clone, Copy)]
-pub struct WindowCtx {
+pub struct WindowLayoutContext {
     pub screen_dx: i32,
     pub screen_dy: i32,
 }
 
-impl WindowCtx {
+impl WindowLayoutContext {
     pub fn from_logical_size(size: IVec2) -> Self {
         Self {
             screen_dx: size.x,
@@ -163,7 +163,7 @@ impl IVars {
 
     /// Resolve an expression against this ivar table and a context struct of
     /// `%name` substitutions (e.g. `screen_dx`).
-    pub fn eval(&self, expr: &IExpr, ctx: &WindowCtx) -> Option<i32> {
+    pub fn eval(&self, expr: &IExpr, ctx: &WindowLayoutContext) -> Option<i32> {
         let mut acc = match &expr.atom {
             Atom::Number(n) => *n,
             Atom::Var(name) => match ctx.lookup(name) {
@@ -359,7 +359,7 @@ impl WindowBase {
     /// Resolve every expression in this window base against `ctx` (typically
     /// `{"screen_dx": logical_width, "screen_dy": logical_height}`), producing
     /// a fully concrete layout.
-    pub fn layout(&self, ctx: &WindowCtx) -> WindowBaseLayout {
+    pub fn layout(&self, ctx: &WindowLayoutContext) -> WindowBaseLayout {
         let eval = |e: &IExpr| self.ivars.eval(e, ctx).unwrap_or(0);
         let eval_uv = |uv: &Option<UvExpr>| match uv {
             None => None,

@@ -2253,6 +2253,7 @@ dependencies = [
  "quote",
  "send_wrapper",
  "shadow_company_tools",
+ "smallvec",
  "strum",
  "syn",
  "thiserror 2.0.18",

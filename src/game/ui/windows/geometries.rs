@@ -7,7 +7,7 @@ use crate::{
     game::{
         config::windows::{
             Geometry, GeometryNormal, GeometryTiled, Vertex, WindowBase, WindowBaseLayout,
-            WindowCtx,
+            WindowLayoutContext,
         },
         globals,
         render::textures::Texture,
@@ -64,7 +64,7 @@ impl Geometries {
         let Some(window_base) = &self.window_base else {
             return;
         };
-        self.layout = window_base.layout(&WindowCtx::from_logical_size(ui_size));
+        self.layout = window_base.layout(&WindowLayoutContext::from_logical_size(ui_size));
         self.textures = self
             .layout
             .geometries
@@ -96,13 +96,7 @@ impl Geometries {
                 Geometry::Tiled(tiled) => compute_tiled_quad(tiled),
             };
 
-            render_items.render_textured_rect(
-                rect.offset(origin),
-                texture,
-                uv_min,
-                uv_max,
-                color,
-            );
+            render_items.render_textured_rect(rect.offset(origin), texture, uv_min, uv_max, color);
         }
     }
 }
@@ -155,7 +149,12 @@ fn compute_normal_quad(geometry: &GeometryNormal) -> Option<(Rect, Vec2, Vec2, V
 /// streaming large jpgs in chunks, but it's not needed here.
 fn compute_tiled_quad(geometry: &GeometryTiled) -> (Rect, Vec2, Vec2, Vec4) {
     let size = IVec2::new(geometry.dimensions[0], geometry.dimensions[1]);
-    (Rect::new(IVec2::ZERO, size), Vec2::ZERO, Vec2::ONE, Vec4::ONE)
+    (
+        Rect::new(IVec2::ZERO, size),
+        Vec2::ZERO,
+        Vec2::ONE,
+        Vec4::ONE,
+    )
 }
 
 fn bounding_box(vertices: &[Vertex]) -> (IVec2, IVec2) {

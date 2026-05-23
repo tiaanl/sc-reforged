@@ -1,12 +1,19 @@
-use glam::IVec2;
+use std::{path::PathBuf, sync::Arc};
+
+use glam::{IVec2, Vec2, Vec4};
 
 use crate::{
-    engine::renderer::RenderContext,
-    game::ui::{
-        EventResult, Rect,
-        render::window_renderer::{WindowRenderItems, WindowRenderer},
-        widgets::widget::Widgets,
-        windows::{geometries::Geometries, window_manager_context::WindowManagerContext},
+    engine::{assets::AssetError, renderer::RenderContext, storage::Handle},
+    game::{
+        config::window_base::WindowBase,
+        globals,
+        render::textures::Texture,
+        ui::{
+            EventResult, Rect,
+            render::window_renderer::{WindowRenderItems, WindowRenderer},
+            widgets::widget::Widgets,
+            windows::window_manager_context::WindowManagerContext,
+        },
     },
 };
 
@@ -20,7 +27,9 @@ pub struct WindowRenderContext<'a> {
 
 pub struct WindowCommon {
     pub rect: Rect,
-    pub geometries: Geometries,
+
+    //pub geometries: Geometries,
+    pub render_geometry: RenderGeometry,
     pub widgets: Widgets,
 
     pub is_visible: bool,
@@ -33,7 +42,8 @@ impl WindowCommon {
     pub fn new(rect: Rect) -> Self {
         Self {
             rect,
-            geometries: Geometries::default(),
+            // geometries: Geometries::default(),
+            render_geometry: RenderGeometry::default(),
             widgets: Widgets::default(),
 
             is_visible: true,
@@ -138,7 +148,7 @@ pub trait WindowImpl {
         context: &mut WindowRenderContext<'_>,
         render_items: &mut WindowRenderItems,
     ) {
-        common.geometries.render(common.rect.position, render_items);
+        // common.geometries.render(common.rect.position, render_items);
         common
             .widgets
             .render(common.rect.position, 0, context, render_items);
@@ -146,6 +156,7 @@ pub trait WindowImpl {
 }
 
 pub struct Window {
+    window_base: Option<Arc<crate::game::config::window_base::WindowBase>>,
     common: WindowCommon,
     window_impl: Box<dyn WindowImpl>,
 }
@@ -153,9 +164,26 @@ pub struct Window {
 impl Window {
     pub fn new(common: WindowCommon, window_impl: Box<dyn WindowImpl>) -> Self {
         Self {
+            window_base: None,
             common,
             window_impl,
         }
+    }
+
+    pub fn from_window_base(
+        window_base: Arc<crate::game::config::window_base::WindowBase>,
+        rect: Rect,
+        window_impl: Box<dyn WindowImpl + 'static>,
+    ) -> Result<Self, AssetError> {
+        let mut common = WindowCommon::new(rect);
+
+        populate_geometries(&mut common.render_geometry, &window_base)?;
+
+        Ok(Self {
+            window_base: Some(window_base),
+            common,
+            window_impl,
+        })
     }
 
     /// Return true if the window is visible.
@@ -190,7 +218,7 @@ impl Window {
     }
 
     pub fn on_resize(&mut self, logical_size: IVec2) {
-        self.common.geometries.on_resize(logical_size);
+        // self.common.geometries.on_resize(logical_size);
         self.window_impl.on_resize(&mut self.common, logical_size);
     }
 
@@ -274,4 +302,64 @@ impl Window {
         self.window_impl
             .render(&mut self.common, context, render_items);
     }
+}
+
+pub struct TiledRenderGeometry {
+    rect: Rect,
+    texture: Handle<Texture>,
+}
+
+#[derive(Default)]
+pub struct RenderGeometry {
+    tiled: Vec<TiledRenderGeometry>,
+}
+
+impl RenderGeometry {
+    pub fn render(&self, render_items: &mut WindowRenderItems) {
+        for geometry in self.tiled.iter() {
+            render_items.render_textured_rect(
+                geometry.rect,
+                geometry.texture,
+                Vec2::ZERO,
+                Vec2::ONE,
+                Vec4::ONE,
+            );
+        }
+    }
+}
+
+fn populate_geometries(
+    geometries: &mut RenderGeometry,
+    window_base: &WindowBase,
+) -> Result<(), AssetError> {
+    geometries.tiled.clear();
+
+    for geometry in window_base.geometries.iter() {
+        use crate::game::config::window_base::Geometry as G;
+
+        match geometry {
+            G::Normal(_geometry_normal) => todo!(),
+
+            G::Tiled(tiled) => geometries.tiled.push({
+                let image = globals::images().load(
+                    PathBuf::from("textures")
+                        .join("interface")
+                        .join(&tiled.jpg_name)
+                        .with_extension("jpg"),
+                )?;
+
+                let Some(texture) = globals::textures().create_from_image(image) else {
+                    tracing::warn!("Frame JPG texture could not be loaded");
+                    continue;
+                };
+
+                TiledRenderGeometry {
+                    rect: Rect::from_size(tiled.dimensions),
+                    texture,
+                }
+            }),
+        }
+    }
+
+    Ok(())
 }

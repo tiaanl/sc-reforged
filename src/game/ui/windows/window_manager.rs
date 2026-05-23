@@ -76,7 +76,10 @@ impl WindowManager {
             .join(name)
             .with_extension("txt");
 
-        let loaded: Arc<WindowBase> = Arc::new(load_config(path)?);
+        let loaded: Arc<WindowBase> = Arc::new(load_config(&path)?);
+
+        let cc = load_config::<crate::game::config::window_base::WindowBase>(path)?;
+        println!("window_base: {:#?}", cc);
 
         let mut defs = self.window_bases.lock().unwrap();
         let def = defs
