@@ -5,7 +5,7 @@ use glam::{IVec2, Vec2, Vec4};
 use crate::{
     engine::{assets::AssetError, renderer::RenderContext, storage::Handle},
     game::{
-        config::window_base::WindowBase,
+        config::{window_base::WindowBase, windows::WindowLayoutContext},
         globals,
         render::textures::Texture,
         ui::{
@@ -156,9 +156,9 @@ pub trait WindowImpl {
 }
 
 pub struct Window {
-    window_base: Option<Arc<crate::game::config::window_base::WindowBase>>,
-    common: WindowCommon,
-    window_impl: Box<dyn WindowImpl>,
+    pub window_base: Option<Arc<crate::game::config::window_base::WindowBase>>,
+    pub common: WindowCommon,
+    pub window_impl: Box<dyn WindowImpl>,
 }
 
 impl Window {
@@ -218,7 +218,18 @@ impl Window {
     }
 
     pub fn on_resize(&mut self, logical_size: IVec2) {
-        // self.common.geometries.on_resize(logical_size);
+        if let Some(window_base) = &self.window_base {
+            let layout_context = WindowLayoutContext::from_logical_size(logical_size);
+            self.common.rect = window_base.resolve_layout_rect(&layout_context);
+
+            if let Err(error) = populate_geometries(&mut self.common.render_geometry, window_base) {
+                tracing::warn!(
+                    "failed to refresh window base '{}' during resize: {error}",
+                    window_base.name
+                );
+            }
+        }
+
         self.window_impl.on_resize(&mut self.common, logical_size);
     }
 
@@ -301,6 +312,10 @@ impl Window {
     ) {
         self.window_impl
             .render(&mut self.common, context, render_items);
+    }
+
+    pub fn update(&mut self, delta_time: f32) {
+        self.window_impl.update(delta_time);
     }
 }
 

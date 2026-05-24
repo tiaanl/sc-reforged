@@ -14,7 +14,7 @@ use crate::{
         renderer::{RenderContext, RenderTarget},
     },
     game::{
-        config::{load_config, windows::WindowBase},
+        config::{load_config, window_base::WindowBase},
         ui::{
             EventResult,
             render::window_renderer::{UiMode, WindowRenderItems, WindowRenderer},
@@ -354,10 +354,10 @@ impl WindowManager {
             })
     }
 
-    pub fn update(&mut self, _delta_time: f32) {
-        // for window in self.windows.iter_mut() {
-        //     window.update(delta_time);
-        // }
+    pub fn update(&mut self, delta_time: f32) {
+        for window in self.windows.iter_mut() {
+            window.update(delta_time);
+        }
     }
 
     pub fn render(
