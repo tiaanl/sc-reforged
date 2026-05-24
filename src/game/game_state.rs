@@ -11,12 +11,15 @@ use crate::{
     },
     game::{
         assets::config::campaign_def::CampaignDefs,
-        config::{load_config, windows::WindowLayoutContext},
+        config::load_config,
         globals,
         sim::SimWorld,
         ui::{
             render::window_renderer::{UiMode, WindowRenderer},
-            windows::{bottombar::new_bottombar_window, main_menu::new_main_menu_window},
+            windows::{
+                bottombar::new_bottombar_window, main_menu::new_main_menu_window,
+                window_manager::WindowLayoutContext,
+            },
         },
         world_layer::WorldLayer,
     },

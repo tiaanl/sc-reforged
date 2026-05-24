@@ -5,7 +5,6 @@ use glam::IVec2;
 use crate::{
     engine::assets::AssetError,
     game::{
-        config::windows::WindowLayoutContext,
         globals,
         ui::{
             Rect,
@@ -14,6 +13,7 @@ use crate::{
             windows::{
                 actions::WindowManagerAction,
                 window::{Window, WindowImpl},
+                window_manager::WindowLayoutContext,
             },
         },
     },
@@ -49,6 +49,8 @@ impl WindowImpl for MainMenuWindow {
         _context: &mut WindowRenderContext<'_>,
         render_items: &mut WindowRenderItems,
     ) {
-        common.render_geometry.render(render_items);
+        common
+            .render_geometry
+            .render(common.rect.position, render_items);
     }
 }

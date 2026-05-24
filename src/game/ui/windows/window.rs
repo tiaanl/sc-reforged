@@ -5,14 +5,16 @@ use glam::{IVec2, Vec2, Vec4};
 use crate::{
     engine::{assets::AssetError, renderer::RenderContext, storage::Handle},
     game::{
-        config::{window_base::WindowBase, windows::WindowLayoutContext},
+        config::window_base::WindowBase,
         globals,
         render::textures::Texture,
         ui::{
             EventResult, Rect,
             render::window_renderer::{WindowRenderItems, WindowRenderer},
             widgets::widget::Widgets,
-            windows::window_manager_context::WindowManagerContext,
+            windows::{
+                window_manager::WindowLayoutContext, window_manager_context::WindowManagerContext,
+            },
         },
     },
 };
@@ -156,7 +158,7 @@ pub trait WindowImpl {
 }
 
 pub struct Window {
-    pub window_base: Option<Arc<crate::game::config::window_base::WindowBase>>,
+    pub window_base: Option<Arc<WindowBase>>,
     pub common: WindowCommon,
     pub window_impl: Box<dyn WindowImpl>,
 }
@@ -171,7 +173,7 @@ impl Window {
     }
 
     pub fn from_window_base(
-        window_base: Arc<crate::game::config::window_base::WindowBase>,
+        window_base: Arc<WindowBase>,
         rect: Rect,
         window_impl: Box<dyn WindowImpl + 'static>,
     ) -> Result<Self, AssetError> {
@@ -319,21 +321,27 @@ impl Window {
     }
 }
 
+#[derive(Debug)]
 pub struct TiledRenderGeometry {
     rect: Rect,
     texture: Handle<Texture>,
 }
 
-#[derive(Default)]
+#[derive(Debug)]
+pub struct NormalRenderGeometry {}
+
+#[derive(Debug, Default)]
 pub struct RenderGeometry {
     tiled: Vec<TiledRenderGeometry>,
+    normal: Vec<NormalRenderGeometry>,
 }
 
 impl RenderGeometry {
-    pub fn render(&self, render_items: &mut WindowRenderItems) {
+    /// Queues the window-base geometries at the specified UI-space origin.
+    pub fn render(&self, origin: IVec2, render_items: &mut WindowRenderItems) {
         for geometry in self.tiled.iter() {
             render_items.render_textured_rect(
-                geometry.rect,
+                geometry.rect.offset(origin),
                 geometry.texture,
                 Vec2::ZERO,
                 Vec2::ONE,

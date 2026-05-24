@@ -25,6 +25,31 @@ use crate::{
 
 use super::window::WindowRenderContext;
 
+/// Resolution context for [`WindowBase::layout`]: the named values that `%foo`
+/// substitutions in window-base expressions look up.
+#[derive(Debug, Clone, Copy)]
+pub struct WindowLayoutContext {
+    pub screen_dx: i32,
+    pub screen_dy: i32,
+}
+
+impl WindowLayoutContext {
+    pub fn from_logical_size(size: IVec2) -> Self {
+        Self {
+            screen_dx: size.x,
+            screen_dy: size.y,
+        }
+    }
+
+    fn lookup(&self, name: &str) -> Option<i32> {
+        match name {
+            "screen_dx" => Some(self.screen_dx),
+            "screen_dy" => Some(self.screen_dy),
+            _ => None,
+        }
+    }
+}
+
 pub struct WindowManager {
     window_bases: Mutex<HashMap<String, Arc<WindowBase>>>,
 
@@ -77,9 +102,6 @@ impl WindowManager {
             .with_extension("txt");
 
         let loaded: Arc<WindowBase> = Arc::new(load_config(&path)?);
-
-        let cc = load_config::<crate::game::config::window_base::WindowBase>(path)?;
-        println!("window_base: {:#?}", cc);
 
         let mut defs = self.window_bases.lock().unwrap();
         let def = defs
@@ -266,7 +288,7 @@ impl WindowManager {
 
         let local = mouse - window.rect().position;
 
-        println!("local: {local}");
+        // println!("local: {local}");
 
         Some(match button {
             MouseButton::Left => window.on_primary_mouse_down(local, context),

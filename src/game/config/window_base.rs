@@ -3,11 +3,8 @@ use glam::IVec2;
 use smallvec::SmallVec;
 
 use crate::game::{
-    config::{
-        parser::{ConfigLine, ConfigLines, ConfigToken},
-        windows::WindowLayoutContext,
-    },
-    ui::Rect,
+    config::parser::{ConfigLine, ConfigLines, ConfigToken},
+    ui::{Rect, windows::window_manager::WindowLayoutContext},
 };
 
 #[derive(Debug)]
