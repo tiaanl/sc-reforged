@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-use super::quad_renderer::{Quad, QuadRenderer};
+use super::ui_mesh_renderer::{UiMesh, UiMeshRenderer};
 
 /// One of the five bitmap fonts available in the original engine.
 #[derive(Clone, Copy, Debug)]
@@ -181,7 +181,7 @@ fn compute_ui_size(surface_size: UVec2, scale_factor: f32, ui_mode: UiMode) -> U
     }
 }
 
-/// Resolves the QuadRenderer's NDC viewport — the size that maps to the full
+/// Resolves the UI mesh renderer's NDC viewport — the size that maps to the full
 /// framebuffer. Matches the surface aspect exactly in `Fixed` mode (no
 /// minimum clamp) so the GPU stretch from UI coords to physical pixels is
 /// always uniform. When `ui_size` is wider than this viewport (narrow
@@ -211,7 +211,7 @@ fn logical_surface_size(surface_size: UVec2, scale_factor: f32) -> UVec2 {
 
 /// Renders all the components required for windows.
 pub struct WindowRenderer {
-    quad_renderer: QuadRenderer,
+    ui_mesh_renderer: UiMeshRenderer,
     tiled_geometries: Storage<TiledGeometry>,
     /// Physical framebuffer / swapchain size in pixels.
     surface_size: UVec2,
@@ -223,7 +223,7 @@ pub struct WindowRenderer {
     /// guaranteeing widgets always have at least the original game's design
     /// real estate.
     ui_size: UVec2,
-    /// QuadRenderer's NDC viewport. Matches the surface aspect exactly (no
+    /// UI mesh renderer's NDC viewport. Matches the surface aspect exactly (no
     /// minimum clamp), so the GPU stretch is always uniform. When `ui_size`
     /// is wider than `quad_viewport` (narrow surfaces), UI extent past
     /// `quad_viewport` extends beyond the framebuffer and gets clipped.
@@ -252,7 +252,7 @@ impl WindowRenderer {
         };
 
         Self {
-            quad_renderer: QuadRenderer::new(&viewport_surface),
+            ui_mesh_renderer: UiMeshRenderer::new(&viewport_surface),
             tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
             scale_factor: surface_desc.scale_factor,
@@ -263,7 +263,7 @@ impl WindowRenderer {
     }
 
     /// Updates the physical surface size + scale factor, then recomputes
-    /// `ui_size` and reconfigures the quad-renderer viewport.
+    /// `ui_size` and reconfigures the UI mesh renderer viewport.
     pub fn resize(&mut self, surface_size: UVec2, scale_factor: f32) {
         self.surface_size = surface_size;
         self.scale_factor = scale_factor;
@@ -292,7 +292,7 @@ impl WindowRenderer {
 
         if new_viewport != self.quad_viewport {
             self.quad_viewport = new_viewport;
-            self.quad_renderer.resize(new_viewport);
+            self.ui_mesh_renderer.resize(new_viewport);
         }
 
         if new_ui_size == self.ui_size {
@@ -326,7 +326,7 @@ impl WindowRenderer {
     }
 
     /// Maps a physical-pixel position (as delivered by winit) into UI
-    /// coordinates. The mapping uses the quad-renderer viewport rather than
+    /// coordinates. The mapping uses the UI renderer viewport rather than
     /// `ui_size`, so the result lines up with what the user sees rendered —
     /// in narrow surfaces (where `ui_size` extends past the viewport) the
     /// reachable UI x-range stops at `quad_viewport.x`.
@@ -412,14 +412,15 @@ impl WindowRenderer {
         height
     }
 
-    /// Resolves window render items into quads and submits them for drawing.
+    /// Resolves window render items into UI meshes and submits them for drawing.
     pub fn submit_render_items(
         &mut self,
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
         items: &WindowRenderItems,
     ) {
-        let mut quads = Vec::new();
+        let mut meshes = Vec::new();
+        let white_texture = self.ui_mesh_renderer.solid_white_texture();
 
         let mut clip_stack: Vec<Rect> = Vec::default();
 
@@ -446,37 +447,45 @@ impl WindowRenderer {
                     uv_max,
                     color,
                 } => {
-                    let mut quad =
-                        Quad::sub_texture(*rect, *texture, *uv_min, *uv_max).with_color(*color);
-                    quad.clip_rect = clip_stack.last().cloned();
-                    quads.push(quad);
+                    let mesh = with_clip_rect(
+                        UiMesh::textured(*rect, *texture, *uv_min, *uv_max, *color),
+                        clip_stack.last().cloned(),
+                    );
+                    meshes.push(mesh);
                 }
                 WindowRenderItem::TiledGeometry { handle, alpha } => {
                     let Some(geometry) = self.tiled_geometries.get(*handle) else {
                         continue;
                     };
 
-                    let mut quad = Quad::texture(
-                        Rect::new(IVec2::ZERO, geometry.render_size),
-                        geometry.texture,
-                    )
-                    .with_color(Vec4::ONE.with_z(*alpha));
-                    quad.clip_rect = clip_stack.last().cloned();
+                    let mesh = with_clip_rect(
+                        UiMesh::textured(
+                            Rect::new(IVec2::ZERO, geometry.render_size),
+                            geometry.texture,
+                            Vec2::ZERO,
+                            Vec2::ONE,
+                            Vec4::ONE.with_w(*alpha),
+                        ),
+                        clip_stack.last().cloned(),
+                    );
 
-                    quads.push(quad);
+                    meshes.push(mesh);
                 }
                 WindowRenderItem::SolidRect { rect, color } => {
-                    let mut quad = Quad::solid(*rect).with_color(*color);
-                    quad.clip_rect = clip_stack.last().cloned();
+                    let mesh = with_clip_rect(
+                        UiMesh::solid(*rect, *color, white_texture),
+                        clip_stack.last().cloned(),
+                    );
 
-                    quads.push(quad);
+                    meshes.push(mesh);
                 }
                 WindowRenderItem::Border {
                     rect,
                     thickness,
                     color,
-                } => push_border_quads(
-                    &mut quads,
+                } => push_border_meshes(
+                    &mut meshes,
+                    white_texture,
                     *rect,
                     *thickness,
                     *color,
@@ -503,18 +512,20 @@ impl WindowRenderer {
                     let uv_max = sprite_frame.bottom_right.as_vec2() / texture_size;
                     let size = sprite_frame.bottom_right - sprite_frame.top_left;
 
-                    let color = Vec4::ONE.with_z(sprite_data.alpha.unwrap_or(*alpha));
+                    let color = Vec4::ONE.with_w(sprite_data.alpha.unwrap_or(*alpha));
 
-                    let mut quad = Quad::sub_texture(
-                        Rect::new(*pos, size),
-                        sprite_data.texture,
-                        uv_min,
-                        uv_max,
-                    )
-                    .with_color(color);
-                    quad.clip_rect = clip_stack.last().cloned();
+                    let mesh = with_clip_rect(
+                        UiMesh::textured(
+                            Rect::new(*pos, size),
+                            sprite_data.texture,
+                            uv_min,
+                            uv_max,
+                            color,
+                        ),
+                        clip_stack.last().cloned(),
+                    );
 
-                    quads.push(quad);
+                    meshes.push(mesh);
                 }
                 WindowRenderItem::Text {
                     pos,
@@ -552,18 +563,20 @@ impl WindowRenderer {
                             let uv_min = glyph_frame.top_left.as_vec2() / texture_size;
                             let uv_max = glyph_frame.bottom_right.as_vec2() / texture_size;
 
-                            let color = color.with_z(color.z * alpha);
+                            let color = Vec4::new(color.x, color.y, color.z, color.w * alpha);
 
-                            let mut quad = Quad::sub_texture(
-                                Rect::new(IVec2::new(x, pos.y), glyph_size),
-                                font_sprite.texture,
-                                uv_min,
-                                uv_max,
-                            )
-                            .with_color(color);
-                            quad.clip_rect = clip_stack.last().cloned();
+                            let mesh = with_clip_rect(
+                                UiMesh::textured(
+                                    Rect::new(IVec2::new(x, pos.y), glyph_size),
+                                    font_sprite.texture,
+                                    uv_min,
+                                    uv_max,
+                                    color,
+                                ),
+                                clip_stack.last().cloned(),
+                            );
 
-                            quads.push(quad);
+                            meshes.push(mesh);
                         }
 
                         x += glyph_size.x + letter_spacing;
@@ -579,8 +592,8 @@ impl WindowRenderer {
             }
         }
 
-        self.quad_renderer
-            .submit(render_context, render_target, quads.as_slice());
+        self.ui_mesh_renderer
+            .submit(render_context, render_target, meshes.as_slice());
     }
 }
 
@@ -634,8 +647,9 @@ pub struct TiledGeometry {
     _chunk_dimensions: IVec2,
 }
 
-fn push_border_quads(
-    quads: &mut Vec<Quad>,
+fn push_border_meshes(
+    meshes: &mut Vec<UiMesh>,
+    white_texture: Handle<Texture>,
     rect: Rect,
     thickness: i32,
     color: Vec4,
@@ -653,13 +667,15 @@ fn push_border_quads(
         .saturating_sub(horizontal_thickness.saturating_mul(2));
 
     push_solid_rect(
-        quads,
+        meshes,
+        white_texture,
         Rect::new(rect.position, IVec2::new(rect.size.x, horizontal_thickness)),
         color,
         clip_rect,
     );
     push_solid_rect(
-        quads,
+        meshes,
+        white_texture,
         Rect::new(
             IVec2::new(
                 rect.position.x,
@@ -673,7 +689,8 @@ fn push_border_quads(
 
     if inner_height > 0 {
         push_solid_rect(
-            quads,
+            meshes,
+            white_texture,
             Rect::new(
                 IVec2::new(rect.position.x, rect.position.y + horizontal_thickness),
                 IVec2::new(vertical_thickness, inner_height),
@@ -682,7 +699,8 @@ fn push_border_quads(
             clip_rect,
         );
         push_solid_rect(
-            quads,
+            meshes,
+            white_texture,
             Rect::new(
                 IVec2::new(
                     rect.position.x + rect.size.x.saturating_sub(vertical_thickness),
@@ -696,13 +714,24 @@ fn push_border_quads(
     }
 }
 
-fn push_solid_rect(quads: &mut Vec<Quad>, rect: Rect, color: Vec4, clip_rect: Option<Rect>) {
+fn push_solid_rect(
+    meshes: &mut Vec<UiMesh>,
+    white_texture: Handle<Texture>,
+    rect: Rect,
+    color: Vec4,
+    clip_rect: Option<Rect>,
+) {
     if rect.size.x == 0 || rect.size.y == 0 {
         return;
     }
 
-    let mut quad = Quad::solid(rect).with_color(color);
-    quad.clip_rect = clip_rect;
+    meshes.push(with_clip_rect(
+        UiMesh::solid(rect, color, white_texture),
+        clip_rect,
+    ));
+}
 
-    quads.push(quad);
+fn with_clip_rect(mut mesh: UiMesh, clip_rect: Option<Rect>) -> UiMesh {
+    mesh.clip_rect = clip_rect;
+    mesh
 }

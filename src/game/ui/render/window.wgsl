@@ -16,14 +16,6 @@ struct Vertex {
     @location(2) color: vec4<f32>,
 }
 
-struct Instance {
-    @location(3) pos: vec2<f32>,
-    @location(4) size: vec2<f32>,
-    @location(5) color: vec4<f32>,
-    @location(6) uv_min: vec2<f32>,
-    @location(7) uv_max: vec2<f32>,
-}
-
 struct VertexOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) uv: vec2<f32>,
@@ -31,19 +23,16 @@ struct VertexOut {
 }
 
 @vertex
-fn vertex(vertex: Vertex, instance: Instance) -> VertexOut {
-    let pixel_pos = instance.pos + vertex.pos * instance.size;
-    let uv = instance.uv_min + vertex.uv * (instance.uv_max - instance.uv_min);
-
+fn vertex(vertex: Vertex) -> VertexOut {
     let ndc = vec2<f32>(
-        (pixel_pos.x / viewport.size.x) * 2.0 - 1.0,
-        1.0 - (pixel_pos.y / viewport.size.y) * 2.0,
+        (vertex.pos.x / viewport.size.x) * 2.0 - 1.0,
+        1.0 - (vertex.pos.y / viewport.size.y) * 2.0,
     );
 
     return VertexOut(
         vec4<f32>(ndc, 0.0, 1.0),
-        uv,
-        vertex.color * instance.color,
+        vertex.uv,
+        vertex.color,
     );
 }
 
