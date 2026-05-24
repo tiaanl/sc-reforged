@@ -5,6 +5,7 @@ use glam::{IVec2, Vec2, Vec4};
 use crate::{
     engine::{assets::AssetError, renderer::RenderContext, storage::Handle},
     game::{
+        assets::sprites::Sprite3d,
         config::window_base::WindowBase,
         globals,
         render::textures::Texture,
@@ -328,7 +329,11 @@ pub struct TiledRenderGeometry {
 }
 
 #[derive(Debug)]
-pub struct NormalRenderGeometry {}
+pub struct NormalRenderGeometry {
+    pos: IVec2,
+    sprite: Handle<Sprite3d>,
+    frame: i32,
+}
 
 #[derive(Debug, Default)]
 pub struct RenderGeometry {
@@ -348,6 +353,10 @@ impl RenderGeometry {
                 Vec4::ONE,
             );
         }
+
+        for geometry in self.normal.iter() {
+            render_items.render_sprite(geometry.pos, geometry.sprite, geometry.frame as usize, 1.0);
+        }
     }
 }
 
@@ -361,7 +370,15 @@ fn populate_geometries(
         use crate::game::config::window_base::Geometry as G;
 
         match geometry {
-            G::Normal(_geometry_normal) => todo!(),
+            G::Normal(_geometry) => {
+                // geometries.normal.push({
+                //     NormalRenderGeometry {
+                //         pos: geometry.,
+                //         sprite: todo!(),
+                //         frame: todo!(),
+                //     }
+                // });
+            }
 
             G::Tiled(tiled) => geometries.tiled.push({
                 let image = globals::images().load(

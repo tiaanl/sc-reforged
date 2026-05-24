@@ -35,12 +35,7 @@ pub fn new_bottombar_window(surface_size: IVec2) -> Result<Window, AssetError> {
     let layout_context = WindowLayoutContext::from_logical_size(surface_size);
     let rect = window_base.resolve_layout_rect(&layout_context);
 
-    let window =
-        Window::from_window_base(Arc::clone(&window_base), rect, Box::new(BottomBarWindow))?;
-
-    println!("geometries: {:?}", window.common.render_geometry);
-
-    Ok(window)
+    Window::from_window_base(Arc::clone(&window_base), rect, Box::new(BottomBarWindow))
 }
 
 impl WindowImpl for BottomBarWindow {

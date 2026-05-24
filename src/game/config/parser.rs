@@ -35,8 +35,12 @@ impl From<ConfigToken> for f32 {
 
 impl From<ConfigToken> for bool {
     fn from(value: ConfigToken) -> Self {
+        // true == "true" || "on"
+        // false == "false" || "off" || <anything else>
         match value {
-            ConfigToken::String(s) => s.eq_ignore_ascii_case("true"),
+            ConfigToken::String(s) => {
+                s.eq_ignore_ascii_case("true") || s.eq_ignore_ascii_case("on")
+            }
             _ => false,
         }
     }
