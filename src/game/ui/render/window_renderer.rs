@@ -149,6 +149,11 @@ impl WindowRenderItems {
             color: color.unwrap_or(font.primary_color()),
         });
     }
+
+    /// Queues a prebuilt UI mesh draw.
+    pub fn render_mesh(&mut self, mesh: UiMesh) {
+        self.0.push(WindowRenderItem::Mesh { mesh });
+    }
 }
 
 /// How the logical UI coordinate space maps to the physical surface.
@@ -589,6 +594,9 @@ impl WindowRenderer {
                         }
                     }
                 }
+                WindowRenderItem::Mesh { mesh } => {
+                    meshes.push(with_clip_rect(mesh.clone(), clip_stack.last().cloned()));
+                }
             }
         }
 
@@ -634,6 +642,9 @@ enum WindowRenderItem {
         text: Vec<u8>,
         font: Font,
         color: Vec4,
+    },
+    Mesh {
+        mesh: UiMesh,
     },
 }
 

@@ -34,8 +34,14 @@ pub fn new_bottombar_window(surface_size: IVec2) -> Result<Window, AssetError> {
     let window_base = globals::window_manager().get_window_base(window_base_name)?;
     let layout_context = WindowLayoutContext::from_logical_size(surface_size);
     let rect = window_base.resolve_layout_rect(&layout_context);
+    let rect = rect.offset(IVec2::new(0, surface_size.y - rect.size.y));
 
-    Window::from_window_base(Arc::clone(&window_base), rect, Box::new(BottomBarWindow))
+    Window::from_window_base(
+        Arc::clone(&window_base),
+        &layout_context,
+        rect,
+        Box::new(BottomBarWindow),
+    )
 }
 
 impl WindowImpl for BottomBarWindow {

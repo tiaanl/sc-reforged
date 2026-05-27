@@ -28,8 +28,12 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
 
     let rect = window_base.resolve_layout_rect(context);
 
-    let mut window =
-        Window::from_window_base(Arc::clone(&window_base), rect, Box::new(MainMenuWindow))?;
+    let mut window = Window::from_window_base(
+        Arc::clone(&window_base),
+        context,
+        rect,
+        Box::new(MainMenuWindow),
+    )?;
 
     window.common.widgets.add(Box::new(
         TextButtonWidget::new(

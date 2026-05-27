@@ -13,7 +13,10 @@ use crate::game::{
 pub enum Atom {
     Number(i32),
     UserVar(String),
-    SystemVar(String),
+    SystemVar {
+        name: String,
+        adjustments: SmallVec<[Adjustment; 0]>,
+    },
 }
 
 impl Atom {
@@ -29,29 +32,17 @@ impl Default for Atom {
 
 impl From<ConfigToken> for Atom {
     fn from(value: ConfigToken) -> Self {
-        let mut result = Self::ZERO;
-
         match value {
-            ConfigToken::String(value) => {
-                let (prefix, value) = value.split_at(1);
-                if prefix == "$" {
-                    result = Self::UserVar(value.into());
-                } else if prefix == "%" {
-                    result = Self::SystemVar(value.into());
-                } else {
-                    panic!("Variable without source specifier!");
-                }
-            }
+            ConfigToken::String(value) => parse_atom_string(&value).unwrap_or(Self::ZERO),
             ConfigToken::Float(value) => {
                 tracing::warn!(
                     "Floating point values for supported in expressions: {}",
                     value
                 );
+                Self::ZERO
             }
-            ConfigToken::Number(value) => result = Self::Number(value),
+            ConfigToken::Number(value) => Self::Number(value),
         }
-
-        result
     }
 }
 
@@ -184,11 +175,20 @@ impl WindowBase {
                 }
                 Some(value)
             }
-            Atom::SystemVar(ref value) => match value.as_str() {
-                "screen_dx" => Some(context.screen_dx),
-                "screen_dy" => Some(context.screen_dy),
-                _ => None,
-            },
+            Atom::SystemVar {
+                ref name,
+                ref adjustments,
+            } => {
+                let mut value = match name.as_str() {
+                    "screen_dx" => context.screen_dx,
+                    "screen_dy" => context.screen_dy,
+                    _ => return None,
+                };
+                for adjustment in adjustments.iter() {
+                    adjustment.apply(&mut value);
+                }
+                Some(value)
+            }
         }
     }
 
@@ -204,6 +204,47 @@ impl WindowBase {
             size: IVec2::new(width, height),
         }
     }
+}
+
+fn parse_atom_string(value: &str) -> Option<Atom> {
+    let mut parts = value.split(',');
+    let head = parts.next()?.trim();
+
+    if let Some(value) = head.strip_prefix('$') {
+        if parts.next().is_some() {
+            tracing::warn!("Inline adjustments are only supported for system vars: {head}");
+        }
+        return Some(Atom::UserVar(value.into()));
+    }
+
+    if let Some(value) = head.strip_prefix('%') {
+        let mut adjustments = SmallVec::<[Adjustment; 0]>::new();
+
+        for part in parts {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+
+            let (op, rhs) = part.split_at(1);
+            let rhs = rhs.trim().parse::<i32>().ok()?;
+            let adjustment = match op {
+                "+" => Adjustment::Add(rhs),
+                "-" => Adjustment::Subtract(rhs),
+                "*" => Adjustment::Multiply(rhs),
+                "/" => Adjustment::Divide(rhs),
+                _ => return None,
+            };
+            adjustments.push(adjustment);
+        }
+
+        return Some(Atom::SystemVar {
+            name: value.into(),
+            adjustments,
+        });
+    }
+
+    head.parse::<i32>().ok().map(Atom::Number)
 }
 
 impl From<ConfigLines> for WindowBase {
