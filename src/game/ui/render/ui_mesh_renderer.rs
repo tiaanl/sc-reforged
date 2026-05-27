@@ -48,13 +48,8 @@ pub struct UiMesh {
 }
 
 impl UiMesh {
-    /// Creates a solid-color rectangle using the shared white texture.
-    pub fn solid(rect: Rect, color: Vec4, white_texture: Handle<Texture>) -> Self {
-        Self::textured(rect, white_texture, Vec2::ZERO, Vec2::ONE, color)
-    }
-
     /// Creates a textured rectangle mesh.
-    pub fn textured(
+    pub fn textured_rect(
         rect: Rect,
         texture: Handle<Texture>,
         uv_min: Vec2,

@@ -3,10 +3,10 @@ use glam::{IVec2, UVec2, Vec2, Vec4};
 use crate::{
     engine::{
         renderer::{RenderContext, RenderTarget, SurfaceDesc},
-        storage::{Handle, Storage},
+        storage::Handle,
     },
     game::{
-        assets::{image::Image, sprites::Sprite3d},
+        assets::sprites::Sprite3d,
         globals,
         render::textures::Texture,
         ui::{Rect, u32_to_color, windows::window_manager::WindowManager},
@@ -103,12 +103,6 @@ impl WindowRenderItems {
             uv_max,
             color,
         });
-    }
-
-    /// Queues a tiled geometry item with the given alpha.
-    pub fn render_tiled_geometry(&mut self, handle: Handle<TiledGeometry>, alpha: f32) {
-        self.0
-            .push(WindowRenderItem::TiledGeometry { handle, alpha });
     }
 
     pub fn render_solid_rect(&mut self, rect: Rect, color: Vec4) {
@@ -217,7 +211,6 @@ fn logical_surface_size(surface_size: UVec2, scale_factor: f32) -> UVec2 {
 /// Renders all the components required for windows.
 pub struct WindowRenderer {
     ui_mesh_renderer: UiMeshRenderer,
-    tiled_geometries: Storage<TiledGeometry>,
     /// Physical framebuffer / swapchain size in pixels.
     surface_size: UVec2,
     /// Logical-to-physical pixel ratio (1.0 on most displays, 2.0 on Retina).
@@ -258,7 +251,6 @@ impl WindowRenderer {
 
         Self {
             ui_mesh_renderer: UiMeshRenderer::new(&viewport_surface),
-            tiled_geometries: Storage::default(),
             surface_size: surface_desc.size,
             scale_factor: surface_desc.scale_factor,
             ui_mode,
@@ -345,24 +337,6 @@ impl WindowRenderer {
             (position.x as i64 * viewport.x as i64 / surface.x as i64) as i32,
             (position.y as i64 * viewport.y as i64 / surface.y as i64) as i32,
         )
-    }
-
-    /// Creates a tiled geometry render item.
-    pub fn create_tiled_geometry(
-        &mut self,
-        image: Handle<Image>,
-        dimensions: IVec2,
-        chunk_dimensions: IVec2,
-    ) -> Option<Handle<TiledGeometry>> {
-        let render_size = globals::images().get(image)?.size.as_ivec2();
-        let texture = globals::textures().create_from_image(image)?;
-
-        Some(self.tiled_geometries.insert(TiledGeometry {
-            texture,
-            render_size,
-            _dimensions: dimensions,
-            _chunk_dimensions: chunk_dimensions,
-        }))
     }
 
     /// Measures the pixel width of a text string in the given font, matching
@@ -453,32 +427,14 @@ impl WindowRenderer {
                     color,
                 } => {
                     let mesh = with_clip_rect(
-                        UiMesh::textured(*rect, *texture, *uv_min, *uv_max, *color),
+                        UiMesh::textured_rect(*rect, *texture, *uv_min, *uv_max, *color),
                         clip_stack.last().cloned(),
                     );
-                    meshes.push(mesh);
-                }
-                WindowRenderItem::TiledGeometry { handle, alpha } => {
-                    let Some(geometry) = self.tiled_geometries.get(*handle) else {
-                        continue;
-                    };
-
-                    let mesh = with_clip_rect(
-                        UiMesh::textured(
-                            Rect::new(IVec2::ZERO, geometry.render_size),
-                            geometry.texture,
-                            Vec2::ZERO,
-                            Vec2::ONE,
-                            Vec4::ONE.with_w(*alpha),
-                        ),
-                        clip_stack.last().cloned(),
-                    );
-
                     meshes.push(mesh);
                 }
                 WindowRenderItem::SolidRect { rect, color } => {
                     let mesh = with_clip_rect(
-                        UiMesh::solid(*rect, *color, white_texture),
+                        UiMesh::textured_rect(*rect, white_texture, Vec2::ZERO, Vec2::ONE, *color),
                         clip_stack.last().cloned(),
                     );
 
@@ -520,7 +476,7 @@ impl WindowRenderer {
                     let color = Vec4::ONE.with_w(sprite_data.alpha.unwrap_or(*alpha));
 
                     let mesh = with_clip_rect(
-                        UiMesh::textured(
+                        UiMesh::textured_rect(
                             Rect::new(*pos, size),
                             sprite_data.texture,
                             uv_min,
@@ -571,7 +527,7 @@ impl WindowRenderer {
                             let color = Vec4::new(color.x, color.y, color.z, color.w * alpha);
 
                             let mesh = with_clip_rect(
-                                UiMesh::textured(
+                                UiMesh::textured_rect(
                                     Rect::new(IVec2::new(x, pos.y), glyph_size),
                                     font_sprite.texture,
                                     uv_min,
@@ -617,10 +573,6 @@ enum WindowRenderItem {
         uv_min: Vec2,
         uv_max: Vec2,
         color: Vec4,
-    },
-    TiledGeometry {
-        handle: Handle<TiledGeometry>,
-        alpha: f32,
     },
     SolidRect {
         rect: Rect,
@@ -737,7 +689,7 @@ fn push_solid_rect(
     }
 
     meshes.push(with_clip_rect(
-        UiMesh::solid(rect, color, white_texture),
+        UiMesh::textured_rect(rect, white_texture, Vec2::ZERO, Vec2::ONE, color),
         clip_rect,
     ));
 }
