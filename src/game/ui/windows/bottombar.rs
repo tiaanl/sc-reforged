@@ -6,17 +6,12 @@ use crate::{
     engine::assets::AssetError,
     game::{
         globals,
-        ui::{
-            render::window_renderer::WindowRenderItems,
-            windows::{
-                window::{Window, WindowCommon, WindowImpl},
-                window_manager::WindowLayoutContext,
-            },
+        ui::windows::{
+            window::{Window, WindowImpl},
+            window_manager::WindowLayoutContext,
         },
     },
 };
-
-use super::window::WindowRenderContext;
 
 /// The in-game bottom bar containing the radar, clock, and command buttons.
 ///
@@ -44,15 +39,4 @@ pub fn new_bottombar_window(surface_size: IVec2) -> Result<Window, AssetError> {
     )
 }
 
-impl WindowImpl for BottomBarWindow {
-    fn render(
-        &mut self,
-        common: &mut WindowCommon,
-        _context: &mut WindowRenderContext<'_>,
-        render_items: &mut WindowRenderItems,
-    ) {
-        common
-            .render_geometry
-            .render(common.rect.position, render_items);
-    }
-}
+impl WindowImpl for BottomBarWindow {}

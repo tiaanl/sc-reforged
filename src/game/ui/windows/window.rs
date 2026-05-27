@@ -10,6 +10,7 @@ use crate::{
         render::textures::Texture,
         ui::{
             EventResult, Rect,
+            geometries::{Geometries, TiledGeometry},
             render::{
                 ui_mesh_renderer::{UiMesh, UiVertex},
                 window_renderer::{WindowRenderItems, WindowRenderer},
@@ -33,8 +34,7 @@ pub struct WindowRenderContext<'a> {
 pub struct WindowCommon {
     pub rect: Rect,
 
-    //pub geometries: Geometries,
-    pub render_geometry: RenderGeometry,
+    pub geometries: Geometries,
     pub widgets: Widgets,
 
     pub is_visible: bool,
@@ -47,8 +47,7 @@ impl WindowCommon {
     pub fn new(rect: Rect) -> Self {
         Self {
             rect,
-            // geometries: Geometries::default(),
-            render_geometry: RenderGeometry::default(),
+            geometries: Geometries::default(),
             widgets: Widgets::default(),
 
             is_visible: true,
@@ -153,7 +152,7 @@ pub trait WindowImpl {
         context: &mut WindowRenderContext<'_>,
         render_items: &mut WindowRenderItems,
     ) {
-        // common.geometries.render(common.rect.position, render_items);
+        common.geometries.render(common.rect.position, render_items);
         common
             .widgets
             .render(common.rect.position, 0, context, render_items);
@@ -183,7 +182,7 @@ impl Window {
     ) -> Result<Self, AssetError> {
         let mut common = WindowCommon::new(rect);
 
-        populate_geometries(&mut common.render_geometry, &window_base, layout_context)?;
+        populate_geometries(&mut common.geometries, &window_base, layout_context)?;
 
         Ok(Self {
             window_base: Some(window_base),
@@ -229,7 +228,8 @@ impl Window {
             self.common.rect = window_base.resolve_layout_rect(&layout_context);
 
             if let Err(error) = populate_geometries(
-                &mut self.common.render_geometry,
+                &mut self.common.geometries,
+                // &mut self.common.render_geometry,
                 window_base,
                 &layout_context,
             ) {
@@ -363,28 +363,36 @@ impl RenderGeometry {
 }
 
 fn populate_geometries(
-    geometries: &mut RenderGeometry,
+    geometries: &mut Geometries,
     window_base: &WindowBase,
-    layout_context: &WindowLayoutContext,
+    _layout_context: &WindowLayoutContext,
 ) -> Result<(), AssetError> {
-    geometries.tiled.clear();
-    geometries.normal.clear();
+    // render_geometries.tiled.clear();
+    // render_geometries.normal.clear();
+
+    geometries.clear();
 
     for geometry in window_base.geometries.iter() {
         use crate::game::config::window_base::Geometry as G;
 
         match geometry {
-            G::Normal(normal) => {
-                geometries
-                    .normal
-                    .push(build_normal_mesh(window_base, normal, layout_context)?)
+            G::Normal(_normal) => {
+                // render_geometries.normal.push(build_normal_mesh(
+                //     window_base,
+                //     normal,
+                //     layout_context,
+                // )?)
             }
 
-            G::Tiled(tiled) => geometries.tiled.push({
+            G::Tiled(crate::game::config::window_base::GeometryTiled {
+                jpg_name,
+                dimensions,
+                ..
+            }) => {
                 let image = globals::images().load(
                     PathBuf::from("textures")
                         .join("interface")
-                        .join(&tiled.jpg_name)
+                        .join(jpg_name)
                         .with_extension("jpg"),
                 )?;
 
@@ -393,11 +401,11 @@ fn populate_geometries(
                     continue;
                 };
 
-                TiledRenderGeometry {
-                    rect: Rect::from_size(tiled.dimensions),
+                geometries.tiled.push(TiledGeometry {
                     texture,
-                }
-            }),
+                    size: *dimensions,
+                });
+            }
         }
     }
 

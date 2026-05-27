@@ -8,7 +8,6 @@ use crate::{
         globals,
         ui::{
             Rect,
-            render::window_renderer::WindowRenderItems,
             widgets::text_button::TextButtonWidget,
             windows::{
                 actions::WindowManagerAction,
@@ -18,8 +17,6 @@ use crate::{
         },
     },
 };
-
-use super::window::{WindowCommon, WindowRenderContext};
 
 pub struct MainMenuWindow;
 
@@ -46,15 +43,4 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
     Ok(window)
 }
 
-impl WindowImpl for MainMenuWindow {
-    fn render(
-        &mut self,
-        common: &mut WindowCommon,
-        _context: &mut WindowRenderContext<'_>,
-        render_items: &mut WindowRenderItems,
-    ) {
-        common
-            .render_geometry
-            .render(common.rect.position, render_items);
-    }
-}
+impl WindowImpl for MainMenuWindow {}
