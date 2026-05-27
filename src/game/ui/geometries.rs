@@ -30,22 +30,21 @@ impl GeometryVertex {
     }
 }
 
-pub struct TiledGeometry {
+pub struct GeometryTiled {
     pub texture: Handle<Texture>,
     pub size: IVec2,
 }
 
 #[derive(Clone)]
-pub struct BaseGeometry {
+pub struct GeometryBase {
     pub mesh: UiMesh,
-    pub texture: Handle<Texture>,
 }
 
 /// Each [Window] can have geometry rendered as backgrounds or UI elements.
 #[derive(Default)]
 pub struct Geometries {
-    pub tiled: Vec<TiledGeometry>,
-    pub base: Vec<BaseGeometry>,
+    pub tiled: Vec<GeometryTiled>,
+    pub base: Vec<GeometryBase>,
 }
 
 impl Geometries {
@@ -75,5 +74,9 @@ impl Geometries {
         }
     }
 
-    fn render_base(&self, _render_items: &mut WindowRenderItems) {}
+    fn render_base(&self, render_items: &mut WindowRenderItems) {
+        for geometry in self.base.iter() {
+            render_items.render_mesh(geometry.mesh.clone());
+        }
+    }
 }

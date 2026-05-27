@@ -5,12 +5,12 @@ use glam::{IVec2, Vec2, Vec4};
 use crate::{
     engine::{assets::AssetError, renderer::RenderContext, storage::Handle},
     game::{
-        config::window_base::{GeometryBase, WindowBase},
+        config::window_base as config,
         globals,
         render::textures::Texture,
         ui::{
             EventResult, Rect,
-            geometries::{Geometries, TiledGeometry},
+            geometries::{Geometries, GeometryBase, GeometryTiled},
             render::{
                 ui_mesh_renderer::{UiMesh, UiVertex},
                 window_renderer::{WindowRenderItems, WindowRenderer},
@@ -160,7 +160,7 @@ pub trait WindowImpl {
 }
 
 pub struct Window {
-    pub window_base: Option<Arc<WindowBase>>,
+    pub window_base: Option<Arc<config::WindowBase>>,
     pub common: WindowCommon,
     pub window_impl: Box<dyn WindowImpl>,
 }
@@ -175,7 +175,7 @@ impl Window {
     }
 
     pub fn from_window_base(
-        window_base: Arc<WindowBase>,
+        window_base: Arc<config::WindowBase>,
         layout_context: &WindowLayoutContext,
         rect: Rect,
         window_impl: Box<dyn WindowImpl + 'static>,
@@ -364,27 +364,14 @@ impl RenderGeometry {
 
 fn populate_geometries(
     geometries: &mut Geometries,
-    window_base: &WindowBase,
-    _layout_context: &WindowLayoutContext,
+    window_base: &config::WindowBase,
+    layout_context: &WindowLayoutContext,
 ) -> Result<(), AssetError> {
-    // render_geometries.tiled.clear();
-    // render_geometries.normal.clear();
-
     geometries.clear();
 
     for geometry in window_base.geometries.iter() {
-        use crate::game::config::window_base::Geometry as G;
-
         match geometry {
-            G::Base(_normal) => {
-                // render_geometries.normal.push(build_normal_mesh(
-                //     window_base,
-                //     normal,
-                //     layout_context,
-                // )?)
-            }
-
-            G::Tiled(crate::game::config::window_base::GeometryTiled {
+            config::Geometry::Tiled(config::GeometryTiled {
                 jpg_name,
                 dimensions,
                 ..
@@ -401,10 +388,15 @@ fn populate_geometries(
                     continue;
                 };
 
-                geometries.tiled.push(TiledGeometry {
+                geometries.tiled.push(GeometryTiled {
                     texture,
                     size: *dimensions,
                 });
+            }
+
+            config::Geometry::Base(geometry) => {
+                let mesh = build_geometry_base_mesh(window_base, geometry, layout_context)?;
+                geometries.base.push(GeometryBase { mesh });
             }
         }
     }
@@ -412,9 +404,9 @@ fn populate_geometries(
     Ok(())
 }
 
-fn build_normal_mesh(
-    window_base: &WindowBase,
-    geometry: &GeometryBase,
+fn build_geometry_base_mesh(
+    window_base: &config::WindowBase,
+    geometry: &config::GeometryBase,
     layout_context: &WindowLayoutContext,
 ) -> Result<UiMesh, AssetError> {
     let image = globals::images().load(
