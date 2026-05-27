@@ -1,13 +1,12 @@
 use std::{path::PathBuf, sync::Arc};
 
-use glam::{IVec2, Vec2, Vec4};
+use glam::{IVec2, Vec2};
 
 use crate::{
-    engine::{assets::AssetError, renderer::RenderContext, storage::Handle},
+    engine::{assets::AssetError, renderer::RenderContext},
     game::{
         config::window_base as config,
         globals,
-        render::textures::Texture,
         ui::{
             EventResult, Rect,
             geometries::{Geometries, GeometryBase, GeometryTiled},
@@ -326,39 +325,6 @@ impl Window {
 
     pub fn update(&mut self, delta_time: f32) {
         self.window_impl.update(delta_time);
-    }
-}
-
-#[derive(Debug)]
-pub struct TiledRenderGeometry {
-    rect: Rect,
-    texture: Handle<Texture>,
-}
-
-#[derive(Debug, Default)]
-pub struct RenderGeometry {
-    tiled: Vec<TiledRenderGeometry>,
-    normal: Vec<UiMesh>,
-}
-
-impl RenderGeometry {
-    /// Queues the window-base geometries at the specified UI-space origin.
-    pub fn render(&self, origin: IVec2, render_items: &mut WindowRenderItems) {
-        for geometry in self.tiled.iter() {
-            render_items.render_textured_rect(
-                geometry.rect.offset(origin),
-                geometry.texture,
-                Vec2::ZERO,
-                Vec2::ONE,
-                Vec4::ONE,
-            );
-        }
-
-        for geometry in self.normal.iter() {
-            let mut mesh = geometry.clone();
-            offset_mesh(&mut mesh, origin.as_vec2());
-            render_items.render_mesh(mesh);
-        }
     }
 }
 
