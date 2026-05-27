@@ -123,7 +123,7 @@ pub struct GeometryPolygon {
 }
 
 #[derive(Debug, Default)]
-pub struct GeometryNormal {
+pub struct GeometryBase {
     pub texture: String,
     pub texture_pack_dx: i32,
     pub texture_pack_dy: i32,
@@ -144,7 +144,7 @@ pub struct GeometryTiled {
 
 #[derive(Debug)]
 pub enum Geometry {
-    Normal(GeometryNormal),
+    Base(GeometryBase),
     Tiled(GeometryTiled),
 }
 
@@ -253,7 +253,7 @@ impl From<ConfigLines> for WindowBase {
         enum State {
             #[default]
             None,
-            GeometryNormal(GeometryNormal),
+            GeometryBase(GeometryBase),
             GeometryTiled(GeometryTiled),
         }
 
@@ -261,9 +261,9 @@ impl From<ConfigLines> for WindowBase {
             fn set(&mut self, result: &mut WindowBase, state: State) {
                 match self {
                     State::None => {}
-                    State::GeometryNormal(geometry) => result
+                    State::GeometryBase(geometry) => result
                         .geometries
-                        .push(Geometry::Normal(std::mem::take(geometry))),
+                        .push(Geometry::Base(std::mem::take(geometry))),
                     State::GeometryTiled(geometry) => result
                         .geometries
                         .push(Geometry::Tiled(std::mem::take(geometry))),
@@ -278,11 +278,11 @@ impl From<ConfigLines> for WindowBase {
                 }
             }
 
-            fn with_normal_geometry(&mut self, mut f: impl FnMut(&mut GeometryNormal)) {
-                if let Self::GeometryNormal(geometry) = self {
+            fn with_base_geometry(&mut self, mut f: impl FnMut(&mut GeometryBase)) {
+                if let Self::GeometryBase(geometry) = self {
                     f(geometry);
                 } else {
-                    tracing::warn!("Expected normal geometry!");
+                    tracing::warn!("Expected base geometry!");
                 }
             }
         }
@@ -400,21 +400,18 @@ impl From<ConfigLines> for WindowBase {
                 }
 
                 "WINDOW_BASE_GEOMETRY" => {
-                    state.set(
-                        &mut result,
-                        State::GeometryNormal(GeometryNormal::default()),
-                    );
+                    state.set(&mut result, State::GeometryBase(GeometryBase::default()));
                 }
 
                 "GEOMETRY_BLEND_MODE" => {
-                    state.with_normal_geometry(|geometry| geometry.blend_mode = line.param(0))
+                    state.with_base_geometry(|geometry| geometry.blend_mode = line.param(0))
                 }
 
                 "GEOMETRY_BILINEAR_FILTERING" => match state {
                     State::None => {
                         tracing::warn!("Bilinear filtering specified outside of geometry block!")
                     }
-                    State::GeometryNormal(ref mut geometry) => {
+                    State::GeometryBase(ref mut geometry) => {
                         geometry.bilinear_filtering = line.param(0)
                     }
                     State::GeometryTiled(ref mut geometry) => {
@@ -423,18 +420,18 @@ impl From<ConfigLines> for WindowBase {
                 },
 
                 "GEOMETRY_TEXTURE" => {
-                    state.with_normal_geometry(|geometry| geometry.texture = line.param(0))
+                    state.with_base_geometry(|geometry| geometry.texture = line.param(0))
                 }
 
                 "GEOMETRY_TEXTURE_PACK_DX" => {
-                    state.with_normal_geometry(|geometry| geometry.texture_pack_dx = line.param(0))
+                    state.with_base_geometry(|geometry| geometry.texture_pack_dx = line.param(0))
                 }
 
                 "GEOMETRY_TEXTURE_PACK_DY" => {
-                    state.with_normal_geometry(|geometry| geometry.texture_pack_dy = line.param(0))
+                    state.with_base_geometry(|geometry| geometry.texture_pack_dy = line.param(0))
                 }
 
-                "GEOMETRY_VERTICES" => state.with_normal_geometry(|geometry| {
+                "GEOMETRY_VERTICES" => state.with_base_geometry(|geometry| {
                     let mut count: i32 = line.param(0);
 
                     loop {
@@ -469,7 +466,7 @@ impl From<ConfigLines> for WindowBase {
                     }
                 }),
 
-                "GEOMETRY_POLYGONS" => state.with_normal_geometry(|geometry| {
+                "GEOMETRY_POLYGONS" => state.with_base_geometry(|geometry| {
                     let mut count: i32 = line.param(0);
                     loop {
                         if count == 0 {
@@ -522,11 +519,11 @@ impl From<ConfigLines> for WindowBase {
 
         match state {
             State::None => {}
-            State::GeometryNormal(geometry_normal) => {
-                result.geometries.push(Geometry::Normal(geometry_normal));
+            State::GeometryBase(geometry) => {
+                result.geometries.push(Geometry::Base(geometry));
             }
-            State::GeometryTiled(geometry_tiled) => {
-                result.geometries.push(Geometry::Tiled(geometry_tiled));
+            State::GeometryTiled(geometry) => {
+                result.geometries.push(Geometry::Tiled(geometry));
             }
         }
 

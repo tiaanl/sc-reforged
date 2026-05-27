@@ -5,7 +5,7 @@ use glam::{IVec2, Vec2, Vec4};
 use crate::{
     engine::{assets::AssetError, renderer::RenderContext, storage::Handle},
     game::{
-        config::window_base::{GeometryNormal, WindowBase},
+        config::window_base::{GeometryBase, WindowBase},
         globals,
         render::textures::Texture,
         ui::{
@@ -376,7 +376,7 @@ fn populate_geometries(
         use crate::game::config::window_base::Geometry as G;
 
         match geometry {
-            G::Normal(_normal) => {
+            G::Base(_normal) => {
                 // render_geometries.normal.push(build_normal_mesh(
                 //     window_base,
                 //     normal,
@@ -414,7 +414,7 @@ fn populate_geometries(
 
 fn build_normal_mesh(
     window_base: &WindowBase,
-    geometry: &GeometryNormal,
+    geometry: &GeometryBase,
     layout_context: &WindowLayoutContext,
 ) -> Result<UiMesh, AssetError> {
     let image = globals::images().load(
