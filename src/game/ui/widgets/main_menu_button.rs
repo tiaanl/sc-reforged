@@ -14,6 +14,7 @@ use crate::{
     },
 };
 
+/// Creates a layered main-menu button using the original widget bounds calculation.
 pub fn create_main_menu_button(
     position: IVec2,
     bullet_sprite: Handle<Sprite3d>,
@@ -29,10 +30,11 @@ pub fn create_main_menu_button(
     let text = ButtonLayer::new(text_sprite, text_frame, position + button_offset);
     let shadow = ButtonLayer::new(shadow_sprite, shadow_frame, position + shadow_offset);
 
-    let rect = Rect::from_position(position)
-        .with_size(bullet.rect.size)
-        .grow(IVec2::new(5, 0))
-        .grow(text.rect.size);
+    let rect = Rect::new(position, {
+        let bullet_size = bullet.rect.size;
+        let text_size = text.rect.size;
+        IVec2::new(bullet_size.x + text_size.x, text_size.y)
+    });
 
     Box::new(MainMenuButton {
         rect,
@@ -63,7 +65,7 @@ impl Widget for MainMenuButton {
     fn on_primary_mouse_down(
         &mut self,
         position: IVec2,
-        context: &mut WindowManagerContext,
+        _context: &mut WindowManagerContext,
     ) -> EventResult {
         if self.rect.contains(position) {
             self.pressed = true;
@@ -74,8 +76,8 @@ impl Widget for MainMenuButton {
 
     fn on_primary_mouse_up(
         &mut self,
-        position: IVec2,
-        context: &mut WindowManagerContext,
+        _position: IVec2,
+        _context: &mut WindowManagerContext,
     ) -> EventResult {
         self.pressed = false;
 

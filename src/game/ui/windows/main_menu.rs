@@ -48,7 +48,7 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
             .unwrap_or(0),
         window_base
             .ivars
-            .get("button_offset_x")
+            .get("button_offset_y")
             .and_then(|ivar| window_base.resolve_ivar(ivar, context))
             .unwrap_or(0),
     );
@@ -56,12 +56,12 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
     let shadow_offset = IVec2::new(
         window_base
             .ivars
-            .get("button_offset_x")
+            .get("shadow_offset_x")
             .and_then(|ivar| window_base.resolve_ivar(ivar, context))
             .unwrap_or(0),
         window_base
             .ivars
-            .get("button_offset_x")
+            .get("shadow_offset_y")
             .and_then(|ivar| window_base.resolve_ivar(ivar, context))
             .unwrap_or(0),
     );
@@ -118,10 +118,10 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
         ),
     ];
 
-    let Some(bullet_sprite) = globals::sprites().get_handle_by_name("interface_elements_14") else {
+    let Some(bullet_sprite) = globals::sprites().get_handle_by_name("interface_elements_16") else {
         return Err(AssetError::custom(PathBuf::new(), "bullet_sprite"));
     };
-    let bullet_frame = 0;
+    let bullet_frame = 3;
 
     for (button, text_sprite, text_frame, shadow_sprite, shadow_frame) in BUTTONS.iter().cloned() {
         let Some(button_advice) = window_base.button_advices.get(button) else {
