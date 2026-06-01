@@ -35,6 +35,12 @@ pub struct SpriteFrame {
     pub bottom_right: IVec2,
 }
 
+impl SpriteFrame {
+    pub fn size(&self) -> IVec2 {
+        self.bottom_right - self.top_left
+    }
+}
+
 #[derive(Debug)]
 pub struct Sprite3d {
     pub name: String,
@@ -82,7 +88,13 @@ impl Sprites {
 
     /// Returns a sprite handle by its configured name.
     pub fn get_handle_by_name(&self, name: &str) -> Option<Handle<Sprite3d>> {
-        self.sprites.get_handle_by_key(&String::from(name))
+        match self.sprites.get_handle_by_key(&String::from(name)) {
+            Some(handle) => Some(handle),
+            None => {
+                tracing::warn!("Handle not found for name: {name}");
+                None
+            }
+        }
     }
 
     /// Returns a sprite by its configured name.

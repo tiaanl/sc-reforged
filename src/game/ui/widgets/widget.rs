@@ -14,19 +14,31 @@ pub trait Widget {
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult;
+    ) -> EventResult {
+        let _ = position;
+        let _ = context;
+        EventResult::Ignore
+    }
 
     fn on_primary_mouse_up(
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult;
+    ) -> EventResult {
+        let _ = position;
+        let _ = context;
+        EventResult::Ignore
+    }
 
     fn on_mouse_wheel(
         &mut self,
         wheel_steps: i32,
         context: &mut WindowManagerContext,
-    ) -> EventResult;
+    ) -> EventResult {
+        let _ = wheel_steps;
+        let _ = context;
+        EventResult::Ignore
+    }
 
     fn render(
         &mut self,

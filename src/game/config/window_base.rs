@@ -192,6 +192,14 @@ impl WindowBase {
         }
     }
 
+    pub fn resolve_ivar(&self, ivar: &IVar, context: &WindowLayoutContext) -> Option<i32> {
+        let mut value = self.resolve(&ivar.atom, context)?;
+        for adjustment in ivar.adjustments.iter() {
+            adjustment.apply(&mut value);
+        }
+        Some(value)
+    }
+
     pub fn resolve_layout_rect(&self, context: &WindowLayoutContext) -> Rect {
         let x = self.resolve(&self.render_dx, context).unwrap_or(0);
         let y = self.resolve(&self.render_dy, context).unwrap_or(0);
