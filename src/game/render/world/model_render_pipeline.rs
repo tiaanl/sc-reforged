@@ -139,12 +139,12 @@ impl ModelRenderPipeline {
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("models_pipeline_layout"),
                     bind_group_layouts: &[
-                        layouts.get::<CameraEnvironmentLayout>(),
-                        &texture_bind_group_layout,
-                        &models.nodes_bind_group_layout,
-                        &poses_bind_group_layout,
+                        Some(layouts.get::<CameraEnvironmentLayout>()),
+                        Some(&texture_bind_group_layout),
+                        Some(&models.nodes_bind_group_layout),
+                        Some(&poses_bind_group_layout),
                     ],
-                    push_constant_ranges: &[],
+                    ..Default::default()
                 });
 
         let buffers = &[
@@ -184,14 +184,14 @@ impl ModelRenderPipeline {
 
         let opaque_depth = wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth32Float,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::LessEqual,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::LessEqual),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         };
 
         let alpha_depth = wgpu::DepthStencilState {
-            depth_write_enabled: false,
+            depth_write_enabled: Some(false),
             ..opaque_depth.clone()
         };
 
@@ -216,7 +216,7 @@ impl ModelRenderPipeline {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffer::opaque_targets(),
                     }),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 
@@ -241,7 +241,7 @@ impl ModelRenderPipeline {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffer::opaque_targets(),
                     }),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 
@@ -266,7 +266,7 @@ impl ModelRenderPipeline {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffer::alpha_targets(),
                     }),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 

@@ -311,11 +311,7 @@ impl From<ConfigLines> for WindowBase {
 
         let mut lines = lines.into_iter().peekable();
 
-        loop {
-            let Some(line) = lines.next() else {
-                break;
-            };
-
+        while let Some(line) = lines.next() {
             match line.key.as_str() {
                 "WINDOW_BASE" => result.name = line.param(0),
 

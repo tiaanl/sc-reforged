@@ -219,8 +219,7 @@ impl GeometryBuffer {
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
+            ..Default::default()
         });
     }
 
@@ -335,8 +334,8 @@ impl GeometryBuffer {
     ) -> wgpu::DepthStencilState {
         wgpu::DepthStencilState {
             format: Self::DEPTH_FORMAT,
-            depth_write_enabled,
-            depth_compare,
+            depth_write_enabled: Some(depth_write_enabled),
+            depth_compare: Some(depth_compare),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }
@@ -368,8 +367,7 @@ impl GeometryBuffer {
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
+            ..Default::default()
         })
     }
 
@@ -408,8 +406,7 @@ impl GeometryBuffer {
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
+            ..Default::default()
         })
     }
 }

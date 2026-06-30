@@ -43,14 +43,18 @@ impl Surface {
         self.configure(device);
     }
 
-    pub fn get_texture(&self, device: &wgpu::Device) -> wgpu::SurfaceTexture {
+    pub fn get_texture(&self, device: &wgpu::Device) -> Option<wgpu::SurfaceTexture> {
         match self.surface.get_current_texture() {
-            Ok(texture) => texture,
-            Err(wgpu::SurfaceError::Outdated) => {
+            wgpu::CurrentSurfaceTexture::Success(surface_texture) => Some(surface_texture),
+            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
                 self.configure(device);
-                self.get_texture(device)
+                Some(surface_texture)
             }
-            Err(err) => panic!("Current texture not available! {err}"),
+            wgpu::CurrentSurfaceTexture::Timeout => todo!(),
+            wgpu::CurrentSurfaceTexture::Occluded => todo!(),
+            wgpu::CurrentSurfaceTexture::Outdated => todo!(),
+            wgpu::CurrentSurfaceTexture::Lost => todo!(),
+            wgpu::CurrentSurfaceTexture::Validation => todo!(),
         }
     }
 }

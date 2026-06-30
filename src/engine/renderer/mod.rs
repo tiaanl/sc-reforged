@@ -13,10 +13,7 @@ pub use surface::{Surface, SurfaceDesc};
 pub fn create(window: Arc<Window>) -> (surface::Surface, Gpu) {
     let winit::dpi::PhysicalSize { width, height } = window.inner_size();
 
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::PRIMARY,
-        ..Default::default()
-    });
+    let instance = wgpu::Instance::default();
 
     let surface = instance.create_surface(window).expect("create surface");
 

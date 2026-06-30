@@ -179,8 +179,11 @@ impl UiMeshRenderer {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("ui_mesh_renderer_pipeline_layout"),
-            bind_group_layouts: &[&viewport_bind_group_layout, &texture_bind_group_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[
+                Some(&viewport_bind_group_layout),
+                Some(&texture_bind_group_layout),
+            ],
+            ..Default::default()
         });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -213,7 +216,7 @@ impl UiMeshRenderer {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 

@@ -34,8 +34,8 @@ impl GizmoRenderPipeline {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("gizmos_pipeline_layout"),
-                    bind_group_layouts: &[layouts.get::<CameraEnvironmentLayout>()],
-                    push_constant_ranges: &[],
+                    bind_group_layouts: &[Some(layouts.get::<CameraEnvironmentLayout>())],
+                    ..Default::default()
                 });
 
         let pipeline =
@@ -63,8 +63,8 @@ impl GizmoRenderPipeline {
                     },
                     depth_stencil: Some(wgpu::DepthStencilState {
                         format: GeometryBuffer::DEPTH_FORMAT,
-                        depth_write_enabled: false,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
+                        depth_write_enabled: Some(false),
+                        depth_compare: Some(wgpu::CompareFunction::LessEqual),
                         stencil: wgpu::StencilState::default(),
                         bias: wgpu::DepthBiasState::default(),
                     }),
@@ -75,7 +75,7 @@ impl GizmoRenderPipeline {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffer::opaque_targets(),
                     }),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 

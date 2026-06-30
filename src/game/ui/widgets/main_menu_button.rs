@@ -15,6 +15,7 @@ use crate::{
 };
 
 /// Creates a layered main-menu button using the original widget bounds calculation.
+#[allow(clippy::too_many_arguments)]
 pub fn create_main_menu_button(
     position: IVec2,
     bullet_sprite: Handle<Sprite3d>,

@@ -191,52 +191,53 @@ impl ApplicationHandler for App {
                         }
 
                         {
-                            let output = surface.get_texture(&globals::gpu().device);
-                            let surface_view = output
-                                .texture
-                                .create_view(&wgpu::TextureViewDescriptor::default());
+                            if let Some(output) = surface.get_texture(&globals::gpu().device) {
+                                let surface_view = output
+                                    .texture
+                                    .create_view(&wgpu::TextureViewDescriptor::default());
 
-                            let encoder = globals::gpu().device.create_command_encoder(
-                                &wgpu::CommandEncoderDescriptor {
-                                    label: Some("main command encoder"),
-                                },
-                            );
-
-                            let mut render_context = RenderContext {
-                                encoder,
-                                frame_index: *frame_index,
-                            };
-                            let render_target = RenderTarget {
-                                view: surface_view,
-                                size: surface.size(),
-                            };
-
-                            game_state.render(&mut render_context, &render_target);
-
-                            // Render egui if it requires a repaint.
-                            #[cfg(feature = "egui")]
-                            if repaint {
-                                egui_integration.render(
-                                    window,
-                                    &mut render_context.encoder,
-                                    &render_target.view,
-                                    |ctx| {
-                                        ctx.set_pixels_per_point(1.2);
-                                        // Debug stuff from the scene.
-                                        game_state.debug_panel(ctx, render_context.frame_index);
+                                let encoder = globals::gpu().device.create_command_encoder(
+                                    &wgpu::CommandEncoderDescriptor {
+                                        label: Some("main command encoder"),
                                     },
                                 );
+
+                                let mut render_context = RenderContext {
+                                    encoder,
+                                    frame_index: *frame_index,
+                                };
+                                let render_target = RenderTarget {
+                                    view: surface_view,
+                                    size: surface.size(),
+                                };
+
+                                game_state.render(&mut render_context, &render_target);
+
+                                // Render egui if it requires a repaint.
+                                #[cfg(feature = "egui")]
+                                if repaint {
+                                    egui_integration.render(
+                                        window,
+                                        &mut render_context.encoder,
+                                        &render_target.view,
+                                        |ctx| {
+                                            ctx.set_pixels_per_point(1.2);
+                                            // Debug stuff from the scene.
+                                            game_state.debug_panel(ctx, render_context.frame_index);
+                                        },
+                                    );
+                                }
+
+                                globals::gpu()
+                                    .queue
+                                    .submit(std::iter::once(render_context.encoder.finish()));
+
+                                output.present();
+
+                                // Frame is done rendering.
+
+                                *frame_index += 1;
                             }
-
-                            globals::gpu()
-                                .queue
-                                .submit(std::iter::once(render_context.encoder.finish()));
-
-                            output.present();
-
-                            // Frame is done rendering.
-
-                            *frame_index += 1;
 
                             window.request_redraw();
                         }

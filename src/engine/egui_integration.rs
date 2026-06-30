@@ -66,11 +66,11 @@ impl EguiIntegration {
         window: &winit::window::Window,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        run_ui: impl FnMut(&egui::Context),
+        run_ui: impl FnMut(&mut egui::Ui),
     ) {
         let raw_input = self.egui.take_egui_input(window);
 
-        let full_output = self.egui.egui_ctx().run(raw_input, run_ui);
+        let full_output = self.egui.egui_ctx().run_ui(raw_input, run_ui);
 
         let egui::FullOutput {
             platform_output,
@@ -121,9 +121,7 @@ impl EguiIntegration {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
+            ..Default::default()
         });
 
         self.egui_renderer.render(

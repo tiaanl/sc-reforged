@@ -23,8 +23,8 @@ impl Compositor {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("compositor_pipeline_layout"),
-                    bind_group_layouts: &[gbuffer_bind_group_layout],
-                    push_constant_ranges: &[],
+                    bind_group_layouts: &[Some(gbuffer_bind_group_layout)],
+                    ..Default::default()
                 });
 
         let pipeline =
@@ -52,7 +52,7 @@ impl Compositor {
                             write_mask: wgpu::ColorWrites::ALL,
                         })],
                     }),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 
@@ -81,9 +81,7 @@ impl Compositor {
                             store: wgpu::StoreOp::Store,
                         },
                     })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
+                    ..Default::default()
                 });
 
         render_pass.set_pipeline(&self.pipeline);

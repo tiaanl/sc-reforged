@@ -250,10 +250,10 @@ impl TerrainRenderPipeline {
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("terrain_pipeline_layout"),
                     bind_group_layouts: &[
-                        layouts.get::<CameraEnvironmentLayout>(),
-                        &terrain_bind_group_layout,
+                        Some(layouts.get::<CameraEnvironmentLayout>()),
+                        Some(&terrain_bind_group_layout),
                     ],
-                    push_constant_ranges: &[],
+                    ..Default::default()
                 });
 
         let instance_attrs = wgpu::vertex_attr_array![
@@ -282,8 +282,8 @@ impl TerrainRenderPipeline {
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: Some(wgpu::DepthStencilState {
                         format: wgpu::TextureFormat::Depth32Float,
-                        depth_write_enabled: true,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
+                        depth_write_enabled: Some(true),
+                        depth_compare: Some(wgpu::CompareFunction::LessEqual),
                         stencil: wgpu::StencilState::default(),
                         bias: wgpu::DepthBiasState::default(),
                     }),
@@ -294,7 +294,7 @@ impl TerrainRenderPipeline {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffer::opaque_targets(),
                     }),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 
@@ -322,8 +322,8 @@ impl TerrainRenderPipeline {
                     },
                     depth_stencil: Some(wgpu::DepthStencilState {
                         format: wgpu::TextureFormat::Depth32Float,
-                        depth_write_enabled: false,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
+                        depth_write_enabled: Some(false),
+                        depth_compare: Some(wgpu::CompareFunction::LessEqual),
                         stencil: wgpu::StencilState::default(),
                         bias: wgpu::DepthBiasState::default(),
                     }),
@@ -334,7 +334,7 @@ impl TerrainRenderPipeline {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffer::opaque_targets(),
                     }),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 
@@ -362,8 +362,8 @@ impl TerrainRenderPipeline {
                     },
                     depth_stencil: Some(wgpu::DepthStencilState {
                         format: wgpu::TextureFormat::Depth32Float,
-                        depth_write_enabled: true,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
+                        depth_write_enabled: Some(true),
+                        depth_compare: Some(wgpu::CompareFunction::LessEqual),
                         stencil: wgpu::StencilState::default(),
                         bias: wgpu::DepthBiasState::default(),
                     }),
@@ -374,7 +374,7 @@ impl TerrainRenderPipeline {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: GeometryBuffer::opaque_targets(),
                     }),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 

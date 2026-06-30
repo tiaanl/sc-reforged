@@ -11,10 +11,10 @@ egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit"]
 shadow_company_tools = { path = "../shadow_company_tools" }
 
 # Graphics
-egui = { version = "0.33", optional = true, default-features = false, features = ["default_fonts"] }
-egui-wgpu = { version = "0.33", optional = true, default-features = false }
-egui-winit = { version = "0.33", optional = true, default-features = false }
-wgpu = { version = "27.0" }
+egui = { version = "0.35", optional = true, default-features = false, features = ["default_fonts"] }
+egui-wgpu = { version = "0.35", optional = true, default-features = false }
+egui-winit = { version = "0.35", optional = true, default-features = false }
+wgpu = { version = "29.0" }
 winit = { version = "0.30" }
 
 ahash = "0.8"
@@ -34,7 +34,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["a
 walkdir = { version = "2.5", default-features = false }
 zune-jpeg = { version = "=0.5.5" }
 bitflags = "2.10"
-bevy_ecs = "0.18"
+bevy_ecs = { version = "0.19", default-features = false }
 send_wrapper = "0.6.0"
 smallvec = { version = "1.15.1", features = ["const_new"] }
 
