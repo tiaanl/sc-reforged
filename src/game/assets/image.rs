@@ -1,7 +1,5 @@
 use glam::UVec2;
 
-use crate::game::assets::asset_source::AssetSource;
-
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum BlendMode {
@@ -16,8 +14,6 @@ pub enum BlendMode {
 }
 
 pub struct Image {
-    #[allow(unused)]
-    pub source: AssetSource,
     pub size: UVec2,
     #[allow(unused)]
     pub blend_mode: BlendMode,
@@ -26,9 +22,8 @@ pub struct Image {
 
 impl Image {
     /// Build an [Image] from RGBA pixel data.
-    pub fn from_rgba(source: AssetSource, data: image::RgbaImage, blend_mode: BlendMode) -> Self {
+    pub fn from_rgba(data: image::RgbaImage, blend_mode: BlendMode) -> Self {
         Self {
-            source,
             size: UVec2::new(data.width(), data.height()),
             blend_mode,
             data,

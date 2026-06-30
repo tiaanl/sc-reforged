@@ -9,10 +9,7 @@ use crate::{
         storage::Handle,
     },
     game::{
-        assets::{
-            asset_source::AssetSource,
-            image::{BlendMode, Image},
-        },
+        assets::image::{BlendMode, Image},
         globals,
         render::textures::Texture,
         ui::Rect,
@@ -228,7 +225,6 @@ impl UiMeshRenderer {
         let white_image = globals::images().insert(
             "solid_white",
             Image::from_rgba(
-                AssetSource::Generated,
                 image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 255, 255, 255])),
                 BlendMode::Opaque,
             ),

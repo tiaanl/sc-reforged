@@ -9,10 +9,7 @@ use crate::{
         storage::{Handle, StorageMap},
     },
     game::{
-        assets::{
-            asset_source::AssetSource,
-            image::{BlendMode, Image, quantize_rgb565, quantize_rgba4444},
-        },
+        assets::image::{BlendMode, Image, quantize_rgb565, quantize_rgba4444},
         globals,
     },
 };
@@ -84,21 +81,15 @@ impl Images {
 
             if is_color_keyd {
                 Image::from_rgba(
-                    AssetSource::FileSystem(path.clone()),
                     image::DynamicImage::from(bmp).into_rgba8(),
                     BlendMode::ColorKeyed,
                 )
             } else if let Some(raw) = raw {
                 let mut rgba = shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw);
                 quantize_rgba4444(&mut rgba);
-                Image::from_rgba(
-                    AssetSource::FileSystem(path.clone()),
-                    rgba,
-                    BlendMode::Alpha,
-                )
+                Image::from_rgba(rgba, BlendMode::Alpha)
             } else {
                 Image::from_rgba(
-                    AssetSource::FileSystem(path.clone()),
                     image::DynamicImage::from(bmp).into_rgba8(),
                     BlendMode::Opaque,
                 )
@@ -128,22 +119,14 @@ impl Images {
             }
             quantize_rgba4444(&mut rgba);
 
-            Image::from_rgba(
-                AssetSource::FileSystem(path.clone()),
-                rgba,
-                BlendMode::Alpha,
-            )
+            Image::from_rgba(rgba, BlendMode::Alpha)
         } else if ext == "jpg" || ext == "jpeg" {
             let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
                 .map_err(|err| image_error_to_asset_error(err, &path))?;
             let mut rgba = image.into_rgba8();
             quantize_rgb565(&mut rgba);
 
-            Image::from_rgba(
-                AssetSource::FileSystem(path.clone()),
-                rgba,
-                BlendMode::Opaque,
-            )
+            Image::from_rgba(rgba, BlendMode::Opaque)
         } else {
             return Err(AssetError::NotSupported(path));
         };
