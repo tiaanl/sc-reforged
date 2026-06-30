@@ -9,7 +9,7 @@ use crate::{
         storage::{Handle, StorageMap},
     },
     game::{
-        assets::image::{BlendMode, Image, quantize_rgb565, quantize_rgba4444},
+        assets::{asset_factory::AssetFactory, image::Image},
         globals,
     },
 };
@@ -36,100 +36,7 @@ impl Images {
             };
         }
 
-        fn image_error_to_asset_error(err: image::ImageError, path: &PathBuf) -> AssetError {
-            match err {
-                image::ImageError::Decoding(_) => AssetError::Decode(path.clone()),
-                image::ImageError::IoError(error) => AssetError::from_io_error(error, path),
-                error => AssetError::custom(path, error),
-            }
-        }
-
-        let data = globals::file_system().load(&path)?;
-
-        let is_color_keyd = path
-            .file_name()
-            .filter(|n| n.to_string_lossy().contains("_ck"))
-            .is_some();
-
-        let ext = match path.extension() {
-            Some(ext) => ext.to_ascii_lowercase(),
-            None => {
-                tracing::warn!("Image path has no extension: {}", path.display());
-                std::ffi::OsString::new()
-            }
-        };
-
-        let image = if ext == "bmp" {
-            let bmp = shadow_company_tools::images::load_bmp_file(
-                &mut std::io::Cursor::new(data),
-                is_color_keyd,
-            )
-            .map_err(|err| image_error_to_asset_error(err, &path))?;
-
-            let raw = if let Ok(data) = globals::file_system().load(path.with_extension("raw")) {
-                Some(
-                    shadow_company_tools::images::load_raw_file(
-                        &mut std::io::Cursor::new(data),
-                        bmp.width(),
-                        bmp.height(),
-                    )
-                    .map_err(|err| image_error_to_asset_error(err, &path))?,
-                )
-            } else {
-                None
-            };
-
-            if is_color_keyd {
-                Image::from_rgba(
-                    image::DynamicImage::from(bmp).into_rgba8(),
-                    BlendMode::ColorKeyed,
-                )
-            } else if let Some(raw) = raw {
-                let mut rgba = shadow_company_tools::images::combine_bmp_and_raw(&bmp, &raw);
-                quantize_rgba4444(&mut rgba);
-                Image::from_rgba(rgba, BlendMode::Alpha)
-            } else {
-                Image::from_rgba(
-                    image::DynamicImage::from(bmp).into_rgba8(),
-                    BlendMode::Opaque,
-                )
-            }
-        } else if ext == "raw" {
-            // Standalone .raw files are headerless grayscale (one byte per pixel),
-            // used as alpha-mapped textures (e.g. fonts). The original engine
-            // (FUN_0048acd0) determines dimensions from the file size using a
-            // hardcoded lookup: 256→16x16, 1024→32x32, 4096→64x64, 16384→128x128,
-            // 65536→256x256. We generalize this to any square power-of-two size.
-            let pixel_count = data.len();
-            let side = (pixel_count as f64).sqrt() as u32;
-            if (side * side) as usize != pixel_count || !side.is_power_of_two() {
-                return Err(AssetError::Decode(path));
-            }
-
-            let raw = shadow_company_tools::images::load_raw_file(
-                &mut std::io::Cursor::new(data),
-                side,
-                side,
-            )
-            .map_err(|err| image_error_to_asset_error(err, &path))?;
-
-            let mut rgba = image::RgbaImage::new(side, side);
-            for (dest, alpha) in rgba.pixels_mut().zip(raw.pixels()) {
-                dest.0 = [255, 255, 255, alpha.0[0]];
-            }
-            quantize_rgba4444(&mut rgba);
-
-            Image::from_rgba(rgba, BlendMode::Alpha)
-        } else if ext == "jpg" || ext == "jpeg" {
-            let image = image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg)
-                .map_err(|err| image_error_to_asset_error(err, &path))?;
-            let mut rgba = image.into_rgba8();
-            quantize_rgb565(&mut rgba);
-
-            Image::from_rgba(rgba, BlendMode::Opaque)
-        } else {
-            return Err(AssetError::NotSupported(path));
-        };
+        let image = Image::load(globals::file_system(), &path)?;
 
         let handle = {
             let mut storage = self.storage.write().unwrap();
