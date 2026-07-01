@@ -10,7 +10,7 @@ pub enum AssetError {
     FileNotFound(PathBuf),
 
     #[error("Decode error ({0})")]
-    Decode(PathBuf),
+    Decode(PathBuf, Option<Box<dyn std::error::Error>>),
 
     #[error("Unsupported asset ({0})")]
     NotSupported(PathBuf),
@@ -23,6 +23,10 @@ pub enum AssetError {
 }
 
 impl AssetError {
+    pub fn decode_with_error(path: PathBuf, error: impl std::error::Error + 'static) -> Self {
+        Self::Decode(path, Some(Box::new(error)))
+    }
+
     pub fn custom(path: impl AsRef<Path>, description: impl std::fmt::Display) -> Self {
         Self::Custom(path.as_ref().to_path_buf(), description.to_string())
     }
