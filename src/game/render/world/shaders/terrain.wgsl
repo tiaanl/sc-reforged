@@ -27,7 +27,7 @@ struct VertexOutput {
     @location(0) world_position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) tex_coord: vec2<f32>,
-    @location(3) flags: u32,
+    @location(3) @interpolate(flat) flags: u32,
 }
 
 fn get_node(coord: vec2<u32>) -> vec4<f32> {

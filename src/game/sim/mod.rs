@@ -280,7 +280,7 @@ fn init_terrain(world: &mut World, campaign_def: &CampaignDef) -> Result<(), Ass
         }
 
         let height_map = {
-            let path = PathBuf::from("maps").join(format!("{}.pcx", &campaign_def.base_name));
+            let path = PathBuf::from("maps").join(format!("{}.pcx", campaign_def.base_name));
             tracing::info!("Loading terrain height map: {}", path.display());
             load_new_height_map(
                 path,

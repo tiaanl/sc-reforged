@@ -23,10 +23,4 @@ pub trait Scene {
         render_context: &mut RenderContext,
         render_target: &RenderTarget,
     );
-
-    /// Hook for adding debug panels.
-    #[cfg(feature = "egui")]
-    fn debug_panel(&mut self, egui: &egui::Context, frame_index: u64) {
-        let _ = (egui, frame_index);
-    }
 }

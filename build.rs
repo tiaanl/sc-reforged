@@ -35,10 +35,7 @@ fn compile_shaders() {
         .chain(SHADERS)
         .for_each(|path| println!("cargo:rerun-if-changed={path}"));
 
-    let mut composer = Composer::default().with_capabilities(
-        Capabilities::PUSH_CONSTANT
-            | Capabilities::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-    );
+    let mut composer = Composer::default();
 
     for path in COMMON {
         add_support_shader(&mut composer, path);

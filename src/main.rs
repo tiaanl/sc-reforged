@@ -14,7 +14,7 @@ use winit::{
 use crate::{
     engine::{
         input,
-        renderer::{RenderContext, RenderTarget, Surface, SurfaceDesc},
+        renderer::{RenderContext, RenderWindow},
     },
     game::{game_state::GameState, globals},
 };
@@ -35,20 +35,13 @@ struct Opts {
 enum App {
     Uninitialzed(Opts),
     Initialized {
-        /// The main window the engine is rendering to. This is also the window
-        /// that is receiving all the input events.
-        window: Arc<winit::window::Window>,
-        /// A description of the surface we can pass around.
-        surface_desc: SurfaceDesc,
-        /// The window surface where the scene will be displayed.
-        surface: Surface,
+        /// The window the engine renders to, which is also the window receiving
+        /// all the input events.
+        render_window: RenderWindow,
         /// The index of the current frame being rendered.
         frame_index: u64,
         /// The instant that the last frame started to render.
         last_frame_time: Instant,
-        /// egui integration.
-        #[cfg(feature = "egui")]
-        egui_integration: engine::egui_integration::EguiIntegration,
 
         /// The main state of the game.
         game_state: GameState,
@@ -69,30 +62,11 @@ impl ApplicationHandler for App {
                         .create_window(attributes)
                         .expect("create main window"),
                 );
-                let _window_size = {
-                    let PhysicalSize { width, height } = window.inner_size();
-                    UVec2::new(width, height)
-                };
-
-                let (surface, gpu) = engine::renderer::create(Arc::clone(&window));
-
-                let surface_desc = SurfaceDesc {
-                    size: surface.size(),
-                    format: surface.format(),
-                    scale_factor: window.scale_factor() as f32,
-                };
-
-                #[cfg(feature = "egui")]
-                let egui_integration = engine::egui_integration::EguiIntegration::new(
-                    event_loop,
-                    gpu.device.clone(),
-                    gpu.queue.clone(),
-                    surface_desc.format,
-                );
+                let (render_window, gpu) = RenderWindow::new(window);
 
                 globals::init(&opts.path, gpu);
 
-                let game_state = match GameState::new(&surface_desc) {
+                let game_state = match GameState::new(&render_window.desc()) {
                     Ok(game_state) => game_state,
                     Err(err) => {
                         tracing::error!("Could not initialize GameState - {err}");
@@ -104,11 +78,7 @@ impl ApplicationHandler for App {
                 tracing::info!("Application initialized!");
 
                 *self = App::Initialized {
-                    window,
-                    surface,
-                    surface_desc,
-                    #[cfg(feature = "egui")]
-                    egui_integration,
+                    render_window,
                     frame_index: 0,
                     last_frame_time: Instant::now(),
                     game_state,
@@ -133,29 +103,15 @@ impl ApplicationHandler for App {
                 tracing::warn!("Can't process events for uninitialized application.");
             }
             App::Initialized {
-                window,
-                surface,
-                surface_desc,
+                render_window,
                 frame_index,
                 last_frame_time,
-                #[cfg(feature = "egui")]
-                egui_integration,
                 game_state,
                 ..
             } => {
-                if window_id != window.id() {
+                if !render_window.has_id(window_id) {
                     return;
                 }
-
-                #[cfg(feature = "egui")]
-                let repaint = {
-                    let egui_winit::EventResponse { consumed, repaint } =
-                        egui_integration.window_event(window.as_ref(), &event);
-                    if consumed {
-                        return;
-                    }
-                    repaint
-                };
 
                 match event {
                     WindowEvent::CloseRequested => {
@@ -165,19 +121,15 @@ impl ApplicationHandler for App {
                     WindowEvent::Resized(PhysicalSize { width, height }) => {
                         let size = UVec2::new(width, height);
 
-                        surface.resize(&globals::gpu().device, size);
-                        surface_desc.size = surface.size();
-                        surface_desc.scale_factor = window.scale_factor() as f32;
+                        render_window.resize(&globals::gpu().device, size);
+                        game_state.resize(size, render_window.desc().scale_factor);
 
-                        game_state.resize(size, surface_desc.scale_factor);
-
-                        window.request_redraw();
+                        render_window.request_redraw();
                     }
 
                     WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                        surface_desc.scale_factor = scale_factor as f32;
-                        game_state.resize(surface_desc.size, surface_desc.scale_factor);
-                        window.request_redraw();
+                        game_state.resize(render_window.desc().size, scale_factor as f32);
+                        render_window.request_redraw();
                     }
 
                     WindowEvent::RedrawRequested => {
@@ -191,11 +143,7 @@ impl ApplicationHandler for App {
                         }
 
                         {
-                            if let Some(output) = surface.get_texture(&globals::gpu().device) {
-                                let surface_view = output
-                                    .texture
-                                    .create_view(&wgpu::TextureViewDescriptor::default());
-
+                            if let Some(frame) = render_window.next_frame(&globals::gpu().device) {
                                 let encoder = globals::gpu().device.create_command_encoder(
                                     &wgpu::CommandEncoderDescriptor {
                                         label: Some("main command encoder"),
@@ -206,40 +154,19 @@ impl ApplicationHandler for App {
                                     encoder,
                                     frame_index: *frame_index,
                                 };
-                                let render_target = RenderTarget {
-                                    view: surface_view,
-                                    size: surface.size(),
-                                };
 
-                                game_state.render(&mut render_context, &render_target);
-
-                                // Render egui if it requires a repaint.
-                                #[cfg(feature = "egui")]
-                                if repaint {
-                                    egui_integration.render(
-                                        window,
-                                        &mut render_context.encoder,
-                                        &render_target.view,
-                                        |ctx| {
-                                            ctx.set_pixels_per_point(1.2);
-                                            // Debug stuff from the scene.
-                                            game_state.debug_panel(ctx, render_context.frame_index);
-                                        },
-                                    );
-                                }
+                                game_state.render(&mut render_context, &frame.target);
 
                                 globals::gpu()
                                     .queue
                                     .submit(std::iter::once(render_context.encoder.finish()));
 
-                                output.present();
-
-                                // Frame is done rendering.
+                                frame.present(&globals::gpu().queue);
 
                                 *frame_index += 1;
                             }
 
-                            window.request_redraw();
+                            render_window.request_redraw();
                         }
                     }
 

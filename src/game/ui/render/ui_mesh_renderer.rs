@@ -190,7 +190,7 @@ impl UiMeshRenderer {
                 module: &shader,
                 entry_point: None,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<UiVertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![
@@ -198,7 +198,7 @@ impl UiMeshRenderer {
                         1 => Float32x2,
                         2 => Float32x4,
                     ],
-                }],
+                })],
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,

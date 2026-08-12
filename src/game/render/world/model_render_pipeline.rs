@@ -148,7 +148,7 @@ impl ModelRenderPipeline {
                 });
 
         let buffers = &[
-            wgpu::VertexBufferLayout {
+            Some(wgpu::VertexBufferLayout {
                 array_stride: std::mem::size_of::<RenderVertex>() as wgpu::BufferAddress,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &wgpu::vertex_attr_array![
@@ -157,8 +157,8 @@ impl ModelRenderPipeline {
                     2 => Float32x2,  // tex_coord
                     3 => Uint32,     // node_index
                 ],
-            },
-            wgpu::VertexBufferLayout {
+            }),
+            Some(wgpu::VertexBufferLayout {
                 array_stride: std::mem::size_of::<
                     super::model_render_pipeline::gpu::ModelInstanceData,
                 >() as wgpu::BufferAddress,
@@ -171,7 +171,7 @@ impl ModelRenderPipeline {
                     8 => Uint32,     // first_node_index
                     9 => Uint32,     // flags
                 ],
-            },
+            }),
         ];
 
         let primitive = wgpu::PrimitiveState {

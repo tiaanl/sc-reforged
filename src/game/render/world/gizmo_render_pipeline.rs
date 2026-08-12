@@ -48,14 +48,14 @@ impl GizmoRenderPipeline {
                         module,
                         entry_point: Some("vertex_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
+                        buffers: &[Some(wgpu::VertexBufferLayout {
                             array_stride: std::mem::size_of::<GizmoVertex>() as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Vertex,
                             attributes: &wgpu::vertex_attr_array![
                                 0 => Float32x4, // position
                                 1 => Float32x4, // color
                             ],
-                        }],
+                        })],
                     },
                     primitive: wgpu::PrimitiveState {
                         topology: wgpu::PrimitiveTopology::LineList,

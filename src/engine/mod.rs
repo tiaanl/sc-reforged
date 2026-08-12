@@ -9,6 +9,3 @@ pub mod shader_cache;
 pub mod storage;
 pub mod tracked;
 pub mod transform;
-
-#[cfg(feature = "egui")]
-pub mod egui_integration;

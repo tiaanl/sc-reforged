@@ -272,12 +272,12 @@ impl TerrainRenderPipeline {
                         module,
                         entry_point: Some("vertex_terrain"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
+                        buffers: &[Some(wgpu::VertexBufferLayout {
                             array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
                                 as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Instance,
                             attributes: &instance_attrs,
-                        }],
+                        })],
                     },
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: Some(wgpu::DepthStencilState {
@@ -308,12 +308,12 @@ impl TerrainRenderPipeline {
                         module,
                         entry_point: Some("vertex_wireframe"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
+                        buffers: &[Some(wgpu::VertexBufferLayout {
                             array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
                                 as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Instance,
                             attributes: &instance_attrs,
-                        }],
+                        })],
                     },
                     primitive: wgpu::PrimitiveState {
                         topology: wgpu::PrimitiveTopology::LineList,
@@ -348,12 +348,12 @@ impl TerrainRenderPipeline {
                         module,
                         entry_point: Some("strata_vertex"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        buffers: &[wgpu::VertexBufferLayout {
+                        buffers: &[Some(wgpu::VertexBufferLayout {
                             array_stride: std::mem::size_of::<gpu::ChunkInstanceData>()
                                 as wgpu::BufferAddress,
                             step_mode: wgpu::VertexStepMode::Instance,
                             attributes: &instance_attrs,
-                        }],
+                        })],
                     },
                     primitive: wgpu::PrimitiveState {
                         topology: wgpu::PrimitiveTopology::TriangleStrip,

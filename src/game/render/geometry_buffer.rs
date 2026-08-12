@@ -4,11 +4,11 @@ use glam::{UVec2, Vec3};
 
 use crate::{engine::renderer::Gpu, game::globals};
 
-pub struct RenderTarget {
+pub struct GeometryTarget {
     pub view: wgpu::TextureView,
 }
 
-impl RenderTarget {
+impl GeometryTarget {
     pub fn new(label: &str, size: UVec2, format: wgpu::TextureFormat) -> Self {
         let size = wgpu::Extent3d {
             width: size.x.max(1),
@@ -16,7 +16,7 @@ impl RenderTarget {
             depth_or_array_layers: 1,
         };
 
-        let full_label = format!("render_target_texture_{label}");
+        let full_label = format!("geometry_target_texture_{label}");
 
         let texture = globals::gpu()
             .device
@@ -41,10 +41,10 @@ impl RenderTarget {
 
 /// These [Inner] parts of a [GeometryBuffer] is recreated when the size of other parameter changes.
 struct Inner {
-    pub depth: RenderTarget,
-    pub color: RenderTarget,
-    pub oit_accumulation: RenderTarget,
-    pub oit_revealage: RenderTarget,
+    pub depth: GeometryTarget,
+    pub color: GeometryTarget,
+    pub oit_accumulation: GeometryTarget,
+    pub oit_revealage: GeometryTarget,
 
     pub bind_group: wgpu::BindGroup,
 }
@@ -53,11 +53,11 @@ impl Inner {
     fn new(bind_group_layout: &wgpu::BindGroupLayout, size: UVec2) -> Self {
         tracing::info!("Creating geometry buffers ({}x{})", size.x, size.y);
 
-        let depth = RenderTarget::new("depth", size, GeometryBuffer::DEPTH_FORMAT);
-        let color = RenderTarget::new("color", size, GeometryBuffer::COLOR_FORMAT);
+        let depth = GeometryTarget::new("depth", size, GeometryBuffer::DEPTH_FORMAT);
+        let color = GeometryTarget::new("color", size, GeometryBuffer::COLOR_FORMAT);
         let oit_accumulation =
-            RenderTarget::new("color", size, GeometryBuffer::OIT_ACCUMULATION_FORMAT);
-        let oit_revealage = RenderTarget::new("color", size, GeometryBuffer::OIT_REVEALAGE_FORMAT);
+            GeometryTarget::new("color", size, GeometryBuffer::OIT_ACCUMULATION_FORMAT);
+        let oit_revealage = GeometryTarget::new("color", size, GeometryBuffer::OIT_REVEALAGE_FORMAT);
 
         let bind_group = globals::gpu()
             .device
