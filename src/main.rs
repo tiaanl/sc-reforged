@@ -107,7 +107,6 @@ impl ApplicationHandler for App {
                 frame_index,
                 last_frame_time,
                 game_state,
-                ..
             } => {
                 if !render_window.has_id(window_id) {
                     return;
@@ -129,6 +128,7 @@ impl ApplicationHandler for App {
 
                     WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                         game_state.resize(render_window.desc().size, scale_factor as f32);
+
                         render_window.request_redraw();
                     }
 
@@ -137,37 +137,33 @@ impl ApplicationHandler for App {
                         let last_frame_duration = now - *last_frame_time;
                         *last_frame_time = now;
 
-                        {
-                            let delta_time = last_frame_duration.as_secs_f32();
-                            game_state.update(delta_time);
+                        let delta_time = last_frame_duration.as_secs_f32();
+                        game_state.update(delta_time);
+
+                        if let Some(frame) = render_window.next_frame(&globals::gpu().device) {
+                            let encoder = globals::gpu().device.create_command_encoder(
+                                &wgpu::CommandEncoderDescriptor {
+                                    label: Some("main command encoder"),
+                                },
+                            );
+
+                            let mut render_context = RenderContext {
+                                encoder,
+                                frame_index: *frame_index,
+                            };
+
+                            game_state.render(&mut render_context, &frame.target);
+
+                            globals::gpu()
+                                .queue
+                                .submit(std::iter::once(render_context.encoder.finish()));
+
+                            frame.present(&globals::gpu().queue);
+
+                            *frame_index += 1;
                         }
 
-                        {
-                            if let Some(frame) = render_window.next_frame(&globals::gpu().device) {
-                                let encoder = globals::gpu().device.create_command_encoder(
-                                    &wgpu::CommandEncoderDescriptor {
-                                        label: Some("main command encoder"),
-                                    },
-                                );
-
-                                let mut render_context = RenderContext {
-                                    encoder,
-                                    frame_index: *frame_index,
-                                };
-
-                                game_state.render(&mut render_context, &frame.target);
-
-                                globals::gpu()
-                                    .queue
-                                    .submit(std::iter::once(render_context.encoder.finish()));
-
-                                frame.present(&globals::gpu().queue);
-
-                                *frame_index += 1;
-                            }
-
-                            render_window.request_redraw();
-                        }
+                        render_window.request_redraw();
                     }
 
                     _ => {}
