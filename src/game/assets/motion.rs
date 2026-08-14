@@ -204,8 +204,8 @@ impl Motion {
 
             let rotation = match (left_bone.rotation, right_bone.rotation) {
                 (Some(left_rotation), Some(right_rotation)) => Some(Self::interpolate_rotation(
-                    Self::convert_source_rotation(left_rotation),
-                    Self::convert_source_rotation(right_rotation),
+                    Self::convert_source_rotation(Quat::from_array(left_rotation.to_array())),
+                    Self::convert_source_rotation(Quat::from_array(right_rotation.to_array())),
                     t,
                 )),
                 _ => None,
@@ -213,8 +213,13 @@ impl Motion {
 
             let translation = match (left_bone.position, right_bone.position) {
                 (Some(left_position), Some(right_position)) => Some(
-                    Self::convert_source_translation(left_position)
-                        .lerp(Self::convert_source_translation(right_position), t),
+                    Self::convert_source_translation(Vec3::from_array(left_position.to_array()))
+                        .lerp(
+                            Self::convert_source_translation(Vec3::from_array(
+                                right_position.to_array(),
+                            )),
+                            t,
+                        ),
                 ),
                 _ => None,
             };
@@ -240,10 +245,12 @@ impl Motion {
         for bone in &key_frame.bones {
             updates.push(BoneSampleUpdate {
                 bone_id: bone.bone_id,
-                translation: bone.position.map(Self::convert_source_translation),
+                translation: bone
+                    .position
+                    .map(|p| Self::convert_source_translation(Vec3::from(p.to_array()))),
                 rotation: bone
                     .rotation
-                    .map(Self::convert_source_rotation)
+                    .map(|r| Self::convert_source_rotation(Quat::from_array(r.to_array())))
                     .map(Self::normalize_rotation_or_identity),
             });
         }
@@ -257,8 +264,10 @@ impl Motion {
         let Some((left, right, t)) = self.interpolation_pair(time, looping) else {
             return Vec3::ZERO;
         };
-        Self::convert_source_translation(left.lve)
-            .lerp(Self::convert_source_translation(right.lve), t)
+        Self::convert_source_translation(Vec3::from(left.lve.to_array())).lerp(
+            Self::convert_source_translation(Vec3::from(right.lve.to_array())),
+            t,
+        )
     }
 
     /// Return the motion declaration flags currently applied to this motion.

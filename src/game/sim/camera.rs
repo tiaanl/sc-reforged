@@ -92,13 +92,18 @@ impl Camera {
 
     #[inline]
     pub fn calculate_projection(&self) -> Mat4 {
-        Mat4::perspective_lh(self.fov, self.aspect_ratio, self.near, self.far)
+        glam::camera::lh::proj::directx::perspective(
+            self.fov,
+            self.aspect_ratio,
+            self.near,
+            self.far,
+        )
     }
 
     #[inline]
     pub fn calculate_view(&self) -> Mat4 {
         let target = self.position + self.rotation * Self::FORWARD;
-        Mat4::look_at_lh(self.position, target, self.rotation * Self::UP)
+        glam::camera::lh::view::look_at_mat4(self.position, target, self.rotation * Self::UP)
     }
 
     /// Compute the final matrices for this camera.

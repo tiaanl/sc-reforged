@@ -4,7 +4,7 @@ use std::{
 };
 
 use ahash::HashMap;
-use glam::Quat;
+use glam::{Quat, Vec2, Vec3};
 use shadow_company_tools::smf;
 
 use crate::{
@@ -141,9 +141,9 @@ impl Models {
                 .vertices
                 .iter()
                 .map(|v| Vertex {
-                    position: v.position,
-                    normal: -v.normal,
-                    tex_coord: v.tex_coord,
+                    position: Vec3::from(v.position.to_array()),
+                    normal: -Vec3::from(v.normal.to_array()),
+                    tex_coord: Vec2::from(v.tex_coord.to_array()),
                     node_index,
                 })
                 .collect();
@@ -185,7 +185,7 @@ impl Models {
 
             nodes.push(LocalNode {
                 parent: parent_node_index,
-                transform: Transform::new(smf_node.position, Quat::IDENTITY),
+                transform: Transform::new(Vec3::from(smf_node.position.to_array()), Quat::IDENTITY),
                 bone_id: smf_node.tree_id,
                 name: smf_node.name.clone(),
             });
@@ -216,8 +216,8 @@ impl Models {
             for smf_collision_box in smf_node.bounding_boxes.iter() {
                 collision_boxes.push(CollisionBox {
                     node_index: node_index as u32,
-                    min: smf_collision_box.min,
-                    max: smf_collision_box.max,
+                    min: Vec3::from(smf_collision_box.min.to_array()),
+                    max: Vec3::from(smf_collision_box.max.to_array()),
                 });
             }
         }
