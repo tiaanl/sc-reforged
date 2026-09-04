@@ -1,15 +1,12 @@
 use glam::IVec2;
 
 use crate::game::ui::{
-    EventResult, Rect,
+    EventResult,
     render::window_renderer::WindowRenderItems,
     windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
 };
 
 pub trait Widget {
-    /// Returns the widget rect in its parent window's coordinate space.
-    fn rect(&self) -> Rect;
-
     fn on_primary_mouse_down(
         &mut self,
         position: IVec2,
@@ -68,11 +65,6 @@ impl Widgets {
         context: &mut WindowManagerContext,
     ) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
-            let rect = widget.rect();
-            if !rect.contains(position) {
-                continue;
-            }
-
             let result = widget.on_primary_mouse_down(position, context);
 
             if matches!(result, EventResult::Handled) {
@@ -91,11 +83,6 @@ impl Widgets {
         context: &mut WindowManagerContext,
     ) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
-            let rect = widget.rect();
-            if !rect.contains(position) {
-                continue;
-            }
-
             let result = widget.on_primary_mouse_up(position, context);
 
             if matches!(result, EventResult::Handled) {
@@ -106,11 +93,6 @@ impl Widgets {
         // Give the remaining widgets a chance to clear any pressed state even
         // when the cursor was released outside their bounds.
         for widget in self.widgets.iter_mut().rev() {
-            let rect = widget.rect();
-            if rect.contains(position) {
-                continue;
-            }
-
             let result = widget.on_primary_mouse_up(position, context);
 
             if matches!(result, EventResult::Handled) {
@@ -141,16 +123,11 @@ impl Widgets {
     /// cursor.
     pub fn on_mouse_wheel(
         &mut self,
-        mouse_position: IVec2,
+        _mouse_position: IVec2,
         wheel_steps: i32,
         context: &mut WindowManagerContext,
     ) -> EventResult {
         for widget in self.widgets.iter_mut().rev() {
-            let rect = widget.rect();
-            if !rect.contains(mouse_position) {
-                continue;
-            }
-
             let result = widget.on_mouse_wheel(wheel_steps, context);
 
             if matches!(result, EventResult::Handled) {

@@ -1,4 +1,4 @@
-use glam::{IVec2, Vec4};
+use glam::IVec2;
 
 use crate::{
     engine::storage::Handle,
@@ -15,34 +15,28 @@ use crate::{
 };
 
 /// Creates a layered main-menu button using the original widget bounds calculation.
-#[allow(clippy::too_many_arguments)]
 pub fn create_main_menu_button(
     position: IVec2,
-    bullet_sprite: Handle<Sprite3d>,
-    bullet_frame: usize,
-    text_sprite: Handle<Sprite3d>,
-    text_frame: usize,
-    shadow_sprite: Handle<Sprite3d>,
-    shadow_frame: usize,
-    button_offset: IVec2,
-    shadow_offset: IVec2,
+    bullet: ButtonLayer,
+    text: ButtonLayer,
+    shadow: ButtonLayer,
 ) -> Box<MainMenuButton> {
-    let bullet = ButtonLayer::new(bullet_sprite, bullet_frame, position);
-    let text = ButtonLayer::new(text_sprite, text_frame, position + button_offset);
-    let shadow = ButtonLayer::new(shadow_sprite, shadow_frame, position + shadow_offset);
-
     let rect = Rect::new(position, {
         let bullet_size = bullet.rect.size;
         let text_size = text.rect.size;
         IVec2::new(bullet_size.x + text_size.x, text_size.y)
     });
 
+    let mut text_pressed = text.clone();
+    text_pressed.frame += 2;
+
     Box::new(MainMenuButton {
         rect,
 
         bullet,
-        text,
         shadow,
+        text,
+        text_pressed,
 
         pressed: false,
     })
@@ -52,17 +46,14 @@ pub struct MainMenuButton {
     pub rect: Rect,
 
     bullet: ButtonLayer,
-    text: ButtonLayer,
     shadow: ButtonLayer,
+    text: ButtonLayer,
+    text_pressed: ButtonLayer,
 
     pressed: bool,
 }
 
 impl Widget for MainMenuButton {
-    fn rect(&self) -> Rect {
-        self.rect
-    }
-
     fn on_primary_mouse_down(
         &mut self,
         position: IVec2,
@@ -87,30 +78,39 @@ impl Widget for MainMenuButton {
 
     fn render(
         &mut self,
-        _origin: glam::IVec2,
+        origin: IVec2,
         _delta_time_ms: i32,
         _window_render_context: &mut WindowRenderContext<'_>,
         window_render_items: &mut WindowRenderItems,
     ) {
-        let frame = if self.pressed {
+        let _frame = if self.pressed {
             self.text.frame + 2
         } else {
             self.text.frame
         };
 
-        window_render_items.render_sprite(self.text.rect.position, self.text.sprite, frame, 1.0);
-        window_render_items.render_border(self.rect, 1, Vec4::ONE);
+        self.bullet.render(window_render_items, origin, 1.0);
+        self.shadow.render(window_render_items, origin, 0.25);
+        if self.pressed {
+            &self.text_pressed
+        } else {
+            &self.text
+        }
+        .render(window_render_items, origin, 1.0);
+
+        // window_render_items.render_border(self.rect, 1, Vec4::ONE);
     }
 }
 
-struct ButtonLayer {
+#[derive(Clone)]
+pub struct ButtonLayer {
     sprite: Handle<Sprite3d>,
     frame: usize,
     rect: Rect,
 }
 
 impl ButtonLayer {
-    fn new(sprite: Handle<Sprite3d>, frame: usize, position: IVec2) -> Self {
+    pub fn new(sprite: Handle<Sprite3d>, frame: usize, position: IVec2) -> Self {
         let size = globals::sprites()
             .get(sprite)
             .and_then(|sprite| sprite.frame(frame))
@@ -122,5 +122,9 @@ impl ButtonLayer {
             frame,
             rect: Rect::new(position, size),
         }
+    }
+
+    fn render(&self, render_items: &mut WindowRenderItems, origin: IVec2, alpha: f32) {
+        render_items.render_sprite(self.rect.position + origin, self.sprite, self.frame, alpha);
     }
 }

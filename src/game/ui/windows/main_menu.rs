@@ -8,7 +8,10 @@ use crate::{
         globals,
         ui::{
             Rect,
-            widgets::{main_menu_button::create_main_menu_button, text_button::TextButtonWidget},
+            widgets::{
+                main_menu_button::{ButtonLayer, create_main_menu_button},
+                text_button::TextButtonWidget,
+            },
             windows::{
                 actions::WindowManagerAction,
                 window::{Window, WindowImpl},
@@ -144,17 +147,14 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
             continue;
         };
 
-        window.common.widgets.add(create_main_menu_button(
-            pos,
-            bullet_sprite,
-            bullet_frame,
-            text_sprite,
-            text_frame,
-            shadow_sprite,
-            shadow_frame,
-            button_offset,
-            shadow_offset,
-        ));
+        let bullet = ButtonLayer::new(bullet_sprite, bullet_frame, pos);
+        let text = ButtonLayer::new(text_sprite, text_frame, pos + button_offset);
+        let shadow = ButtonLayer::new(shadow_sprite, shadow_frame, pos + shadow_offset);
+
+        window
+            .common
+            .widgets
+            .add(create_main_menu_button(pos, bullet, text, shadow));
     }
 
     Ok(window)

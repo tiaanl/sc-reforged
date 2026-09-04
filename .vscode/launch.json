@@ -5,43 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug executable 'sc-reforged'",
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'sc-reforged'",
             "cargo": {
                 "args": [
-                    "build",
-                    "--bin=sc-reforged",
-                    "--package=sc-reforged"
-                ],
-                "filter": {
-                    "name": "sc-reforged",
-                    "kind": "bin"
-                }
+                    "run",
+                    "--bin=sc-reforged"
+                ]
             },
             "args": [
-                "d:\\games\\shadow_company\\data"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'sc-reforged'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=sc-reforged",
-                    "--package=sc-reforged"
-                ],
-                "filter": {
-                    "name": "sc-reforged",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
+                "shadow"
+            ]
         }
     ]
 }

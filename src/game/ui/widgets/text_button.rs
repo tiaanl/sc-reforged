@@ -68,15 +68,13 @@ impl TextButtonWidget {
 }
 
 impl Widget for TextButtonWidget {
-    fn rect(&self) -> Rect {
-        self.rect
-    }
-
     fn on_primary_mouse_down(
         &mut self,
         _position: IVec2,
         _context: &mut WindowManagerContext,
     ) -> EventResult {
+        tracing::info!("TextButton::on_primary_mouse_down");
+
         self.is_pressed = true;
         EventResult::Handled
     }
@@ -86,6 +84,8 @@ impl Widget for TextButtonWidget {
         _position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
+        tracing::info!("TextButton::on_primary_mouse_up");
+
         let was_pressed = std::mem::replace(&mut self.is_pressed, false);
 
         if !was_pressed {
