@@ -55,7 +55,7 @@ pub fn init(root_dir: impl AsRef<Path>, gpu: Gpu) -> bool {
     }
 
     if WINDOW_MANAGER
-        .set(SendWrapper::new(RefCell::new(WindowManager::new())))
+        .set(SendWrapper::new(RefCell::new(WindowManager::default())))
         .is_err()
     {
         return false;

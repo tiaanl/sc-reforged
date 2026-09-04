@@ -165,11 +165,11 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(common: WindowCommon, window_impl: Box<dyn WindowImpl>) -> Self {
+    pub fn new<I: WindowImpl + 'static>(rect: Rect, window_impl: I) -> Self {
         Self {
             window_base: None,
-            common,
-            window_impl,
+            common: WindowCommon::new(rect),
+            window_impl: Box::new(window_impl),
         }
     }
 

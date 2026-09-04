@@ -4,7 +4,7 @@ use std::{
 };
 
 use ahash::HashMap;
-use glam::IVec2;
+use glam::{IVec2, Vec3, Vec4};
 use winit::event::MouseButton;
 
 use crate::{
@@ -71,10 +71,8 @@ pub struct WindowManager {
     secondary_button_down: bool,
 }
 
-impl WindowManager {
-    pub const UI_SIZE: IVec2 = IVec2::new(640, 480);
-
-    pub fn new() -> Self {
+impl Default for WindowManager {
+    fn default() -> Self {
         Self {
             window_bases: Mutex::new(HashMap::default()),
 
@@ -90,6 +88,10 @@ impl WindowManager {
             secondary_button_down: false,
         }
     }
+}
+
+impl WindowManager {
+    pub const UI_SIZE: IVec2 = IVec2::new(640, 480);
 
     pub fn get_window_base(&self, name: &str) -> Result<Arc<WindowBase>, AssetError> {
         if let Some(def) = self.window_bases.lock().unwrap().get(name).cloned() {
@@ -396,6 +398,28 @@ impl WindowManager {
         };
         for window in self.windows.iter_mut() {
             window.render(&mut ctx, &mut self.window_render_items_cache);
+        }
+
+        if false {
+            let topmost = self
+                .mouse_position
+                .and_then(|position| self.topmost_input_window_index(position));
+
+            let mut b = 0.1;
+            for (i, window) in self.windows.iter_mut().enumerate() {
+                let color = Vec4::new(0.0, 0.1, 0.2, 0.5);
+                let mut color = color + Vec3::splat(b).extend(0.0);
+
+                if let Some(ii) = topmost
+                    && i == ii
+                {
+                    color.x = 1.0;
+                }
+
+                self.window_render_items_cache
+                    .render_solid_rect(window.rect(), color);
+                b += 0.1;
+            }
         }
 
         window_renderer.submit_render_items(

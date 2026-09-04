@@ -29,9 +29,10 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
 
     let should_pause_game = !help_def.do_not_pause_game;
 
-    let mut common = WindowCommon::new(Rect::new(pos, size));
-    common.is_modal = should_pause_game;
-    common.is_always_on_top = true;
+    let mut window = Window::new(Rect::new(pos, size), HelpWindow { should_pause_game });
+
+    window.common.is_modal = should_pause_game;
+    window.common.is_always_on_top = true;
 
     // List box widget to hold the help text body lines.
     let mut list_box = Box::new(ListBoxWidget::vertical(Rect::new(
@@ -51,7 +52,7 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
         list_box.add_item(list_item);
     }
 
-    common.widgets.add(list_box);
+    window.common.widgets.add(list_box);
 
     if help_def.is_confirmation {
         let button_width = (size.x - 64) / 3;
@@ -69,7 +70,7 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
         button.font = Font::TwelvePoint;
         button.custom_color = Some(u32_to_color(0xff19ff19));
 
-        common.widgets.add(button);
+        window.common.widgets.add(button);
 
         let mut button = Box::new(TextButtonWidget::new(
             Rect::new(
@@ -81,10 +82,10 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
         button.font = Font::TwelvePoint;
         button.custom_color = Some(u32_to_color(0xff19ff19));
 
-        common.widgets.add(button);
+        window.common.widgets.add(button);
     }
 
-    Window::new(common, Box::new(HelpWindow { should_pause_game }))
+    window
 }
 
 impl WindowImpl for HelpWindow {
