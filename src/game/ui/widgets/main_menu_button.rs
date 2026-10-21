@@ -8,7 +8,10 @@ use crate::{
         ui::{
             EventResult, Rect,
             render::window_renderer::WindowRenderItems,
-            widgets::widget::Widget,
+            widgets::{
+                text_button::TextButtonWidget,
+                widget::{Widget, WidgetBase},
+            },
             windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
         },
     },
@@ -31,49 +34,46 @@ pub fn create_main_menu_button(
     text_pressed.frame += 2;
 
     Box::new(MainMenuButton {
-        rect,
+        text_button: TextButtonWidget {
+            widget: WidgetBase {
+                rect,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
 
         bullet,
         shadow,
         text,
         text_pressed,
-
-        pressed: false,
     })
 }
 
 pub struct MainMenuButton {
-    pub rect: Rect,
+    text_button: TextButtonWidget,
 
     bullet: ButtonLayer,
     shadow: ButtonLayer,
     text: ButtonLayer,
     text_pressed: ButtonLayer,
-
-    pressed: bool,
 }
 
 impl Widget for MainMenuButton {
     fn on_primary_mouse_down(
         &mut self,
         position: IVec2,
-        _context: &mut WindowManagerContext,
+        context: &mut WindowManagerContext,
     ) -> EventResult {
-        if self.rect.contains(position) {
-            self.pressed = true;
-        }
-
-        EventResult::Handled
+        tracing::info!("Mouse down on {}!", &self.text_button.text);
+        self.text_button.on_primary_mouse_down(position, context)
     }
 
     fn on_primary_mouse_up(
         &mut self,
-        _position: IVec2,
-        _context: &mut WindowManagerContext,
+        position: IVec2,
+        context: &mut WindowManagerContext,
     ) -> EventResult {
-        self.pressed = false;
-
-        EventResult::Handled
+        self.text_button.on_primary_mouse_up(position, context)
     }
 
     fn render(
@@ -83,7 +83,9 @@ impl Widget for MainMenuButton {
         _window_render_context: &mut WindowRenderContext<'_>,
         window_render_items: &mut WindowRenderItems,
     ) {
-        let _frame = if self.pressed {
+        let is_pressed = self.text_button.is_pressed;
+
+        let _frame = if is_pressed {
             self.text.frame + 2
         } else {
             self.text.frame
@@ -91,14 +93,19 @@ impl Widget for MainMenuButton {
 
         self.bullet.render(window_render_items, origin, 1.0);
         self.shadow.render(window_render_items, origin, 0.25);
-        if self.pressed {
+        if is_pressed {
             &self.text_pressed
         } else {
             &self.text
         }
         .render(window_render_items, origin, 1.0);
 
-        // window_render_items.render_border(self.rect, 1, Vec4::ONE);
+        // Render a debug border around the button.
+        window_render_items.render_border(
+            self.text_button.widget.rect.offset(origin),
+            1,
+            glam::Vec4::ONE,
+        );
     }
 }
 

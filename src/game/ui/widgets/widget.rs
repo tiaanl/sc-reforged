@@ -1,7 +1,7 @@
 use glam::IVec2;
 
 use crate::game::ui::{
-    EventResult,
+    EventResult, Rect,
     render::window_renderer::WindowRenderItems,
     windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
 };
@@ -44,6 +44,43 @@ pub trait Widget {
         window_render_context: &mut WindowRenderContext<'_>,
         window_render_items: &mut WindowRenderItems,
     );
+}
+
+pub struct WidgetBase {
+    pub rect: Rect,
+    pub color: u32,
+    pub parent_index: Option<usize>,
+    pub visible: bool,
+    pub accepts_input: bool,
+    pub hovered: bool,
+    pub group_index: Option<usize>,
+}
+
+impl Default for WidgetBase {
+    fn default() -> Self {
+        Self {
+            rect: Rect::default(),
+            color: 0x00000000,
+            parent_index: None,
+            visible: true,
+            accepts_input: true,
+            hovered: false,
+            group_index: None,
+        }
+    }
+}
+
+impl Widget for WidgetBase {
+    fn render(
+        &mut self,
+        _origin: IVec2,
+        _delta_time_ms: i32,
+        _window_render_context: &mut WindowRenderContext<'_>,
+        _window_render_items: &mut WindowRenderItems,
+    ) {
+        // TODO
+        // Render_Panel()
+    }
 }
 
 #[derive(Default)]

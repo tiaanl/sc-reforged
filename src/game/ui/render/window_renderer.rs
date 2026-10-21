@@ -16,8 +16,9 @@ use crate::{
 use super::ui_mesh_renderer::{UiMesh, UiMeshRenderer};
 
 /// One of the five bitmap fonts available in the original engine.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum Font {
+    #[default]
     Default,
     Small,
     Clock,

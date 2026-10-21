@@ -9,6 +9,7 @@ use crate::game::{
         widgets::{
             list_box::{ListBoxItem, ListBoxWidget},
             text_button::TextButtonWidget,
+            widget::WidgetBase,
         },
         windows::window::{Window, WindowCommon},
     },
@@ -60,25 +61,33 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
         // Wire them up to the help-def action/callback data so Quit and
         // Cancel actually trigger the expected behavior.
 
-        let mut button = Box::new(TextButtonWidget::new(
-            Rect::new(
-                IVec2::new(button_width + 32, size.y - 36),
-                IVec2::new(button_width, 20),
-            ),
-            help_def.confirmation_text_1.as_ref().unwrap(),
-        ));
+        let mut button = Box::new(TextButtonWidget {
+            widget: WidgetBase {
+                rect: Rect::new(
+                    IVec2::new(button_width + 32, size.y - 36),
+                    IVec2::new(button_width, 20),
+                ),
+                ..Default::default()
+            },
+            text: help_def.confirmation_text_1.as_ref().unwrap().clone(),
+            ..Default::default()
+        });
         button.font = Font::TwelvePoint;
         button.custom_color = Some(u32_to_color(0xff19ff19));
 
         window.common.widgets.add(button);
 
-        let mut button = Box::new(TextButtonWidget::new(
-            Rect::new(
-                IVec2::new(button_width * 2 + 48, size.y - 36),
-                IVec2::new(button_width, 20),
-            ),
-            help_def.confirmation_text_2.as_ref().unwrap(),
-        ));
+        let mut button = Box::new(TextButtonWidget {
+            widget: WidgetBase {
+                rect: Rect::new(
+                    IVec2::new(button_width * 2 + 48, size.y - 36),
+                    IVec2::new(button_width, 20),
+                ),
+                ..Default::default()
+            },
+            text: help_def.confirmation_text_2.as_ref().unwrap().clone(),
+            ..Default::default()
+        });
         button.font = Font::TwelvePoint;
         button.custom_color = Some(u32_to_color(0xff19ff19));
 

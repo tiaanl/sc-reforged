@@ -5,12 +5,14 @@ use glam::IVec2;
 use crate::{
     engine::assets::AssetError,
     game::{
+        config::window_base::WindowBase,
         globals,
         ui::{
             Rect,
             widgets::{
                 main_menu_button::{ButtonLayer, create_main_menu_button},
                 text_button::TextButtonWidget,
+                widget::WidgetBase,
             },
             windows::{
                 actions::WindowManagerAction,
@@ -20,6 +22,34 @@ use crate::{
         },
     },
 };
+
+impl WindowBase {
+    fn get_button_offset(&self, context: &WindowLayoutContext) -> IVec2 {
+        IVec2::new(
+            self.ivars
+                .get("button_offset_x")
+                .and_then(|ivar| self.resolve_ivar(ivar, context))
+                .unwrap_or(0),
+            self.ivars
+                .get("button_offset_y")
+                .and_then(|ivar| self.resolve_ivar(ivar, context))
+                .unwrap_or(0),
+        )
+    }
+
+    fn get_shadow_offset(&self, context: &WindowLayoutContext) -> IVec2 {
+        IVec2::new(
+            self.ivars
+                .get("shadow_offset_x")
+                .and_then(|ivar| self.resolve_ivar(ivar, context))
+                .unwrap_or(0),
+            self.ivars
+                .get("shadow_offset_y")
+                .and_then(|ivar| self.resolve_ivar(ivar, context))
+                .unwrap_or(0),
+        )
+    }
+}
 
 pub struct MainMenuWindow;
 
@@ -35,39 +65,19 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
         Box::new(MainMenuWindow),
     )?;
 
-    window.common.widgets.add(Box::new(
-        TextButtonWidget::new(
-            Rect::new(IVec2::new(10, 10), IVec2::new(100, 30)),
-            "Training",
-        )
-        .with_action(WindowManagerAction::StartCampaign(String::from("training"))),
-    ));
+    let button = Box::new(TextButtonWidget {
+        widget: WidgetBase {
+            rect: Rect::new(IVec2::new(10, 10), IVec2::new(100, 30)),
+            ..Default::default()
+        },
+        // action: Some(WindowManagerAction::StartCampaign(String::from("training"))),
+        text: String::from("Training"),
+        ..Default::default()
+    });
+    window.common.widgets.add(button);
 
-    let button_offset = IVec2::new(
-        window_base
-            .ivars
-            .get("button_offset_x")
-            .and_then(|ivar| window_base.resolve_ivar(ivar, context))
-            .unwrap_or(0),
-        window_base
-            .ivars
-            .get("button_offset_y")
-            .and_then(|ivar| window_base.resolve_ivar(ivar, context))
-            .unwrap_or(0),
-    );
-
-    let shadow_offset = IVec2::new(
-        window_base
-            .ivars
-            .get("shadow_offset_x")
-            .and_then(|ivar| window_base.resolve_ivar(ivar, context))
-            .unwrap_or(0),
-        window_base
-            .ivars
-            .get("shadow_offset_y")
-            .and_then(|ivar| window_base.resolve_ivar(ivar, context))
-            .unwrap_or(0),
-    );
+    let button_offset = window_base.get_button_offset(context);
+    let shadow_offset = window_base.get_shadow_offset(context);
 
     const BUTTONS: &[(&str, &str, usize, &str, usize)] = &[
         (

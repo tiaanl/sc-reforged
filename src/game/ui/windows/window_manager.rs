@@ -229,17 +229,15 @@ impl WindowManager {
             return true;
         }
 
-        let windows = &mut self.windows;
-        for window in windows.iter_mut().rev() {
-            if Self::try_mouse_down_on_window(
+        for window in self.windows.iter_mut().rev() {
+            match Self::try_mouse_down_on_window(
                 window,
                 mouse,
                 button,
                 &mut self.window_manager_context,
-            )
-            .is_some()
-            {
-                return true;
+            ) {
+                None => {}
+                Some(_) => return true,
             }
 
             // TODO: Handle dragging and capture results.
@@ -290,8 +288,6 @@ impl WindowManager {
 
         let local = mouse - window.rect().position;
 
-        // println!("local: {local}");
-
         Some(match button {
             MouseButton::Left => window.on_primary_mouse_down(local, context),
             MouseButton::Right => window.on_secondary_mouse_down(local, context),
@@ -306,7 +302,7 @@ impl WindowManager {
             _ => {}
         }
 
-        let Some(mouse) = self.mouse_position else {
+        let Some(mouse_position) = self.mouse_position else {
             return self.modal_window.is_some();
         };
 
@@ -314,12 +310,12 @@ impl WindowManager {
         // capture / drag state. In Ghidra the mouse-up path is routed through
         // the captured or mouse-down window, not by re-hit-testing the current
         // topmost window under the cursor.
-        let Some(window_index) = self.topmost_input_window_index(mouse) else {
+        let Some(window_index) = self.topmost_input_window_index(mouse_position) else {
             return self.modal_window.is_some();
         };
 
         let window = &mut self.windows[window_index];
-        let local = mouse - window.rect().position;
+        let local = mouse_position - window.rect().position;
 
         let context = &mut self.window_manager_context;
 
