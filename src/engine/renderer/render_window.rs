@@ -46,23 +46,9 @@ impl RenderWindow {
         }))
         .expect("Could not request an adapter.");
 
-        let supported_features = adapter.features();
-        let desired_features = wgpu::Features::MULTI_DRAW_INDIRECT_COUNT
-            | wgpu::Features::POLYGON_MODE_LINE
-            | wgpu::Features::TEXTURE_BINDING_ARRAY
-            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
-
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            required_features: desired_features & supported_features,
-            required_limits: wgpu::Limits {
-                max_binding_array_elements_per_shader_stage: 1024,
-                max_bind_groups: 6,
-                max_color_attachment_bytes_per_sample: 56,
-                ..Default::default()
-            },
-            ..Default::default()
-        }))
-        .expect("request device");
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                .expect("request device");
 
         let surface_config = Self::config_for(&surface, &adapter, window.inner_size());
 
