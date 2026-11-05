@@ -1,5 +1,5 @@
 use std::{
-    io::{ErrorKind, Read},
+    io::ErrorKind,
     path::{Path, PathBuf},
 };
 
@@ -9,6 +9,9 @@ use walkdir::WalkDir;
 
 #[derive(Debug, Error)]
 pub enum FileSystemError {
+    #[error("The game data directory could not be found. \"{0}\"")]
+    RootDirNotFound(PathBuf),
+
     #[error("The path was not found: {0}")]
     FileNotFound(PathBuf),
 
@@ -23,7 +26,9 @@ pub struct FileSystem {
 
 impl FileSystem {
     /// Builds a virtual file system rooted at the game data directory.
-    pub fn new(root_dir: impl AsRef<Path>) -> Self {
+    pub fn new(root_dir: impl AsRef<Path>) -> Result<Self, FileSystemError> {
+        let root_dir = root_dir.as_ref().canonicalize()?;
+
         let mut gut_files = HashMap::default();
 
         WalkDir::new(&root_dir)
@@ -50,36 +55,30 @@ impl FileSystem {
                 }
             });
 
-        Self {
-            root_dir: root_dir
-                .as_ref()
-                .canonicalize()
-                .expect("Could not canonicalize root path"),
+        Ok(Self {
+            root_dir,
             gut_files,
-        }
+        })
     }
 
     /// Loads a file either from disk or from a mounted .gut archive.
     pub fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
-        let full_path = self.root_dir.join(path.as_ref());
+        let path = path.as_ref();
+        let full_path = self.root_dir.join(path);
 
-        if !full_path.exists()
-            && let Some(gut_file) = self.gut_file_for_path(&path)
-        {
-            return gut_file.load(path);
-        }
+        match std::fs::read(full_path) {
+            Ok(data) => Ok(data),
 
-        let mut file = std::fs::File::open(full_path).map_err(|err| {
-            if let ErrorKind::NotFound = err.kind() {
-                FileSystemError::FileNotFound(path.as_ref().to_path_buf())
-            } else {
-                FileSystemError::Io(err)
+            Err(err) if err.kind() == ErrorKind::NotFound => {
+                if let Some(gut_file) = self.gut_file_for_path(path) {
+                    gut_file.load(path)
+                } else {
+                    Err(FileSystemError::FileNotFound(path.to_path_buf()))
+                }
             }
-        })?;
-        let mut data = Vec::default();
-        let _bytes_read = file.read_to_end(&mut data)?;
 
-        Ok(data)
+            Err(err) => Err(err.into()),
+        }
     }
 
     /// Returns all files below `root`, combining external files and matching .gut entries.
@@ -91,13 +90,13 @@ impl FileSystem {
         let mut result: HashSet<PathBuf> = HashSet::default();
 
         if let Some(gut_file) = self.gut_file_for_path(&root) {
-            let search = root
-                .as_ref()
-                .to_string_lossy()
-                .to_ascii_lowercase()
-                .replace(std::path::MAIN_SEPARATOR, "\\");
+            let search = normalize_gut_path(root.as_ref())
+                .trim_end_matches('\\')
+                .to_owned();
+            let prefix = format!("{search}\\");
+
             for gut_path in gut_file.entries.keys() {
-                if gut_path.starts_with(&search) {
+                if gut_path.starts_with(&prefix) {
                     // Convert the separators to OS separators again.
                     result.insert(PathBuf::from(
                         gut_path.replace(r"\", std::path::MAIN_SEPARATOR_STR),
@@ -144,14 +143,7 @@ impl GutFile {
         use shadow_company_tools::gut;
 
         let mut file = std::fs::File::open(path.as_ref())?;
-        let gut_file = match gut::GutFile::open(&mut file) {
-            Ok(gut_file) => gut_file,
-            Err(err) => match err {
-                gut::GutError::Io(err) => {
-                    return Err(FileSystemError::Io(err));
-                }
-            },
-        };
+        let gut_file = gut::GutFile::open(&mut file).map_err(|gut::GutError::Io(err)| err)?;
 
         let mut entries: HashMap<String, GutEntry> = HashMap::default();
         gut_file.entries().for_each(|entry| {
@@ -172,18 +164,16 @@ impl GutFile {
     /// Reads a single file entry.
     fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         // Paths in a .gut file are all lower case and use the `\`` separator.
-        let lower_path = path
-            .as_ref()
-            .to_string_lossy()
-            .to_ascii_lowercase()
-            .replace(std::path::MAIN_SEPARATOR, "\\")
-            .to_string();
+        let lookup = normalize_gut_path(path.as_ref()).to_string();
 
-        let Some(entry) = self.entries.get(&lower_path) else {
+        let Some(entry) = self.entries.get(&lookup) else {
             return Err(FileSystemError::FileNotFound(path.as_ref().to_path_buf()));
         };
 
-        let mut data = vec![0u8; entry.size as usize];
+        let size = usize::try_from(entry.size)
+            .map_err(|_| std::io::Error::from(ErrorKind::InvalidData))?;
+
+        let mut data = vec![0u8; size];
         read_exact_at(&self.file, &mut data, entry.offset)?;
 
         if entry.is_plain_text {
@@ -199,6 +189,12 @@ struct GutEntry {
     pub offset: u64,
     pub size: u64,
     pub is_plain_text: bool,
+}
+
+fn normalize_gut_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('/', "\\")
+        .to_ascii_lowercase()
 }
 
 fn read_exact_at(file: &std::fs::File, buf: &mut [u8], offset: u64) -> std::io::Result<()> {
@@ -231,9 +227,11 @@ fn read_exact_at(file: &std::fs::File, buf: &mut [u8], offset: u64) -> std::io::
 
         buf = &mut buf[bytes_read..];
 
-        offset = offset
-            .checked_add(bytes_read as u64)
-            .ok_or(ErrorKind::InvalidInput)?;
+        if !buf.is_empty() {
+            offset = offset
+                .checked_add(bytes_read as u64)
+                .ok_or(ErrorKind::InvalidInput)?;
+        }
     }
 
     Ok(())

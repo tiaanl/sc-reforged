@@ -30,8 +30,13 @@ pub fn init(root_dir: impl AsRef<Path>, gpu: Gpu) -> bool {
         return false;
     }
 
-    if FILE_SYSTEM.set(FileSystem::new(root_dir)).is_err() {
-        return false;
+    match FileSystem::new(root_dir) {
+        Ok(fs) => {
+            if FILE_SYSTEM.set(fs).is_err() {
+                return false;
+            }
+        }
+        Err(_) => return false,
     }
 
     if IMAGES.set(Images::default()).is_err() {

@@ -64,7 +64,11 @@ impl ApplicationHandler for App {
                 );
                 let (render_window, gpu) = RenderWindow::new(window);
 
-                globals::init(&opts.path, gpu);
+                if !globals::init(&opts.path, gpu) {
+                    tracing::error!("Could not initialize globals.");
+                    event_loop.exit();
+                    return;
+                }
 
                 let game_state = match GameState::new(&render_window.desc()) {
                     Ok(game_state) => game_state,
@@ -98,6 +102,7 @@ impl ApplicationHandler for App {
         event: winit::event::WindowEvent,
     ) {
         use winit::event::WindowEvent;
+
         match self {
             App::Uninitialzed(..) => {
                 tracing::warn!("Can't process events for uninitialized application.");
