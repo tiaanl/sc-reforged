@@ -12,6 +12,9 @@ pub enum FileSystemError {
     #[error("The game data directory could not be found. \"{0}\"")]
     RootDirNotFound(PathBuf),
 
+    #[error("Invalid GUT entry. \"{0}\"")]
+    InvalidGutEntry(PathBuf),
+
     #[error("The path was not found: {0}")]
     FileNotFound(PathBuf),
 
@@ -31,29 +34,40 @@ impl FileSystem {
 
         let mut gut_files = HashMap::default();
 
-        WalkDir::new(&root_dir)
-            .into_iter()
-            .filter_map(|entry| match entry {
-                Ok(dir_entry) => {
-                    if let Some(ext) = dir_entry.path().extension() {
-                        if ext.eq_ignore_ascii_case("gut") {
-                            Some(dir_entry.into_path())
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
+        for entry in WalkDir::new(&root_dir).into_iter() {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    tracing::warn!(error = %err, "Could not scan data directory.");
+                    continue;
+                }
+            };
+
+            let path = entry.path();
+
+            if !entry.file_type().is_file()
+                || !path
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("gut"))
+            {
+                continue;
+            }
+
+            match GutFile::from_path(path) {
+                Ok(gut_file) => {
+                    if let Some(name) = path.file_stem() {
+                        gut_files.insert(name.to_string_lossy().to_ascii_lowercase(), gut_file);
                     }
                 }
-                Err(_) => None,
-            })
-            .for_each(|path| {
-                if let Ok(gut_entry) = GutFile::from_path(&path)
-                    && let Some(name) = path.file_stem()
-                {
-                    gut_files.insert(name.to_string_lossy().to_string(), gut_entry);
+                Err(err) => {
+                    tracing::warn!(
+                        path = %path.display(),
+                        error = %err,
+                        "Could not load GUT archive.",
+                    );
                 }
-            });
+            }
+        }
 
         Ok(Self {
             root_dir,
@@ -107,29 +121,34 @@ impl FileSystem {
 
         let root = self.root_dir.join(root);
 
-        walkdir::WalkDir::new(&root)
-            .into_iter()
-            .filter_map(|entry| {
-                if let Ok(entry) = entry {
-                    if entry.file_type().is_file() {
-                        Some(pathdiff::diff_paths(entry.into_path(), &self.root_dir).unwrap())
-                    } else {
-                        None
-                    }
-                } else {
-                    None
+        for entry in WalkDir::new(&root) {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    tracing::warn!(
+                        path = %root.display(),
+                        error = %err,
+                        "Could not enumerate directory.",
+                    );
+                    continue;
                 }
-            })
-            .for_each(|path| {
-                result.insert(path);
-            });
+            };
+
+            if entry.file_type().is_file()
+                && let Ok(path) = entry.path().strip_prefix(&self.root_dir)
+            {
+                result.insert(path.to_path_buf());
+            }
+        }
 
         Ok(result.into_iter())
     }
 
     fn gut_file_for_path(&self, path: impl AsRef<Path>) -> Option<&GutFile> {
         let component = path.as_ref().components().next()?;
-        self.gut_files.get(component.as_os_str().to_str()?)
+        let name = component.as_os_str().to_str()?.to_ascii_lowercase();
+
+        self.gut_files.get(&name)
     }
 }
 
@@ -144,19 +163,29 @@ impl GutFile {
 
         let mut file = std::fs::File::open(path.as_ref())?;
         let gut_file = gut::GutFile::open(&mut file).map_err(|gut::GutError::Io(err)| err)?;
+        let file_len = file.metadata()?.len();
 
         let mut entries: HashMap<String, GutEntry> = HashMap::default();
-        gut_file.entries().for_each(|entry| {
-            // Although the rule is that all paths in a .gut file are lower case, we enforce it.
+
+        for entry in gut_file.entries() {
+            let end = entry
+                .offset
+                .checked_add(entry.size)
+                .ok_or(FileSystemError::InvalidGutEntry(PathBuf::from(&entry.name)))?;
+
+            if end > file_len || usize::try_from(entry.size).is_err() {
+                return Err(FileSystemError::InvalidGutEntry(PathBuf::from(&entry.name)));
+            }
+
             entries.insert(
-                entry.name.to_ascii_lowercase().to_string(),
+                entry.name.to_ascii_lowercase(),
                 GutEntry {
                     offset: entry.offset,
                     size: entry.size,
                     is_plain_text: entry.is_plain_text,
                 },
             );
-        });
+        }
 
         Ok(Self { file, entries })
     }
@@ -164,16 +193,13 @@ impl GutFile {
     /// Reads a single file entry.
     fn load(&self, path: impl AsRef<Path>) -> Result<Vec<u8>, FileSystemError> {
         // Paths in a .gut file are all lower case and use the `\`` separator.
-        let lookup = normalize_gut_path(path.as_ref()).to_string();
+        let lookup = normalize_gut_path(path.as_ref());
 
         let Some(entry) = self.entries.get(&lookup) else {
             return Err(FileSystemError::FileNotFound(path.as_ref().to_path_buf()));
         };
 
-        let size = usize::try_from(entry.size)
-            .map_err(|_| std::io::Error::from(ErrorKind::InvalidData))?;
-
-        let mut data = vec![0u8; size];
+        let mut data = vec![0u8; entry.size as usize];
         read_exact_at(&self.file, &mut data, entry.offset)?;
 
         if entry.is_plain_text {
