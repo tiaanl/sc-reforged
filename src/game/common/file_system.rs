@@ -1,24 +1,24 @@
 use std::{
     io::ErrorKind,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
-use ahash::{HashMap, HashSet};
+use ahash::HashMap;
 use thiserror::Error;
 use walkdir::WalkDir;
 
 #[derive(Debug, Error)]
 pub enum FileSystemError {
-    #[error("The game data directory could not be found. \"{0}\"")]
+    #[error("The game data directory could not be found. ({0})")]
     RootDirNotFound(PathBuf),
 
-    #[error("Invalid GUT entry. \"{0}\"")]
+    #[error("Invalid GUT entry. ({0})")]
     InvalidGutEntry(PathBuf),
 
-    #[error("The path was not found: {0}")]
+    #[error("The path was not found. ({0})")]
     FileNotFound(PathBuf),
 
-    #[error("I/O Error: {0}")]
+    #[error("I/O Error. ({0})")]
     Io(#[from] std::io::Error),
 }
 
@@ -95,26 +95,33 @@ impl FileSystem {
         }
     }
 
-    /// Returns all files below `root`, combining external files and matching .gut entries.
+    /// Returns all files below `root`, combining external files and matching .gut entries. External
+    /// files take precedence over archive entries with the same case-insensitive path.
     pub fn dir(
         &self,
         root: impl AsRef<Path>,
     ) -> Result<impl Iterator<Item = PathBuf>, FileSystemError> {
-        // TODO: Enumerate the root directory?
-        let mut result: HashSet<PathBuf> = HashSet::default();
+        let root = root.as_ref();
+        debug_assert!(
+            root.components()
+                .any(|component| matches!(component, Component::Normal(_))),
+            "The directory path must contain at least one named component. ({})",
+            root.display(),
+        );
 
-        if let Some(gut_file) = self.gut_file_for_path(&root) {
-            let search = normalize_gut_path(root.as_ref())
-                .trim_end_matches('\\')
-                .to_owned();
+        let mut result: HashMap<String, PathBuf> = HashMap::default();
+
+        if let Some(gut_file) = self.gut_file_for_path(root) {
+            let search = normalize_gut_path(root).trim_end_matches('\\').to_owned();
             let prefix = format!("{search}\\");
 
             for gut_path in gut_file.entries.keys() {
                 if gut_path.starts_with(&prefix) {
                     // Convert the separators to OS separators again.
-                    result.insert(PathBuf::from(
-                        gut_path.replace(r"\", std::path::MAIN_SEPARATOR_STR),
-                    ));
+                    result.insert(
+                        gut_path.clone(),
+                        PathBuf::from(gut_path.replace(r"\", std::path::MAIN_SEPARATOR_STR)),
+                    );
                 }
             }
         }
@@ -137,11 +144,13 @@ impl FileSystem {
             if entry.file_type().is_file()
                 && let Ok(path) = entry.path().strip_prefix(&self.root_dir)
             {
-                result.insert(path.to_path_buf());
+                // Keep the disk spelling so the returned override also loads on case-sensitive
+                // hosts.
+                result.insert(normalize_gut_path(path), path.to_path_buf());
             }
         }
 
-        Ok(result.into_iter())
+        Ok(result.into_values())
     }
 
     fn gut_file_for_path(&self, path: impl AsRef<Path>) -> Option<&GutFile> {
