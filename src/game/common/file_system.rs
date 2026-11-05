@@ -201,27 +201,39 @@ struct GutEntry {
     pub is_plain_text: bool,
 }
 
-/// Reads exactly `buf.len()` bytes from `file` starting at `offset` without changing a shared cursor.
-#[cfg(unix)]
 fn read_exact_at(file: &std::fs::File, buf: &mut [u8], offset: u64) -> std::io::Result<()> {
-    use std::os::unix::fs::FileExt;
-
-    file.read_exact_at(buf, offset)
-}
-
-/// Reads exactly `buf.len()` bytes from `file` starting at `offset` without changing a shared cursor.
-#[cfg(windows)]
-fn read_exact_at(file: &std::fs::File, mut buf: &mut [u8], mut offset: u64) -> std::io::Result<()> {
-    use std::os::windows::fs::FileExt;
+    let mut buf = buf;
+    let mut offset = offset;
 
     while !buf.is_empty() {
-        let bytes_read = file.seek_read(buf, offset)?;
+        let bytes_read = loop {
+            #[cfg(unix)]
+            let result = {
+                use std::os::unix::fs::FileExt;
+                file.read_at(buf, offset)
+            };
+
+            #[cfg(windows)]
+            let result = {
+                use std::os::windows::fs::FileExt;
+                file.seek_read(buf, offset)
+            };
+
+            match result {
+                Err(e) if e.kind() == ErrorKind::Interrupted => continue,
+                result => break result?,
+            }
+        };
+
         if bytes_read == 0 {
-            return Err(std::io::Error::from(ErrorKind::UnexpectedEof));
+            return Err(ErrorKind::UnexpectedEof.into());
         }
 
         buf = &mut buf[bytes_read..];
-        offset += bytes_read as u64;
+
+        offset = offset
+            .checked_add(bytes_read as u64)
+            .ok_or(ErrorKind::InvalidInput)?;
     }
 
     Ok(())
