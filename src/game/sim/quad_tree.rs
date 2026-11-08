@@ -1,5 +1,3 @@
-use core::f32;
-
 use glam::{IVec2, UVec2, Vec2};
 
 use crate::game::math::{BoundingBox, Containment, Frustum, RaySegment};

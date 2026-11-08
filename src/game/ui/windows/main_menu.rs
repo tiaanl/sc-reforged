@@ -15,7 +15,6 @@ use crate::{
                 widget::WidgetBase,
             },
             windows::{
-                actions::WindowManagerAction,
                 window::{Window, WindowImpl},
                 window_manager::WindowLayoutContext,
             },
