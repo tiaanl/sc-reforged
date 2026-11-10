@@ -32,24 +32,35 @@ pub struct WindowRenderContext<'a> {
 
 pub trait WindowBehavior {
     /// Allow each [Window] to have its own update behavior.
-    fn update(&mut self, delta: f32) {
+    fn update(&mut self, window: &mut WindowCommon, delta: f32) {
+        let _ = window;
         let _ = delta;
     }
 
     /// Allows each [Window] to have its own render behavior.
     fn render(
         &mut self,
+        window: &mut WindowCommon,
         context: &mut WindowRenderContext<'_>,
         render_items: &mut WindowRenderItems,
     ) {
-        let _ = context;
-        let _ = render_items;
+        window.render_geometries(render_items);
+        window.render_widgets(context, render_items);
     }
 }
 
 struct DefaultWindowBehavior;
 
-impl WindowBehavior for DefaultWindowBehavior {}
+impl WindowBehavior for DefaultWindowBehavior {
+    fn render(
+        &mut self,
+        window: &mut WindowCommon,
+        context: &mut WindowRenderContext<'_>,
+        render_items: &mut WindowRenderItems,
+    ) {
+        window.render_widgets(context, render_items)
+    }
+}
 
 /// Data shared between all [Window]s.
 pub struct WindowCommon {
@@ -66,6 +77,22 @@ pub struct WindowCommon {
 
     pub widgets: Vec<Widget>,
     pub capture_widget: Option<usize>,
+}
+
+impl WindowCommon {
+    pub fn render_geometries(&mut self, render_items: &mut WindowRenderItems) {
+        self.geometries.render(self.rect.position, render_items);
+    }
+
+    pub fn render_widgets(
+        &mut self,
+        context: &mut WindowRenderContext,
+        render_items: &mut WindowRenderItems,
+    ) {
+        for widget in self.widgets.iter_mut().rev() {
+            widget.render(self.rect.position, context, render_items);
+        }
+    }
 }
 
 pub struct Window {
@@ -185,9 +212,8 @@ impl Window {
         context: &mut WindowRenderContext<'_>,
         render_items: &mut WindowRenderItems,
     ) {
-        for widget in self.common.widgets.iter_mut().rev() {
-            widget.render(self.common.rect.position, context, render_items);
-        }
+        self.behavior
+            .render(&mut self.common, context, render_items);
     }
 
     fn top_level_input_widget(&self, position: IVec2) -> Option<usize> {

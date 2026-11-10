@@ -45,9 +45,9 @@ impl WindowBase {
     }
 }
 
-pub struct MainMenuWindow;
+pub struct MainMenuBehavior;
 
-impl WindowBehavior for MainMenuWindow {}
+impl WindowBehavior for MainMenuBehavior {}
 
 pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, AssetError> {
     let window_base = globals::window_manager().get_window_base("main_menu")?;
@@ -55,7 +55,7 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
     let rect = window_base.resolve_layout_rect(context);
 
     let mut window = WindowBuilder::new(rect)
-        .with_behavior(Box::new(MainMenuWindow))
+        .with_behavior(Box::new(MainMenuBehavior))
         .with_window_base(Arc::clone(&window_base), context)
         .build()?;
 
