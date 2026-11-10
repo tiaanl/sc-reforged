@@ -8,7 +8,7 @@ use crate::game::ui::{
     windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
 };
 
-use super::widget::WidgetImpl;
+use super::widget::WidgetBehavior;
 
 pub enum ListBoxItemKind {
     Text {
@@ -92,7 +92,7 @@ impl ListBoxWidget {
     }
 }
 
-impl WidgetImpl for ListBoxWidget {
+impl WidgetBehavior for ListBoxWidget {
     fn on_primary_mouse_down(
         &mut self,
         _widget: &mut WidgetCommon,

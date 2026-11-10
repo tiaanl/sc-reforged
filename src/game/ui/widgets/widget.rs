@@ -6,7 +6,7 @@ use crate::game::ui::{
     windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
 };
 
-pub trait WidgetImpl {
+pub trait WidgetBehavior {
     fn on_primary_mouse_down(
         &mut self,
         widget: &mut WidgetCommon,
@@ -99,7 +99,7 @@ impl Default for WidgetCommon {
 #[derive(Default)]
 pub struct Widget {
     pub common: WidgetCommon,
-    pub thing: Option<Box<dyn WidgetImpl>>,
+    pub thing: Option<Box<dyn WidgetBehavior>>,
 }
 
 impl Widget {

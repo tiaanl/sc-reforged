@@ -3,7 +3,7 @@ use glam::{IVec2, Vec4};
 use crate::game::ui::{
     EventResult,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
-    widgets::widget::{Widget, WidgetCommon, WidgetImpl},
+    widgets::widget::{Widget, WidgetBehavior, WidgetCommon},
     windows::{
         actions::WindowManagerAction, window::WindowRenderContext,
         window_manager_context::WindowManagerContext,
@@ -39,7 +39,7 @@ impl TextButtonWidget {
     }
 }
 
-impl WidgetImpl for TextButtonWidget {
+impl WidgetBehavior for TextButtonWidget {
     fn on_primary_mouse_down(
         &mut self,
         _widget: &mut WidgetCommon,

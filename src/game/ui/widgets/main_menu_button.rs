@@ -10,7 +10,7 @@ use crate::{
             render::window_renderer::WindowRenderItems,
             widgets::{
                 text_button::TextButtonWidget,
-                widget::{Widget, WidgetCommon, WidgetImpl},
+                widget::{Widget, WidgetBehavior, WidgetCommon},
             },
             windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
         },
@@ -69,7 +69,7 @@ pub struct MainMenuButton {
     text_pressed: ButtonLayer,
 }
 
-impl WidgetImpl for MainMenuButton {
+impl WidgetBehavior for MainMenuButton {
     fn on_primary_mouse_down(
         &mut self,
         widget: &mut WidgetCommon,
