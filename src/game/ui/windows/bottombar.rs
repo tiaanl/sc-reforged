@@ -6,10 +6,7 @@ use crate::{
     engine::assets::AssetError,
     game::{
         globals,
-        ui::windows::{
-            window::{Window, WindowImpl},
-            window_manager::WindowLayoutContext,
-        },
+        ui::windows::{window::Window, window_manager::WindowLayoutContext},
     },
 };
 
@@ -31,12 +28,5 @@ pub fn new_bottombar_window(surface_size: IVec2) -> Result<Window, AssetError> {
     let rect = window_base.resolve_layout_rect(&layout_context);
     let rect = rect.offset(IVec2::new(0, surface_size.y - rect.size.y));
 
-    Window::from_window_base(
-        Arc::clone(&window_base),
-        &layout_context,
-        rect,
-        Box::new(BottomBarWindow),
-    )
+    Window::from_window_base(Arc::clone(&window_base), &layout_context, rect)
 }
-
-impl WindowImpl for BottomBarWindow {}

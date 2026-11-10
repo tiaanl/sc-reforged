@@ -4,18 +4,16 @@ use crate::game::{
     config::help_window_defs::HelpDef,
     ui::{
         Rect,
-        render::window_renderer::{Font, WindowRenderItems},
+        render::window_renderer::Font,
         u32_to_color,
         widgets::{
             list_box::{ListBoxItem, ListBoxWidget},
             text_button::TextButtonWidget,
-            widget::WidgetBase,
+            widget::{Widget, WidgetCommon},
         },
-        windows::window::{Window, WindowCommon},
+        windows::window::Window,
     },
 };
-
-use super::window::{WindowImpl, WindowRenderContext};
 
 pub struct HelpWindow {
     should_pause_game: bool,
@@ -30,16 +28,14 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
 
     let should_pause_game = !help_def.do_not_pause_game;
 
-    let mut window = Window::new(Rect::new(pos, size), HelpWindow { should_pause_game });
+    let mut window = Window::new(Rect::new(pos, size));
 
-    window.common.is_modal = should_pause_game;
-    window.common.is_always_on_top = true;
+    window.modal = should_pause_game;
+    window.always_on_top = true;
 
     // List box widget to hold the help text body lines.
-    let mut list_box = Box::new(ListBoxWidget::vertical(Rect::new(
-        IVec2::splat(16),
-        size - IVec2::new(32, 68),
-    )));
+
+    let mut list_box = Box::new(ListBoxWidget::vertical());
     // TODO: Match the original help-body list-box configuration here:
     // it should be a plain clipped container for body rows, with no panel
     // background and no extra border beyond the surrounding help window.
@@ -53,7 +49,13 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
         list_box.add_item(list_item);
     }
 
-    window.common.widgets.add(list_box);
+    window.widgets.push(Widget {
+        common: WidgetCommon {
+            rect: Rect::new(IVec2::splat(16), size - IVec2::new(32, 68)),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 
     if help_def.is_confirmation {
         let button_width = (size.x - 64) / 3;
@@ -62,11 +64,14 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
         // Cancel actually trigger the expected behavior.
 
         let mut button = Box::new(TextButtonWidget {
-            widget: WidgetBase {
-                rect: Rect::new(
-                    IVec2::new(button_width + 32, size.y - 36),
-                    IVec2::new(button_width, 20),
-                ),
+            widget: Widget {
+                common: WidgetCommon {
+                    rect: Rect::new(
+                        IVec2::new(button_width + 32, size.y - 36),
+                        IVec2::new(button_width, 20),
+                    ),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             text: help_def.confirmation_text_1.as_ref().unwrap().clone(),
@@ -75,14 +80,17 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
         button.font = Font::TwelvePoint;
         button.custom_color = Some(u32_to_color(0xff19ff19));
 
-        window.common.widgets.add(button);
+        // window.common.widgets.add(button);
 
         let mut button = Box::new(TextButtonWidget {
-            widget: WidgetBase {
-                rect: Rect::new(
-                    IVec2::new(button_width * 2 + 48, size.y - 36),
-                    IVec2::new(button_width, 20),
-                ),
+            widget: Widget {
+                common: WidgetCommon {
+                    rect: Rect::new(
+                        IVec2::new(button_width * 2 + 48, size.y - 36),
+                        IVec2::new(button_width, 20),
+                    ),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             text: help_def.confirmation_text_2.as_ref().unwrap().clone(),
@@ -91,12 +99,14 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
         button.font = Font::TwelvePoint;
         button.custom_color = Some(u32_to_color(0xff19ff19));
 
-        window.common.widgets.add(button);
+        // window.common.widgets.add(button);
+        todo!()
     }
 
     window
 }
 
+/*
 impl WindowImpl for HelpWindow {
     fn render(
         &mut self,
@@ -154,3 +164,4 @@ impl WindowImpl for HelpWindow {
             .render(common.rect.position, DELTA_TIME_MS, context, render_items);
     }
 }
+*/

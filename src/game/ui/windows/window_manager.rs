@@ -122,15 +122,13 @@ impl WindowManager {
 
     /// Push a new window to the top of the stack.
     pub fn push(&mut self, window: Window) {
-        let is_modal = window.is_modal();
-        let is_always_on_top = window.is_always_on_top();
-
-        let insert_index = if is_modal || is_always_on_top {
+        let is_modal = window.modal;
+        let insert_index = if window.modal || window.always_on_top {
             self.windows.len()
         } else {
             self.windows
                 .iter()
-                .position(|window| window.is_always_on_top())
+                .position(|window| window.always_on_top)
                 .unwrap_or(self.windows.len())
         };
 
@@ -191,7 +189,7 @@ impl WindowManager {
                 self.modal_window.is_some()
                     || self
                         .mouse_position
-                        .and_then(|mouse| self.topmost_input_window_index(mouse))
+                        .and_then(|mouse| self.top_level_window(mouse))
                         .is_some()
             }
             InputEvent::MouseLeave => {
@@ -207,7 +205,7 @@ impl WindowManager {
     }
 
     fn dispatch_mouse_down(&mut self, button: MouseButton) -> bool {
-        let Some(mouse) = self.mouse_position else {
+        let Some(position) = self.mouse_position else {
             return self.modal_window.is_some();
         };
 
@@ -222,7 +220,7 @@ impl WindowManager {
         {
             let _ = Self::try_mouse_down_on_window(
                 window,
-                mouse,
+                position,
                 button,
                 &mut self.window_manager_context,
             );
@@ -232,7 +230,7 @@ impl WindowManager {
         for window in self.windows.iter_mut().rev() {
             match Self::try_mouse_down_on_window(
                 window,
-                mouse,
+                position,
                 button,
                 &mut self.window_manager_context,
             ) {
@@ -278,15 +276,15 @@ impl WindowManager {
 
     fn try_mouse_down_on_window(
         window: &mut Window,
-        mouse: IVec2,
+        position: IVec2,
         button: MouseButton,
         context: &mut WindowManagerContext,
     ) -> Option<EventResult> {
-        if !window.is_visible() || !window.is_enabled() || !window.hit_test(mouse) {
+        if !is_input_candidate(window, position) {
             return None;
         }
 
-        let local = mouse - window.rect().position;
+        let local = position - window.rect.position;
 
         Some(match button {
             MouseButton::Left => window.on_primary_mouse_down(local, context),
@@ -310,12 +308,12 @@ impl WindowManager {
         // capture / drag state. In Ghidra the mouse-up path is routed through
         // the captured or mouse-down window, not by re-hit-testing the current
         // topmost window under the cursor.
-        let Some(window_index) = self.topmost_input_window_index(mouse_position) else {
+        let Some(window_index) = self.top_level_window(mouse_position) else {
             return self.modal_window.is_some();
         };
 
         let window = &mut self.windows[window_index];
-        let local = mouse_position - window.rect().position;
+        let local = mouse_position - window.rect.position;
 
         let context = &mut self.window_manager_context;
 
@@ -342,12 +340,12 @@ impl WindowManager {
             return self.modal_window.is_some();
         };
 
-        let Some(window_index) = self.topmost_input_window_index(mouse) else {
+        let Some(window_index) = self.top_level_window(mouse) else {
             return self.modal_window.is_some();
         };
 
         let window = &mut self.windows[window_index];
-        let local = mouse - window.rect().position;
+        let local = mouse - window.rect.position;
 
         let context = &mut self.window_manager_context;
         let _ = window.on_mouse_wheel(local, delta, context);
@@ -357,21 +355,18 @@ impl WindowManager {
         true
     }
 
-    fn topmost_input_window_index(&self, position: IVec2) -> Option<usize> {
+    /// Get the top most window at the given `position`.
+    fn top_level_window(&self, position: IVec2) -> Option<usize> {
         if let Some(index) = self.modal_window {
             let window = &self.windows[index];
-            return (window.is_visible() && window.is_enabled() && window.hit_test(position))
-                .then_some(index);
+            return is_input_candidate(window, position).then_some(index);
         }
 
         self.windows
             .iter()
             .enumerate()
             .rev()
-            .find_map(|(index, window)| {
-                (window.is_visible() && window.is_enabled() && window.hit_test(position))
-                    .then_some(index)
-            })
+            .find_map(|(index, window)| is_input_candidate(window, position).then_some(index))
     }
 
     pub fn update(&mut self, delta_time: f32) {
@@ -399,7 +394,7 @@ impl WindowManager {
         if false {
             let topmost = self
                 .mouse_position
-                .and_then(|position| self.topmost_input_window_index(position));
+                .and_then(|position| self.top_level_window(position));
 
             let mut b = 0.1;
             for (i, window) in self.windows.iter_mut().enumerate() {
@@ -413,7 +408,7 @@ impl WindowManager {
                 }
 
                 self.window_render_items_cache
-                    .render_solid_rect(window.rect(), color);
+                    .render_solid_rect(window.rect, color);
                 b += 0.1;
             }
         }
@@ -424,4 +419,9 @@ impl WindowManager {
             &self.window_render_items_cache,
         );
     }
+}
+
+#[inline]
+fn is_input_candidate(window: &Window, position: IVec2) -> bool {
+    window.visible && window.enabled && window.hit_test(position)
 }

@@ -10,7 +10,7 @@ use crate::{
             render::window_renderer::WindowRenderItems,
             widgets::{
                 text_button::TextButtonWidget,
-                widget::{Widget, WidgetBase},
+                widget::{Widget, WidgetCommon, WidgetImpl},
             },
             windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
         },
@@ -23,7 +23,7 @@ pub fn create_main_menu_button(
     bullet: ButtonLayer,
     text: ButtonLayer,
     shadow: ButtonLayer,
-) -> Box<MainMenuButton> {
+) -> Widget {
     let rect = Rect::new(position, {
         let bullet_size = bullet.rect.size;
         let text_size = text.rect.size;
@@ -33,10 +33,13 @@ pub fn create_main_menu_button(
     let mut text_pressed = text.clone();
     text_pressed.frame += 2;
 
-    Box::new(MainMenuButton {
+    let thing = Box::new(MainMenuButton {
         text_button: TextButtonWidget {
-            widget: WidgetBase {
-                rect,
+            widget: Widget {
+                common: WidgetCommon {
+                    rect,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             ..Default::default()
@@ -46,7 +49,15 @@ pub fn create_main_menu_button(
         shadow,
         text,
         text_pressed,
-    })
+    });
+
+    Widget {
+        common: WidgetCommon {
+            rect,
+            ..Default::default()
+        },
+        thing: Some(thing),
+    }
 }
 
 pub struct MainMenuButton {
@@ -58,26 +69,31 @@ pub struct MainMenuButton {
     text_pressed: ButtonLayer,
 }
 
-impl Widget for MainMenuButton {
+impl WidgetImpl for MainMenuButton {
     fn on_primary_mouse_down(
         &mut self,
+        widget: &mut WidgetCommon,
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
         tracing::info!("Mouse down on {}!", &self.text_button.text);
-        self.text_button.on_primary_mouse_down(position, context)
+        self.text_button
+            .on_primary_mouse_down(widget, position, context)
     }
 
     fn on_primary_mouse_up(
         &mut self,
+        widget: &mut WidgetCommon,
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        self.text_button.on_primary_mouse_up(position, context)
+        self.text_button
+            .on_primary_mouse_up(widget, position, context)
     }
 
     fn render(
         &mut self,
+        _widget: &mut WidgetCommon,
         origin: IVec2,
         _delta_time_ms: i32,
         _window_render_context: &mut WindowRenderContext<'_>,
@@ -102,7 +118,7 @@ impl Widget for MainMenuButton {
 
         // Render a debug border around the button.
         window_render_items.render_border(
-            self.text_button.widget.rect.offset(origin),
+            self.text_button.widget.common.rect.offset(origin),
             1,
             glam::Vec4::ONE,
         );

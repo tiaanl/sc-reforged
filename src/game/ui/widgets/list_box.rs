@@ -4,10 +4,11 @@ use crate::game::ui::{
     EventResult, Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
     u32_to_color,
+    widgets::widget::{Widget, WidgetCommon},
     windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
 };
 
-use super::widget::Widget;
+use super::widget::WidgetImpl;
 
 pub enum ListBoxItemKind {
     Text {
@@ -54,8 +55,6 @@ impl ListBoxItem {
 
 #[derive(Default)]
 pub struct ListBoxWidget {
-    rect: Rect,
-
     items: Vec<ListBoxItem>,
 
     scroll_offset: IVec2,
@@ -75,17 +74,15 @@ pub struct ListBoxWidget {
 }
 
 impl ListBoxWidget {
-    pub fn horizontal(rect: Rect) -> Self {
+    pub fn horizontal() -> Self {
         Self {
-            rect,
             horizontal: true,
             ..Default::default()
         }
     }
 
-    pub fn vertical(rect: Rect) -> Self {
+    pub fn vertical() -> Self {
         Self {
-            rect,
             ..Default::default()
         }
     }
@@ -95,9 +92,10 @@ impl ListBoxWidget {
     }
 }
 
-impl Widget for ListBoxWidget {
+impl WidgetImpl for ListBoxWidget {
     fn on_primary_mouse_down(
         &mut self,
+        _widget: &mut WidgetCommon,
         _mouse_position: IVec2,
         _context: &mut WindowManagerContext,
     ) -> EventResult {
@@ -189,6 +187,7 @@ impl Widget for ListBoxWidget {
 
     fn on_primary_mouse_up(
         &mut self,
+        _widget: &mut WidgetCommon,
         _mouse_position: IVec2,
         _context: &mut WindowManagerContext,
     ) -> EventResult {
@@ -205,6 +204,7 @@ impl Widget for ListBoxWidget {
 
     fn on_mouse_wheel(
         &mut self,
+        widget: &mut WidgetCommon,
         wheel_steps: i32,
         _context: &mut WindowManagerContext,
     ) -> EventResult {
@@ -217,7 +217,7 @@ impl Widget for ListBoxWidget {
         let mut target_scroll =
             self.scroll_offset.y + self.pending_scroll_delta + item_height * wheel_steps;
 
-        let max_scroll = (self.content_size + self.rect.size.y) - self.rect.bottom_right().y;
+        let max_scroll = (self.content_size + widget.rect.size.y) - widget.rect.bottom_right().y;
 
         if target_scroll > max_scroll {
             target_scroll = max_scroll;
@@ -239,12 +239,13 @@ impl Widget for ListBoxWidget {
 
     fn render(
         &mut self,
+        widget: &mut WidgetCommon,
         origin: IVec2,
         delta_time_ms: i32,
         context: &mut WindowRenderContext<'_>,
         window_render_items: &mut WindowRenderItems,
     ) {
-        let rect = self.rect.offset(origin);
+        let rect = widget.rect.offset(origin);
 
         // 1. Draw list-box chrome.
         if self.render_panel_background && !self.force_flat_background {

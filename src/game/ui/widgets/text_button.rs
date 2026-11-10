@@ -3,7 +3,7 @@ use glam::{IVec2, Vec4};
 use crate::game::ui::{
     EventResult,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
-    widgets::widget::{Widget, WidgetBase},
+    widgets::widget::{Widget, WidgetCommon, WidgetImpl},
     windows::{
         actions::WindowManagerAction, window::WindowRenderContext,
         window_manager_context::WindowManagerContext,
@@ -12,7 +12,7 @@ use crate::game::ui::{
 
 #[derive(Default)]
 pub struct TextButtonWidget {
-    pub widget: WidgetBase,
+    pub widget: Widget,
 
     pub is_pressed: bool,
     pub is_disabled: bool,
@@ -39,9 +39,10 @@ impl TextButtonWidget {
     }
 }
 
-impl Widget for TextButtonWidget {
+impl WidgetImpl for TextButtonWidget {
     fn on_primary_mouse_down(
         &mut self,
+        _widget: &mut WidgetCommon,
         _position: IVec2,
         _context: &mut WindowManagerContext,
     ) -> EventResult {
@@ -63,6 +64,7 @@ impl Widget for TextButtonWidget {
 
     fn on_primary_mouse_up(
         &mut self,
+        _widget: &mut WidgetCommon,
         _position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
@@ -89,6 +91,7 @@ impl Widget for TextButtonWidget {
 
     fn render(
         &mut self,
+        _widget: &mut WidgetCommon,
         origin: IVec2,
         _delta_time_ms: i32,
         context: &mut WindowRenderContext<'_>,
@@ -99,20 +102,20 @@ impl Widget for TextButtonWidget {
         } else {
             self.font.primary_color()
         };
-        window_render_items.render_border(self.widget.rect.offset(origin), 1, color);
+        window_render_items.render_border(self.widget.common.rect.offset(origin), 1, color);
 
         // TODO: Match the original button render states more closely. The
         // current button only nudges the text when pressed instead of using
         // the original style flags and pressed-state visuals.
         let text_offset = Self::calculate_text_offset(
             &self.text,
-            self.widget.rect.size,
+            self.widget.common.rect.size,
             self.font,
             context.window_renderer,
         ) + IVec2::splat(self.is_pressed as i32);
 
         window_render_items.render_text(
-            origin + self.widget.rect.position + text_offset,
+            origin + self.widget.common.rect.position + text_offset,
             self.text.as_bytes(),
             self.font,
             self.custom_color,

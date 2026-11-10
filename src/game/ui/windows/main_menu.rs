@@ -12,12 +12,9 @@ use crate::{
             widgets::{
                 main_menu_button::{ButtonLayer, create_main_menu_button},
                 text_button::TextButtonWidget,
-                widget::WidgetBase,
+                widget::Widget,
             },
-            windows::{
-                window::{Window, WindowImpl},
-                window_manager::WindowLayoutContext,
-            },
+            windows::{window::Window, window_manager::WindowLayoutContext},
         },
     },
 };
@@ -57,23 +54,18 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
 
     let rect = window_base.resolve_layout_rect(context);
 
-    let mut window = Window::from_window_base(
-        Arc::clone(&window_base),
-        context,
-        rect,
-        Box::new(MainMenuWindow),
-    )?;
+    let mut window = Window::from_window_base(Arc::clone(&window_base), context, rect)?;
 
-    let button = Box::new(TextButtonWidget {
-        widget: WidgetBase {
-            rect: Rect::new(IVec2::new(10, 10), IVec2::new(100, 30)),
-            ..Default::default()
-        },
-        // action: Some(WindowManagerAction::StartCampaign(String::from("training"))),
-        text: String::from("Training"),
-        ..Default::default()
-    });
-    window.common.widgets.add(button);
+    // let button = Box::new(TextButtonWidget {
+    //     widget: Widget {
+    //         rect: Rect::new(IVec2::new(10, 10), IVec2::new(100, 30)),
+    //         ..Default::default()
+    //     },
+    //     // action: Some(WindowManagerAction::StartCampaign(String::from("training"))),
+    //     text: String::from("Training"),
+    //     ..Default::default()
+    // });
+    // window.widgets.add(button);
 
     let button_offset = window_base.get_button_offset(context);
     let shadow_offset = window_base.get_shadow_offset(context);
@@ -161,12 +153,9 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
         let shadow = ButtonLayer::new(shadow_sprite, shadow_frame, pos + shadow_offset);
 
         window
-            .common
             .widgets
-            .add(create_main_menu_button(pos, bullet, text, shadow));
+            .push(create_main_menu_button(pos, bullet, text, shadow));
     }
 
     Ok(window)
 }
-
-impl WindowImpl for MainMenuWindow {}

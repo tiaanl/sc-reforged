@@ -25,3 +25,10 @@ pub enum EventResult {
     Ignore,
     Handled,
 }
+
+impl EventResult {
+    #[inline]
+    pub fn ignored(&self) -> bool {
+        matches!(self, Self::Ignore)
+    }
+}

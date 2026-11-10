@@ -14,7 +14,7 @@ use crate::{
                 ui_mesh_renderer::{UiMesh, UiVertex},
                 window_renderer::{WindowRenderItems, WindowRenderer},
             },
-            widgets::widget::Widgets,
+            widgets::widget::Widget,
             windows::{
                 window_manager::WindowLayoutContext, window_manager_context::WindowManagerContext,
             },
@@ -30,146 +30,36 @@ pub struct WindowRenderContext<'a> {
     pub window_renderer: &'a WindowRenderer,
 }
 
-pub struct WindowCommon {
+pub struct Window {
+    pub window_base: Option<Arc<config::WindowBase>>,
+
     pub rect: Rect,
 
     pub geometries: Geometries,
-    pub widgets: Widgets,
 
-    pub is_visible: bool,
-    pub is_enabled: bool,
-    pub is_modal: bool,
-    pub is_always_on_top: bool,
-}
+    pub widgets: Vec<Widget>,
+    pub capture_widget: Option<usize>,
 
-impl WindowCommon {
-    pub fn new(rect: Rect) -> Self {
-        Self {
-            rect,
-            geometries: Geometries::default(),
-            widgets: Widgets::default(),
-
-            is_visible: true,
-            is_enabled: true,
-            is_modal: false,
-            is_always_on_top: false,
-        }
-    }
-}
-
-pub trait WindowImpl {
-    /// Handle a primary mouse down event.
-    fn on_primary_mouse_down(
-        &mut self,
-        common: &mut WindowCommon,
-        position: IVec2,
-        context: &mut WindowManagerContext,
-    ) -> EventResult {
-        let _ = common;
-        let _ = position;
-        let _ = context;
-        EventResult::Ignore
-    }
-
-    /// Handle a secondary mouse down event.
-    fn on_secondary_mouse_down(
-        &mut self,
-        common: &mut WindowCommon,
-        position: IVec2,
-        context: &mut WindowManagerContext,
-    ) -> EventResult {
-        let _ = common;
-        let _ = position;
-        let _ = context;
-        EventResult::Ignore
-    }
-
-    /// Handle a primary mouse up event.
-    fn on_primary_mouse_up(
-        &mut self,
-        common: &mut WindowCommon,
-        position: IVec2,
-        context: &mut WindowManagerContext,
-    ) -> EventResult {
-        let _ = common;
-        let _ = position;
-        let _ = context;
-        EventResult::Ignore
-    }
-
-    /// Handle a secondary mouse up event.
-    fn on_secondary_mouse_up(
-        &mut self,
-        common: &mut WindowCommon,
-        position: IVec2,
-        context: &mut WindowManagerContext,
-    ) -> EventResult {
-        let _ = common;
-        let _ = position;
-        let _ = context;
-        EventResult::Ignore
-    }
-
-    /// Handle a mouse wheel event in window-local coordinates.
-    fn on_mouse_wheel(
-        &mut self,
-        common: &mut WindowCommon,
-        position: IVec2,
-        wheel_steps: i32,
-        context: &mut WindowManagerContext,
-    ) -> EventResult {
-        let _ = common;
-        let _ = position;
-        let _ = wheel_steps;
-        let _ = context;
-        EventResult::Ignore
-    }
-
-    /// Called to update the window state given the time in seconds since the last frame was drawn
-    /// in `delta_time`.
-    fn update(&mut self, delta_time: f32) {
-        let _ = delta_time;
-    }
-
-    /// Called when the logical UI size changes so windows can re-resolve any
-    /// expression-based layout (button positions, geometry, etc.) keyed off
-    /// `%screen_dx` / `%screen_dy`.
-    fn on_resize(&mut self, common: &mut WindowCommon, logical_size: IVec2) {
-        let _ = common;
-        let _ = logical_size;
-    }
-
-    /// Called for each window so they can drive any GPU work and append items
-    /// to `render_items` to be composited later.
-    ///
-    /// The default implementation renders `common.geometries` (background art
-    /// from the window base) followed by `common.widgets`. Overrides are
-    /// responsible for calling these themselves if they want them drawn.
-    fn render(
-        &mut self,
-        common: &mut WindowCommon,
-        context: &mut WindowRenderContext<'_>,
-        render_items: &mut WindowRenderItems,
-    ) {
-        common.geometries.render(common.rect.position, render_items);
-        common
-            .widgets
-            .render(common.rect.position, 0, context, render_items);
-    }
-}
-
-pub struct Window {
-    pub window_base: Option<Arc<config::WindowBase>>,
-    pub common: WindowCommon,
-    pub window_impl: Box<dyn WindowImpl>,
+    pub visible: bool,
+    pub enabled: bool,
+    pub modal: bool,
+    pub always_on_top: bool,
 }
 
 impl Window {
-    pub fn new<I: WindowImpl + 'static>(rect: Rect, window_impl: I) -> Self {
+    pub fn new(rect: Rect) -> Self {
         Self {
             window_base: None,
-            common: WindowCommon::new(rect),
-            window_impl: Box::new(window_impl),
+
+            rect,
+            geometries: Geometries::default(),
+            widgets: Vec::default(),
+            capture_widget: None,
+
+            visible: true,
+            enabled: true,
+            modal: false,
+            always_on_top: false,
         }
     }
 
@@ -177,69 +67,36 @@ impl Window {
         window_base: Arc<config::WindowBase>,
         layout_context: &WindowLayoutContext,
         rect: Rect,
-        window_impl: Box<dyn WindowImpl + 'static>,
     ) -> Result<Self, AssetError> {
-        let mut common = WindowCommon::new(rect);
+        let mut geometries = Geometries::default();
+        populate_geometries(&mut geometries, &window_base, layout_context)?;
 
-        populate_geometries(&mut common.geometries, &window_base, layout_context)?;
+        let mut window = Window::new(rect);
+        window.geometries = geometries;
 
-        Ok(Self {
-            window_base: Some(window_base),
-            common,
-            window_impl,
-        })
-    }
-
-    /// Return true if the window is visible.
-    pub fn is_visible(&self) -> bool {
-        self.common.is_visible
-    }
-
-    /// Return true if the window can receive input events.
-    pub fn is_enabled(&self) -> bool {
-        self.common.is_enabled
-    }
-
-    /// Return true if the window is modal and should exclusively receive input.
-    pub fn is_modal(&self) -> bool {
-        self.common.is_modal
-    }
-
-    /// Return true if the window should stay above normal windows.
-    pub fn is_always_on_top(&self) -> bool {
-        self.common.is_always_on_top
+        Ok(window)
     }
 
     /// Return true if the global coordinates are within the bounds of the
     /// window.
     pub fn hit_test(&self, position: IVec2) -> bool {
-        self.common.rect.contains(position)
-    }
-
-    /// Return the [Rect] of the window.
-    pub fn rect(&self) -> Rect {
-        self.common.rect
+        self.rect.contains(position)
     }
 
     pub fn on_resize(&mut self, logical_size: IVec2) {
         if let Some(window_base) = &self.window_base {
             let layout_context = WindowLayoutContext::from_logical_size(logical_size);
-            self.common.rect = window_base.resolve_layout_rect(&layout_context);
+            self.rect = window_base.resolve_layout_rect(&layout_context);
 
-            if let Err(error) = populate_geometries(
-                &mut self.common.geometries,
-                // &mut self.common.render_geometry,
-                window_base,
-                &layout_context,
-            ) {
+            if let Err(error) =
+                populate_geometries(&mut self.geometries, window_base, &layout_context)
+            {
                 tracing::warn!(
                     "failed to refresh window base '{}' during resize: {error}",
                     window_base.name
                 );
             }
         }
-
-        self.window_impl.on_resize(&mut self.common, logical_size);
     }
 
     pub fn on_primary_mouse_down(
@@ -247,12 +104,23 @@ impl Window {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        let result = self.common.widgets.on_primary_mouse_down(position, context);
-        if matches!(result, EventResult::Handled) {
-            return result;
+        let Some(index) = self.top_level_input_widget(position) else {
+            // If we are not over a top level widget that can receive input, we
+            // ignore the event.
+            return EventResult::Ignore;
+        };
+
+        // SAFETY: We can unwrap here, because `top_level_input_widget` only
+        //         returns `Some` if the widget index was found.
+        let widget = self.widgets.get_mut(index).unwrap();
+
+        self.capture_widget = Some(index);
+
+        if let Some(thing) = widget.thing.as_mut() {
+            thing.on_primary_mouse_down(&mut widget.common, position, context)
+        } else {
+            EventResult::Ignore
         }
-        self.window_impl
-            .on_primary_mouse_down(&mut self.common, position, context)
     }
 
     pub fn on_primary_mouse_up(
@@ -260,71 +128,84 @@ impl Window {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        let result = self.common.widgets.on_primary_mouse_up(position, context);
-        if matches!(result, EventResult::Handled) {
-            return result;
+        if let Some(index) = self.capture_widget {
+            if let Some(widget) = self.widgets.get_mut(index) {
+                widget.on_primary_mouse_up(position, context);
+            }
+            self.capture_widget = None;
         }
-        self.window_impl
-            .on_primary_mouse_up(&mut self.common, position, context)
+
+        // for widget in self.widgets.iter_mut().rev() {
+        //     let result = widget.on_primary_mouse_down(position, context);
+        //     if !result.ignored() {
+        //         return result;
+        //     }
+        // }
+
+        // // Give the remaining widgets a chance to clear any pressed state even
+        // // when the cursor was released outside their bounds.
+        // for widget in self.widgets.iter_mut().rev() {
+        //     // let result = widget.on_primary_mouse_up(position, context);
+
+        //     // if matches!(result, EventResult::Handled) {
+        //     //     return result;
+        //     // }
+        //     todo!()
+        // }
+
+        EventResult::Ignore
     }
 
     pub fn on_secondary_mouse_down(
         &mut self,
-        position: IVec2,
-        context: &mut WindowManagerContext,
+        _position: IVec2,
+        _context: &mut WindowManagerContext,
     ) -> EventResult {
-        let result = self
-            .common
-            .widgets
-            .on_secondary_mouse_down(position, context);
-        if matches!(result, EventResult::Handled) {
-            return result;
-        }
-        self.window_impl
-            .on_secondary_mouse_down(&mut self.common, position, context)
+        EventResult::Ignore
     }
 
     pub fn on_secondary_mouse_up(
         &mut self,
-        position: IVec2,
-        context: &mut WindowManagerContext,
+        _position: IVec2,
+        _context: &mut WindowManagerContext,
     ) -> EventResult {
-        let result = self.common.widgets.on_secondary_mouse_up(position, context);
-        if matches!(result, EventResult::Handled) {
-            return result;
-        }
-        self.window_impl
-            .on_secondary_mouse_up(&mut self.common, position, context)
+        EventResult::Ignore
     }
 
     pub fn on_mouse_wheel(
         &mut self,
-        position: IVec2,
-        wheel_steps: i32,
-        context: &mut WindowManagerContext,
+        _position: IVec2,
+        _wheel_steps: i32,
+        _context: &mut WindowManagerContext,
     ) -> EventResult {
-        let result = self
-            .common
-            .widgets
-            .on_mouse_wheel(position, wheel_steps, context);
-        if matches!(result, EventResult::Handled) {
-            return result;
-        }
-        self.window_impl
-            .on_mouse_wheel(&mut self.common, position, wheel_steps, context)
+        EventResult::Ignore
     }
+
+    pub fn update(&mut self, _delta_time: f32) {}
 
     pub fn render(
         &mut self,
         context: &mut WindowRenderContext<'_>,
         render_items: &mut WindowRenderItems,
     ) {
-        self.window_impl
-            .render(&mut self.common, context, render_items);
+        for widget in self.widgets.iter_mut().rev() {
+            widget.render(self.rect.position, context, render_items);
+        }
     }
 
-    pub fn update(&mut self, delta_time: f32) {
-        self.window_impl.update(delta_time);
+    fn top_level_input_widget(&self, position: IVec2) -> Option<usize> {
+        for (index, widget) in self.widgets.iter().enumerate().rev() {
+            // Offset the widget position by the window position.
+
+            if widget.common.visible
+                && widget.common.accepts_input
+                && widget.common.rect.contains(self.rect.position + position)
+            {
+                return Some(index);
+            }
+        }
+
+        None
     }
 }
 

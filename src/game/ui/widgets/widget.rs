@@ -6,9 +6,10 @@ use crate::game::ui::{
     windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
 };
 
-pub trait Widget {
+pub trait WidgetImpl {
     fn on_primary_mouse_down(
         &mut self,
+        widget: &mut WidgetCommon,
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
@@ -19,6 +20,7 @@ pub trait Widget {
 
     fn on_primary_mouse_up(
         &mut self,
+        widget: &mut WidgetCommon,
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
@@ -29,6 +31,7 @@ pub trait Widget {
 
     fn on_mouse_wheel(
         &mut self,
+        widget: &mut WidgetCommon,
         wheel_steps: i32,
         context: &mut WindowManagerContext,
     ) -> EventResult {
@@ -39,6 +42,7 @@ pub trait Widget {
 
     fn render(
         &mut self,
+        widget: &mut WidgetCommon,
         origin: IVec2,
         delta_time_ms: i32,
         window_render_context: &mut WindowRenderContext<'_>,
@@ -46,7 +50,7 @@ pub trait Widget {
     );
 }
 
-pub struct WidgetBase {
+pub struct WidgetCommon {
     pub rect: Rect,
     pub color: u32,
     pub parent_index: Option<usize>,
@@ -56,7 +60,7 @@ pub struct WidgetBase {
     pub group_index: Option<usize>,
 }
 
-impl Default for WidgetBase {
+impl Default for WidgetCommon {
     fn default() -> Self {
         Self {
             rect: Rect::default(),
@@ -70,122 +74,43 @@ impl Default for WidgetBase {
     }
 }
 
-impl Widget for WidgetBase {
-    fn render(
-        &mut self,
-        _origin: IVec2,
-        _delta_time_ms: i32,
-        _window_render_context: &mut WindowRenderContext<'_>,
-        _window_render_items: &mut WindowRenderItems,
-    ) {
-        // TODO
-        // Render_Panel()
-    }
-}
-
 #[derive(Default)]
-pub struct Widgets {
-    widgets: Vec<Box<dyn Widget>>,
+pub struct Widget {
+    pub common: WidgetCommon,
+    pub thing: Option<Box<dyn WidgetImpl>>,
 }
 
-impl Widgets {
-    /// Adds a widget to the end of the child-widget list.
-    pub fn add(&mut self, widget: Box<dyn Widget>) {
-        self.widgets.push(widget);
-    }
-
-    /// Forwards a primary mouse-down event to the topmost child widget under
-    /// the cursor.
+impl Widget {
     pub fn on_primary_mouse_down(
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        for widget in self.widgets.iter_mut().rev() {
-            let result = widget.on_primary_mouse_down(position, context);
-
-            if matches!(result, EventResult::Handled) {
-                return result;
-            }
+        if let Some(ref mut thing) = self.thing {
+            return thing.on_primary_mouse_down(&mut self.common, position, context);
         }
-
         EventResult::Ignore
     }
 
-    /// Forwards a primary mouse-up event to the topmost child widget under
-    /// the cursor.
     pub fn on_primary_mouse_up(
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        for widget in self.widgets.iter_mut().rev() {
-            let result = widget.on_primary_mouse_up(position, context);
-
-            if matches!(result, EventResult::Handled) {
-                return result;
-            }
+        if let Some(ref mut thing) = self.thing {
+            return thing.on_primary_mouse_up(&mut self.common, position, context);
         }
-
-        // Give the remaining widgets a chance to clear any pressed state even
-        // when the cursor was released outside their bounds.
-        for widget in self.widgets.iter_mut().rev() {
-            let result = widget.on_primary_mouse_up(position, context);
-
-            if matches!(result, EventResult::Handled) {
-                return result;
-            }
-        }
-
         EventResult::Ignore
     }
 
-    pub fn on_secondary_mouse_down(
-        &mut self,
-        _position: IVec2,
-        _context: &mut WindowManagerContext,
-    ) -> EventResult {
-        EventResult::Ignore
-    }
-
-    pub fn on_secondary_mouse_up(
-        &mut self,
-        _position: IVec2,
-        _context: &mut WindowManagerContext,
-    ) -> EventResult {
-        EventResult::Ignore
-    }
-
-    /// Forwards a mouse-wheel event to the topmost child widget under the
-    /// cursor.
-    pub fn on_mouse_wheel(
-        &mut self,
-        _mouse_position: IVec2,
-        wheel_steps: i32,
-        context: &mut WindowManagerContext,
-    ) -> EventResult {
-        for widget in self.widgets.iter_mut().rev() {
-            let result = widget.on_mouse_wheel(wheel_steps, context);
-
-            if matches!(result, EventResult::Handled) {
-                return result;
-            }
-        }
-
-        EventResult::Ignore
-    }
-
-    /// Renders child widgets using the original engine's back-to-front widget
-    /// traversal order.
     pub fn render(
         &mut self,
         origin: IVec2,
-        delta_time_ms: i32,
-        context: &mut WindowRenderContext<'_>,
-        window_render_items: &mut WindowRenderItems,
+        context: &mut WindowRenderContext,
+        render_items: &mut WindowRenderItems,
     ) {
-        for widget in self.widgets.iter_mut().rev() {
-            widget.render(origin, delta_time_ms, context, window_render_items);
+        if let Some(ref mut thing) = self.thing {
+            thing.render(&mut self.common, origin, 0, context, render_items);
         }
     }
 }
