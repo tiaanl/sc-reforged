@@ -18,7 +18,29 @@ pub trait WidgetImpl {
         EventResult::Ignore
     }
 
+    fn on_secondary_mouse_down(
+        &mut self,
+        widget: &mut WidgetCommon,
+        position: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
+        let _ = position;
+        let _ = context;
+        EventResult::Ignore
+    }
+
     fn on_primary_mouse_up(
+        &mut self,
+        widget: &mut WidgetCommon,
+        position: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
+        let _ = position;
+        let _ = context;
+        EventResult::Ignore
+    }
+
+    fn on_secondary_mouse_up(
         &mut self,
         widget: &mut WidgetCommon,
         position: IVec2,
@@ -92,6 +114,17 @@ impl Widget {
         EventResult::Ignore
     }
 
+    pub fn on_secondary_mouse_down(
+        &mut self,
+        position: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
+        if let Some(ref mut thing) = self.thing {
+            return thing.on_secondary_mouse_down(&mut self.common, position, context);
+        }
+        EventResult::Ignore
+    }
+
     pub fn on_primary_mouse_up(
         &mut self,
         position: IVec2,
@@ -99,6 +132,28 @@ impl Widget {
     ) -> EventResult {
         if let Some(ref mut thing) = self.thing {
             return thing.on_primary_mouse_up(&mut self.common, position, context);
+        }
+        EventResult::Ignore
+    }
+
+    pub fn on_secondary_mouse_up(
+        &mut self,
+        position: IVec2,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
+        if let Some(ref mut thing) = self.thing {
+            return thing.on_secondary_mouse_up(&mut self.common, position, context);
+        }
+        EventResult::Ignore
+    }
+
+    pub fn on_mouse_wheel(
+        &mut self,
+        wheel_steps: i32,
+        context: &mut WindowManagerContext,
+    ) -> EventResult {
+        if let Some(ref mut thing) = self.thing {
+            return thing.on_mouse_wheel(&mut self.common, wheel_steps, context);
         }
         EventResult::Ignore
     }
