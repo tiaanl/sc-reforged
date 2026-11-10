@@ -47,6 +47,10 @@ pub trait WindowBehavior {
     }
 }
 
+struct DefaultWindowBehavior;
+
+impl WindowBehavior for DefaultWindowBehavior {}
+
 /// Data shared between all [Window]s.
 pub struct WindowCommon {
     pub rect: Rect,
@@ -64,54 +68,12 @@ pub struct WindowCommon {
     pub capture_widget: Option<usize>,
 }
 
-impl WindowCommon {
-    pub fn new(rect: Rect) -> Self {
-        Self {
-            rect,
-
-            visible: true,
-            enabled: true,
-            modal: false,
-            always_on_top: false,
-
-            window_base: None,
-            geometries: Geometries::default(),
-
-            widgets: Vec::default(),
-            capture_widget: None,
-        }
-    }
-}
-
 pub struct Window {
     pub common: WindowCommon,
-    pub behavior: Option<Box<dyn WindowBehavior>>,
+    pub behavior: Box<dyn WindowBehavior>,
 }
 
 impl Window {
-    pub fn new(rect: Rect, behavior: Box<dyn WindowBehavior>) -> Self {
-        Self {
-            common: WindowCommon::new(rect),
-            behavior: Some(behavior),
-        }
-    }
-
-    pub fn from_window_base(
-        rect: Rect,
-        behavior: Box<dyn WindowBehavior>,
-        window_base: Arc<config::WindowBase>,
-        layout_context: &WindowLayoutContext,
-    ) -> Result<Self, AssetError> {
-        let mut geometries = Geometries::default();
-        populate_geometries(&mut geometries, window_base.as_ref(), layout_context)?;
-
-        let mut window = Window::new(rect, behavior);
-        window.common.window_base = Some(window_base);
-        window.common.geometries = geometries;
-
-        Ok(window)
-    }
-
     /// Return true if the global coordinates are within the bounds of the
     /// window.
     pub fn hit_test(&self, position: IVec2) -> bool {
@@ -349,5 +311,92 @@ fn offset_mesh(mesh: &mut UiMesh, offset: Vec2) {
     for vertex in mesh.vertices.iter_mut() {
         vertex.pos[0] += offset.x;
         vertex.pos[1] += offset.y;
+    }
+}
+
+struct WindowBaseDetails<'a> {
+    window_base: Arc<config::WindowBase>,
+    context: &'a WindowLayoutContext,
+}
+
+pub struct WindowBuilder<'a> {
+    rect: Rect,
+    behavior: Option<Box<dyn WindowBehavior>>,
+    window_base_details: Option<WindowBaseDetails<'a>>,
+    modal: bool,
+    always_on_top: bool,
+}
+
+impl<'a> WindowBuilder<'a> {
+    pub fn new(rect: Rect) -> WindowBuilder<'a> {
+        Self {
+            rect,
+            behavior: None,
+            window_base_details: None,
+            modal: false,
+            always_on_top: false,
+        }
+    }
+
+    pub fn with_behavior(mut self, behavior: Box<dyn WindowBehavior>) -> Self {
+        self.behavior = Some(behavior);
+        self
+    }
+
+    pub fn with_window_base(
+        mut self,
+        window_base: Arc<config::WindowBase>,
+        context: &'a WindowLayoutContext,
+    ) -> Self {
+        self.window_base_details = Some(WindowBaseDetails {
+            window_base,
+            context,
+        });
+        self
+    }
+
+    pub fn modal(mut self, modal: bool) -> Self {
+        self.modal = modal;
+        self
+    }
+
+    pub fn always_on_top(mut self, always_on_top: bool) -> Self {
+        self.always_on_top = always_on_top;
+        self
+    }
+
+    pub fn build(self) -> Result<Window, AssetError> {
+        let mut geometries = Geometries::default();
+        let mut maybe_window_base = None;
+        if let Some(WindowBaseDetails {
+            window_base,
+            context,
+        }) = self.window_base_details
+        {
+            populate_geometries(&mut geometries, window_base.as_ref(), context)?;
+            maybe_window_base = Some(window_base);
+        }
+
+        let behavior = self.behavior.unwrap_or(Box::new(DefaultWindowBehavior));
+
+        let window = Window {
+            common: WindowCommon {
+                rect: self.rect,
+
+                visible: true,
+                enabled: true,
+                modal: self.modal,
+                always_on_top: self.always_on_top,
+
+                window_base: maybe_window_base,
+                geometries,
+
+                widgets: Vec::default(),
+                capture_widget: None,
+            },
+            behavior,
+        };
+
+        Ok(window)
     }
 }

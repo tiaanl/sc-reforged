@@ -1,17 +1,20 @@
 use glam::{IVec2, UVec2};
 
-use crate::game::{
-    config::help_window_defs::HelpDef,
-    ui::{
-        Rect,
-        render::window_renderer::Font,
-        u32_to_color,
-        widgets::{
-            list_box::{ListBoxItem, ListBoxWidget},
-            text_button::TextButtonWidget,
-            widget::{Widget, WidgetCommon},
+use crate::{
+    engine::assets::AssetError,
+    game::{
+        config::help_window_defs::HelpDef,
+        ui::{
+            Rect,
+            render::window_renderer::Font,
+            u32_to_color,
+            widgets::{
+                list_box::{ListBoxItem, ListBoxWidget},
+                text_button::TextButtonWidget,
+                widget::{Widget, WidgetCommon},
+            },
+            windows::window::{Window, WindowBehavior, WindowBuilder},
         },
-        windows::window::{Window, WindowBehavior},
     },
 };
 
@@ -22,7 +25,7 @@ pub struct HelpWindow {
 impl WindowBehavior for HelpWindow {}
 
 /// Creates a help window from the specified help definition.
-pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
+pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Result<Window, AssetError> {
     let size = help_def.dimensions.unwrap_or(IVec2::new(380, 180));
     let pos = help_def
         .position
@@ -30,13 +33,11 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
 
     let should_pause_game = !help_def.do_not_pause_game;
 
-    let mut window = Window::new(
-        Rect::new(pos, size),
-        Box::new(HelpWindow { should_pause_game }),
-    );
-
-    window.common.modal = should_pause_game;
-    window.common.always_on_top = true;
+    let mut window = WindowBuilder::new(Rect::new(pos, size))
+        .with_behavior(Box::new(HelpWindow { should_pause_game }))
+        .modal(should_pause_game)
+        .always_on_top(true)
+        .build()?;
 
     // List box widget to hold the help text body lines.
 
@@ -108,7 +109,7 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
         todo!()
     }
 
-    window
+    Ok(window)
 }
 
 /*

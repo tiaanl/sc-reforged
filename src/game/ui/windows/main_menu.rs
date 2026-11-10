@@ -10,7 +10,7 @@ use crate::{
         ui::{
             widgets::main_menu_button::{ButtonLayer, create_main_menu_button},
             windows::{
-                window::{Window, WindowBehavior},
+                window::{Window, WindowBehavior, WindowBuilder},
                 window_manager::WindowLayoutContext,
             },
         },
@@ -54,12 +54,10 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
 
     let rect = window_base.resolve_layout_rect(context);
 
-    let mut window = Window::from_window_base(
-        rect,
-        Box::new(MainMenuWindow),
-        Arc::clone(&window_base),
-        context,
-    )?;
+    let mut window = WindowBuilder::new(rect)
+        .with_behavior(Box::new(MainMenuWindow))
+        .with_window_base(Arc::clone(&window_base), context)
+        .build()?;
 
     // let button = Box::new(TextButtonWidget {
     //     widget: Widget {
