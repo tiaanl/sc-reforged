@@ -30,49 +30,84 @@ pub struct WindowRenderContext<'a> {
     pub window_renderer: &'a WindowRenderer,
 }
 
-pub struct Window {
-    pub window_base: Option<Arc<config::WindowBase>>,
+pub trait WindowBehavior {
+    /// Allow each [Window] to have its own update behavior.
+    fn update(&mut self, delta: f32) {
+        let _ = delta;
+    }
 
+    /// Allows each [Window] to have its own render behavior.
+    fn render(
+        &mut self,
+        context: &mut WindowRenderContext<'_>,
+        render_items: &mut WindowRenderItems,
+    ) {
+        let _ = context;
+        let _ = render_items;
+    }
+}
+
+/// Data shared between all [Window]s.
+pub struct WindowCommon {
     pub rect: Rect,
-
-    pub geometries: Geometries,
-
-    pub widgets: Vec<Widget>,
-    pub capture_widget: Option<usize>,
 
     pub visible: bool,
     pub enabled: bool,
     pub modal: bool,
     pub always_on_top: bool,
+
+    pub window_base: Option<Arc<config::WindowBase>>,
+
+    pub geometries: Geometries,
+
+    pub widgets: Vec<Widget>,
+    pub capture_widget: Option<usize>,
 }
 
-impl Window {
+impl WindowCommon {
     pub fn new(rect: Rect) -> Self {
         Self {
-            window_base: None,
-
             rect,
-            geometries: Geometries::default(),
-            widgets: Vec::default(),
-            capture_widget: None,
 
             visible: true,
             enabled: true,
             modal: false,
             always_on_top: false,
+
+            window_base: None,
+            geometries: Geometries::default(),
+
+            widgets: Vec::default(),
+            capture_widget: None,
+        }
+    }
+}
+
+pub struct Window {
+    pub common: WindowCommon,
+    pub behavior: Option<Box<dyn WindowBehavior>>,
+}
+
+impl Window {
+    pub fn new(rect: Rect, behavior: Box<dyn WindowBehavior>) -> Self {
+        Self {
+            common: WindowCommon::new(rect),
+            behavior: Some(behavior),
         }
     }
 
     pub fn from_window_base(
+        rect: Rect,
+        behavior: Box<dyn WindowBehavior>,
         window_base: Arc<config::WindowBase>,
         layout_context: &WindowLayoutContext,
-        rect: Rect,
     ) -> Result<Self, AssetError> {
         let mut geometries = Geometries::default();
-        populate_geometries(&mut geometries, &window_base, layout_context)?;
+        populate_geometries(&mut geometries, window_base.as_ref(), layout_context)?;
 
-        let mut window = Window::new(rect);
-        window.geometries = geometries;
+        let mut window = Window::new(rect, behavior);
+        window.common.window_base = Some(window_base);
+        window.common.geometries = geometries;
 
         Ok(window)
     }
@@ -80,16 +115,16 @@ impl Window {
     /// Return true if the global coordinates are within the bounds of the
     /// window.
     pub fn hit_test(&self, position: IVec2) -> bool {
-        self.rect.contains(position)
+        self.common.rect.contains(position)
     }
 
     pub fn on_resize(&mut self, logical_size: IVec2) {
-        if let Some(window_base) = &self.window_base {
+        if let Some(window_base) = &self.common.window_base {
             let layout_context = WindowLayoutContext::from_logical_size(logical_size);
-            self.rect = window_base.resolve_layout_rect(&layout_context);
+            self.common.rect = window_base.resolve_layout_rect(&layout_context);
 
             if let Err(error) =
-                populate_geometries(&mut self.geometries, window_base, &layout_context)
+                populate_geometries(&mut self.common.geometries, window_base, &layout_context)
             {
                 tracing::warn!(
                     "failed to refresh window base '{}' during resize: {error}",
@@ -112,12 +147,12 @@ impl Window {
 
         // SAFETY: We can unwrap here, because `top_level_input_widget` only
         //         returns `Some` if the widget index was found.
-        let widget = self.widgets.get_mut(index).unwrap();
+        let widget = self.common.widgets.get_mut(index).unwrap();
 
-        self.capture_widget = Some(index);
+        self.common.capture_widget = Some(index);
 
-        if let Some(thing) = widget.thing.as_mut() {
-            thing.on_primary_mouse_down(&mut widget.common, position, context)
+        if let Some(behavior) = widget.behavior.as_mut() {
+            behavior.on_primary_mouse_down(&mut widget.common, position, context)
         } else {
             EventResult::Ignore
         }
@@ -128,14 +163,14 @@ impl Window {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        if let Some(index) = self.capture_widget {
-            if let Some(widget) = self.widgets.get_mut(index) {
+        if let Some(index) = self.common.capture_widget {
+            if let Some(widget) = self.common.widgets.get_mut(index) {
                 widget.on_primary_mouse_up(position, context);
             }
-            self.capture_widget = None;
+            self.common.capture_widget = None;
         }
 
-        // for widget in self.widgets.iter_mut().rev() {
+        // for widget in self.common.widgets.iter_mut().rev() {
         //     let result = widget.on_primary_mouse_down(position, context);
         //     if !result.ignored() {
         //         return result;
@@ -144,7 +179,7 @@ impl Window {
 
         // // Give the remaining widgets a chance to clear any pressed state even
         // // when the cursor was released outside their bounds.
-        // for widget in self.widgets.iter_mut().rev() {
+        // for widget in self.common.widgets.iter_mut().rev() {
         //     // let result = widget.on_primary_mouse_up(position, context);
 
         //     // if matches!(result, EventResult::Handled) {
@@ -188,18 +223,21 @@ impl Window {
         context: &mut WindowRenderContext<'_>,
         render_items: &mut WindowRenderItems,
     ) {
-        for widget in self.widgets.iter_mut().rev() {
-            widget.render(self.rect.position, context, render_items);
+        for widget in self.common.widgets.iter_mut().rev() {
+            widget.render(self.common.rect.position, context, render_items);
         }
     }
 
     fn top_level_input_widget(&self, position: IVec2) -> Option<usize> {
-        for (index, widget) in self.widgets.iter().enumerate().rev() {
+        for (index, widget) in self.common.widgets.iter().enumerate().rev() {
             // Offset the widget position by the window position.
 
             if widget.common.visible
                 && widget.common.accepts_input
-                && widget.common.rect.contains(self.rect.position + position)
+                && widget
+                    .common
+                    .rect
+                    .contains(self.common.rect.position + position)
             {
                 return Some(index);
             }

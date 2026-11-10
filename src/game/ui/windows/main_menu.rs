@@ -8,13 +8,11 @@ use crate::{
         config::window_base::WindowBase,
         globals,
         ui::{
-            Rect,
-            widgets::{
-                main_menu_button::{ButtonLayer, create_main_menu_button},
-                text_button::TextButtonWidget,
-                widget::Widget,
+            widgets::main_menu_button::{ButtonLayer, create_main_menu_button},
+            windows::{
+                window::{Window, WindowBehavior},
+                window_manager::WindowLayoutContext,
             },
-            windows::{window::Window, window_manager::WindowLayoutContext},
         },
     },
 };
@@ -49,12 +47,19 @@ impl WindowBase {
 
 pub struct MainMenuWindow;
 
+impl WindowBehavior for MainMenuWindow {}
+
 pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, AssetError> {
     let window_base = globals::window_manager().get_window_base("main_menu")?;
 
     let rect = window_base.resolve_layout_rect(context);
 
-    let mut window = Window::from_window_base(Arc::clone(&window_base), context, rect)?;
+    let mut window = Window::from_window_base(
+        rect,
+        Box::new(MainMenuWindow),
+        Arc::clone(&window_base),
+        context,
+    )?;
 
     // let button = Box::new(TextButtonWidget {
     //     widget: Widget {
@@ -153,6 +158,7 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
         let shadow = ButtonLayer::new(shadow_sprite, shadow_frame, pos + shadow_offset);
 
         window
+            .common
             .widgets
             .push(create_main_menu_button(pos, bullet, text, shadow));
     }

@@ -4,7 +4,7 @@ use crate::game::ui::{
     EventResult, Rect,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
     u32_to_color,
-    widgets::widget::{Widget, WidgetCommon},
+    widgets::widget::WidgetCommon,
     windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
 };
 

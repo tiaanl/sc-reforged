@@ -122,13 +122,13 @@ impl WindowManager {
 
     /// Push a new window to the top of the stack.
     pub fn push(&mut self, window: Window) {
-        let is_modal = window.modal;
-        let insert_index = if window.modal || window.always_on_top {
+        let is_modal = window.common.modal;
+        let insert_index = if window.common.modal || window.common.always_on_top {
             self.windows.len()
         } else {
             self.windows
                 .iter()
-                .position(|window| window.always_on_top)
+                .position(|window| window.common.always_on_top)
                 .unwrap_or(self.windows.len())
         };
 
@@ -284,7 +284,7 @@ impl WindowManager {
             return None;
         }
 
-        let local = position - window.rect.position;
+        let local = position - window.common.rect.position;
 
         Some(match button {
             MouseButton::Left => window.on_primary_mouse_down(local, context),
@@ -313,7 +313,7 @@ impl WindowManager {
         };
 
         let window = &mut self.windows[window_index];
-        let local = mouse_position - window.rect.position;
+        let local = mouse_position - window.common.rect.position;
 
         let context = &mut self.window_manager_context;
 
@@ -345,7 +345,7 @@ impl WindowManager {
         };
 
         let window = &mut self.windows[window_index];
-        let local = mouse - window.rect.position;
+        let local = mouse - window.common.rect.position;
 
         let context = &mut self.window_manager_context;
         let _ = window.on_mouse_wheel(local, delta, context);
@@ -408,7 +408,7 @@ impl WindowManager {
                 }
 
                 self.window_render_items_cache
-                    .render_solid_rect(window.rect, color);
+                    .render_solid_rect(window.common.rect, color);
                 b += 0.1;
             }
         }
@@ -423,5 +423,5 @@ impl WindowManager {
 
 #[inline]
 fn is_input_candidate(window: &Window, position: IVec2) -> bool {
-    window.visible && window.enabled && window.hit_test(position)
+    window.common.visible && window.common.enabled && window.hit_test(position)
 }

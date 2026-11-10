@@ -11,13 +11,15 @@ use crate::game::{
             text_button::TextButtonWidget,
             widget::{Widget, WidgetCommon},
         },
-        windows::window::Window,
+        windows::window::{Window, WindowBehavior},
     },
 };
 
 pub struct HelpWindow {
     should_pause_game: bool,
 }
+
+impl WindowBehavior for HelpWindow {}
 
 /// Creates a help window from the specified help definition.
 pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
@@ -28,10 +30,13 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
 
     let should_pause_game = !help_def.do_not_pause_game;
 
-    let mut window = Window::new(Rect::new(pos, size));
+    let mut window = Window::new(
+        Rect::new(pos, size),
+        Box::new(HelpWindow { should_pause_game }),
+    );
 
-    window.modal = should_pause_game;
-    window.always_on_top = true;
+    window.common.modal = should_pause_game;
+    window.common.always_on_top = true;
 
     // List box widget to hold the help text body lines.
 
@@ -49,7 +54,7 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Window {
         list_box.add_item(list_item);
     }
 
-    window.widgets.push(Widget {
+    window.common.widgets.push(Widget {
         common: WidgetCommon {
             rect: Rect::new(IVec2::splat(16), size - IVec2::new(32, 68)),
             ..Default::default()

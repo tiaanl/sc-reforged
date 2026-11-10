@@ -13,6 +13,7 @@ pub trait WidgetBehavior {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
+        let _ = widget;
         let _ = position;
         let _ = context;
         EventResult::Ignore
@@ -24,6 +25,7 @@ pub trait WidgetBehavior {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
+        let _ = widget;
         let _ = position;
         let _ = context;
         EventResult::Ignore
@@ -35,6 +37,7 @@ pub trait WidgetBehavior {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
+        let _ = widget;
         let _ = position;
         let _ = context;
         EventResult::Ignore
@@ -46,6 +49,7 @@ pub trait WidgetBehavior {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
+        let _ = widget;
         let _ = position;
         let _ = context;
         EventResult::Ignore
@@ -57,6 +61,7 @@ pub trait WidgetBehavior {
         wheel_steps: i32,
         context: &mut WindowManagerContext,
     ) -> EventResult {
+        let _ = widget;
         let _ = wheel_steps;
         let _ = context;
         EventResult::Ignore
@@ -99,16 +104,26 @@ impl Default for WidgetCommon {
 #[derive(Default)]
 pub struct Widget {
     pub common: WidgetCommon,
-    pub thing: Option<Box<dyn WidgetBehavior>>,
+    pub behavior: Option<Box<dyn WidgetBehavior>>,
 }
 
 impl Widget {
+    pub fn new(rect: Rect, behavior: Box<dyn WidgetBehavior>) -> Self {
+        Self {
+            common: WidgetCommon {
+                rect,
+                ..Default::default()
+            },
+            behavior: Some(behavior),
+        }
+    }
+
     pub fn on_primary_mouse_down(
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        if let Some(ref mut thing) = self.thing {
+        if let Some(ref mut thing) = self.behavior {
             return thing.on_primary_mouse_down(&mut self.common, position, context);
         }
         EventResult::Ignore
@@ -119,7 +134,7 @@ impl Widget {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        if let Some(ref mut thing) = self.thing {
+        if let Some(ref mut thing) = self.behavior {
             return thing.on_secondary_mouse_down(&mut self.common, position, context);
         }
         EventResult::Ignore
@@ -130,7 +145,7 @@ impl Widget {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        if let Some(ref mut thing) = self.thing {
+        if let Some(ref mut thing) = self.behavior {
             return thing.on_primary_mouse_up(&mut self.common, position, context);
         }
         EventResult::Ignore
@@ -141,7 +156,7 @@ impl Widget {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        if let Some(ref mut thing) = self.thing {
+        if let Some(ref mut thing) = self.behavior {
             return thing.on_secondary_mouse_up(&mut self.common, position, context);
         }
         EventResult::Ignore
@@ -152,7 +167,7 @@ impl Widget {
         wheel_steps: i32,
         context: &mut WindowManagerContext,
     ) -> EventResult {
-        if let Some(ref mut thing) = self.thing {
+        if let Some(ref mut thing) = self.behavior {
             return thing.on_mouse_wheel(&mut self.common, wheel_steps, context);
         }
         EventResult::Ignore
@@ -164,7 +179,7 @@ impl Widget {
         context: &mut WindowRenderContext,
         render_items: &mut WindowRenderItems,
     ) {
-        if let Some(ref mut thing) = self.thing {
+        if let Some(ref mut thing) = self.behavior {
             thing.render(&mut self.common, origin, 0, context, render_items);
         }
     }

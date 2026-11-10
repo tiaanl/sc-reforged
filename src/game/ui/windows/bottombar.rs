@@ -6,7 +6,10 @@ use crate::{
     engine::assets::AssetError,
     game::{
         globals,
-        ui::windows::{window::Window, window_manager::WindowLayoutContext},
+        ui::windows::{
+            window::{Window, WindowBehavior},
+            window_manager::WindowLayoutContext,
+        },
     },
 };
 
@@ -15,6 +18,8 @@ use crate::{
 /// Mirrors the original engine's window-base selection between the 640x480 and
 /// 800x600 variants based on the active logical UI size.
 pub struct BottomBarWindow;
+
+impl WindowBehavior for BottomBarWindow {}
 
 /// Creates the bottom bar window for the current logical UI size.
 pub fn new_bottombar_window(surface_size: IVec2) -> Result<Window, AssetError> {
@@ -28,5 +33,10 @@ pub fn new_bottombar_window(surface_size: IVec2) -> Result<Window, AssetError> {
     let rect = window_base.resolve_layout_rect(&layout_context);
     let rect = rect.offset(IVec2::new(0, surface_size.y - rect.size.y));
 
-    Window::from_window_base(Arc::clone(&window_base), &layout_context, rect)
+    Window::from_window_base(
+        rect,
+        Box::new(BottomBarWindow),
+        Arc::clone(&window_base),
+        &layout_context,
+    )
 }

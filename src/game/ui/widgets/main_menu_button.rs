@@ -56,7 +56,7 @@ pub fn create_main_menu_button(
             rect,
             ..Default::default()
         },
-        thing: Some(thing),
+        behavior: Some(thing),
     }
 }
 
