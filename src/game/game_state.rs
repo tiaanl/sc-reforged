@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use glam::{IVec2, UVec2};
 
-use super::ui::windows::actions::WindowManagerAction;
 use crate::{
     engine::{
         assets::AssetError,
@@ -22,8 +21,10 @@ use crate::{
                 widget::{Widget, WidgetCommon},
             },
             windows::{
-                bottombar::new_bottombar_window, main_menu::new_main_menu_window,
-                window::WindowBuilder, window_manager::WindowLayoutContext,
+                actions::WindowManagerAction, bottombar::new_bottombar_window,
+                difficulty_selection::show_difficulty_selection_window,
+                main_menu::new_main_menu_window, window::WindowBuilder,
+                window_manager::WindowLayoutContext,
             },
         },
         world_layer::WorldLayer,
@@ -54,7 +55,7 @@ impl GameState {
         let main_menu_window = new_main_menu_window(&context)?;
         globals::window_manager().push(main_menu_window);
 
-        {
+        if false {
             let mut test_window =
                 WindowBuilder::new(Rect::new(IVec2::new(100, 100), IVec2::new(400, 300)))
                     .build_default()?;
@@ -108,6 +109,14 @@ impl GameState {
                         tracing::error!("Could not start campaign {name} - {err}");
                     }
                 },
+                WindowManagerAction::ShowDifficultySelectionWindow => {
+                    match show_difficulty_selection_window() {
+                        Ok(_) => {}
+                        Err(err) => {
+                            tracing::error!("Could not show difficulty selection window. {err}");
+                        }
+                    }
+                }
             }
         }
 

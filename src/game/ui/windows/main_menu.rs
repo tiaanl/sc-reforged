@@ -12,6 +12,7 @@ use crate::{
             render::window_renderer::WindowRenderItems,
             widgets::main_menu_button::{ButtonLayer, create_main_menu_button},
             windows::{
+                actions::WindowManagerAction,
                 window::{Window, WindowBehavior, WindowBuilder},
                 window_manager::WindowLayoutContext,
             },
@@ -148,13 +149,14 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
     let button_offset = window_base.get_button_offset(context);
     let shadow_offset = window_base.get_shadow_offset(context);
 
-    const BUTTONS: &[(&str, &str, usize, &str, usize)] = &[
+    let buttons = &[
         (
             "b_new_game",
             "interface_elements_14",
             0,
             "interface_elements_14",
             1,
+            Some(WindowManagerAction::ShowDifficultySelectionWindow),
         ),
         (
             "b_training",
@@ -162,6 +164,7 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
             0,
             "interface_elements_17",
             1,
+            Some(WindowManagerAction::StartCampaign(String::from("training"))),
         ),
         (
             "b_options",
@@ -169,6 +172,7 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
             0,
             "interface_elements_15",
             1,
+            None,
         ),
         (
             "b_exit",
@@ -176,6 +180,7 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
             3,
             "interface_elements_15",
             4,
+            None,
         ),
         (
             "b_load_game",
@@ -183,6 +188,7 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
             0,
             "interface_elements_13",
             1,
+            None,
         ),
         (
             "b_multiplayer",
@@ -190,6 +196,7 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
             3,
             "interface_elements_14",
             4,
+            None,
         ),
         (
             "b_intro",
@@ -197,6 +204,7 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
             3,
             "interface_elements_13",
             4,
+            None,
         ),
     ];
 
@@ -205,7 +213,9 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
     };
     let bullet_frame = 3;
 
-    for (button, text_sprite, text_frame, shadow_sprite, shadow_frame) in BUTTONS.iter().cloned() {
+    for (button, text_sprite, text_frame, shadow_sprite, shadow_frame, action) in
+        buttons.iter().cloned()
+    {
         let Some(button_advice) = window_base.button_advices.get(button) else {
             continue;
         };
@@ -233,7 +243,7 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
         window
             .common
             .widgets
-            .push(create_main_menu_button(pos, bullet, text, shadow));
+            .push(create_main_menu_button(pos, bullet, text, shadow, action));
     }
 
     Ok(window)

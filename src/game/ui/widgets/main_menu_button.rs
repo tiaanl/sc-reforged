@@ -12,7 +12,10 @@ use crate::{
                 text_button::TextButtonBehavior,
                 widget::{Widget, WidgetBehavior, WidgetCommon},
             },
-            windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
+            windows::{
+                actions::WindowManagerAction, window::WindowRenderContext,
+                window_manager_context::WindowManagerContext,
+            },
         },
     },
 };
@@ -23,6 +26,7 @@ pub fn create_main_menu_button(
     bullet: ButtonLayer,
     text: ButtonLayer,
     shadow: ButtonLayer,
+    action: Option<WindowManagerAction>,
 ) -> Widget {
     let rect = Rect::new(position, {
         let bullet_size = bullet.rect.size;
@@ -39,7 +43,10 @@ pub fn create_main_menu_button(
             ..Default::default()
         },
         behavior: Some(Box::new(MainMenuButton {
-            text_button: TextButtonBehavior::default(),
+            text_button: TextButtonBehavior {
+                action,
+                ..Default::default()
+            },
             bullet,
             shadow,
             text,
@@ -105,7 +112,7 @@ impl WidgetBehavior for MainMenuButton {
         .render(window_render_items, origin, 1.0);
 
         // Render a debug border around the button.
-        window_render_items.render_border(widget.rect.offset(origin), 1, glam::Vec4::ONE);
+        // window_render_items.render_border(widget.rect.offset(origin), 1, glam::Vec4::ONE);
     }
 }
 

@@ -2,4 +2,5 @@
 pub enum WindowManagerAction {
     Quit,
     StartCampaign(String),
+    ShowDifficultySelectionWindow,
 }
