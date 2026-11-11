@@ -294,22 +294,20 @@ impl WidgetBehavior for ListBoxWidget {
         for item in self.items.iter() {
             let item_size = item.desired_size(context.window_renderer);
 
-            let stop_now;
-            let item_is_visible;
-
-            if !self.snap_scroll_to_item_extent {
-                stop_now = item_offset.x > scroll_offset.x + viewport_size.x
-                    || item_offset.y > scroll_offset.y + viewport_size.y;
-
-                item_is_visible = scroll_offset.x <= item_offset.x + item_size.x
-                    && scroll_offset.y <= item_offset.y + item_size.y;
+            let (stop_now, item_is_visible) = if !self.snap_scroll_to_item_extent {
+                (
+                    item_offset.x > scroll_offset.x + viewport_size.x
+                        || item_offset.y > scroll_offset.y + viewport_size.y,
+                    scroll_offset.x <= item_offset.x + item_size.x
+                        && scroll_offset.y <= item_offset.y + item_size.y,
+                )
             } else {
-                stop_now = item_offset.x + item_size.x > scroll_offset.x + viewport_size.x
-                    || item_offset.y + item_size.y > scroll_offset.y + viewport_size.y;
-
-                item_is_visible =
-                    scroll_offset.x <= item_offset.x && scroll_offset.y <= item_offset.y;
-            }
+                (
+                    item_offset.x + item_size.x > scroll_offset.x + viewport_size.x
+                        || item_offset.y + item_size.y > scroll_offset.y + viewport_size.y,
+                    scroll_offset.x <= item_offset.x && scroll_offset.y <= item_offset.y,
+                )
+            };
 
             if stop_now {
                 break;

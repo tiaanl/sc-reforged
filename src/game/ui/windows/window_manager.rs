@@ -4,7 +4,7 @@ use std::{
 };
 
 use ahash::HashMap;
-use glam::{IVec2, Vec3, Vec4};
+use glam::IVec2;
 use winit::event::MouseButton;
 
 use crate::{

@@ -219,7 +219,7 @@ impl Model {
                 distance: local_len,
             };
 
-            for (triangle_index, tri) in mesh.mesh.indices.chunks_exact(3).enumerate() {
+            for (triangle_index, tri) in mesh.mesh.indices.as_chunks::<3>().0.iter().enumerate() {
                 let i0 = tri[0] as usize;
                 let i1 = tri[1] as usize;
                 let i2 = tri[2] as usize;

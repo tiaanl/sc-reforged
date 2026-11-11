@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use glam::{IVec2, UVec2, Vec4};
+use glam::{IVec2, UVec2};
 
 use super::ui::windows::actions::WindowManagerAction;
 use crate::{
@@ -22,10 +22,8 @@ use crate::{
                 widget::{Widget, WidgetCommon},
             },
             windows::{
-                bottombar::new_bottombar_window,
-                main_menu::new_main_menu_window,
-                window::{WindowBehavior, WindowBuilder},
-                window_manager::WindowLayoutContext,
+                bottombar::new_bottombar_window, main_menu::new_main_menu_window,
+                window::WindowBuilder, window_manager::WindowLayoutContext,
             },
         },
         world_layer::WorldLayer,

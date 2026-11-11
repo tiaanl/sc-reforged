@@ -83,7 +83,7 @@ impl AssetFactory for Image {
                 read_as_rgba(decoder).map_err(|err| image_error_to_asset_error(err, path))?;
 
             if is_color_keyd {
-                for pixel in rgba.chunks_exact_mut(4) {
+                for pixel in rgba.as_chunks_mut::<4>().0 {
                     pixel[3] = if pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0 {
                         0
                     } else {
