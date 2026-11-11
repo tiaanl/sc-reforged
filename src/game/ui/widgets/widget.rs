@@ -1,7 +1,7 @@
 use glam::IVec2;
 
 use crate::game::ui::{
-    EventResult, Rect,
+    Rect, WidgetResult,
     render::window_renderer::WindowRenderItems,
     windows::{window::WindowRenderContext, window_manager_context::WindowManagerContext},
 };
@@ -12,11 +12,11 @@ pub trait WidgetBehavior {
         widget: &mut WidgetCommon,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         let _ = widget;
         let _ = position;
         let _ = context;
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     fn on_secondary_mouse_down(
@@ -24,11 +24,11 @@ pub trait WidgetBehavior {
         widget: &mut WidgetCommon,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         let _ = widget;
         let _ = position;
         let _ = context;
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     fn on_primary_mouse_up(
@@ -36,11 +36,11 @@ pub trait WidgetBehavior {
         widget: &mut WidgetCommon,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         let _ = widget;
         let _ = position;
         let _ = context;
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     fn on_secondary_mouse_up(
@@ -48,11 +48,11 @@ pub trait WidgetBehavior {
         widget: &mut WidgetCommon,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         let _ = widget;
         let _ = position;
         let _ = context;
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     fn on_mouse_wheel(
@@ -60,11 +60,11 @@ pub trait WidgetBehavior {
         widget: &mut WidgetCommon,
         wheel_steps: i32,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         let _ = widget;
         let _ = wheel_steps;
         let _ = context;
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     fn render(
@@ -122,55 +122,55 @@ impl Widget {
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         if let Some(ref mut thing) = self.behavior {
             return thing.on_primary_mouse_down(&mut self.common, position, context);
         }
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     pub fn on_secondary_mouse_down(
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         if let Some(ref mut thing) = self.behavior {
             return thing.on_secondary_mouse_down(&mut self.common, position, context);
         }
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     pub fn on_primary_mouse_up(
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         if let Some(ref mut thing) = self.behavior {
             return thing.on_primary_mouse_up(&mut self.common, position, context);
         }
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     pub fn on_secondary_mouse_up(
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         if let Some(ref mut thing) = self.behavior {
             return thing.on_secondary_mouse_up(&mut self.common, position, context);
         }
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     pub fn on_mouse_wheel(
         &mut self,
         wheel_steps: i32,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         if let Some(ref mut thing) = self.behavior {
             return thing.on_mouse_wheel(&mut self.common, wheel_steps, context);
         }
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     pub fn render(

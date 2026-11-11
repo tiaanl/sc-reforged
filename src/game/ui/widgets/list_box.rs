@@ -1,7 +1,7 @@
 use glam::{IVec2, Vec4};
 
 use crate::game::ui::{
-    EventResult, Rect,
+    Rect, WidgetResult,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
     u32_to_color,
     widgets::widget::WidgetCommon,
@@ -98,7 +98,7 @@ impl WidgetBehavior for ListBoxWidget {
         _widget: &mut WidgetCommon,
         _mouse_position: IVec2,
         _context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         /*
         int item_top = 0;
         int local_y = (mouse_y - widget.rect.top) + m_scroll_offset_y;
@@ -182,7 +182,7 @@ impl WidgetBehavior for ListBoxWidget {
         return EVENT_HANDLED;
         */
 
-        EventResult::Handled
+        WidgetResult::Ignored
     }
 
     fn on_primary_mouse_up(
@@ -190,7 +190,7 @@ impl WidgetBehavior for ListBoxWidget {
         _widget: &mut WidgetCommon,
         _mouse_position: IVec2,
         _context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         /*
         if (m_selected_item != NULL && !m_input_disabled) {
             m_selected_item->On_Primary_Mouse_Up();
@@ -199,7 +199,7 @@ impl WidgetBehavior for ListBoxWidget {
         return EVENT_HANDLED;
         */
 
-        EventResult::Handled
+        WidgetResult::Ignored
     }
 
     fn on_mouse_wheel(
@@ -207,9 +207,9 @@ impl WidgetBehavior for ListBoxWidget {
         widget: &mut WidgetCommon,
         wheel_steps: i32,
         _context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         if self.mouse_wheel_disabled || self.items.is_empty() {
-            return EventResult::Ignore;
+            return WidgetResult::Ignored;
         }
 
         let item_height = self.items.first().map(|item| item.height).unwrap_or(0);
@@ -234,7 +234,7 @@ impl WidgetBehavior for ListBoxWidget {
             self.pending_scroll_delta = target_scroll - self.scroll_offset.y;
         }
 
-        EventResult::Handled
+        WidgetResult::Ignored
     }
 
     fn render(

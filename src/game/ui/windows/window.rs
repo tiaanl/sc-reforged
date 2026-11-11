@@ -8,12 +8,13 @@ use crate::{
         config::window_base as config,
         globals,
         ui::{
-            EventResult, Rect,
+            Rect, WidgetResult,
             geometries::{Geometries, GeometryBase, GeometryTiled},
             render::{
                 ui_mesh_renderer::{UiMesh, UiVertex},
                 window_renderer::{WindowRenderItems, WindowRenderer},
             },
+            u32_to_color,
             widgets::widget::Widget,
             windows::{
                 window_manager::WindowLayoutContext, window_manager_context::WindowManagerContext,
@@ -58,7 +59,8 @@ impl WindowBehavior for DefaultWindowBehavior {
         context: &mut WindowRenderContext<'_>,
         render_items: &mut WindowRenderItems,
     ) {
-        window.render_widgets(context, render_items)
+        render_items.render_solid_rect(window.rect, u32_to_color(0xff4c4c4c));
+        window.render_widgets(context, render_items);
     }
 }
 
@@ -127,31 +129,36 @@ impl Window {
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
-        let Some(index) = self.top_level_input_widget(position) else {
-            // If we are not over a top level widget that can receive input, we
-            // ignore the event.
-            return EventResult::Ignore;
+    ) -> WidgetResult {
+        // TODO: Handle double-click.
+
+        let Some(top_level_index) = self.top_level_input_widget(position) else {
+            return WidgetResult::Ignored;
         };
 
-        // SAFETY: We can unwrap here, because `top_level_input_widget` only
-        //         returns `Some` if the widget index was found.
-        let widget = self.common.widgets.get_mut(index).unwrap();
+        let Some(top_level_widget) = self.common.widgets.get_mut(top_level_index) else {
+            return WidgetResult::Ignored;
+        };
 
-        self.common.capture_widget = Some(index);
-
-        if let Some(behavior) = widget.behavior.as_mut() {
-            behavior.on_primary_mouse_down(&mut widget.common, position, context)
-        } else {
-            EventResult::Ignore
+        if !top_level_widget.common.accepts_input {
+            return WidgetResult::Ignored;
         }
+
+        let local_position = position - self.common.rect.position;
+        let result = top_level_widget.on_primary_mouse_down(local_position, context);
+
+        if matches!(result, WidgetResult::Capture) {
+            self.common.capture_widget = Some(top_level_index);
+        }
+
+        result
     }
 
     pub fn on_primary_mouse_up(
         &mut self,
         position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         if let Some(index) = self.common.capture_widget {
             if let Some(widget) = self.common.widgets.get_mut(index) {
                 widget.on_primary_mouse_up(position, context);
@@ -177,23 +184,23 @@ impl Window {
         //     todo!()
         // }
 
-        EventResult::Ignore
+        WidgetResult::Ignored
     }
 
     pub fn on_secondary_mouse_down(
         &mut self,
         _position: IVec2,
         _context: &mut WindowManagerContext,
-    ) -> EventResult {
-        EventResult::Ignore
+    ) -> WidgetResult {
+        WidgetResult::Ignored
     }
 
     pub fn on_secondary_mouse_up(
         &mut self,
         _position: IVec2,
         _context: &mut WindowManagerContext,
-    ) -> EventResult {
-        EventResult::Ignore
+    ) -> WidgetResult {
+        WidgetResult::Ignored
     }
 
     pub fn on_mouse_wheel(
@@ -201,8 +208,8 @@ impl Window {
         _position: IVec2,
         _wheel_steps: i32,
         _context: &mut WindowManagerContext,
-    ) -> EventResult {
-        EventResult::Ignore
+    ) -> WidgetResult {
+        WidgetResult::Ignored
     }
 
     pub fn update(&mut self, delta: f32) {
@@ -220,14 +227,9 @@ impl Window {
 
     fn top_level_input_widget(&self, position: IVec2) -> Option<usize> {
         for (index, widget) in self.common.widgets.iter().enumerate().rev() {
-            // Offset the widget position by the window position.
-
             if widget.common.visible
                 && widget.common.accepts_input
-                && widget
-                    .common
-                    .rect
-                    .contains(self.common.rect.position + position)
+                && widget.common.rect.contains(position)
             {
                 return Some(index);
             }
@@ -424,5 +426,9 @@ impl<'a> WindowBuilder<'a> {
         let window = Window { common, behavior };
 
         Ok(window)
+    }
+
+    pub fn build_default(self) -> Result<Window, AssetError> {
+        self.build(|_| Ok(DefaultWindowBehavior))
     }
 }

@@ -1,9 +1,9 @@
 use glam::{IVec2, Vec4};
 
 use crate::game::ui::{
-    EventResult,
+    WidgetResult,
     render::window_renderer::{Font, WindowRenderItems, WindowRenderer},
-    widgets::widget::{Widget, WidgetBehavior, WidgetCommon},
+    widgets::widget::{WidgetBehavior, WidgetCommon},
     windows::{
         actions::WindowManagerAction, window::WindowRenderContext,
         window_manager_context::WindowManagerContext,
@@ -11,9 +11,7 @@ use crate::game::ui::{
 };
 
 #[derive(Default)]
-pub struct TextButtonWidget {
-    pub widget: Widget,
-
+pub struct TextButtonBehavior {
     pub is_pressed: bool,
     pub is_disabled: bool,
 
@@ -25,7 +23,7 @@ pub struct TextButtonWidget {
     pub custom_color: Option<Vec4>,
 }
 
-impl TextButtonWidget {
+impl TextButtonBehavior {
     fn calculate_text_offset(
         text: &str,
         size: IVec2,
@@ -39,27 +37,23 @@ impl TextButtonWidget {
     }
 }
 
-impl WidgetBehavior for TextButtonWidget {
+impl WidgetBehavior for TextButtonBehavior {
     fn on_primary_mouse_down(
         &mut self,
         _widget: &mut WidgetCommon,
         _position: IVec2,
         _context: &mut WindowManagerContext,
-    ) -> EventResult {
-        tracing::info!("TextButton::on_primary_mouse_down");
-
+    ) -> WidgetResult {
         if self.is_disabled {
-            return EventResult::Ignore;
+            return WidgetResult::Ignored;
         }
 
         self.is_pressed = true;
 
         // TODO: sound_manager().play_sound(5);
 
-        // TODO: user data?
-        // return (this->m_user_data != (Widget *)0x0) + '\x02';
-
-        EventResult::Handled
+        // TODO: Capture or CaptureWithPayload.
+        WidgetResult::Capture
     }
 
     fn on_primary_mouse_up(
@@ -67,14 +61,14 @@ impl WidgetBehavior for TextButtonWidget {
         _widget: &mut WidgetCommon,
         _position: IVec2,
         context: &mut WindowManagerContext,
-    ) -> EventResult {
+    ) -> WidgetResult {
         tracing::info!("TextButton::on_primary_mouse_up");
 
         let was_pressed = self.is_pressed;
         self.is_pressed = false;
 
         if !was_pressed {
-            return EventResult::Ignore;
+            return WidgetResult::Ignored;
         }
 
         if let Some(action) = &self.action {
@@ -86,12 +80,12 @@ impl WidgetBehavior for TextButtonWidget {
             on_click();
         }
 
-        EventResult::Handled
+        WidgetResult::Capture
     }
 
     fn render(
         &mut self,
-        _widget: &mut WidgetCommon,
+        widget: &mut WidgetCommon,
         origin: IVec2,
         _delta_time_ms: i32,
         context: &mut WindowRenderContext<'_>,
@@ -102,20 +96,20 @@ impl WidgetBehavior for TextButtonWidget {
         } else {
             self.font.primary_color()
         };
-        window_render_items.render_border(self.widget.common.rect.offset(origin), 1, color);
+        window_render_items.render_border(widget.rect.offset(origin), 1, color);
 
         // TODO: Match the original button render states more closely. The
         // current button only nudges the text when pressed instead of using
         // the original style flags and pressed-state visuals.
         let text_offset = Self::calculate_text_offset(
             &self.text,
-            self.widget.common.rect.size,
+            widget.rect.size,
             self.font,
             context.window_renderer,
         ) + IVec2::splat(self.is_pressed as i32);
 
         window_render_items.render_text(
-            origin + self.widget.common.rect.position + text_offset,
+            origin + widget.rect.position + text_offset,
             self.text.as_bytes(),
             self.font,
             self.custom_color,

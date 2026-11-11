@@ -16,7 +16,7 @@ use crate::{
     game::{
         config::{load_config, window_base::WindowBase},
         ui::{
-            EventResult,
+            WidgetResult,
             render::window_renderer::{UiMode, WindowRenderItems, WindowRenderer},
             windows::{window::Window, window_manager_context::WindowManagerContext},
         },
@@ -279,7 +279,7 @@ impl WindowManager {
         position: IVec2,
         button: MouseButton,
         context: &mut WindowManagerContext,
-    ) -> Option<EventResult> {
+    ) -> Option<WidgetResult> {
         if !is_input_candidate(window, position) {
             return None;
         }
@@ -289,7 +289,7 @@ impl WindowManager {
         Some(match button {
             MouseButton::Left => window.on_primary_mouse_down(local, context),
             MouseButton::Right => window.on_secondary_mouse_down(local, context),
-            _ => EventResult::Ignore,
+            _ => WidgetResult::Ignored,
         })
     }
 
@@ -389,28 +389,6 @@ impl WindowManager {
         };
         for window in self.windows.iter_mut() {
             window.render(&mut ctx, &mut self.window_render_items_cache);
-        }
-
-        if false {
-            let topmost = self
-                .mouse_position
-                .and_then(|position| self.top_level_window(position));
-
-            let mut b = 0.1;
-            for (i, window) in self.windows.iter_mut().enumerate() {
-                let color = Vec4::new(0.0, 0.1, 0.2, 0.5);
-                let mut color = color + Vec3::splat(b).extend(0.0);
-
-                if let Some(ii) = topmost
-                    && i == ii
-                {
-                    color.x = 1.0;
-                }
-
-                self.window_render_items_cache
-                    .render_solid_rect(window.common.rect, color);
-                b += 0.1;
-            }
         }
 
         window_renderer.submit_render_items(

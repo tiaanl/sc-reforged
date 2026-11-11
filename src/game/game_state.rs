@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use glam::UVec2;
+use glam::{IVec2, UVec2, Vec4};
 
 use super::ui::windows::actions::WindowManagerAction;
 use crate::{
@@ -15,9 +15,16 @@ use crate::{
         globals,
         sim::SimWorld,
         ui::{
+            Rect,
             render::window_renderer::{UiMode, WindowRenderer},
+            widgets::{
+                text_button::TextButtonBehavior,
+                widget::{Widget, WidgetCommon},
+            },
             windows::{
-                bottombar::new_bottombar_window, main_menu::new_main_menu_window,
+                bottombar::new_bottombar_window,
+                main_menu::new_main_menu_window,
+                window::{WindowBehavior, WindowBuilder},
                 window_manager::WindowLayoutContext,
             },
         },
@@ -48,6 +55,28 @@ impl GameState {
 
         let main_menu_window = new_main_menu_window(&context)?;
         globals::window_manager().push(main_menu_window);
+
+        {
+            let mut test_window =
+                WindowBuilder::new(Rect::new(IVec2::new(100, 100), IVec2::new(400, 300)))
+                    .build_default()?;
+
+            test_window.common.widgets.push(Widget {
+                common: WidgetCommon {
+                    rect: Rect::new(IVec2::new(10, 10), IVec2::new(150, 40)),
+                    ..Default::default()
+                },
+                behavior: Some(Box::new(TextButtonBehavior {
+                    text: "Test".into(),
+                    on_click: Some(Box::new(|| {
+                        println!("test");
+                    })),
+                    ..Default::default()
+                })),
+            });
+
+            globals::window_manager().push(test_window);
+        }
 
         Ok(Self {
             campaign_defs,

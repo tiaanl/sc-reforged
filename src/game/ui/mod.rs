@@ -21,14 +21,16 @@ pub const fn u32_to_color(value: u32) -> Vec4 {
 }
 
 #[derive(Debug)]
-pub enum EventResult {
-    Ignore,
+pub enum WidgetResult {
+    Ignored,
     Handled,
+    Capture,
+    CaptureWithPayload,
 }
 
-impl EventResult {
+impl WidgetResult {
     #[inline]
     pub fn ignored(&self) -> bool {
-        matches!(self, Self::Ignore)
+        matches!(self, Self::Ignored)
     }
 }
