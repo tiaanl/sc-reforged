@@ -49,7 +49,7 @@ pub trait WindowBehavior {
     }
 }
 
-struct DefaultWindowBehavior;
+pub struct DefaultWindowBehavior;
 
 impl WindowBehavior for DefaultWindowBehavior {
     fn render(
@@ -205,7 +205,9 @@ impl Window {
         EventResult::Ignore
     }
 
-    pub fn update(&mut self, _delta_time: f32) {}
+    pub fn update(&mut self, delta: f32) {
+        self.behavior.update(&mut self.common, delta)
+    }
 
     pub fn render(
         &mut self,
@@ -347,7 +349,6 @@ struct WindowBaseDetails<'a> {
 
 pub struct WindowBuilder<'a> {
     rect: Rect,
-    behavior: Option<Box<dyn WindowBehavior>>,
     window_base_details: Option<WindowBaseDetails<'a>>,
     modal: bool,
     always_on_top: bool,
@@ -357,16 +358,10 @@ impl<'a> WindowBuilder<'a> {
     pub fn new(rect: Rect) -> WindowBuilder<'a> {
         Self {
             rect,
-            behavior: None,
             window_base_details: None,
             modal: false,
             always_on_top: false,
         }
-    }
-
-    pub fn with_behavior(mut self, behavior: Box<dyn WindowBehavior>) -> Self {
-        self.behavior = Some(behavior);
-        self
     }
 
     pub fn with_window_base(
@@ -391,7 +386,13 @@ impl<'a> WindowBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> Result<Window, AssetError> {
+    pub fn build<B>(
+        self,
+        create: impl FnOnce(&mut WindowCommon) -> Result<B, AssetError>,
+    ) -> Result<Window, AssetError>
+    where
+        B: WindowBehavior + 'static,
+    {
         let mut geometries = Geometries::default();
         let mut maybe_window_base = None;
         if let Some(WindowBaseDetails {
@@ -403,25 +404,24 @@ impl<'a> WindowBuilder<'a> {
             maybe_window_base = Some(window_base);
         }
 
-        let behavior = self.behavior.unwrap_or(Box::new(DefaultWindowBehavior));
+        let mut common = WindowCommon {
+            rect: self.rect,
 
-        let window = Window {
-            common: WindowCommon {
-                rect: self.rect,
+            visible: true,
+            enabled: true,
+            modal: self.modal,
+            always_on_top: self.always_on_top,
 
-                visible: true,
-                enabled: true,
-                modal: self.modal,
-                always_on_top: self.always_on_top,
+            window_base: maybe_window_base,
+            geometries,
 
-                window_base: maybe_window_base,
-                geometries,
-
-                widgets: Vec::default(),
-                capture_widget: None,
-            },
-            behavior,
+            widgets: Vec::default(),
+            capture_widget: None,
         };
+
+        let behavior = Box::new(create(&mut common)?);
+
+        let window = Window { common, behavior };
 
         Ok(window)
     }

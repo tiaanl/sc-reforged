@@ -34,10 +34,9 @@ pub fn new_help_window(help_def: &HelpDef, surface_size: UVec2) -> Result<Window
     let should_pause_game = !help_def.do_not_pause_game;
 
     let mut window = WindowBuilder::new(Rect::new(pos, size))
-        .with_behavior(Box::new(HelpWindow { should_pause_game }))
         .modal(should_pause_game)
         .always_on_top(true)
-        .build()?;
+        .build(|_| Ok(HelpWindow { should_pause_game }))?;
 
     // List box widget to hold the help text body lines.
 

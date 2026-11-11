@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use glam::IVec2;
+use glam::{IVec2, Vec2, Vec4};
 
 use crate::{
     engine::assets::AssetError,
@@ -8,6 +8,8 @@ use crate::{
         config::window_base::WindowBase,
         globals,
         ui::{
+            Rect,
+            render::window_renderer::WindowRenderItems,
             widgets::main_menu_button::{ButtonLayer, create_main_menu_button},
             windows::{
                 window::{Window, WindowBehavior, WindowBuilder},
@@ -16,6 +18,8 @@ use crate::{
         },
     },
 };
+
+use super::window::{WindowCommon, WindowRenderContext};
 
 impl WindowBase {
     fn get_button_offset(&self, context: &WindowLayoutContext) -> IVec2 {
@@ -45,9 +49,76 @@ impl WindowBase {
     }
 }
 
-pub struct MainMenuBehavior;
+#[derive(Debug)]
+struct Frame {
+    index: usize,
+    alpha: f32,
+}
 
-impl WindowBehavior for MainMenuBehavior {}
+pub struct MainMenuBehavior {
+    frames: Vec<usize>,
+    phase: f64,
+}
+
+impl MainMenuBehavior {
+    /// Draws the two neighboring frames at the current animation position.
+    fn render_frames(&self, window: &WindowCommon, render_items: &mut WindowRenderItems) {
+        let count = self.frames.len();
+        if count == 0 {
+            return;
+        }
+
+        let last = (count - 1) as f64;
+
+        // Reflect the phase to travel 0 → last → 0.
+        let position = if self.phase <= last {
+            self.phase
+        } else {
+            2.0 * last - self.phase
+        };
+
+        let lower = position.floor() as usize;
+        let upper = (lower + 1).min(count - 1);
+        let blend = (position - lower as f64) as f32;
+
+        // An opaque base plus a translucent overlay produces a crossfade.
+        for (frame, alpha) in [(lower, 1.0), (upper, blend)] {
+            if alpha <= 0.0 {
+                continue;
+            }
+
+            let geometry = &window.geometries.tiled[self.frames[frame]];
+            render_items.render_textured_rect(
+                Rect::new(IVec2::ZERO, geometry.size),
+                geometry.texture,
+                Vec2::ZERO,
+                Vec2::ONE,
+                Vec4::new(1.0, 1.0, 1.0, alpha),
+            );
+        }
+    }
+}
+
+impl WindowBehavior for MainMenuBehavior {
+    fn update(&mut self, _window: &mut WindowCommon, delta: f32) {
+        if self.frames.len() < 2 {
+            return;
+        }
+
+        let cycle = 2.0 * (self.frames.len() - 1) as f64;
+        self.phase = (self.phase + f64::from(delta) * 0.4).rem_euclid(cycle);
+    }
+
+    fn render(
+        &mut self,
+        window: &mut WindowCommon,
+        context: &mut WindowRenderContext<'_>,
+        render_items: &mut WindowRenderItems,
+    ) {
+        self.render_frames(window, render_items);
+        window.render_widgets(context, render_items);
+    }
+}
 
 pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, AssetError> {
     let window_base = globals::window_manager().get_window_base("main_menu")?;
@@ -55,9 +126,13 @@ pub fn new_main_menu_window(context: &WindowLayoutContext) -> Result<Window, Ass
     let rect = window_base.resolve_layout_rect(context);
 
     let mut window = WindowBuilder::new(rect)
-        .with_behavior(Box::new(MainMenuBehavior))
         .with_window_base(Arc::clone(&window_base), context)
-        .build()?;
+        .build(|common| {
+            Ok(MainMenuBehavior {
+                frames: (0..common.geometries.tiled.len()).rev().collect(),
+                phase: 0.0,
+            })
+        })?;
 
     // let button = Box::new(TextButtonWidget {
     //     widget: Widget {

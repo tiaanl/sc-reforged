@@ -7,7 +7,7 @@ use crate::{
     game::{
         globals,
         ui::windows::{
-            window::{Window, WindowBuilder},
+            window::{DefaultWindowBehavior, Window, WindowBuilder},
             window_manager::WindowLayoutContext,
         },
     },
@@ -27,5 +27,5 @@ pub fn new_bottombar_window(surface_size: IVec2) -> Result<Window, AssetError> {
 
     WindowBuilder::new(rect)
         .with_window_base(Arc::clone(&window_base), &layout_context)
-        .build()
+        .build(|_| Ok(DefaultWindowBehavior))
 }
