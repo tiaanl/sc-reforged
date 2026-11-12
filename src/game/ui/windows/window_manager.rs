@@ -153,6 +153,7 @@ impl WindowManager {
         if is_modal {
             self.modal_window = Some(insert_index);
         }
+        self.update_hover();
     }
 
     pub fn resize(
@@ -178,6 +179,7 @@ impl WindowManager {
         for window in self.windows.iter_mut() {
             window.on_resize(ui_size);
         }
+        self.update_hover();
     }
 
     pub fn input(&mut self, event: &InputEvent, window_renderer: &WindowRenderer) -> bool {
@@ -185,6 +187,7 @@ impl WindowManager {
             InputEvent::MouseMove(position) => {
                 self.mouse_position =
                     Some(window_renderer.physical_to_ui_position(position.as_ivec2()));
+                self.update_hover();
 
                 self.modal_window.is_some()
                     || self
@@ -194,6 +197,7 @@ impl WindowManager {
             }
             InputEvent::MouseLeave => {
                 self.mouse_position = None;
+                self.update_hover();
                 self.modal_window.is_some()
             }
             InputEvent::MouseDown(button) => self.dispatch_mouse_down(button),
@@ -369,7 +373,22 @@ impl WindowManager {
             .find_map(|(index, window)| is_input_candidate(window, position).then_some(index))
     }
 
+    /// Recomputes hover after pointer, layout, or window-stack changes.
+    fn update_hover(&mut self) {
+        let hovered_window = self
+            .mouse_position
+            .and_then(|mouse| self.top_level_window(mouse));
+        for (index, window) in self.windows.iter_mut().enumerate() {
+            let position = self
+                .mouse_position
+                .filter(|_| hovered_window == Some(index));
+            window.update_hover(position.map(|mouse| mouse - window.common.rect.position));
+        }
+    }
+
+    /// Updates hover and advances windows using elapsed seconds.
     pub fn update(&mut self, delta_time: f32) {
+        self.update_hover();
         for window in self.windows.iter_mut() {
             window.update(delta_time);
         }
@@ -402,4 +421,86 @@ impl WindowManager {
 #[inline]
 fn is_input_candidate(window: &Window, position: IVec2) -> bool {
     window.common.visible && window.common.enabled && window.hit_test(position)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::ui::{
+        Rect,
+        widgets::{text_button::TextButtonBehavior, widget::Widget},
+        windows::window::WindowBuilder,
+    };
+
+    /// Creates an offset window with overlapping widgets to exercise hit ordering.
+    fn test_window() -> Window {
+        let mut window = WindowBuilder::new(Rect::new(IVec2::new(100, 50), IVec2::new(200, 200)))
+            .build_default()
+            .unwrap();
+        for _ in 0..2 {
+            window.common.widgets.push(Widget::new(
+                Rect::new(IVec2::new(10, 20), IVec2::new(30, 30)),
+                Box::new(TextButtonBehavior::default()),
+            ));
+        }
+        window
+    }
+
+    #[test]
+    fn hover_uses_local_coordinates_and_topmost_eligible_widget() {
+        let mut manager = WindowManager::default();
+        manager.push(test_window());
+        manager.mouse_position = Some(IVec2::new(115, 75));
+        manager.update(0.0);
+        assert!(!manager.windows[0].common.widgets[0].common.hovered);
+        assert!(manager.windows[0].common.widgets[1].common.hovered);
+
+        manager.windows[0].common.widgets[1].common.accepts_input = false;
+        manager.update(0.0);
+        assert!(manager.windows[0].common.widgets[0].common.hovered);
+        assert!(!manager.windows[0].common.widgets[1].common.hovered);
+
+        manager.windows[0].common.widgets[0].common.visible = false;
+        manager.update(0.0);
+        assert!(
+            manager.windows[0]
+                .common
+                .widgets
+                .iter()
+                .all(|w| !w.common.hovered)
+        );
+    }
+
+    #[test]
+    fn stationary_pointer_transfers_hover_when_windows_change() {
+        let mut manager = WindowManager::default();
+        manager.mouse_position = Some(IVec2::new(115, 75));
+        manager.push(test_window());
+        assert!(manager.windows[0].common.widgets[1].common.hovered);
+        manager.push(test_window());
+        assert!(!manager.windows[0].common.widgets[1].common.hovered);
+        assert!(manager.windows[1].common.widgets[1].common.hovered);
+
+        manager.windows[1].common.enabled = false;
+        manager.update(0.0);
+        assert!(manager.windows[0].common.widgets[1].common.hovered);
+        assert!(!manager.windows[1].common.widgets[1].common.hovered);
+
+        manager.mouse_position = None;
+        manager.update(0.0);
+        assert!(!manager.windows[0].common.widgets[1].common.hovered);
+    }
+
+    #[test]
+    fn modal_window_blocks_hover_outside_its_bounds() {
+        let mut manager = WindowManager::default();
+        manager.mouse_position = Some(IVec2::new(115, 75));
+        manager.push(test_window());
+        let modal = WindowBuilder::new(Rect::new(IVec2::ZERO, IVec2::new(50, 50)))
+            .modal(true)
+            .build_default()
+            .unwrap();
+        manager.push(modal);
+        assert!(!manager.windows[0].common.widgets[1].common.hovered);
+    }
 }

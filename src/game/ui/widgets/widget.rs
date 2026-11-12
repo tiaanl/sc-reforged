@@ -67,6 +67,11 @@ pub trait WidgetBehavior {
         WidgetResult::Ignored
     }
 
+    fn update(&mut self, widget: &mut WidgetCommon, delta_time: f32) {
+        let _ = widget;
+        let _ = delta_time;
+    }
+
     fn render(
         &mut self,
         widget: &mut WidgetCommon,
@@ -123,8 +128,8 @@ impl Widget {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> WidgetResult {
-        if let Some(ref mut thing) = self.behavior {
-            return thing.on_primary_mouse_down(&mut self.common, position, context);
+        if let Some(ref mut behavior) = self.behavior {
+            return behavior.on_primary_mouse_down(&mut self.common, position, context);
         }
         WidgetResult::Ignored
     }
@@ -134,8 +139,8 @@ impl Widget {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> WidgetResult {
-        if let Some(ref mut thing) = self.behavior {
-            return thing.on_secondary_mouse_down(&mut self.common, position, context);
+        if let Some(ref mut behavior) = self.behavior {
+            return behavior.on_secondary_mouse_down(&mut self.common, position, context);
         }
         WidgetResult::Ignored
     }
@@ -145,8 +150,8 @@ impl Widget {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> WidgetResult {
-        if let Some(ref mut thing) = self.behavior {
-            return thing.on_primary_mouse_up(&mut self.common, position, context);
+        if let Some(ref mut behavior) = self.behavior {
+            return behavior.on_primary_mouse_up(&mut self.common, position, context);
         }
         WidgetResult::Ignored
     }
@@ -156,8 +161,8 @@ impl Widget {
         position: IVec2,
         context: &mut WindowManagerContext,
     ) -> WidgetResult {
-        if let Some(ref mut thing) = self.behavior {
-            return thing.on_secondary_mouse_up(&mut self.common, position, context);
+        if let Some(ref mut behavior) = self.behavior {
+            return behavior.on_secondary_mouse_up(&mut self.common, position, context);
         }
         WidgetResult::Ignored
     }
@@ -167,10 +172,16 @@ impl Widget {
         wheel_steps: i32,
         context: &mut WindowManagerContext,
     ) -> WidgetResult {
-        if let Some(ref mut thing) = self.behavior {
-            return thing.on_mouse_wheel(&mut self.common, wheel_steps, context);
+        if let Some(ref mut behavior) = self.behavior {
+            return behavior.on_mouse_wheel(&mut self.common, wheel_steps, context);
         }
         WidgetResult::Ignored
+    }
+
+    pub fn update(&mut self, delta: f32) {
+        if let Some(ref mut behavior) = self.behavior {
+            behavior.update(&mut self.common, delta);
+        }
     }
 
     pub fn render(
@@ -179,8 +190,8 @@ impl Widget {
         context: &mut WindowRenderContext,
         render_items: &mut WindowRenderItems,
     ) {
-        if let Some(ref mut thing) = self.behavior {
-            thing.render(&mut self.common, origin, 0, context, render_items);
+        if let Some(ref mut behavior) = self.behavior {
+            behavior.render(&mut self.common, origin, 0, context, render_items);
         }
     }
 }

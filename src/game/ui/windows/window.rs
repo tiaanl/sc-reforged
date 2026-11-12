@@ -36,6 +36,7 @@ pub trait WindowBehavior {
     fn update(&mut self, window: &mut WindowCommon, delta: f32) {
         let _ = window;
         let _ = delta;
+        window.update_widgets(delta);
     }
 
     /// Allows each [Window] to have its own render behavior.
@@ -82,6 +83,12 @@ pub struct WindowCommon {
 }
 
 impl WindowCommon {
+    pub fn update_widgets(&mut self, delta: f32) {
+        for widget in self.widgets.iter_mut() {
+            widget.update(delta);
+        }
+    }
+
     pub fn render_geometries(&mut self, render_items: &mut WindowRenderItems) {
         self.geometries.render(self.rect.position, render_items);
     }
@@ -103,6 +110,14 @@ pub struct Window {
 }
 
 impl Window {
+    /// Updates widget hover flags using a window-local pointer, or clears them.
+    pub fn update_hover(&mut self, position: Option<IVec2>) {
+        let hovered = position.and_then(|position| self.top_level_input_widget(position));
+        for (index, widget) in self.common.widgets.iter_mut().enumerate() {
+            widget.common.hovered = hovered == Some(index);
+        }
+    }
+
     /// Return true if the global coordinates are within the bounds of the
     /// window.
     pub fn hit_test(&self, position: IVec2) -> bool {

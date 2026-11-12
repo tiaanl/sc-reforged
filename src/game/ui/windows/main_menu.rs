@@ -101,7 +101,8 @@ impl MainMenuBehavior {
 }
 
 impl WindowBehavior for MainMenuBehavior {
-    fn update(&mut self, _window: &mut WindowCommon, delta: f32) {
+    fn update(&mut self, window: &mut WindowCommon, delta: f32) {
+        window.update_widgets(delta);
         if self.frames.len() < 2 {
             return;
         }
