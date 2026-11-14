@@ -425,6 +425,8 @@ fn is_input_candidate(window: &Window, position: IVec2) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::field_reassign_with_default)]
+
     use super::*;
     use crate::game::ui::{
         Rect,
